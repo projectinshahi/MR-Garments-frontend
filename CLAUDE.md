@@ -12,7 +12,8 @@ no backend, auth API, database, or persistence.
 - **Done:**
   - The foundation, the screenshot inventory (`docs/screenshot-inventory.md`), and decisions D1–D6 and B1–B4 (`docs/proposed-build-plan.md`).
   - **Phase 2 shared setup:** shell, tokens, Arimo, shared components, master data, route registration, guard hook.
-- **Next:** Wave 1 screen agents, **only after explicit user approval**.
+  - **Impeccable installed and verified** (see the Impeccable section below).
+- **Next:** one pilot screen agent (`W1-dashboard`), then the rest of Wave 1, each **only after explicit user approval**.
 - Every route already exists as a placeholder page. A screen agent replaces only the pages and feature folders its assignment lists.
 
 ## Commands
@@ -110,15 +111,24 @@ Create a feature folder only when a screen is assigned. Do not create empty modu
 
 ## Impeccable (design skill): status and allowed use
 
-- **Status (verified 2026-10-23): not installed** in this environment. There is no skill, plugin or package. Do not claim to use it, and do not substitute another design tool under its name.
-- **Official setup** (orchestrator or user only; the guard hook blocks agents):
-  - `npx impeccable install --providers=claude --scope=project`, or `/plugin marketplace add pbakaus/impeccable` then `/plugin`.
-  - Then `/impeccable init` (writes `PRODUCT.md`) and `/impeccable document` (writes `DESIGN.md` from the tokens).
-  - Sources: github.com/pbakaus/impeccable and impeccable.style/docs.
-- **Once installed, it is a QA aid only.** It never authorizes redesign.
-  - **Allowed:** `/impeccable audit <target>` and `/impeccable critique <target>` (reports), and `npx impeccable detect <path|url>` (deterministic anti-pattern scan).
+- **Status (verified 2026-10-23): installed at project scope.** Source: github.com/pbakaus/impeccable, docs at impeccable.style.
+  - Skill `.claude/skills/impeccable/` (skill 4.7.0, engine 0.1.16). Invoke as `/impeccable <command> [target]`.
+  - Four agents, `.claude/agents/impeccable-*.md`. Only `new-work` and `live` use them, and neither is allowed here, so they stay idle.
+  - Design hook in `.claude/settings.local.json`: per machine, not committed. Settings live in `.impeccable/`.
+  - **Not run yet:** `/impeccable init` (writes `PRODUCT.md`) and `/impeccable document` (writes `DESIGN.md` from the code). The user or the orchestrator runs them.
+- **Discovery:** a session ignores a `.claude/skills/` directory created after it started. Run `/reload-skills` or start a new session. This is why `/impeccable init` returned `Unknown command` in the session that was open during the install.
+- **CLI:** `.claude/skills/impeccable/scripts/impeccable detect <path|url>` from Git Bash, or `impeccable.cmd` from PowerShell. Use this launcher rather than `npx impeccable`, so the engine matches the skill.
+  - The 20 MB engine under `scripts/bin/` is git-ignored. Without it, the launcher downloads a checksum-verified copy (network needed).
+  - A worktree therefore has no engine, so call the main checkout's launcher by its absolute path.
+  - A path scan uses regex rules only. Scan the running URL for the full rule set.
+- **Hook:** after every Edit/Write of a UI file (`.tsx`, `.ts`, `.css`, …), it runs the immediate-tier rules and posts its findings into context. `Stop` runs the full deep pass. It never blocks an edit.
+  - Its message invites the agent to add ignores itself. **In this project only the orchestrator adds ignores.**
+  - The screen-agent guard blocks `impeccable hooks` (except `status`), `ignores`, `install`, `update`, `pin` and `link`.
+- **It is a QA aid only.** It never authorizes redesign, and the reference screenshot always wins over its suggestions.
+  - **Allowed:** `/impeccable audit <target>` and `/impeccable critique <target>` (reports), `detect` (deterministic anti-pattern scan), and `/impeccable hooks status`.
+  - **Orchestrator or user only:** `init`/`teach`, `document`, `doctor`, `pin`, and `hooks on|off|ignore-*|reset`.
   - **Handling findings:** fix findings that the reference does not contradict (accessibility, overflow, broken states). A finding that conflicts with the reference (for example the gradient sidebar, the selected-row side stripe, or the Arial-metric font) is reported and **not changed**. The orchestrator records it as an Impeccable ignore with the reason "matches reference screenshot".
-  - **Not allowed on referenced screens:** `craft`, `shape`, `bolder`, `quieter`, `colorize`, `typeset`, `layout`, `animate`, `delight`, `overdrive`, `distill`, `simplify`, `polish`, `live`, `generate`, `adapt`, `harden`, `onboard`, `clarify`, `optimize`, `extract`. They change the design or copy. The orchestrator may approve one explicitly for undesigned states.
+  - **Not allowed on referenced screens:** `craft`, `shape`, `bolder`, `quieter`, `colorize`, `typeset`, `layout`, `animate`, `delight`, `overdrive`, `distill`, `polish`, `live`, `generate`, `adapt`, `harden`, `onboard`, `clarify`, `optimize`, `extract`. They change the design or copy. The orchestrator may approve one explicitly for undesigned states.
 
 ## Known, accepted warnings and exceptions
 

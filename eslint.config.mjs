@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "test-results/**",
     // Subagent git worktrees (each is linted from inside its own tree):
     ".claude/worktrees/**",
+    // Vendored Impeccable skill scripts (third-party, updated by `impeccable update`):
+    ".claude/skills/**",
   ]),
 ]);
 

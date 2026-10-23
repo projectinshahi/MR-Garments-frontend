@@ -21,15 +21,17 @@ folder, and its e2e spec, as listed in its assignment. It reports back and chang
 | --- | --- | --- |
 | Concurrency | Background subagents run concurrently. Default cap is 20 per session (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`). We plan 5 to 7. | code.claude.com/docs/en/sub-agents |
 | Nesting | Subagents can spawn subagents by default. `screen-builder` omits the `Agent` tool, so it cannot. | sub-agents |
-| Isolation | `isolation: worktree` in agent frontmatter gives each run a temporary git worktree under `.claude/worktrees/`, **branched from the default branch, not the current HEAD**. It is removed automatically if unchanged, and kept if it has changes. | /docs/en/worktrees |
+| Isolation | `isolation: worktree` in agent frontmatter gives each run a temporary git worktree under `.claude/worktrees/`. With the default `worktree.baseRef: "fresh"`, it **branches from `origin/<default-branch>`**. That is stale while local commits are unpushed (`origin/main` is still the initial commit). `"head"` branches from the local HEAD. It is removed automatically if unchanged, and kept if it has changes. | /docs/en/worktrees |
 | Dependencies in worktrees | `worktree.symlinkDirectories: ["node_modules"]` (set in `.claude/settings.json`) links the main `node_modules` into each worktree. | /docs/en/settings-reference |
 | Per-agent restrictions | Settings `deny` rules apply to every session and cannot target one subagent. Restrictions use the frontmatter `tools` allowlist and frontmatter `hooks`. Hooks run only after the folder is trusted. | sub-agents, /docs/en/permissions |
 | Hook shell on Windows | Git Bash if installed, otherwise PowerShell. `$CLAUDE_PROJECT_DIR` is the main checkout, even inside a worktree. | /docs/en/hooks |
 
-Verified locally (not by spawning a real agent): with `node_modules` junctioned into a copy at
-`.claude/worktrees/<name>/`, `next build`, `vitest` and `tsc` all pass. The same copy **outside** the repo fails
-`next build`, because Turbopack refuses a `node_modules` link outside its root. On the first real spawn, confirm
-the agent can run `npm run typecheck` in its worktree before relying on the setup.
+**Pre-flight, 2026-10-23** (a real `git worktree` at `.claude/worktrees/pilot-preflight` with `node_modules` junctioned in; no agent spawned):
+- `tsc` passed. `next dev` failed with "Could not find the Next.js package".
+  - Cause: the worktree has its own `package-lock.json`, so Turbopack makes the worktree its root and refuses the link that leads outside it.
+- Fix: `next.config.ts` sets `turbopack.root` to the parent of the real `node_modules`. That is this project in the main checkout and the main checkout in a worktree.
+- After the fix, the worktree passed `next dev`, `next build`, `visual-diff` at 1440 × 900, the guard cases and the Impeccable `detect`.
+- On the first real spawn, still confirm that the agent can run `npm run typecheck` in its worktree.
 
 **Not guaranteed:** that every agent starts at the same instant, or the exact scheduling of agents spawned in one
 message. Plan for agents that start and finish at different times.
@@ -39,6 +41,7 @@ message. Plan for agents that start and finish at different times.
 | Rule | How it is enforced |
 | --- | --- |
 | No installs, shadcn CLI, or `git push` | `.claude/hooks/guard-screen-agent.mjs` (PreToolUse, exit 2) |
+| No Impeccable config changes (`hooks` other than `status`, `ignores`, `install`, `update`, `pin`, `link`), whether through `npx` or the in-repo launcher | Same hook. `detect` is allowed |
 | No edits to shared files | Same hook. Denylist covers configs, `src/components`, `src/lib`, `src/types`, `src/mocks`, `src/config`, `src/hooks`, root and group layouts, `/preview`, `.claude/`, `docs/` |
 | No edits outside the agent's worktree | Same hook (paths resolving outside `cwd` are blocked) |
 | One screen per agent, no cross-screen edits | Assignment plus worktree isolation plus orchestrator diff review. Not machine-enforced between two feature folders |

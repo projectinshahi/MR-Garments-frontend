@@ -44,9 +44,15 @@ Visual verification (required, see "Screenshot-fidelity workflow" in CLAUDE.md):
 - Open `.visual/<name>/compare.png` (reference | ours | diff), fix visible mismatches, and repeat.
 - Ignore only annotation labels (D3) and D6 normalizations. Never claim pixel-perfect.
 
-Impeccable: **not installed** at the time of writing (CLAUDE.md, "Impeccable" section). Do not claim to use it.
-If the orchestrator's assignment says it is installed, you may run only `npx impeccable detect <your feature path>`
-and report its findings. Fix a finding only when the reference does not contradict it. Never run its redesign commands.
+Impeccable (CLAUDE.md, "Impeccable" section) is installed as a QA aid. **The reference screenshot always wins over its suggestions.**
+- Your worktree has no Impeccable engine binary. Run the main checkout's launcher from Bash:
+  `"/d/SDEC/MR Garments/MR-Garments-frontend/.claude/skills/impeccable/scripts/impeccable" detect src/features/<feature>`.
+  Then scan the page itself: `... detect http://localhost:<dev port>/<route>`. This is the only Impeccable command you run.
+- After each edit to a UI file, a design hook may post findings. Fix a finding only when the reference does not
+  contradict it (accessibility, overflow, broken states).
+- Leave any finding that conflicts with the reference unchanged and report it.
+- Never add ignores: the hook suggests them, but the guard blocks them. The orchestrator records them.
+- Never apply redesign advice (bolder, colorize, layout, typeset, polish, …) to a referenced screen.
 
 Before reporting, run `npm run lint`, `npm run typecheck`, `npm run test`, and your e2e spec
 (`E2E_PORT=<port> npx playwright test e2e/<agent-name>.spec.ts`).
@@ -55,6 +61,6 @@ Final report (your last message, for the orchestrator):
 1. **Files changed**: every path created or modified.
 2. **Implemented**: what the screen does, including any mock mutations and their reset behavior, and which actions use `notInPrototype`.
 3. **Deliberate data differences**: records in your fixtures that differ from other screens (D1), each with the screenshot it comes from.
-4. **Verification**: each command and its actual result; for each reference, the visual-diff region and final mean diff, plus the remaining named visual differences.
+4. **Verification**: each command and its actual result; for each reference, the visual-diff region and final mean diff, plus the remaining named visual differences; Impeccable `detect` and hook findings, each marked fixed or "conflicts with reference, left as shown".
 5. **Requests for the orchestrator**: token values, shared-component changes, data/type fields, or dependencies you needed, with exact values.
 6. **Unresolved issues**: anything incomplete, ambiguous, or not faithful to the reference.

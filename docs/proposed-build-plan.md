@@ -221,8 +221,8 @@ route segment and a feature folder. Order detail is split by tab ownership.
 | # | Item | Needed from you |
 | --- | --- | --- |
 | W1-A | **Approval to launch Wave 1** (7 agents, §6) | An explicit go-ahead. |
-| W1-B | **Impeccable is not installed** (CLAUDE.md, "Impeccable") | Either install it (`npx impeccable install --providers=claude --scope=project`, or `/plugin marketplace add pbakaus/impeccable`, then `/impeccable init` and `/impeccable document`) and confirm whether its non-blocking design hook should be on, or confirm that Wave 1 proceeds without it, using the visual-diff workflow only. |
-| W1-C | **First-agent check** (§8) | None. The orchestrator spawns one agent first and confirms that typecheck works in its worktree and that the hook blocks installs. |
+| W1-B | ✅ **Impeccable installed** at project scope and verified 2026-10-23 (CLAUDE.md, "Impeccable"). The design hook is on and non-blocking. The guard now also blocks the in-repo launcher's config verbs. | Optional: run `/impeccable init` and `/impeccable document`. |
+| W1-C | **Pilot agent** (§8): `W1-dashboard` only. A pre-flight on a manual worktree passed after the `turbopack.root` fix (typecheck, dev, build, guard, Impeccable `detect`, visual-diff at 1440 × 900). See `docs/multi-agent-plan.md`. | Approval to commit the Impeccable setup (worktrees branch from `main`), then approval to spawn the pilot. |
 | B5 | **Node 20.20.2** (advisory) | Upgrade to Node 22 LTS when convenient. The project runs on both, with pinned Vitest 4 and jsdom 29. |
 
 ## 12. Not planned (needs references or requirements)

@@ -54,3 +54,9 @@ next-env.d.ts
 
 # visual-diff output (scripts/visual-diff.mjs)
 /.visual/
+
+# Impeccable: 20 MB engine binary (the launcher downloads a checksum-verified copy when it is missing)
+# and per-machine hook state
+/.claude/skills/impeccable/scripts/bin/
+/.impeccable/config.local.json
+/.impeccable/hook.cache.json

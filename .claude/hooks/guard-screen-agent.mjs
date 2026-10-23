@@ -20,8 +20,10 @@ const SHARED_FILES = [
   /^(PRODUCT|DESIGN)\.md$/,
 ];
 
+// Impeccable verbs that change its install or shared config, whether run as `npx impeccable` or through the
+// in-repo launcher (.claude/skills/impeccable/scripts/impeccable[.cmd|.exe]). `detect` and `hooks status` stay allowed.
 const SHARED_COMMANDS =
-  /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci|uninstall|remove|rm|un|update|upgrade|up|dedupe|link)\b|\bnpx\s+(-y\s+|--yes\s+)?(shadcn\b|impeccable\s+(install|update|link|ignores|hooks)\b)|\bgit\s+push\b/;
+  /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci|uninstall|remove|rm|un|update|upgrade|up|dedupe|link)\b|\bnpx\s+(-y\s+|--yes\s+)?shadcn\b|\bimpeccable(@\S+|\.cmd|\.exe)?["']?\s+(install|update|link|ignores|pin|skills|telemetry|hooks\b(?!\s+status\b))|\bgit\s+push\b/;
 
 let raw = "";
 for await (const chunk of process.stdin) raw += chunk;

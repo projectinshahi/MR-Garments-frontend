@@ -1,0 +1,2 @@
+# The Impeccable launcher is a POSIX sh script; core.autocrlf would break it with CRLF on checkout.
+/.claude/skills/impeccable/scripts/impeccable text eol=lf
