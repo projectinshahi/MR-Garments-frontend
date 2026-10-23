@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* No dark theme in the references; `dark:` classes in generated shadcn files stay inert. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens measured from the reference screenshots (1440 × 900, docs/screenshot-inventory.md §4;
+ * JPEG tolerance about ±3 per channel). Orchestrator-owned. Components use these tokens, never raw colors.
+ */
+
+@theme inline {
+  --font-sans: var(--font-arimo), Arial, Helvetica, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--neutral-soft);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--neutral-soft);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--neutral-soft);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--danger-strong);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-input-readonly: var(--input-readonly);
+  --color-ring: var(--primary);
+  --color-label: var(--label);
+  --color-navy: var(--navy);
+  --color-table-head: var(--table-head);
+  --color-table-head-foreground: var(--table-head-foreground);
+  --color-overlay: var(--overlay);
+  --color-placeholder: var(--placeholder);
+  --color-chip-muted: var(--chip-muted);
+  --color-toggle-off: var(--toggle-off);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-strong: var(--danger-strong);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-strong: var(--success-strong);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
+  --color-purple-border: var(--purple-border);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-callout-info: var(--callout-info);
+  --color-callout-info-foreground: var(--callout-info-foreground);
+  --color-callout-success-foreground: var(--callout-success-foreground);
+  --color-callout-warning: var(--callout-warning);
+  --color-callout-warning-border: var(--callout-warning-border);
+  --color-callout-warning-foreground: var(--callout-warning-foreground);
+
+  --color-sidebar: var(--sidebar-from);
+  --color-sidebar-from: var(--sidebar-from);
+  --color-sidebar-to: var(--sidebar-to);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-detail: var(--sidebar-detail);
+  --color-sidebar-bullet: var(--sidebar-bullet);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-avatar: var(--sidebar-avatar);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-track: var(--chart-track);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
+
+:root {
+  /* Surfaces and text */
+  --background: #f5f6fb;
+  --card: #ffffff;
+  --foreground: #111a2f;
+  --muted-foreground: #6b6e7e;
+  --label: #383c4f;
+  --border: #e2e4ec;
+  --border-subtle: #eff0f3;
+  --table-head: #f8f9fd;
+  --table-head-foreground: #5f6f7e;
+  --input: #d2d4e1;
+  --input-background: #fbfcfe;
+  --input-readonly: #f2f3f8;
+  --placeholder: #959ba7;
+  --chip-muted: #e3e8f3; /* inactive tab chips, stage-progress segments */
+  --toggle-off: #cfd6e6;
+
+  /* Brand */
+  --primary: #2f6fed;
+  --primary-foreground: #ffffff;
+  --navy: #13213c;
+  --overlay: rgb(19 33 60 / 50%);
+
+  /* Status tones: text on a soft tint */
+  --danger: #ac2c39;
+  --danger-soft: #fceced;
+  --danger-strong: #bf2837;
+  --warning: #9a5605;
+  --warning-soft: #fff2df;
+  --success: #226d4e;
+  --success-soft: #e6f5ee;
+  --success-strong: #1a7f4b;
+  --info: #3964c0;
+  --info-soft: #eaf0ff;
+  --purple: #6b41a3;
+  --purple-soft: #f4ebfc;
+  --purple-border: #d5caea;
+  --neutral: #363a53;
+  --neutral-soft: #f2f3f8;
+
+  /* Callouts */
+  --callout-info: #eff3ff;
+  --callout-info-foreground: #313e6a;
+  --callout-success-foreground: #2a6b49;
+  --callout-warning: #fff7ea;
+  --callout-warning-border: #ebd8b8;
+  --callout-warning-foreground: #604113;
+
+  /* Sidebar (vertical gradient) */
+  --sidebar-from: #14223f;
+  --sidebar-to: #1c3160;
+  --sidebar-foreground: #c1ccec;
+  --sidebar-accent: #323d59;
+  --sidebar-muted: #8b97bd;
+  --sidebar-detail: #a3b4e0; /* user-block sub-line */
+  --sidebar-bullet: #5e72a9;
+  --sidebar-border: #263964;
+  --sidebar-avatar: #3d5289;
+
+  /* Charts */
+  --chart-1: #2f6fed;
+  --chart-2: #efa021;
+  --chart-3: #1d7e4d;
+  --chart-4: #13213c;
+  --chart-5: #c82e40;
+  --chart-track: #eef1f8;
+
+  /* Layout (CSS px at the 1440 × 900 reference) */
+  --sidebar-width: 240px;
+  --header-height: 68px;
+  --tabs-height: 46px;
+  --page-padding: 32px;
+  --page-padding-top: 22px;
+  --page-gap: 18px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-sm text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
