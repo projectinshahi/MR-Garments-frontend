@@ -1,6 +1,6 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import { getItems } from "@/features/settings/data/queries";
+import { ItemsScreen } from "@/features/settings/settings-screens";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Settings" references="46_15.7_Item_list.jpeg" />;
+export default async function ItemsSettingsPage() {
+  return <ItemsScreen rows={await getItems()} />;
 }

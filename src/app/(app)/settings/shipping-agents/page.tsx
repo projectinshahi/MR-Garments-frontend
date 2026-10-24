@@ -1,6 +1,6 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import { getShippingAgents } from "@/features/settings/data/queries";
+import { ShippingAgentsScreen } from "@/features/settings/settings-screens";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Settings" references="41_15.2_Shipping_agents.jpeg" />;
+export default async function ShippingAgentsSettingsPage() {
+  return <ShippingAgentsScreen rows={await getShippingAgents()} />;
 }

@@ -1,6 +1,6 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import { getTransportCompanies } from "@/features/settings/data/queries";
+import { TransportCompaniesScreen } from "@/features/settings/settings-screens";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Settings" references="43_15.4_Transport_companies.jpeg" />;
+export default async function TransportCompaniesSettingsPage() {
+  return <TransportCompaniesScreen rows={await getTransportCompanies()} />;
 }
