@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Clearing (India)" references="26_9.1_Clearing_list.jpeg" />;
+import { ClearingListScreen } from "@/features/clearing/clearing-list-screen";
+import { getClearingList } from "@/features/clearing/data/queries";
+
+export const metadata: Metadata = { title: "Clearing (India)" };
+
+export default async function ClearingPage() {
+  const data = await getClearingList();
+  return <ClearingListScreen data={data} />;
 }

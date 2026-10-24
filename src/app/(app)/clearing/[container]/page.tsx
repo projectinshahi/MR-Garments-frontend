@@ -1,6 +1,19 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Clearing" references="25_9_Clearing_(India)_-_Stage_4_form.jpeg" />;
+import { ClearingFormScreen } from "@/features/clearing/clearing-form-screen";
+import { getClearingForm, listClearingFormSlugs } from "@/features/clearing/data/queries";
+
+export const metadata: Metadata = { title: "Clearing (India)" };
+
+/** The container segment is the number with its space as a hyphen: /clearing/CAIU-2298076. */
+export async function generateStaticParams() {
+  return (await listClearingFormSlugs()).map((container) => ({ container }));
+}
+
+export default async function ClearingFormPage({ params }: PageProps<"/clearing/[container]">) {
+  const { container } = await params;
+  const data = await getClearingForm(container);
+  if (!data) notFound();
+  return <ClearingFormScreen data={data} />;
 }
