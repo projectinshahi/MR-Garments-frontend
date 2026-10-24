@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Landed Cost" references="31_12_Landed_Cost.jpeg" />;
+import { getLandedCost } from "@/features/landed-cost/data/queries";
+import { LandedCostScreen } from "@/features/landed-cost/landed-cost-screen";
+
+export const metadata: Metadata = { title: "Landed Cost" };
+
+export default async function LandedCostPage() {
+  const data = await getLandedCost();
+  return <LandedCostScreen data={data} />;
 }
