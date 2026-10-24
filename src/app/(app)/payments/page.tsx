@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Deposits & Payments" references="16_5_Deposits_&_Payments.jpeg" />;
+import { getPayments } from "@/features/payments/data/queries";
+import { PaymentsScreen } from "@/features/payments/payments-screen";
+
+export const metadata: Metadata = { title: "Deposits & Payments" };
+
+export default async function PaymentsPage() {
+  const data = await getPayments();
+  return <PaymentsScreen data={data} />;
 }
