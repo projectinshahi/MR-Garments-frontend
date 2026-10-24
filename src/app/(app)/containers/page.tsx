@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Containers" references="24_8.1_Containers_list.jpeg" />;
+import { ContainersListScreen } from "@/features/containers/containers-list-screen";
+import { getContainersList } from "@/features/containers/data/queries";
+
+export const metadata: Metadata = { title: "Containers" };
+
+export default async function ContainersPage() {
+  const data = await getContainersList();
+  return <ContainersListScreen data={data} />;
 }
