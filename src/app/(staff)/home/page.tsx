@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Home" references="39_14_Staff_home.jpeg" />;
+import { getStaffHome } from "@/features/staff-home/data/queries";
+import { StaffHomeScreen } from "@/features/staff-home/staff-home-screen";
+
+export const metadata: Metadata = { title: "Home" };
+
+export default async function StaffHomePage() {
+  const data = await getStaffHome();
+  return <StaffHomeScreen data={data} />;
 }
