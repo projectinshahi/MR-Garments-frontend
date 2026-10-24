@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Receive goods" references="29_11_Warehouse_-_Stage_6_form.jpeg" />;
+import { getReceiveGoods } from "@/features/warehouse/data/queries";
+import { ReceiveGoodsScreen } from "@/features/warehouse/receive-goods-screen";
+
+export const metadata: Metadata = { title: "Receive goods" };
+
+export default async function ReceiveGoodsPage() {
+  const data = await getReceiveGoods();
+  return <ReceiveGoodsScreen data={data} />;
 }
