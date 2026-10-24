@@ -22,3 +22,14 @@ describe("KeyValueList total row", () => {
     expect(totalRow()).not.toHaveClass("text-base");
   });
 });
+
+describe("KeyValueList density", () => {
+  it("pads rows 7 px (35 px pitch) by default and 6.5 px (34 px pitch) when compact", () => {
+    const { rerender } = render(<KeyValueList items={items} />);
+    const row = () => screen.getByText("Goods").parentElement;
+    expect(row()).toHaveClass("py-[7px]", "leading-5");
+    rerender(<KeyValueList items={items} density="compact" />);
+    expect(row()).toHaveClass("py-[6.5px]", "leading-5");
+    expect(row()).not.toHaveClass("py-[7px]");
+  });
+});

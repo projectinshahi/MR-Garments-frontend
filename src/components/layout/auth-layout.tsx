@@ -11,7 +11,7 @@ const SIX_STAGES = [
   "India warehouse and landed cost",
 ];
 
-/** Split layout for sign in, forgot and change password: 700 px navy panel plus a centered 454 px card. */
+/** Split layout for sign in, forgot and change password: 700 px navy panel plus a centered 440 px card (01–03). */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-svh bg-background">
@@ -49,7 +49,8 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-[454px] rounded-2xl border border-border-subtle bg-card p-6 shadow-[0_12px_40px_rgb(19_33_60/8%)] sm:p-12">
+        {/* The references draw the card from x 850 to 1290 with its content starting 41 px inside the left edge. */}
+        <div className="w-full max-w-[440px] rounded-2xl border border-border-subtle bg-card p-6 shadow-[0_12px_40px_rgb(19_33_60/8%)] sm:p-10">
           {children}
         </div>
       </main>

@@ -20,15 +20,6 @@ type Totals = ReturnType<typeof summarizeReceipts>;
 const ALL = "all";
 const LAST_30_DAYS = "30d";
 
-// Measured from 30_11.1_Warehouse_list.jpeg: a 38 px header row, 65 px rows (two-line item cell) and a 43 px totals
-// row. DataTable has no such density, so the cell contents carry the measured heights.
-function Head({ children }: { children: React.ReactNode }) {
-  return <span className="block leading-[38px]">{children}</span>;
-}
-function Foot({ children }: { children: React.ReactNode }) {
-  return <span className="block pt-[6px] pb-px leading-5">{children}</span>;
-}
-
 const TEAM_COLUMNS = [
   { key: "received", label: "Received", width: "w-[96.5px]" },
   { key: "retail", label: "Retail", width: "w-[73.5px]" },
@@ -38,37 +29,37 @@ const TEAM_COLUMNS = [
 
 /** Column widths measured from the reference; the totals row follows the rows shown. */
 const columnsFor = (totals: Totals): ColumnDef<WarehouseReceipt>[] => [
-  { accessorKey: "receivedOn", header: () => <Head>Received on</Head>, cell: ({ row }) => formatDate(row.original.receivedOn), footer: () => <Foot>Total</Foot>, meta: { className: "w-[126px]" } },
+  { accessorKey: "receivedOn", header: "Received on", cell: ({ row }) => formatDate(row.original.receivedOn), footer: "Total", meta: { className: "w-[126px]" } },
   {
     accessorKey: "item",
-    header: () => <Head>Item</Head>,
+    header: "Item",
     cell: ({ row }) => (
-      <div className="flex min-h-12 flex-col justify-center">
+      <div className="flex flex-col justify-center">
         <span className="leading-[18px] font-bold">{row.original.item}</span>
         <span className="text-[12.5px] leading-4 text-muted-foreground">
           {row.original.po} · {row.original.supplier}
         </span>
       </div>
     ),
-    footer: () => <Foot>{`${totals.items} ${totals.items === 1 ? "item" : "items"}`}</Foot>,
+    footer: () => `${totals.items} ${totals.items === 1 ? "item" : "items"}`,
     meta: { className: "w-[252px]" },
   },
-  { accessorKey: "container", header: () => <Head>Container</Head>, meta: { className: "w-[150px]" } },
+  { accessorKey: "container", header: "Container", meta: { className: "w-[150px]" } },
   ...TEAM_COLUMNS.map(
     ({ key, label, width }): ColumnDef<WarehouseReceipt> => ({
       accessorKey: key,
-      header: () => <Head>{label}</Head>,
+      header: label,
       cell: ({ row }) => formatNumber(row.original[key]),
-      footer: () => <Foot>{formatNumber(totals[key])}</Foot>,
+      footer: () => formatNumber(totals[key]),
       meta: { align: "right", className: width },
     }),
   ),
-  { accessorKey: "receivedBy", header: () => <Head>Received by</Head>, meta: { className: "w-[130px]" } },
+  { accessorKey: "receivedBy", header: "Received by", meta: { className: "w-[130px]" } },
   {
     accessorKey: "costPerPiece",
-    header: () => <Head>Cost per piece</Head>,
+    header: "Cost per piece",
     cell: ({ row }) => formatINR(row.original.costPerPiece, 2),
-    footer: () => <Foot>{formatINR(totals.costPerPiece, 2)}</Foot>,
+    footer: () => formatINR(totals.costPerPiece, 2),
     meta: { align: "right", className: "w-[122px]" },
   },
 ];
@@ -140,7 +131,8 @@ export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
           data={rows}
           getRowId={(r) => r.id}
           size="sm"
-          density="compact"
+          header="tall"
+          density="loose"
           emptyState="No items match this search."
         />
         <p className="mt-[2px] text-[12.5px] leading-5 text-muted-foreground">

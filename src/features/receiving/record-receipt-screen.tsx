@@ -73,13 +73,13 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   <FieldLabel htmlFor="received-on" className={labelClass}>
                     Received on <RequiredMark />
                   </FieldLabel>
-                  <Input id="received-on" required defaultValue={formatDate(data.receivedOn)} />
+                  <Input size="sm" id="received-on" required defaultValue={formatDate(data.receivedOn)} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="received-office" className={labelClass}>
                     Received at office <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="received-office" required defaultValue={data.office}>
+                  <NativeSelect size="sm" id="received-office" required defaultValue={data.office}>
                     {data.offices.map((office) => (
                       <option key={office}>{office}</option>
                     ))}
@@ -89,19 +89,19 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   <FieldLabel htmlFor="received-by" className={labelClass}>
                     Received by <RequiredMark />
                   </FieldLabel>
-                  <Input id="received-by" required defaultValue={data.receivedBy} />
+                  <Input size="sm" id="received-by" required defaultValue={data.receivedBy} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="bundles-now" className={labelClass}>
                     Bundles received now <RequiredMark />
                   </FieldLabel>
-                  <Input id="bundles-now" required inputMode="numeric" defaultValue={String(data.bundles)} />
+                  <Input size="sm" id="bundles-now" required inputMode="numeric" defaultValue={String(data.bundles)} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="delivery-note" className={labelClass}>
                     Supplier delivery note no.
                   </FieldLabel>
-                  <Input id="delivery-note" defaultValue={data.deliveryNote} />
+                  <Input size="sm" id="delivery-note" defaultValue={data.deliveryNote} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="goods-photo" className={labelClass}>

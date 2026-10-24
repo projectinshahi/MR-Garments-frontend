@@ -19,7 +19,6 @@ type FormField = "name" | "email" | "phone" | "role" | "office" | "language" | "
 
 const labelClass = "gap-0.5 text-[13px] leading-[15px] font-bold text-label";
 // The cards in 48 end 18 px below their last row (SectionCard pads 20).
-const cardClass = "pb-[18px]";
 const rowClass = "flex items-center border-b border-border-subtle py-[9px] last:border-0";
 
 /** Add or edit user (48): user details, the stages the person can enter, and what the role can do. */
@@ -53,31 +52,31 @@ export function EditUserForm({ data }: { data: EditUserData }) {
   return (
     <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1fr_400px]">
       <div className="flex flex-col gap-5">
-        <SectionCard title="User details" titleGap="none" className={cardClass}>
+        <SectionCard title="User details" titleGap="none" bottomGap="form">
           <div className="mt-[11px] grid gap-x-4 gap-y-[13px] sm:grid-cols-3">
             <Field className="gap-1.5">
               <FieldLabel htmlFor="user-name" className={labelClass}>
                 Full name <RequiredMark />
               </FieldLabel>
-              <Input id="user-name" required autoComplete="off" {...field("name")} />
+              <Input size="sm" id="user-name" required autoComplete="off" {...field("name")} />
             </Field>
             <Field className="gap-1.5">
               <FieldLabel htmlFor="user-email" className={labelClass}>
                 Email <RequiredMark />
               </FieldLabel>
-              <Input id="user-email" type="email" required autoComplete="off" {...field("email")} />
+              <Input size="sm" id="user-email" type="email" required autoComplete="off" {...field("email")} />
             </Field>
             <Field className="gap-1.5">
               <FieldLabel htmlFor="user-phone" className={labelClass}>
                 Phone
               </FieldLabel>
-              <Input id="user-phone" type="tel" autoComplete="off" {...field("phone")} />
+              <Input size="sm" id="user-phone" type="tel" autoComplete="off" {...field("phone")} />
             </Field>
             <Field className="gap-1.5">
               <FieldLabel htmlFor="user-role" className={labelClass}>
                 Role <RequiredMark />
               </FieldLabel>
-              <NativeSelect id="user-role" required {...field("role")}>
+              <NativeSelect size="sm" id="user-role" required {...field("role")}>
                 {data.roles.map((role) => (
                   <option key={role}>{role}</option>
                 ))}
@@ -87,7 +86,7 @@ export function EditUserForm({ data }: { data: EditUserData }) {
               <FieldLabel htmlFor="user-office" className={labelClass}>
                 Office
               </FieldLabel>
-              <NativeSelect id="user-office" {...field("office")}>
+              <NativeSelect size="sm" id="user-office" {...field("office")}>
                 {data.offices.map((office) => (
                   <option key={office}>{office}</option>
                 ))}
@@ -97,7 +96,7 @@ export function EditUserForm({ data }: { data: EditUserData }) {
               <FieldLabel htmlFor="user-language" className={labelClass}>
                 Language
               </FieldLabel>
-              <NativeSelect id="user-language" {...field("language")}>
+              <NativeSelect size="sm" id="user-language" {...field("language")}>
                 {data.languages.map((language) => (
                   <option key={language}>{language}</option>
                 ))}
@@ -107,13 +106,13 @@ export function EditUserForm({ data }: { data: EditUserData }) {
               <FieldLabel htmlFor="user-password" className={labelClass}>
                 Password
               </FieldLabel>
-              <Input id="user-password" type="password" autoComplete="new-password" placeholder={data.passwordPlaceholder} {...field("password")} />
+              <Input size="sm" id="user-password" type="password" autoComplete="new-password" placeholder={data.passwordPlaceholder} {...field("password")} />
             </Field>
             <Field className="gap-1.5">
               <FieldLabel htmlFor="user-status" className={labelClass}>
                 Status
               </FieldLabel>
-              <NativeSelect id="user-status" {...field("status")}>
+              <NativeSelect size="sm" id="user-status" {...field("status")}>
                 {STATUSES.map((status) => (
                   <option key={status}>{status}</option>
                 ))}
@@ -122,7 +121,7 @@ export function EditUserForm({ data }: { data: EditUserData }) {
           </div>
         </SectionCard>
 
-        <SectionCard title="Stages this person can enter data for" titleGap="none" className={cardClass}>
+        <SectionCard title="Stages this person can enter data for" titleGap="none" bottomGap="form">
           <p className="mt-[3px] text-[12.5px] leading-[18px] text-muted-foreground">Entry staff see only the stages ticked here.</p>
           <ul className="mt-0.5">
             {data.stages.map((stage) => (
@@ -141,7 +140,7 @@ export function EditUserForm({ data }: { data: EditUserData }) {
         </SectionCard>
       </div>
 
-      <SectionCard title="What this role can do" titleGap="none" className={cardClass}>
+      <SectionCard title="What this role can do" titleGap="none" bottomGap="form">
         {/* 13.5 px text as in Callout size="sm"; the reference pads it 11.5 px vertically (sm pads 10). */}
         <Callout size="sm" className="mt-3 py-[11.5px]">
           {data.roleCard.summary}

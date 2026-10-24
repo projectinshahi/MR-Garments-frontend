@@ -96,8 +96,10 @@ export function SettingsList<T extends SettingsRecord>({
             placeholder="name or phone"
             value={query}
             onValueChange={setQuery}
-            // 40–46 draw a 168 px box; the shared 15 px placeholder needs this width to show "name or phone" uncut.
-            className="w-[194px] gap-2 bg-card"
+            size="md"
+            placeholderTone="label"
+            // 40–46 draw a 168 px white box.
+            className="w-[168px] gap-2 bg-card"
           />
           <FilterChips
             label="Status"
@@ -113,6 +115,7 @@ export function SettingsList<T extends SettingsRecord>({
             data={visible}
             getRowId={(row) => row.id}
             size="sm"
+            header="tall"
             emptyState={`No ${noun} match these filters.`}
           />
           <p className="text-[12.5px] leading-5 text-muted-foreground">{footnote}</p>

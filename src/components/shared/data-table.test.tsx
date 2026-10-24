@@ -57,9 +57,12 @@ describe("DataTable", () => {
   });
 
   it.each([
+    ["short", "h-[37px]"],
     ["default", "h-[53px]"],
     ["compact", "h-[39px]"],
     ["tall", "h-[58px]"],
+    ["relaxed", "h-[61px]"],
+    ["loose", "h-[65px]"],
   ] as const)("keeps %s rows at their fixed height with 13 px headers and 14 px cells", (density, height) => {
     render(<DataTable columns={columns} data={rows} density={density} variant="plain" />);
     expect(screen.getByText("Alpha").closest("tr")).toHaveClass(height);
@@ -73,9 +76,26 @@ describe("DataTable", () => {
     expect(head()).toHaveClass("h-11", "text-[13px]", "px-5", "first:pl-5");
     rerender(<DataTable columns={columns} data={rows} size="sm" density="snug" />);
     expect(head()).toHaveClass("h-[34px]", "text-[12.5px]", "px-[14.5px]", "first:pl-[14.5px]");
-    expect(head()).not.toHaveClass("h-11");
+    expect(head()).not.toHaveClass("h-11", "leading-[38px]");
     expect(screen.getByText("Alpha").closest("tr")).toHaveClass("h-[49px]");
     expect(screen.getByText("Alpha")).toHaveClass("text-sm", "px-[14.5px]");
+  });
+
+  it("draws a 39 px header with the label in a 38 px line box with header='tall', keeping the sm text and padding", () => {
+    render(<DataTable columns={columns} data={rows} size="sm" header="tall" />);
+    const head = screen.getByRole("columnheader", { name: "Name" });
+    expect(head).toHaveClass("h-[39px]", "leading-[38px]", "text-[12.5px]", "px-[14.5px]");
+    expect(head).not.toHaveClass("h-[34px]");
+  });
+
+  it("gives the totals row its own 49 px height whatever the body density", () => {
+    const { rerender } = render(<DataTable columns={columns} data={rows} density="loose" />);
+    const footerRow = () => within(screen.getAllByRole("rowgroup")[2]!).getByRole("row");
+    expect(footerRow()).toHaveClass("h-[49px]");
+    expect(footerRow()).not.toHaveClass("h-[65px]");
+    rerender(<DataTable columns={columns} data={rows} density="default" />);
+    expect(footerRow()).toHaveClass("h-[49px]");
+    expect(footerRow()).not.toHaveClass("h-[53px]");
   });
 
   it("sizes dense rows by padding, with 12 px headers, 13.5 px cells and 6 px outer padding", () => {

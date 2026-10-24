@@ -139,6 +139,13 @@ Create a feature folder only when a screen is assigned. Do not create empty modu
   - Search placeholder `--placeholder` #959ba7 on #fbfcfe, 2.72:1. The reference itself samples about 2.67:1.
   - TodayPill `--primary` #2f6fed on `--callout-info` #eff3ff, 4.10:1. The reference blue is confirmed by matching large areas; small text in the JPEG samples darker.
   - Sidebar section labels: an advisory only. The tool compares them with the gradient's end color #1c3160 (4.38:1). At the labels' actual positions they measure 4.79–5.17:1, which passes.
+  - The same `--placeholder` grey (2.7–2.8:1) on the search fields and empty form fields of the Wave 2/3 screens ("Search container or PO", "Select date", "Enter number", "Enter address", "Optional"). Each reference draws that grey.
+  - Inactive `RouteTabs` number chips: `--muted-foreground` #6b6e7e on `--chip-muted` #e3e8f3, 4.1:1 (settings, users and order-detail tabs). The references draw the same grey chips.
+- **Other Impeccable findings that the references require** (Wave 2/3):
+  - `nested-cards`: bordered boxes inside cards. Examples: the FOB/CNF note on Load container (23), the deposit cards on New order (15), the loading and unloading panels on the transport form (27), and the bordered tables inside report cards (33, 38).
+  - `tight-leading`: the forgot-password sub-line (02) and the two-line list items on the staff home (39). Both use the measured line pitch.
+  - `side-tab`: the narrow transport segment of the Landed Cost stacked bar (31).
+  - The "straggler" advisory on the Reports hub. At 1440 px the text fits on one line, as in the reference.
 - **Browser tests run with one worker.** Concurrent Chromium processes stall on this machine (see docs/multi-agent-plan.md, "Browser tests"). Do not raise `workers` here.
 
 ## Multi-agent work

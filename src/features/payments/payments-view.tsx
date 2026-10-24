@@ -113,7 +113,7 @@ export function PaymentsView({ orders, selectedPo, kpis, detail }: PaymentsViewP
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1.6fr_1fr]">
           <SectionCard
             title="Payments by order"
-            aside={<CardNote className="text-[13px]">Amounts in supplier currency (¥) and INR</CardNote>}
+            aside={<CardNote size="sm">Amounts in supplier currency (¥) and INR</CardNote>}
             titleGap="none"
             className="min-w-0 pt-3.5 pb-[18px]"
           >

@@ -15,3 +15,11 @@ describe("Button sizes", () => {
     expect(screen.getByRole("button", { name: "+ New order" })).toHaveClass("h-[34px]", "px-3.5", "text-sm");
   });
 });
+
+describe("Button variants", () => {
+  it("draws outline labels in the slate label colour measured in every reference", () => {
+    render(<Button variant="outline">Save draft</Button>);
+    expect(screen.getByRole("button", { name: "Save draft" })).toHaveClass("border-border", "bg-card", "text-label");
+    expect(screen.getByRole("button", { name: "Save draft" })).not.toHaveClass("text-foreground");
+  });
+});

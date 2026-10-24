@@ -59,7 +59,7 @@ export function ListView({ deliveries }: CalendarData) {
         </div>
         <FilterChips label="Delivery status" options={options} value={status} onValueChange={setStatus} size="sm" />
       </div>
-      <DataTable columns={columns} data={rows} getRowId={(d) => d.po} density="compact" size="sm" emptyState="No deliveries." />
+      <DataTable columns={columns} data={rows} getRowId={(d) => d.po} density="short" size="sm" emptyState="No deliveries." />
     </PageContainer>
   );
 }

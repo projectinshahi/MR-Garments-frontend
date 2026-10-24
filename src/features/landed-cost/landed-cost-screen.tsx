@@ -8,9 +8,6 @@ import { shareOfTotal, summarizeOrders } from "./cost-math";
 import type { CostPartKey, LandedCostData } from "./data/queries";
 import { GoodsCostTable, LandedCostFilters, OrdersCostCard } from "./landed-cost-client";
 
-// Reference KPI text starts 18 px inside the card edge (17 px padding plus the border).
-const KPI_PAD = "px-[17px]";
-
 const PART_COLORS: Record<CostPartKey, StackedSegment["color"]> = { goods: "chart-1", duty: "chart-4", transport: "chart-2" };
 
 /** Landed Cost (31_12_Landed_Cost.jpeg): KPIs, landed cost by order, and PO-2028's breakdown and goods payments. */
@@ -27,24 +24,21 @@ export function LandedCostScreen({ data }: { data: LandedCostData }) {
         actions={<LandedCostFilters suppliers={data.suppliers} teams={data.teams} />}
       />
       <PageContainer>
-        <KpiRow>
+        <KpiRow gap="sm">
           <KpiCard
             size="xs"
-            className={KPI_PAD}
             label="Total landed cost, finished orders"
             value={formatINR(kpis.finishedTotal)}
             sub={`${kpis.finishedPOs.length} orders, all costs entered`}
           />
           <KpiCard
             size="xs"
-            className={KPI_PAD}
             label="Goods costed"
             value={`${formatNumber(kpis.finishedPieces)} pcs`}
             sub={kpis.finishedPOs.join(" and ")}
           />
           <KpiCard
             size="xs"
-            className={KPI_PAD}
             label="Still an estimate"
             value={`${kpis.estimatePOs.length} order${kpis.estimatePOs.length === 1 ? "" : "s"}`}
             sub={`${kpis.estimatePOs.join(", ")}, ${data.estimateReason}`}

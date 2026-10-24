@@ -10,7 +10,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border-border bg-card text-foreground hover:bg-neutral-soft",
+        // Slate labels: every outline button in the references samples about #3d4459, not the navy foreground.
+        outline: "border-border bg-card text-label hover:bg-neutral-soft",
         ghost: "text-foreground hover:bg-neutral-soft",
         link: "text-primary hover:underline underline-offset-4",
         destructive: "bg-danger-soft text-danger hover:bg-danger-soft/80",

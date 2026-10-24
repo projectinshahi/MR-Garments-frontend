@@ -26,8 +26,18 @@ declare module "@tanstack/react-table" {
 
 // dense rows have no fixed height: 9 px padding around a 16 px line gives 35 px text rows and 39 px rows with a
 // 20 px StatusPill, as in the dashboard cards (04).
-// snug 49: bordered tables inside order-detail cards (08, 12, 13, 14).
-const ROW_HEIGHT = { dense: "", compact: "h-[39px]", snug: "h-[49px]", default: "h-[53px]", tall: "h-[58px]" } as const;
+// short 37: calendar list and roles (20, 49). snug 49: bordered tables inside order-detail cards (08, 12, 13, 14).
+// relaxed 61: containers list (24). loose 65: two-line cells on transport, warehouse and users (28, 30, 47).
+const ROW_HEIGHT = {
+  dense: "",
+  short: "h-[37px]",
+  compact: "h-[39px]",
+  snug: "h-[49px]",
+  default: "h-[53px]",
+  tall: "h-[58px]",
+  relaxed: "h-[61px]",
+  loose: "h-[65px]",
+} as const;
 const ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
 type DataTablePagination = {
@@ -47,14 +57,21 @@ type DataTableProps<TData, TValue> = {
   getRowId?: (row: TData) => string;
   /**
    * Row height: dense (dashboard cards: 12 px headers, 13.5 px cells, 35 px rows or 39 px with pills, 6 px outer
-   * padding), compact 39, snug 49 (order-detail tables), default 53 (settings), tall 58 (orders).
+   * padding), short 37, compact 39, snug 49 (order-detail tables), default 53 (settings), tall 58 (orders),
+   * relaxed 61, loose 65 (two-line cells). The totals row is 49 px whatever the density.
    */
   density?: keyof typeof ROW_HEIGHT;
   /**
-   * sm: the header and padding measured in the Wave 1 bordered tables (05, 07–14, 20, 22): 34 px header row with
+   * sm: the header and padding measured in the Wave 1 bordered tables (07–14, 20): 34 px header row with
    * 12.5 px text, 14.5 px cell padding in `card`. Row height still comes from `density`. No effect with `dense`.
    */
   size?: "default" | "sm";
+  /**
+   * tall: a 38 px header band (39 px from the card's top border to the header rule) with the label in a 38 px line
+   * box, as in the list tables 05, 22, 24, 26, 28, 30, 33, 35, 37, 38 and 40–47. Combine with `size="sm"` for its text
+   * and padding. No effect with `dense`.
+   */
+  header?: "default" | "tall";
   /** card: bordered box with a tinted header (list pages). plain: no box, white header (tables inside a SectionCard). */
   variant?: "card" | "plain";
   /** Highlights the row (blue tint and left bar), as on Deposits & Payments and Landed Cost. */
@@ -77,6 +94,7 @@ export function DataTable<TData, TValue>({
   getRowId,
   density = "default",
   size = "default",
+  header: headerHeight = "default",
   variant = "card",
   selectedRowId,
   onRowClick,
@@ -124,8 +142,11 @@ export function DataTable<TData, TValue>({
                   key={header.id}
                   className={cn(
                     // dense: the header sits right under a SectionCard title (titleGap="none"), text low in its 36 px.
-                    dense ? "h-9 pt-[7px]" : sm ? "h-[34px]" : density === "compact" ? "h-9" : "h-11",
+                    dense ? "h-9 pt-[7px]" : headerHeight === "tall" ? "h-[39px]" : sm ? "h-[34px]" : density === "compact" ? "h-9" : "h-11",
                     dense ? "text-xs" : sm ? "text-[12.5px]" : "text-[13px]",
+                    // tall: centring a normal line in the cell sets the label 1 px above every reference; a 38 px line box
+                    // matches. After the font size: tailwind-merge drops a leading class that a later font-size class follows.
+                    !dense && headerHeight === "tall" && "leading-[38px]",
                     "font-bold text-table-head-foreground",
                     cellPad,
                     ALIGN[header.column.columnDef.meta?.align ?? "left"],
@@ -172,7 +193,9 @@ export function DataTable<TData, TValue>({
         {hasFooter ? (
           <TableFooter className="border-t-2 border-navy bg-table-head font-bold">
             {table.getFooterGroups().map((footerGroup) => (
-              <TableRow key={footerGroup.id} className={cn(ROW_HEIGHT[density], "hover:bg-transparent")}>
+              // Every reference totals row is 48 px from the navy rule to the table's bottom border (07, 13, 26, 28, 30,
+              // 37, 38), whatever the body density; a 49 px row renders that inside the collapsed border.
+              <TableRow key={footerGroup.id} className="h-[49px] hover:bg-transparent">
                 {footerGroup.headers.map((header) => (
                   <TableCell
                     key={header.id}

@@ -14,8 +14,6 @@ import { balance, monthTotals, shortQty, supplierTotals } from "./report-logic";
 // Tables and the INR chart of the reports. Client-side because column definitions and value formatters are
 // functions. Column widths place each column where its reference has it; one column per table takes the rest.
 
-// The bordered report tables (33, 35, 37, 38) have a 38 px header row plus its rule (DataTable size="sm" draws 34 px).
-const HEAD = "h-[39px]";
 const DASH = "–";
 
 /** "Recently downloaded" on the hub (32): 12 px headers low in a 43 px row, 13.5 px cells, 10 px outer padding. */
@@ -39,36 +37,36 @@ export function RecentDownloadsTable({ rows }: { rows: RecentDownload[] }) {
 /** "Late orders" (33): bordered table inside the card. */
 export function LateOrdersTable({ rows }: { rows: LateOrder[] }) {
   const columns: ColumnDef<LateOrder>[] = [
-    { accessorKey: "po", header: "PO", meta: { className: cn(HEAD, "w-[105px] font-bold") } },
-    { accessorKey: "supplier", header: "Supplier", meta: { className: HEAD } },
-    { accessorKey: "due", header: "Due", meta: { className: cn(HEAD, "w-[91px]") }, cell: ({ row }) => formatShortDate(row.original.due) },
+    { accessorKey: "po", header: "PO", meta: { className: "w-[105px] font-bold" } },
+    { accessorKey: "supplier", header: "Supplier" },
+    { accessorKey: "due", header: "Due", meta: { className: "w-[91px]" }, cell: ({ row }) => formatShortDate(row.original.due) },
     {
       accessorKey: "lateBy",
       header: "Late by",
-      meta: { className: cn(HEAD, "w-[105px]") },
+      meta: { className: "w-[105px]" },
       cell: ({ row }) => <StatusPill tone="danger">{row.original.lateBy}</StatusPill>,
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.po} size="sm" />;
+  return <DataTable columns={columns} data={rows} getRowId={(row) => row.po} size="sm" header="tall" />;
 }
 
 /** Ordered vs received (35): short is red and bold above zero; payment Reduced or Full. */
 export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
   const columns: ColumnDef<ReceivedLine>[] = [
-    { accessorKey: "po", header: "PO", meta: { className: cn(HEAD, "w-[115px] font-bold") } },
-    { accessorKey: "supplier", header: "Supplier", meta: { className: cn(HEAD, "w-[234px]") } },
-    { accessorKey: "item", header: "Item", meta: { className: cn(HEAD, "w-[155px]") } },
-    { accessorKey: "ordered", header: "Ordered", meta: { className: HEAD }, cell: ({ row }) => formatQty(row.original.ordered, row.original.unit) },
+    { accessorKey: "po", header: "PO", meta: { className: "w-[115px] font-bold" } },
+    { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[234px]" } },
+    { accessorKey: "item", header: "Item", meta: { className: "w-[155px]" } },
+    { accessorKey: "ordered", header: "Ordered", cell: ({ row }) => formatQty(row.original.ordered, row.original.unit) },
     {
       accessorKey: "received",
       header: "Received",
-      meta: { align: "right", className: cn(HEAD, "w-[123px]") },
+      meta: { align: "right", className: "w-[123px]" },
       cell: ({ row }) => formatQty(row.original.received, row.original.unit),
     },
     {
       id: "short",
       header: "Short",
-      meta: { align: "right", className: cn(HEAD, "w-[98px]") },
+      meta: { align: "right", className: "w-[98px]" },
       cell: ({ row }) => {
         const short = shortQty(row.original);
         return short > 0 ? <span className="font-bold text-danger">{formatQty(short, row.original.unit)}</span> : "0";
@@ -77,55 +75,55 @@ export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
     {
       accessorKey: "shortValue",
       header: "Value of short",
-      meta: { align: "right", className: cn(HEAD, "w-[152px]") },
+      meta: { align: "right", className: "w-[152px]" },
       cell: ({ row }) => (row.original.shortValue === null ? DASH : formatCNY(row.original.shortValue)),
     },
     {
       accessorKey: "payment",
       header: "Payment",
-      meta: { className: cn(HEAD, "w-[134px]") },
+      meta: { className: "w-[134px]" },
       cell: ({ row }) => <StatusPill tone={row.original.payment === "Reduced" ? "danger" : "success"}>{row.original.payment}</StatusPill>,
     },
   ];
-  return <DataTable columns={columns} data={lines} getRowId={(row) => row.po} size="sm" />;
+  return <DataTable columns={columns} data={lines} getRowId={(row) => row.po} size="sm" header="tall" />;
 }
 
 /** Payments per supplier (37), with the totals row. */
 export function SupplierPaymentsTable({ rows }: { rows: SupplierPayment[] }) {
   const totals = supplierTotals(rows);
   const columns: ColumnDef<SupplierPayment>[] = [
-    { accessorKey: "supplier", header: "Supplier", meta: { className: cn(HEAD, "w-[287px] font-bold") }, footer: "Total" },
-    { id: "orders", header: "Orders", meta: { className: HEAD }, cell: ({ row }) => row.original.orders.join(", "), footer: `${totals.orders} open orders` },
+    { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[287px] font-bold" }, footer: "Total" },
+    { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${totals.orders} open orders` },
     {
       accessorKey: "orderValue",
       header: "Order value",
-      meta: { align: "right", className: cn(HEAD, "w-[146px]") },
+      meta: { align: "right", className: "w-[146px]" },
       cell: ({ row }) => formatCNY(row.original.orderValue),
       footer: formatCNY(totals.orderValue),
     },
     {
       accessorKey: "paid",
       header: "Paid",
-      meta: { align: "right", className: cn(HEAD, "w-[146px]") },
+      meta: { align: "right", className: "w-[146px]" },
       cell: ({ row }) => formatCNY(row.original.paid),
       footer: formatCNY(totals.paid),
     },
     {
       accessorKey: "paidInr",
       header: "Paid in INR",
-      meta: { align: "right", className: cn(HEAD, "w-[160px]") },
+      meta: { align: "right", className: "w-[160px]" },
       cell: ({ row }) => formatINR(row.original.paidInr),
       footer: formatINR(totals.paidInr),
     },
     {
       id: "balance",
       header: "Balance",
-      meta: { align: "right", className: cn(HEAD, "w-[145px]") },
+      meta: { align: "right", className: "w-[145px]" },
       cell: ({ row }) => formatCNY(balance(row.original)),
       footer: formatCNY(totals.balance),
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplier} density="snug" size="sm" />;
+  return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplier} density="snug" size="sm" header="tall" />;
 }
 
 const perPieceLabel = (value: number | null) => (value === null ? DASH : formatINR(value, 2));
@@ -137,33 +135,32 @@ export function MonthTable({ months }: { months: MonthCost[] }) {
     {
       accessorKey: "month",
       header: "Month",
-      meta: { className: HEAD },
       cell: ({ row }) => (row.original.soFar ? `${row.original.month} (so far)` : row.original.month),
       footer: "Total",
     },
     {
       accessorKey: "pieces",
       header: "Pieces",
-      meta: { align: "right", className: cn(HEAD, "w-[120px]") },
+      meta: { align: "right", className: "w-[120px]" },
       cell: ({ row }) => formatNumber(row.original.pieces),
       footer: formatNumber(totals.pieces),
     },
     {
       accessorKey: "landedCost",
       header: "Landed cost",
-      meta: { align: "right", className: cn(HEAD, "w-[135px]") },
+      meta: { align: "right", className: "w-[135px]" },
       cell: ({ row }) => (row.original.landedCost > 0 ? formatINR(row.original.landedCost) : DASH),
       footer: formatINR(totals.landedCost),
     },
     {
       id: "perPiece",
       header: "Per piece",
-      meta: { align: "right", className: cn(HEAD, "w-[110px]") },
+      meta: { align: "right", className: "w-[110px]" },
       cell: ({ row }) => perPieceLabel(row.original.perPiece),
       footer: perPieceLabel(totals.perPiece),
     },
   ];
-  return <DataTable columns={columns} data={months} getRowId={(row) => row.month} density="snug" size="sm" />;
+  return <DataTable columns={columns} data={months} getRowId={(row) => row.month} density="snug" size="sm" header="tall" />;
 }
 
 /** "Landed cost by month" bars (38), with ₹ value labels. */

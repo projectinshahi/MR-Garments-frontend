@@ -16,7 +16,7 @@ export function PaymentDetailCard({ detail }: { detail: OrderPaymentDetail }) {
   return (
     <SectionCard
       title={`${po} payments`}
-      aside={<CardNote className="text-[13px]">{supplier}</CardNote>}
+      aside={<CardNote size="sm">{supplier}</CardNote>}
       titleGap="none"
       className="pt-3.5 pb-[18px]"
     >

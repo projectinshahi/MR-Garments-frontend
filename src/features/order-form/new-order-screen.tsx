@@ -22,7 +22,6 @@ import { depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals
 // headers, 38 px item inputs with 10 px padding. Cards use titleGap="none" and place content where the reference has it.
 const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
-const fieldInput = "px-3 text-sm";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "px-1.5 py-2";
 const lineInput = "h-[38px] px-2.5 text-sm";
@@ -51,7 +50,7 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
         title="New order"
         parent={{ label: "Orders", href: "/orders" }}
         actions={
-          <Button asChild variant="outline" className="text-label">
+          <Button asChild variant="outline">
             <Link href="/orders">Cancel</Link>
           </Button>
         }
@@ -65,31 +64,31 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
           }}
         >
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
-            <SectionCard title="Order details" titleGap="none">
+            <SectionCard title="Order details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-[11px] grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="po-number" className={labelClass}>
                     Purchase order no.
                   </FieldLabel>
-                  <Input id="po-number" defaultValue={data.po} className={fieldInput} />
+                  <Input id="po-number" defaultValue={data.po} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="order-date" className={labelClass}>
                     Order date
                   </FieldLabel>
-                  <Input id="order-date" defaultValue={formatDate(data.orderDate)} className={fieldInput} />
+                  <Input id="order-date" defaultValue={formatDate(data.orderDate)} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="delivery-date" className={labelClass}>
                     Delivery date <RequiredMark />
                   </FieldLabel>
-                  <Input id="delivery-date" required defaultValue={formatDate(data.deliveryDate)} className={fieldInput} />
+                  <Input id="delivery-date" required defaultValue={formatDate(data.deliveryDate)} size="sm" />
                 </Field>
                 <Field className={cn(fieldClass, "sm:col-span-2")}>
                   <FieldLabel htmlFor="supplier" className={labelClass}>
                     Supplier <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="supplier" required defaultValue={data.supplier}>
+                  <NativeSelect size="sm" id="supplier" required defaultValue={data.supplier}>
                     {data.suppliers.map((supplier) => (
                       <option key={supplier}>{supplier}</option>
                     ))}
@@ -99,7 +98,7 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                   <FieldLabel htmlFor="currency" className={labelClass}>
                     Currency
                   </FieldLabel>
-                  <NativeSelect id="currency" defaultValue={data.currency}>
+                  <NativeSelect size="sm" id="currency" defaultValue={data.currency}>
                     <option>{data.currency}</option>
                   </NativeSelect>
                 </Field>
@@ -107,19 +106,19 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                   <FieldLabel htmlFor="contact-person" className={labelClass}>
                     Contact person
                   </FieldLabel>
-                  <Input id="contact-person" defaultValue={data.contactPerson} className={fieldInput} />
+                  <Input id="contact-person" defaultValue={data.contactPerson} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="phone" className={labelClass}>
                     Phone
                   </FieldLabel>
-                  <Input id="phone" type="tel" defaultValue={data.phone} className={fieldInput} />
+                  <Input id="phone" type="tel" defaultValue={data.phone} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="city" className={labelClass}>
                     City
                   </FieldLabel>
-                  <Input id="city" defaultValue={data.city} className={fieldInput} />
+                  <Input id="city" defaultValue={data.city} size="sm" />
                 </Field>
               </FieldGroup>
             </SectionCard>
@@ -219,8 +218,9 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
               </Button>
             </SectionCard>
 
-            <SectionCard title="Summary" titleGap="none">
+            <SectionCard title="Summary" titleGap="none" bottomGap="form">
               <KeyValueList
+                density="compact"
                 className="mt-2.5 border-b border-border-subtle"
                 items={[
                   { label: "Order total", value: spacedCNY(totals.orderTotal) },

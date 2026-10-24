@@ -46,5 +46,5 @@ const columnsFor = (roles: Role[]): ColumnDef<RoleMatrixRow>[] => [
 
 /** Read-only permission matrix (49). "Roles are fixed in this first version." */
 export function RolesTable({ roles, rows }: RolesData) {
-  return <DataTable columns={columnsFor(roles)} data={rows} getRowId={(r) => r.capability} density="compact" size="sm" />;
+  return <DataTable columns={columnsFor(roles)} data={rows} getRowId={(r) => r.capability} density="short" size="sm" />;
 }

@@ -27,13 +27,6 @@ const PERIODS = [{ value: "last-30-days", label: "Last 30 days" }];
 
 const focusRing = "rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
-// Measured from 28_10.1_Transport_list.jpeg: a 39 px header row (DataTable size="sm" draws 34 px) and 65 px rows
-// around the two-line vehicle cell. Both heights come from this screen's own cell content.
-const head = (label: string) =>
-  function Head() {
-    return <span className="block leading-[38px]">{label}</span>;
-  };
-
 function VehicleCell({ row }: { row: TransportListRow }) {
   const lines = (
     <>
@@ -41,7 +34,7 @@ function VehicleCell({ row }: { row: TransportListRow }) {
       <span className="block text-[12.5px] leading-[14px] text-muted-foreground">{row.lr}</span>
     </>
   );
-  const block = "flex min-h-12 flex-col justify-center";
+  const block = "flex flex-col justify-center";
   return row.formHref ? (
     // The row would navigate too, so the link keeps its own click.
     <Link href={row.formHref} onClick={(event) => event.stopPropagation()} className={`${block} ${focusRing} hover:underline`}>
@@ -64,35 +57,35 @@ const kpiSub = (text: string) => <span className="text-[12.5px]">{text}</span>;
 const columns: ColumnDef<TransportListRow>[] = [
   {
     id: "vehicle",
-    header: head("Vehicle / LR number"),
+    header: "Vehicle / LR number",
     meta: { className: "w-[147.5px] px-[14px]" },
     cell: ({ row }) => <VehicleCell row={row.original} />,
     footer: ({ table }) => transportTotals(rowsOf(table.getRowModel().rows)).label,
   },
-  { accessorKey: "company", header: head("Transport company"), meta: { className: "w-[145px] px-[14px]" } },
-  { accessorKey: "container", header: head("Container"), meta: { className: "w-[128px] px-[14px]" } },
-  { id: "orders", header: head("Orders"), meta: { className: "w-[149px] px-[14px]" }, cell: ({ row }) => row.original.orders.join(", ") },
+  { accessorKey: "company", header: "Transport company", meta: { className: "w-[145px] px-[14px]" } },
+  { accessorKey: "container", header: "Container", meta: { className: "w-[128px] px-[14px]" } },
+  { id: "orders", header: "Orders", meta: { className: "w-[149px] px-[14px]" }, cell: ({ row }) => row.original.orders.join(", ") },
   {
     accessorKey: "bundlesLoaded",
-    header: head("Bundles loaded"),
+    header: "Bundles loaded",
     meta: { align: "right", className: "w-[121.5px] px-[14px]" },
     cell: ({ row }) => formatNumber(row.original.bundlesLoaded),
   },
   {
     accessorKey: "loadedOn",
-    header: head("Loaded on"),
+    header: "Loaded on",
     meta: { className: "w-[91.5px] px-[14px]" },
     cell: ({ row }) => formatShortDate(row.original.loadedOn),
   },
   {
     accessorKey: "unloadedOn",
-    header: head("Unloaded on"),
+    header: "Unloaded on",
     meta: { className: "w-[104.5px] px-[14px]" },
     cell: ({ row }) => formatShortDate(row.original.unloadedOn),
   },
   {
     id: "received",
-    header: head("Bundles received"),
+    header: "Bundles received",
     meta: { className: "w-[132px] px-[14px]" },
     cell: ({ row }) => {
       const { bundlesReceived, bundlesLoaded } = row.original;
@@ -105,7 +98,7 @@ const columns: ColumnDef<TransportListRow>[] = [
   },
   {
     accessorKey: "cost",
-    header: head("Transport cost"),
+    header: "Transport cost",
     meta: { className: "w-[115px] px-[14px] font-bold" },
     cell: ({ row }) => formatINR(row.original.cost),
     footer: ({ table }) => formatINR(transportTotals(rowsOf(table.getRowModel().rows)).cost),
@@ -164,10 +157,10 @@ export function TransportListScreen({ data }: { data: TransportListData }) {
 
         {/* The reference indents the KPI text 18 px and sets the sub-lines at 12.5 px (KpiCard: 20 px, 13 px). */}
         <KpiRow gap="sm">
-          <KpiCard size="xs" className="px-[18px]" label="On the way now" value={formatNumber(kpis.onTheWay)} sub={kpiSub("no vehicle on the road")} />
-          <KpiCard size="xs" className="px-[18px]" label="Delivered, last 30 days" value={formatNumber(kpis.delivered)} sub={kpiSub("vehicles")} />
-          <KpiCard size="xs" className="px-[18px]" label="Bundles delivered" value={formatNumber(kpis.bundlesDelivered)} sub={kpiSub("all counts matched")} />
-          <KpiCard size="xs" className="px-[18px]" label="Transport cost, last 30 days" value={formatINR(kpis.cost)} sub={kpiSub("freight, loading, unloading")} />
+          <KpiCard size="xs" label="On the way now" value={formatNumber(kpis.onTheWay)} sub={kpiSub("no vehicle on the road")} />
+          <KpiCard size="xs" label="Delivered, last 30 days" value={formatNumber(kpis.delivered)} sub={kpiSub("vehicles")} />
+          <KpiCard size="xs" label="Bundles delivered" value={formatNumber(kpis.bundlesDelivered)} sub={kpiSub("all counts matched")} />
+          <KpiCard size="xs" label="Transport cost, last 30 days" value={formatINR(kpis.cost)} sub={kpiSub("freight, loading, unloading")} />
         </KpiRow>
 
         <DataTable
@@ -175,7 +168,8 @@ export function TransportListScreen({ data }: { data: TransportListData }) {
           data={rows}
           getRowId={(r) => r.id}
           size="sm"
-          density="snug"
+          header="tall"
+          density="loose"
           onRowClick={(row) => (row.formHref ? router.push(row.formHref) : notInPrototype(`Transport for ${row.vehicle}`))}
           emptyState="No vehicles match these filters."
         />

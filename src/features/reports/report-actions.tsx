@@ -13,10 +13,10 @@ export function PrototypeButton({ action, ...props }: React.ComponentProps<typeo
 export function ExportActions() {
   return (
     <>
-      <PrototypeButton action="Export Excel" variant="outline" className="text-label">
+      <PrototypeButton action="Export Excel" variant="outline">
         Export Excel
       </PrototypeButton>
-      <PrototypeButton action="Export PDF" variant="outline" className="text-label">
+      <PrototypeButton action="Export PDF" variant="outline">
         Export PDF
       </PrototypeButton>
     </>

@@ -29,7 +29,7 @@ export function ReportsHub({ data }: { data: ReportsHubData }) {
             <RecentDownloadsTable rows={data.recent} />
           </div>
         </SectionCard>
-        <Callout size="sm" className="px-3 text-[13px]">
+        <Callout size="xs">
           Data-entry staff, the clearing and transport staff included, cannot open this page. They can only add and
           update their own stage.
         </Callout>

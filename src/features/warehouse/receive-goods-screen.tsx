@@ -23,10 +23,8 @@ import { capTeamPieces, costSoFar, splitSummary, teamCost } from "./warehouse-lo
 // Measured from 29_11_Warehouse_-_Stage_6_form.jpeg: 12.5 px bold labels 5 px above 14 px fields, a 30 px table
 // header with 12 px text, 16 px between stacked cards and 18 px under each card's last line. Cards use
 // titleGap="none" and place their content as shown.
-const cardClass = "pb-[18px]";
 const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
-const inputClass = "pl-3 text-sm";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "px-1.5 py-0";
 const TEAM_WIDTHS = ["w-[114px]", "w-[154px]", "w-[122.5px]"];
@@ -45,7 +43,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
         title="Receive goods"
         parent={{ label: "Warehouse", href: "/warehouse" }}
         actions={
-          <Button asChild variant="outline" className="text-label">
+          <Button asChild variant="outline">
             <Link href="/warehouse">Cancel</Link>
           </Button>
         }
@@ -59,37 +57,37 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
               notInPrototype("Save and add to stock");
             }}
           >
-            <SectionCard title="Arrival details" titleGap="none" className={cardClass}>
+            <SectionCard title="Arrival details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-3 grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="vehicle-number" className={labelClass}>
                     Vehicle number
                   </FieldLabel>
-                  <Input id="vehicle-number" readOnly value={data.vehicleNumber} className={inputClass} />
+                  <Input id="vehicle-number" readOnly value={data.vehicleNumber} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="lr-number" className={labelClass}>
                     LR number
                   </FieldLabel>
-                  <Input id="lr-number" readOnly value={data.lrNumber} className={inputClass} />
+                  <Input id="lr-number" readOnly value={data.lrNumber} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="container" className={labelClass}>
                     Container
                   </FieldLabel>
-                  <Input id="container" readOnly value={data.container} className={inputClass} />
+                  <Input id="container" readOnly value={data.container} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="unloaded-on" className={labelClass}>
                     Unloaded on <RequiredMark />
                   </FieldLabel>
-                  <Input id="unloaded-on" required defaultValue={formatDate(data.unloadedOn)} className={inputClass} />
+                  <Input id="unloaded-on" required defaultValue={formatDate(data.unloadedOn)} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="warehouse" className={labelClass}>
                     Warehouse
                   </FieldLabel>
-                  <NativeSelect id="warehouse" defaultValue={data.warehouse}>
+                  <NativeSelect size="sm" id="warehouse" defaultValue={data.warehouse}>
                     {data.warehouses.map((name) => (
                       <option key={name}>{name}</option>
                     ))}
@@ -99,7 +97,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                   <FieldLabel htmlFor="received-by" className={labelClass}>
                     Received by <RequiredMark />
                   </FieldLabel>
-                  <Input id="received-by" required defaultValue={data.receivedBy} className={inputClass} />
+                  <Input id="received-by" required defaultValue={data.receivedBy} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="bundles-received" className={labelClass}>
@@ -111,7 +109,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                     inputMode="numeric"
                     value={bundles}
                     onChange={(event) => setBundles(event.target.value.replace(/\D/g, ""))}
-                    className={inputClass}
+                    size="sm"
                   />
                   {Number(bundles) === data.bundlesLoaded ? (
                     <p className="mt-px text-[12.5px] leading-[15px] font-bold text-success-strong">
@@ -124,9 +122,9 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
 
             <SectionCard
               title="Goods received, by team"
-              aside={<CardNote className="text-[13px]">Split the quantity between the teams</CardNote>}
+              aside={<CardNote size="sm">Split the quantity between the teams</CardNote>}
               titleGap="none"
-              className={cardClass}
+              bottomGap="form"
             >
               <Table className="mt-[13px]">
                 <TableHeader>
@@ -199,6 +197,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
               <div className="mt-3 border-b border-border-subtle pb-[10.5px]">
                 <KeyValueList
                   size="sm"
+                  density="compact"
                   items={[
                     { label: "Goods (paid to supplier)", value: formatINR(data.cost.goods) },
                     { label: "Sea freight", value: <span className="text-muted-foreground">In supplier price (CNF)</span> },
@@ -214,7 +213,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
               </div>
             </SectionCard>
 
-            <SectionCard title="Cost by team" titleGap="none" className={cardClass}>
+            <SectionCard title="Cost by team" titleGap="none" bottomGap="form">
               <ul className="mt-3">
                 {data.teams.map((team, i) => (
                   <li

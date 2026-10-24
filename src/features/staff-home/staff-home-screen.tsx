@@ -29,7 +29,8 @@ export function StaffHomeScreen({ data }: { data: StaffHomeData }) {
             </h2>
             <p className="mt-[2.5px] text-[14.5px] leading-5 text-sidebar-foreground">{waitingSummary(data.waitingOrders.length)}</p>
           </div>
-          <Button asChild variant="outline" className="h-[41px] px-[19px] text-[15px]">
+          {/* The white banner button keeps navy text (39); other outline buttons in the references are slate. */}
+          <Button asChild variant="outline" className="h-[41px] px-[19px] text-[15px] text-foreground">
             <Link href="/receiving/new">+ Record a receipt</Link>
           </Button>
         </section>
@@ -39,7 +40,7 @@ export function StaffHomeScreen({ data }: { data: StaffHomeData }) {
             <SectionCard
               title="Waiting for you"
               aria-label="Waiting for you"
-              aside={<CardNote className="text-[13px]">Orders not yet received in China</CardNote>}
+              aside={<CardNote size="sm">Orders not yet received in China</CardNote>}
               titleGap="none"
               className="px-[18px] pt-3 pb-4"
             >
@@ -51,14 +52,14 @@ export function StaffHomeScreen({ data }: { data: StaffHomeData }) {
           </div>
 
           <div className="flex flex-col gap-4">
-            <SectionCard title="What you can do" titleGap="none" className="pt-3.5 pb-[18px]">
+            <SectionCard title="What you can do" titleGap="none" bottomGap="form" className="pt-3.5">
               <AccessList items={data.allowedActions} allowed />
             </SectionCard>
-            <SectionCard title="Not shown to your account" titleGap="none" className="pt-3.5 pb-[18px]">
+            <SectionCard title="Not shown to your account" titleGap="none" bottomGap="form" className="pt-3.5">
               <AccessList items={data.hiddenAreas} allowed={false} />
             </SectionCard>
-            <Callout size="sm" className="px-3">
-              <p className="text-[13px]">
+            <Callout size="xs">
+              <p>
                 <span className="block">Each staff member sees only the stage they work on.</span>
                 <span className="block">Clearing agents and transporters do not log in.</span>
               </p>

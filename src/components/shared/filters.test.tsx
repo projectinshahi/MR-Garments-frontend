@@ -61,4 +61,19 @@ describe("SearchInput", () => {
     expect(input).not.toHaveClass("text-[15px]");
     expect(input.parentElement).toHaveClass("h-[38px]");
   });
+
+  it("is 40 px with 14 px text when md, and draws a slate placeholder with placeholderTone='label'", () => {
+    const { rerender } = render(<SearchInput label="Search suppliers" value="" onValueChange={() => {}} />);
+    const input = () => screen.getByRole("searchbox", { name: "Search suppliers" });
+    expect(input()).toHaveClass("placeholder:text-placeholder");
+    rerender(<SearchInput label="Search suppliers" value="" onValueChange={() => {}} size="md" placeholderTone="label" />);
+    expect(input()).toHaveClass("text-sm", "placeholder:text-label");
+    expect(input()).not.toHaveClass("placeholder:text-placeholder");
+    expect(input().parentElement).toHaveClass("h-10");
+  });
+
+  it("hides Chromium's search clear button, which no reference shows and which clipped placeholders", () => {
+    render(<SearchInput label="Search" value="" onValueChange={() => {}} />);
+    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveClass("[&::-webkit-search-cancel-button]:appearance-none");
+  });
 });

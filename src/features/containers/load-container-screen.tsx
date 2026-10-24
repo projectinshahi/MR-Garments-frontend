@@ -106,13 +106,13 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                   <FieldLabel htmlFor="container-number" className={labelClass}>
                     Container number <RequiredMark />
                   </FieldLabel>
-                  <Input id="container-number" required defaultValue={data.number} />
+                  <Input size="sm" id="container-number" required defaultValue={data.number} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="shipping-agent" className={labelClass}>
                     Shipping agent <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="shipping-agent" required defaultValue={data.agent}>
+                  <NativeSelect size="sm" id="shipping-agent" required defaultValue={data.agent}>
                     {data.agents.map((agent) => (
                       <option key={agent}>{agent}</option>
                     ))}
@@ -122,7 +122,7 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                   <FieldLabel htmlFor="container-terms" className={labelClass}>
                     Container terms <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="container-terms" required defaultValue={data.terms}>
+                  <NativeSelect size="sm" id="container-terms" required defaultValue={data.terms}>
                     {TERMS.map((terms) => (
                       <option key={terms}>{terms}</option>
                     ))}
@@ -132,31 +132,31 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                   <FieldLabel htmlFor="loaded-on" className={labelClass}>
                     Loaded on
                   </FieldLabel>
-                  <Input id="loaded-on" defaultValue={formatDate(data.loadedOn)} />
+                  <Input size="sm" id="loaded-on" defaultValue={formatDate(data.loadedOn)} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="etd" className={labelClass}>
                     Expected departure (ETD)
                   </FieldLabel>
-                  <Input id="etd" defaultValue={formatDate(data.etd)} />
+                  <Input size="sm" id="etd" defaultValue={formatDate(data.etd)} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="eta" className={labelClass}>
                     Expected arrival in India (ETA)
                   </FieldLabel>
-                  <Input id="eta" defaultValue={formatDate(data.eta)} />
+                  <Input size="sm" id="eta" defaultValue={formatDate(data.eta)} />
                 </Field>
                 <Field className={cn(fieldClass, "sm:col-span-2")}>
                   <FieldLabel htmlFor="port-of-loading" className={labelClass}>
                     Port of loading
                   </FieldLabel>
-                  <Input id="port-of-loading" defaultValue={data.portOfLoading} />
+                  <Input size="sm" id="port-of-loading" defaultValue={data.portOfLoading} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="port-of-arrival" className={labelClass}>
                     Port of arrival
                   </FieldLabel>
-                  <Input id="port-of-arrival" defaultValue={data.portOfArrival} />
+                  <Input size="sm" id="port-of-arrival" defaultValue={data.portOfArrival} />
                 </Field>
               </FieldGroup>
             </SectionCard>

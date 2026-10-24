@@ -112,7 +112,8 @@ export function ContainersListScreen({ data }: { data: ContainersListData }) {
           data={rows}
           getRowId={(r) => r.number}
           size="sm"
-          density="tall"
+          header="tall"
+          density="relaxed"
           emptyState="No containers match these filters."
         />
         <p className="text-[13px] leading-4 text-muted-foreground">{data.footnote}</p>

@@ -131,6 +131,7 @@ export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
         getRowId={(order) => order.po}
         density="tall"
         size="sm"
+        header="tall"
         onRowClick={(order) =>
           order.hasDetail ? router.push(`/orders/${order.po}`) : notInPrototype(`Order detail for ${order.po}`)
         }

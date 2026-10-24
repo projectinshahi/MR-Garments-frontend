@@ -135,7 +135,10 @@ export function FilterSelect({
 
 /**
  * Search field without an icon. inlineLabel renders the small "Search" prefix used on settings and users.
- * size: default 40 px with 15 px text; sm 38 px with 13.5 px text (the dashboard header search).
+ * size: default 40 px with 15 px text; sm 38 px with 13.5 px text (the dashboard header search); md 40 px with
+ * 14 px text (settings and users filter rows, 40–47).
+ * placeholderTone="label": the dark slate placeholder of the settings and users references (40–47).
+ * Chromium's search clear button is hidden: no reference shows it, and its reserved space clipped placeholders.
  */
 export function SearchInput({
   label,
@@ -144,6 +147,7 @@ export function SearchInput({
   onValueChange,
   placeholder,
   size = "default",
+  placeholderTone = "default",
   className,
 }: {
   /** Accessible name. */
@@ -152,7 +156,8 @@ export function SearchInput({
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
-  size?: "default" | "sm";
+  size?: "default" | "sm" | "md";
+  placeholderTone?: "default" | "label";
   className?: string;
 }) {
   return (
@@ -175,8 +180,9 @@ export function SearchInput({
         onChange={(event) => onValueChange(event.target.value)}
         placeholder={placeholder}
         className={cn(
-          "h-full min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-placeholder",
-          size === "sm" ? "text-[13.5px]" : "text-[15px]",
+          "h-full min-w-0 flex-1 bg-transparent text-foreground outline-none [&::-webkit-search-cancel-button]:appearance-none",
+          placeholderTone === "label" ? "placeholder:text-label" : "placeholder:text-placeholder",
+          size === "sm" ? "text-[13.5px]" : size === "md" ? "text-sm" : "text-[15px]",
         )}
       />
     </label>

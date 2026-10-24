@@ -18,7 +18,8 @@ export function PageHeader({ title, parent, titleAddon, actions }: PageHeaderPro
   return (
     <header className="sticky top-14 z-20 flex h-(--header-height) shrink-0 items-center gap-4 border-b bg-card px-4 md:top-0 md:px-(--page-padding)">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex min-w-0 items-baseline gap-1.5">
+        {/* 4 px gaps: the "/" sits 4.5 px after the parent and 5 px before the title (06, 15, 23, 29, 33). */}
+        <div className="flex min-w-0 items-baseline gap-1">
           {parent ? (
             <>
               <Link href={parent.href} className="shrink-0 text-sm text-muted-foreground hover:text-foreground">

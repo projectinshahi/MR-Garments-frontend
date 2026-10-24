@@ -147,6 +147,7 @@ export function ClearingListScreen({ data }: { data: ClearingListData }) {
           data={rows}
           getRowId={(r) => r.container}
           size="sm"
+          header="tall"
           onRowClick={(r) =>
             r.container === FORM_CONTAINER ? router.push(`/clearing/${containerSlug(r.container)}`) : notInPrototype(`Clearing for ${r.container}`)
           }

@@ -22,7 +22,6 @@ import type { ClearingFormData } from "./data/queries";
 // the cards, 12 px table headers. Cards use titleGap="none" and place their content where the reference has it.
 const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
-const inputClass = "px-3 text-sm";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "h-[33px] px-1.5 py-0 text-sm";
 
@@ -68,7 +67,7 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
         title={`Container ${data.container}`}
         parent={{ label: "Clearing (India)", href: "/clearing" }}
         actions={
-          <Button asChild variant="outline" className="text-label">
+          <Button asChild variant="outline">
             <Link href="/clearing">Cancel</Link>
           </Button>
         }
@@ -82,25 +81,25 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
               notInPrototype("Mark cleared, hand to transport");
             }}
           >
-            <SectionCard title="Clearing details" titleGap="none" className="pb-[18px]">
+            <SectionCard title="Clearing details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-3 grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="container-number" className={labelClass}>
                     Container number
                   </FieldLabel>
-                  <Input id="container-number" defaultValue={data.container} className={inputClass} />
+                  <Input id="container-number" defaultValue={data.container} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="arrived-at-port" className={labelClass}>
                     Arrived at port
                   </FieldLabel>
-                  <Input id="arrived-at-port" defaultValue={formatDate(data.arrivedAtPort)} className={inputClass} />
+                  <Input id="arrived-at-port" defaultValue={formatDate(data.arrivedAtPort)} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="clearing-agent" className={labelClass}>
                     Clearing agent <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="clearing-agent" required defaultValue={data.agent}>
+                  <NativeSelect size="sm" id="clearing-agent" required defaultValue={data.agent}>
                     {data.agents.map((agent) => (
                       <option key={agent}>{agent}</option>
                     ))}
@@ -110,25 +109,25 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                   <FieldLabel htmlFor="handed-to-agent" className={labelClass}>
                     Handed to agent on
                   </FieldLabel>
-                  <Input id="handed-to-agent" defaultValue={formatDate(data.handedToAgentOn)} className={inputClass} />
+                  <Input id="handed-to-agent" defaultValue={formatDate(data.handedToAgentOn)} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="agent-contact" className={labelClass}>
                     Agent contact person
                   </FieldLabel>
-                  <Input id="agent-contact" defaultValue={data.contactPerson} className={inputClass} />
+                  <Input id="agent-contact" defaultValue={data.contactPerson} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="agent-phone" className={labelClass}>
                     Agent phone
                   </FieldLabel>
-                  <Input id="agent-phone" type="tel" defaultValue={data.phone} className={inputClass} />
+                  <Input id="agent-phone" type="tel" defaultValue={data.phone} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="bill-of-entry" className={labelClass}>
                     Bill of entry no.
                   </FieldLabel>
-                  <Input id="bill-of-entry" defaultValue={data.billOfEntry} className={inputClass} />
+                  <Input id="bill-of-entry" defaultValue={data.billOfEntry} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="duty-paid-on" className={labelClass}>
@@ -138,7 +137,8 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                     id="duty-paid-on"
                     placeholder="Select date"
                     defaultValue={data.dutyPaidOn ? formatDate(data.dutyPaidOn) : ""}
-                    className={cn(inputClass, !data.dutyPaidOn && "border-dashed")}
+                    size="sm"
+                    className={cn(!data.dutyPaidOn && "border-dashed")}
                   />
                 </Field>
                 <Field className={fieldClass}>
@@ -149,7 +149,8 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                     id="cleared-on"
                     placeholder="Select date"
                     defaultValue={data.clearedOn ? formatDate(data.clearedOn) : ""}
-                    className={cn(inputClass, !data.clearedOn && "border-dashed")}
+                    size="sm"
+                    className={cn(!data.clearedOn && "border-dashed")}
                   />
                 </Field>
               </FieldGroup>
@@ -157,7 +158,7 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
 
             <SectionCard
               title="Duty calculation from the agent"
-              aside={<CardNote className="text-[13px]">Amounts in INR</CardNote>}
+              aside={<CardNote size="sm">Amounts in INR</CardNote>}
               titleGap="none"
               className="pb-[18px]"
             >
@@ -202,13 +203,13 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
           <div className="flex flex-col gap-4">
             <SectionCard title="Clearing progress" titleGap="none" className="pb-4">
               <Timeline
-                size="sm"
+                size="xs"
                 className="mt-[11px]"
                 items={data.progress.map((step) => ({
                   title: step.title,
                   marker: step.marker,
                   number: step.number,
-                  detail: step.detail ? <span className="block leading-[15px]">{step.detail}</span> : undefined,
+                  detail: step.detail,
                 }))}
               />
             </SectionCard>

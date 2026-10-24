@@ -116,7 +116,7 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
           <KpiCard size="xs" label="Short items this month" value={kpis.shortItems} sub={kpis.shortItemPos.join(" · ")} tone="danger" />
         </KpiRow>
 
-        <DataTable columns={columns} data={rows} getRowId={(r) => r.id} size="sm" emptyState="No receipts match these filters." />
+        <DataTable columns={columns} data={rows} getRowId={(r) => r.id} size="sm" header="tall" emptyState="No receipts match these filters." />
       </PageContainer>
     </>
   );

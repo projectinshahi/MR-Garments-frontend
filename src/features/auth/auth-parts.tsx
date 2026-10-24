@@ -36,7 +36,7 @@ export function AuthNote({ className, ...props }: React.ComponentProps<"p">) {
  * Password field with the in-field "Show"/"Hide" toggle. While masked, the dots use the placeholder grey, as all
  * three references draw them. `label` completes the toggle's accessible name ("Show new password").
  */
-export function PasswordInput({ label, className, ...props }: React.ComponentProps<"input"> & { label: string }) {
+export function PasswordInput({ label, className, ...props }: Omit<React.ComponentProps<"input">, "size"> & { label: string }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">

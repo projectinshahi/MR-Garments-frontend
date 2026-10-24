@@ -25,7 +25,7 @@ export function ProfileScreen({ data }: { data: ProfileData }) {
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <ProfileDetailsForm details={data.details} languages={data.languages} />
 
-            <SectionCard title="Password" titleGap="none" className={cardClass}>
+            <SectionCard title="Password" titleGap="none" bottomGap="form" className={cardClass}>
               <div className="mt-[13.5px] flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className={rowTitleClass}>Password</p>

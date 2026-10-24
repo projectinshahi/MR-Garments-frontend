@@ -72,7 +72,7 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
         title={`Container ${data.container}`}
         parent={{ label: "Transport", href: "/transport" }}
         actions={
-          <Button asChild variant="outline" className="text-label">
+          <Button asChild variant="outline">
             <Link href="/transport">Cancel</Link>
           </Button>
         }
@@ -86,13 +86,13 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
               notInPrototype("Save and mark unloaded");
             }}
           >
-            <SectionCard title="Transport details" titleGap="none" className="pb-[18px]">
+            <SectionCard title="Transport details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-[11px] grid gap-x-4 gap-y-[13px] sm:grid-cols-3">
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="transport-name" className={labelClass}>
                     Transport name <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect id="transport-name" required {...bind("company")}>
+                  <NativeSelect size="sm" id="transport-name" required {...bind("company")}>
                     {data.companies.map((company) => (
                       <option key={company}>{company}</option>
                     ))}
@@ -106,7 +106,7 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
               </FieldGroup>
             </SectionCard>
 
-            <SectionCard title="Loading and unloading" titleGap="none" className="pb-[18px]">
+            <SectionCard title="Loading and unloading" titleGap="none" bottomGap="form">
               <div className="mt-3 grid gap-[18px] sm:grid-cols-2">
                 <Panel title="Loading at the port" status={<StatusPill tone="success">Done</StatusPill>}>
                   <TextField id="loaded-on" label="Loaded on" className="bg-card" {...bind("loadedOn")} />
@@ -127,7 +127,7 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
                 </Panel>
               </div>
 
-              <Callout tone="warning" size="sm" className="mt-[11px] px-3 text-[13px]">
+              <Callout tone="warning" size="xs" className="mt-[11px]">
                 If the bundles received are fewer than the {formatNumber(data.bundlesLoaded)} loaded, the system asks for a short
                 remark before saving.
               </Callout>
@@ -152,14 +152,13 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
           <div className="flex flex-col gap-4">
             <SectionCard title="Transport progress" titleGap="none" className="pb-[17px]">
               <Timeline
-                size="sm"
+                size="xs"
                 className="mt-2.5"
                 items={data.progress.map((step) => ({
                   title: step.title,
                   marker: step.marker,
                   number: step.number,
-                  // The reference sets the detail line 15 px tall (47 px per step).
-                  detail: step.detail ? <span className="block leading-[15px]">{step.detail}</span> : undefined,
+                  detail: step.detail,
                 }))}
               />
             </SectionCard>
@@ -191,6 +190,7 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
             <SectionCard title="Transport charges" titleGap="none" aside={<CardNote>INR</CardNote>} className="pb-[28px]">
               <KeyValueList
                 size="sm"
+                density="compact"
                 className="mt-2.5 text-[14.5px]"
                 items={data.charges.map((charge) => ({ label: charge.label, value: formatINR(charge.amount) }))}
                 total={{ label: "Adds to landed cost", value: formatINR(chargesTotal) }}
@@ -223,7 +223,7 @@ function TextField({ id, label, required, className, ...props }: React.Component
         {label}
         {required ? <RequiredMark /> : null}
       </FieldLabel>
-      <Input id={id} required={required} className={cn("px-3 text-sm", className)} {...props} />
+      <Input size="sm" id={id} required={required} className={className} {...props} />
     </Field>
   );
 }

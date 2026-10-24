@@ -9,7 +9,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 import type { ProfileDetails } from "./data/queries";
-import { cardClass, fieldClass, inputClass, labelClass } from "./styles";
+import { cardClass, fieldClass, labelClass } from "./styles";
 
 /** "My details": three columns; email, role and office are read-only (grey). */
 export function ProfileDetailsForm({ details, languages }: { details: ProfileDetails; languages: string[] }) {
@@ -19,7 +19,7 @@ export function ProfileDetailsForm({ details, languages }: { details: ProfileDet
   const [language, setLanguage] = useState(details.language);
 
   return (
-    <SectionCard title="My details" titleGap="none" className={cardClass}>
+    <SectionCard title="My details" titleGap="none" bottomGap="form" className={cardClass}>
       <form
         aria-label="My details"
         onSubmit={(event) => {
@@ -37,14 +37,14 @@ export function ProfileDetailsForm({ details, languages }: { details: ProfileDet
               autoComplete="name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className={inputClass}
+              size="sm"
             />
           </Field>
           <Field className={fieldClass}>
             <FieldLabel htmlFor="profile-email" className={labelClass}>
               Email
             </FieldLabel>
-            <Input id="profile-email" type="email" readOnly value={details.email} className={inputClass} />
+            <Input id="profile-email" type="email" readOnly value={details.email} size="sm" />
           </Field>
           <Field className={fieldClass}>
             <FieldLabel htmlFor="profile-phone" className={labelClass}>
@@ -56,26 +56,26 @@ export function ProfileDetailsForm({ details, languages }: { details: ProfileDet
               autoComplete="tel"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
-              className={inputClass}
+              size="sm"
             />
           </Field>
           <Field className={fieldClass}>
             <FieldLabel htmlFor="profile-role" className={labelClass}>
               Role
             </FieldLabel>
-            <Input id="profile-role" readOnly value={details.role} className={inputClass} />
+            <Input id="profile-role" readOnly value={details.role} size="sm" />
           </Field>
           <Field className={fieldClass}>
             <FieldLabel htmlFor="profile-office" className={labelClass}>
               Office
             </FieldLabel>
-            <Input id="profile-office" readOnly value={details.office} className={inputClass} />
+            <Input id="profile-office" readOnly value={details.office} size="sm" />
           </Field>
           <Field className={fieldClass}>
             <FieldLabel htmlFor="profile-language" className={labelClass}>
               Language
             </FieldLabel>
-            <NativeSelect id="profile-language" value={language} onChange={(event) => setLanguage(event.target.value)}>
+            <NativeSelect size="sm" id="profile-language" value={language} onChange={(event) => setLanguage(event.target.value)}>
               {languages.map((option) => (
                 <option key={option}>{option}</option>
               ))}

@@ -15,15 +15,23 @@ type KeyValueListProps = {
   boldValues?: boolean;
   /** Total row: default 16 px on a 24 px line, 12 px under the rule; sm 15 px on a 20 px line, 7 px under it (06, 08, 10, 11, 21). */
   size?: "default" | "sm";
+  /** Row pitch: default 35 px; compact 34 px, as in the form side cards (15 summary, 27 charges, 29 cost so far). */
+  density?: "default" | "compact";
   className?: string;
 };
 
 /** Label-left, value-right rows with 1 px dividers (money, order terms, clearing, transport, summaries). */
-export function KeyValueList({ items, total, boldValues = false, size = "default", className }: KeyValueListProps) {
+export function KeyValueList({ items, total, boldValues = false, size = "default", density = "default", className }: KeyValueListProps) {
   return (
     <dl className={cn("flex flex-col text-sm", className)}>
       {items.map((item, index) => (
-        <div key={index} className="flex items-baseline justify-between gap-4 border-b border-border-subtle py-[7px] leading-5 last:border-b-0">
+        <div
+          key={index}
+          className={cn(
+            "flex items-baseline justify-between gap-4 border-b border-border-subtle leading-5 last:border-b-0",
+            density === "compact" ? "py-[6.5px]" : "py-[7px]",
+          )}
+        >
           <dt className={cn(item.muted && "text-muted-foreground")}>{item.label}</dt>
           <dd className={cn("text-right", boldValues && !item.muted && "font-bold")}>{item.value}</dd>
         </div>

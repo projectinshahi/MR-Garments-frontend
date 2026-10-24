@@ -305,7 +305,7 @@ fixtures. Screen agents add any new differences they find to their report, and t
 
 | Record | Screens and values | Note |
 | --- | --- | --- |
-| PO-2044 | Orders (5), Staff home (39): **Ladies kurtis, 3,200 pcs** · Calendar Week/List (19, 20): **Men's shirts, 1,800 pcs** | Supplier (Shenzhen Apparel) and due date (29 Sep) agree |
+| PO-2044 | Orders (5), Staff home (39): **Ladies kurtis, 3,200 pcs** · Calendar Week/List (19, 20), Notifications (50): **Men's shirts, 1,800 pcs** | Supplier (Shenzhen Apparel) and due date (29 Sep) agree |
 | PO-2041 | Orders (5), Staff home (39): **Cotton fabric rolls, 5,000 m** · Calendar List (20): **Ladies tops, 2,000 pcs** | due 26 Sep, Guangzhou Textile Co. agree |
 | PO-2047 | Orders (5), Staff home (39): **Polo shirts, 1,800 pcs** · Calendar Week/List (19, 20): **Ladies leggings, 2,000 pcs** | due 1 Oct agrees |
 | PO-2049 | Orders (5), Staff home (39): **Cotton denim fabric, 2,400 m** · Calendar Week/List (19, 20): **Polyester fabric, 3,000 m** | due 3 Oct agrees |
@@ -314,7 +314,7 @@ fixtures. Screen agents add any new differences they find to their report, and t
 | PO-2028 timeline | Orders (5): stage **4. Clearing in India / In clearing** · Containers list (24): **Arrived, in clearing** · Clearing form (25): duty paid **waiting** · Transport form (27): unloading **waiting** · Order detail (6–14), Clearing list (26), Transport list (28), Warehouse (29, 30), Landed cost (31, 38): **received in warehouse 3 Oct** | Snapshots from different days, some after `MOCK_TODAY` (30 Sep). Store the shown values; do not recompute them from the clock. |
 | Chen Yu | Users list (47): last sign-in **Yesterday, 15:31** · Staff home (39): signed in today (30 Sep) | Keep as shown |
 | PO-2041 rates | Deposits & Payments (16): deposit rate **20.00**, expected balance rate **30.00** (other orders show 11.60–14.00) | Implausible but shown, so keep as shown |
-| Late wording | Dashboard (4): **Late 4 days / Late 3 days / Late 1 day** · Calendar List (20): **4 days late / 3 days late / 1 day late** (same POs 2041, 2038, 2044) | Each screen keeps its own wording |
+| Late wording | Dashboard (4): **Late 4 days / Late 3 days / Late 1 day** · Calendar List (20): **4 days late / 3 days late / 1 day late** · Order status report (33): **4 days / 3 days / 1 day** · Staff home (39): **26 Sep · late** (same POs 2041, 2038, 2044) | Each screen keeps its own wording |
 | "On track" colour | Calendar Month and Week (18, 19): **blue** (info) · Calendar List (20) and Dashboard (4): **green** (success) | Each screen keeps its own tone |
 | Calendar Month | Month (18) shows **October 2026** while `MOCK_TODAY` is 30 Sep, and **14** PO chips in its grid (28 Sep – 1 Nov). The 16 records in the List include PO-2041 (26 Sep) and PO-2038 (27 Sep), which fall before the grid. | The W1 assignment's "16 chips" was wrong; 14 are rendered, as shown |
 | PO-2024 supplier | Orders (5): **Hangzhou Silk House** · Suppliers (40) lists five suppliers and has **Hangzhou Knits** but no Hangzhou Silk House | Not added to the supplier master (no reference supports it); the Orders screen adds it to its own supplier filter |
@@ -322,3 +322,16 @@ fixtures. Screen agents add any new differences they find to their report, and t
 | Receiving office | Receiving list (22) has no office column. The form (21) shows **Guangzhou office** for PO-2035 (24 Sep). The other rows' office is **inferred** as Guangzhou office, the only China office in Offices (44) | Uncertain: inferred so the "All offices" filter works, not transcribed |
 | PO-2035 price | Receipt form (21): **¥60 per jacket**, inferred from "Short: 40 pcs × ¥60"; care labels show no price | Inferred, not shown as a field |
 | "Due soon" (Orders) | Orders (5) shows only the chip label **Due soon 5**. Rule used for filtering: not late and due from `MOCK_TODAY` up to **7 days** ahead. Chip counts are for all 50 orders; page 1 matches 2 (Due soon) and 1 (Short received) | Documented decision, not a transcribed value |
+| Foshan Fabrics contact | New order (15): **Mr. Li Wei, +86 757 8812 0345, Foshan, China** · Suppliers (40) and the supplier master: **Mr. Chen Hao, +86 137 2288 5501, Foshan** | The form keeps its own contact and is not auto-filled from the master |
+| FCIU 5527310 | Containers list (24): loaded **–**, **23** bundles, "Est. 24 Oct" · Load container (23): loaded **27 Sep 2026**, **71** bundles over 3 lines | Snapshots from different moments; keep both |
+| OOLU 6094412 | Containers list (24): sailed **1 Oct**, after `MOCK_TODAY` (30 Sep) | Stored as shown |
+| CAIU 2298076 clearing | Clearing list (26): **Cleared 1 Oct**, KPI "In clearing now **0**" · Clearing form (25): duty paid **Waiting**, still in clearing | Same snapshot difference as the PO-2028 timeline row |
+| Track pants | Warehouse list (30): **PO-2030 · Hangzhou Knits**, ₹236.33 per piece · Orders (5), Landed Cost (31): **PO-2019 · Shenzhen Apparel**, ₹236.33 | Keep both |
+| PO-2024 cost | Landed Cost (31): **Estimate, waiting for duty** · Orders (5): stage **5, On the road** | Keep both |
+| Landed cost presentation | Landed Cost (31): duty **navy**, transport **amber**, percentages with one decimal · Order detail Cost tab (13): other chart colours, whole percentages | Same PO-2028 amounts; each screen keeps its own presentation |
+| Deliveries per day (34) | KPI **Days with none 6**, while its own chart shows **7** zero days | Source inconsistency; the KPI is stored as shown |
+| Landed cost by month (38) | September **₹213.87** per piece; 28,44,560 / 13,300 = 213.877 would round to ₹213.88 | Stored as shown; the ₹267.19 total is computed and matches |
+| Reports hub (32) | Stat strips "2 orders short · **40 pcs** missing" (35 also shows 12 m short) and "**6 on the way** · 2 arrive this week" (36 lists 6 containers, one arrived and one loading). Card titles differ from the report page titles ("Deliveries due by date" opens "Deliveries per day") | Each screen keeps its own text |
+| PO-2035 receipts | Staff home (39): **460 pcs Men's jackets** and **500 pcs Care labels**, 9 bundles each, saved 24 Sep · Record receipt form (21): its own PO-2035 quantities | Keep both |
+| Notification times | Notifications (50) is newest first, yet its last rows read **30 Sep, 17:35** and **30 Sep, 09:00** below **24 Sep, 16:45** | Source inconsistency; labels stored as shown |
+| Head office | Users list (47): **Head office** for Suresh, Priya and Anita · Offices & warehouses (44) and the location master: no Head office | Not added to the master (no reference lists it); the users list shows the value from the user record |

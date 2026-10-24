@@ -11,13 +11,15 @@ import { cn } from "@/lib/utils";
  */
 export type Marker = "check" | "current" | "pending" | "dot" | "ring";
 
-function MarkerIcon({ marker, number, size }: { marker: Marker; number?: number; size: "md" | "lg" }) {
-  const box = size === "lg" ? "size-[30px]" : "size-6";
+// sm: the 22 px progress markers of the clearing and transport forms (25, 27), where the current step has a 3 px
+// pale-blue halo and pending steps are drawn lighter.
+function MarkerIcon({ marker, number, size }: { marker: Marker; number?: number; size: "sm" | "md" | "lg" }) {
+  const box = size === "lg" ? "size-[30px]" : size === "md" ? "size-6" : "size-[22px]";
   switch (marker) {
     case "check":
       return (
         <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-success-strong text-white", box)}>
-          <Check className={size === "lg" ? "size-4" : "size-3.5"} strokeWidth={3} aria-hidden />
+          <Check className={size === "lg" ? "size-4" : size === "md" ? "size-3.5" : "size-3"} strokeWidth={3} aria-hidden />
         </span>
       );
     case "current":
@@ -26,7 +28,11 @@ function MarkerIcon({ marker, number, size }: { marker: Marker; number?: number;
         <span
           className={cn(
             "flex shrink-0 items-center justify-center rounded-full border-2 bg-card text-xs font-bold",
-            marker === "current" ? "border-primary text-primary" : "border-chip-muted text-muted-foreground",
+            marker === "current"
+              ? cn("border-primary text-primary", size === "sm" && "ring-3 ring-info-soft")
+              : size === "sm"
+                ? "border-input text-placeholder"
+                : "border-chip-muted text-muted-foreground",
             box,
           )}
         >
@@ -94,29 +100,45 @@ export type TimelineItem = { title: React.ReactNode; detail?: React.ReactNode; m
 /**
  * Vertical progress list (clearing/transport progress, receiving history, latest activity, deliveries for a PO).
  * size: default 15 px titles on a 24 px line, 16 px between items; sm 14 px titles on a 20 px line, 12.5 px
- * detail, 12 px between items (06, 09, 21).
+ * detail, 12 px between items (06, 09, 21); xs as sm with 22 px markers 8 px from the text and 2 px below the
+ * title line (so a step without detail is 36 px), 15 px detail lines, a halo on the current step and lighter pending
+ * steps (clearing and transport progress: 25, 27).
  */
-export function Timeline({ items, size = "default", className }: { items: TimelineItem[]; size?: "default" | "sm"; className?: string }) {
-  const sm = size === "sm";
+export function Timeline({ items, size = "default", className }: { items: TimelineItem[]; size?: "default" | "sm" | "xs"; className?: string }) {
+  const sm = size !== "default";
+  const xs = size === "xs";
   return (
     <ol className={cn("flex flex-col", className)}>
       {items.map((item, index) => {
         const muted = item.marker === "pending";
         const small = item.marker === "dot" || item.marker === "ring";
         return (
-          <li key={index} className={cn("relative flex gap-3 last:pb-0", sm ? "pb-3" : "pb-4")}>
+          <li key={index} className={cn("relative flex last:pb-0", xs ? "gap-2" : "gap-3", sm ? "pb-3" : "pb-4")}>
             {index < items.length - 1 ? (
-              <span aria-hidden className={cn("absolute w-0.5 bg-chip-muted", small ? "top-4 bottom-0 left-[6px]" : "top-7 bottom-1 left-[11px]")} />
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute w-0.5 bg-chip-muted",
+                  small ? "top-4 bottom-0 left-[6px]" : xs ? "top-[28px] bottom-0.5 left-[10px]" : "top-7 bottom-1 left-[11px]",
+                )}
+              />
             ) : null}
-            <span className={cn("relative z-10 flex justify-center", small ? cn("w-3.5", sm ? "pt-[3px]" : "pt-1") : "w-6")}>
-              <MarkerIcon marker={item.marker} number={item.number} size="md" />
+            <span className={cn("relative z-10 flex justify-center", small ? cn("w-3.5", sm ? "pt-[3px]" : "pt-1") : xs ? "w-[22px] pt-0.5" : "w-6")}>
+              <MarkerIcon marker={item.marker} number={item.number} size={xs ? "sm" : "md"} />
             </span>
             <div className="flex min-w-0 flex-col">
-              <span className={cn(sm ? "text-sm leading-5" : "text-[15px] leading-6", muted ? "text-muted-foreground" : "font-bold")}>
+              <span
+                className={cn(
+                  sm ? "text-sm leading-5" : "text-[15px] leading-6",
+                  muted ? (xs ? "text-placeholder" : "text-muted-foreground") : "font-bold",
+                )}
+              >
                 {item.title}
               </span>
               {item.detail ? (
-                <span className={cn(sm ? "text-[12.5px]" : "text-[13px]", "leading-[18px] text-muted-foreground")}>{item.detail}</span>
+                <span className={cn(sm ? "text-[12.5px]" : "text-[13px]", xs ? "leading-[15px]" : "leading-[18px]", "text-muted-foreground")}>
+                  {item.detail}
+                </span>
               ) : null}
             </div>
           </li>

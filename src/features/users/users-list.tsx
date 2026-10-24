@@ -34,9 +34,8 @@ const columns: ColumnDef<UserRow>[] = [
     accessorKey: "name",
     header: "User",
     meta: { className: "w-[272px]" },
-    // The two-line cell sets the reference's 65 px row pitch (DataTable has no such density).
     cell: ({ row }) => (
-      <div className="flex min-h-12 flex-col justify-center leading-4">
+      <div className="flex flex-col justify-center leading-4">
         <span className="font-bold">{row.original.name}</span>
         <span className="text-[12.5px] text-muted-foreground">{row.original.email}</span>
       </div>
@@ -76,9 +75,9 @@ export function UsersList({ users, roles }: UsersListData) {
             placeholder="name or email"
             value={filters.query}
             onValueChange={(query) => set({ query })}
-            // 40 px tall as in 47 (sm is 38). 163 px wide in the reference; the shared 12 px "Search" prefix and the
-            // space Chrome keeps for the search cancel button need 180 px so the placeholder is not clipped.
-            className="h-10 w-[180px]"
+            placeholderTone="label"
+            // 47 draws a 40 px tall (sm is 38), 163 px wide box with sm's 13.5 px text.
+            className="h-10 w-[163px]"
           />
           <FilterSelect
             label="Role"
@@ -101,7 +100,7 @@ export function UsersList({ users, roles }: UsersListData) {
         />
       </div>
 
-      <DataTable columns={columns} data={rows} getRowId={(u) => u.id} density="tall" size="sm" emptyState="No users match these filters." />
+      <DataTable columns={columns} data={rows} getRowId={(u) => u.id} density="loose" size="sm" header="tall" emptyState="No users match these filters." />
 
       <p className="text-[12.5px] leading-4 text-muted-foreground">
         Staff with an entry role can enter data for their own stage only. They cannot see costs, payments or reports.

@@ -16,7 +16,7 @@ export function NotificationSettings({ preferences }: { preferences: Notificatio
   );
 
   return (
-    <SectionCard title="Notifications" titleGap="none" className={cardClass}>
+    <SectionCard title="Notifications" titleGap="none" bottomGap="form" className={cardClass}>
       <ul aria-label="Notification settings" className="mt-[13px] divide-y divide-border-subtle">
         {preferences.map((preference) => (
           <li key={preference.id} className="flex items-center justify-between gap-4 py-[12.5px]">
