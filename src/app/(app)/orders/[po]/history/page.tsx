@@ -1,6 +1,14 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="History" references="14_3.1.i_History.jpeg" withHeader={false} />;
+import { getOrderHistory } from "@/features/order-detail/history/data/queries";
+import { HistoryScreen } from "@/features/order-detail/history/history-screen";
+
+export const metadata: Metadata = { title: "History" };
+
+export default async function HistoryPage({ params }: PageProps<"/orders/[po]/history">) {
+  const { po } = await params;
+  const events = await getOrderHistory(po);
+  if (!events) notFound();
+  return <HistoryScreen po={po} events={events} />;
 }

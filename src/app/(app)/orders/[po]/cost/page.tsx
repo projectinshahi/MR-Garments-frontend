@@ -1,6 +1,14 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Cost" references="13_3.1.h_Cost.jpeg" withHeader={false} />;
+import { CostScreen } from "@/features/order-detail/cost/cost-screen";
+import { getOrderCost } from "@/features/order-detail/cost/data/queries";
+
+export const metadata: Metadata = { title: "Cost" };
+
+export default async function CostPage({ params }: PageProps<"/orders/[po]/cost">) {
+  const { po } = await params;
+  const data = await getOrderCost(po);
+  if (!data) notFound();
+  return <CostScreen po={po} data={data} />;
 }

@@ -1,6 +1,14 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Warehouse" references="12_3.1.g_Warehouse.jpeg" withHeader={false} />;
+import { getWarehouseReceipt } from "@/features/order-detail/warehouse/data/queries";
+import { WarehouseScreen } from "@/features/order-detail/warehouse/warehouse-screen";
+
+export const metadata: Metadata = { title: "Warehouse" };
+
+export default async function WarehousePage({ params }: PageProps<"/orders/[po]/warehouse">) {
+  const { po } = await params;
+  const data = await getWarehouseReceipt(po);
+  if (!data) notFound();
+  return <WarehouseScreen po={po} data={data} />;
 }

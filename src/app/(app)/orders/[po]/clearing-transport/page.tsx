@@ -1,6 +1,14 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Clearing & transport" references="11_3.1.f_Clearing_&_transport.jpeg" withHeader={false} />;
+import { ClearingTransportScreen } from "@/features/order-detail/clearing-transport/clearing-transport-screen";
+import { getClearingTransport } from "@/features/order-detail/clearing-transport/data/queries";
+
+export const metadata: Metadata = { title: "Clearing & transport" };
+
+export default async function ClearingTransportPage({ params }: PageProps<"/orders/[po]/clearing-transport">) {
+  const { po } = await params;
+  const data = await getClearingTransport(po);
+  if (!data) notFound();
+  return <ClearingTransportScreen po={po} data={data} />;
 }
