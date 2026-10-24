@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Notifications" references="50_17.1_Notifications.jpeg" />;
+import { getNotifications } from "@/features/notifications/data/queries";
+import { NotificationsScreen } from "@/features/notifications/notifications-screen";
+
+export const metadata: Metadata = { title: "Notifications" };
+
+export default async function NotificationsPage() {
+  const data = await getNotifications();
+  return <NotificationsScreen data={data} />;
 }

@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="My profile" references="51_17.2_My_profile.jpeg" />;
+import { getProfile } from "@/features/profile/data/queries";
+import { ProfileScreen } from "@/features/profile/profile-screen";
+
+export const metadata: Metadata = { title: "My profile" };
+
+export default async function ProfilePage() {
+  const data = await getProfile();
+  return <ProfileScreen data={data} />;
 }
