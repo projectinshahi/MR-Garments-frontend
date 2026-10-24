@@ -1,6 +1,14 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Items" references="07_3.1.b_Items.jpeg" withHeader={false} />;
+import { getOrderItems } from "@/features/order-detail/items/data/queries";
+import { ItemsScreen } from "@/features/order-detail/items/items-screen";
+
+export const metadata: Metadata = { title: "Order items" };
+
+export default async function OrderItemsPage({ params }: PageProps<"/orders/[po]/items">) {
+  const { po } = await params;
+  const data = await getOrderItems(po);
+  if (!data) notFound();
+  return <ItemsScreen po={po} data={data} />;
 }
