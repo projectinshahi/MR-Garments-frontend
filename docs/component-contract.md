@@ -22,23 +22,23 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 
 | Export | Kind | Props and usage |
 | --- | --- | --- |
-| `SectionCard` | Server | `title?`, `aside?` (use `CardLink` for "View all orders" or `CardNote` for muted notes), children. 12 px radius, 1 px border, padding 16/20/20, 16 px bold title. `titleGap?: "default" \| "none"`: 16 px between the title row and the content, or none, so a `density="dense"` table header sits right under the title (dashboard). |
+| `SectionCard` | Server | `title?`, `aside?` (use `CardLink` for "View all orders" or `CardNote` for muted notes), children. 12 px radius, 1 px border, padding 16/20/20, 16 px bold title. `bottomGap?: "default" | "tight"`: 20 px bottom padding, or 6 px for a card that ends with a bordered table (07, 08, 12, 13). `titleGap?: "default" \| "none"`: 16 px between the title row and the content, or none, so a `density="dense"` table header sits right under the title (dashboard). |
 | `CardLink`, `CardNote` | Server | Right-side title-row link (15 px bold primary; `size="sm"` 13 px, dashboard) and muted note (14 px). |
-| `KpiCard`, `KpiRow` | Server | `KpiCard`: `label`, `value`, `sub?`, `tone?: "default" \| "danger"` (strong red value), `size?: "default" \| "sm"` (106 px tall, or 104 px with tighter spacing, dashboard). `KpiRow`: equal-width cards, `gap?: "default" \| "sm"` (18 px, or 16 px on the dashboard). |
-| `Callout` | Server | `tone?: "info" \| "success" \| "warning"`. Tinted note box (warning has a border, as in the week view's late banner). |
+| `KpiCard`, `KpiRow` | Server | `KpiCard`: `label`, `value`, `sub?`, `tone?: "default" \| "danger"` (strong red value), `size?: "default" \| "sm" \| "xs"` (106 px tall; `sm` 104 px with tighter spacing, dashboard; `xs` 91.5 px with a 28 px value, order detail, payments, receiving: 08, 09, 12, 16, 22). `KpiRow`: equal-width cards, `gap?: "default" \| "sm"` (18 px, or 16 px on the dashboard and the `xs` screens). |
+| `Callout` | Server | `tone?: "info" \| "success" \| "warning"`. Tinted note box (warning has a border, as in the week view's late banner). `size?: "default" | "sm"`: 15 px text, or 13.5 px with 14/10 px padding (08, 10, 12, 16, 19). |
 | `TodayPill` | Server | `style?: "today" \| "weekday"`, giving "Today, 30 Sep 2026" or "Wed, 30 Sep 2026" from `MOCK_TODAY`. `size?: "default" \| "sm"`: 14 px text, or 13.5 px (dashboard). |
 | `StatusPill` | Server | `tone: "danger" \| "warning" \| "success" \| "info" \| "purple" \| "neutral"`. 20 px pill, 12 px bold. |
 | `TermsBadge` | Server | `terms: "FOB" \| "CNF"`, `size?: "sm" \| "md"`. Boxed FOB (info) and CNF (purple). |
-| `KeyValueList` | Server | `items: { label, value, muted? }[]`, `total?: { label, value }` (under a 2 px navy rule), `boldValues?`. |
+| `KeyValueList` | Server | `items: { label, value, muted? }[]`, `total?: { label, value }` (under a 2 px navy rule), `boldValues?`, `size?: "default" | "sm"` (total row 16 px on a 24 px line, or 15 px on a 20 px line, 7 px under the rule: 06, 08, 10, 11, 21). |
 | `ProgressBar` | Server | `value`, `max`, `label`, `size?: "lg" (18 px) \| "sm" (8 px)`. |
 | `StageProgress` | Server | `stage: 1–6`. Six 16 × 6 segments plus caption "2. Receiving in China" (orders list). |
 | `StackedBar`, `LegendSwatch` | Server | `segments: { label, value, color: "chart-1".."chart-4" }[]`. 34 px bar. The screen renders its own legend rows using `LegendSwatch`. |
-| `Journey` | Server | `steps: { title, lines?, marker, number? }[]`, `align?: "center" \| "edges"`. Horizontal steps (order journey: all `check`; container route: `dot`/`ring` with `edges`). |
-| `Timeline` | Server | `items: { title, detail?, marker, number? }[]`. Vertical list. Markers: `check` (done), `current` (blue ring + number), `pending` (grey ring + number), `dot`, `ring`. |
-| `BarChart` | Client | `data: { label, value }[]`, `label` (accessible), `formatValue?`, `className` (set the height, e.g. `h-72`). Value labels above bars; zero values show a track-colored stub. |
+| `Journey` | Server | `steps: { title, lines?, marker, number? }[]`, `align?: "center" \| "edges"`. Horizontal steps (order journey: all `check`; container route: `dot`/`ring` with `edges`). `size?: "default" | "sm"`: 15 px titles and 13 px lines 6 px apart, or 14 px titles and 12.5 px lines with no gap (06, 10). |
+| `Timeline` | Server | `items: { title, detail?, marker, number? }[]`. Vertical list. Markers: `check` (done), `current` (blue ring + number), `pending` (grey ring + number), `dot`, `ring`. `size?: "default" | "sm"`: 15 px titles on a 24 px line, 16 px between items, or 14 px titles on a 20 px line, 12.5 px detail, 12 px between items (06, 09, 21). |
+| `BarChart` | Client | `data: { label, value }[]`, `label` (accessible), `formatValue?`, `className` (set the height, e.g. `h-72`). Value labels above bars; zero values show a track-colored stub. Every category label is drawn. `size?: "default" | "sm"`: 14 px labels (report charts), or the side-card chart on the Delivery Calendar (18): 11 px day labels, 12 px values, bars 84 % of the band. |
 | `DataTable` | Client | See below. |
-| `FilterChips` | Client | `options: { value, label, tone?: "danger" }[]`, `value`, `onValueChange`, `label`, `variant?: "chips" \| "segmented"`. Labels include counts exactly as shown ("All 50", "Active (6)"). |
-| `FilterSelect` | Client | `label`, `showLabel?` ("Stage  All stages ▾"), `value`, `options`, `onValueChange`. A 40 px button that opens a radio menu. The trigger renders before hydration. |
+| `FilterChips` | Client | `options: { value, label, tone?: "danger" }[]`, `value`, `onValueChange`, `label`, `variant?: "chips" \| "segmented"`. Labels include counts exactly as shown ("All 50", "Active (6)"). `size?: "default" | "sm"`: 33 px chips with 14 px text, or 32 px with 13 px bold slate text (05, 20, 22). |
+| `FilterSelect` | Client | `label`, `showLabel?` ("Stage  All stages ▾"), `value`, `options`, `onValueChange`. A 40 px button that opens a radio menu. The trigger renders before hydration. `size?: "default" | "sm"`: 15 px text with a ▾ character, or 14 px slate text with a drawn 6 × 5 triangle 5 px after it (05, 20, 22). |
 | `SearchInput` | Client | `label` (accessible), `inlineLabel?` ("Search" prefix on settings and users), `placeholder`, `value`, `onValueChange`, `size?: "default" \| "sm"`. No icon. Default 40 px with 15 px text; `sm` 38 px with 13.5 px text (the dashboard header search). Set the width with `className` (`w-[250px]` in the header). |
 | `RequiredMark`, `NativeSelect`, `FormFooter` | Server-safe | Red `*` after a label, a 42 px native select with ▼, and right-aligned form actions (use `Button size="lg"`). |
 | `notInPrototype(action)` | Client fn | **D5.** Shows the toast "⟨action⟩ is not included in the current prototype." The only allowed behavior for undesigned actions. |
@@ -49,7 +49,8 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 | Prop | Contract |
 | --- | --- |
 | `columns`, `data`, `getRowId?` | TanStack v8 column definitions. The caller filters `data`. |
-| `density?` | `dense` (dashboard cards, 04): 12 px headers in a 36 px header row, 13.5 px cells, rows sized by 9 px padding around a 16 px line (35 px text rows, 39 px rows with a `StatusPill`), 6 px outer cell padding in `plain`. Pair it with `SectionCard titleGap="none"`. `compact` (39 px rows, 36 px header), `default` (53 px, settings), `tall` (58 px, orders). Header 13 px and cells 14 px unless `dense`. |
+| `density?` | `dense` (dashboard cards, 04): 12 px headers in a 36 px header row, 13.5 px cells, rows sized by 9 px padding around a 16 px line (35 px text rows, 39 px rows with a `StatusPill`), 6 px outer cell padding in `plain`. Pair it with `SectionCard titleGap="none"`. `compact` (39 px rows, 36 px header), `snug` (49 px rows, order-detail tables: 08, 12, 13, 14), `default` (53 px, settings), `tall` (58 px, orders). Header 13 px and cells 14 px unless `dense`. |
+| `size?` | `default`, or `sm`: the Wave 1 bordered-table header and padding (05, 07–14, 20, 22): 34 px header row with 12.5 px text and 14.5 px cell padding in `card`. Row height still comes from `density`; no effect with `dense`. |
 | `variant?` | `card` (bordered box with a tinted header, list pages) or `plain` (no box, white header, tables inside a `SectionCard`). |
 | column `meta` | `{ align?: "left" \| "right" \| "center", className? }`. Numbers are right-aligned. |
 | column `footer` | Any column with `footer` makes a totals row under a 2 px navy rule ("Total, 4 containers"). |
@@ -59,7 +60,7 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 
 ## UI primitives (`src/components/ui`, shadcn radix-nova, restyled)
 
-`button` (variants `default` / `outline` / `ghost` / `link` / `destructive`; sizes `default` 36 px, `sm`, `lg` 46 px
+`button` (variants `default` / `outline` / `ghost` / `link` / `destructive`; sizes `default` 36 px, `sm`, `header` 34 px (page-header primary action: 05, 16, 22), `lg` 46 px
 form buttons, `icon`, `icon-sm`), `input` (42 px; `readOnly` gets the grey fill; `className="border-dashed"` for empty
 optional fields), `textarea`, `checkbox` (20 px), `switch` (38 × 22), `dialog` (16 px radius, navy 50% overlay, 22 px
 title), `dropdown-menu`, `sheet`, `tooltip`, `sonner`, `chart`, `field`, `label`, `separator`, `skeleton`, `spinner`,

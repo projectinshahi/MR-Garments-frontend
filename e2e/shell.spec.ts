@@ -44,6 +44,22 @@ test("staff sidebar shows only Home and the staff member's stage", async ({ page
   await expect(nav.getByRole("link")).toHaveText(["Home", "Receiving (China)"]);
 });
 
+test("shared Journey route markers and BarChart day labels render (preview)", async ({ page }) => {
+  await page.goto("/preview");
+  // Journey dot markers used to render 0 × 0 inside their plain wrapper.
+  const route = page.getByRole("list").filter({ hasText: "Guangzhou (Nansha)" });
+  const dot = route.locator("span.size-3\\.5").first();
+  await expect(dot).toBeVisible();
+  const box = await dot.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(13);
+  expect(box?.height).toBeGreaterThanOrEqual(13);
+  // Every category label is drawn; none is dropped to avoid a collision.
+  const chart = page.getByRole("figure", { name: "Deliveries due per day, next 7 days" });
+  for (const day of ["Thu 1", "Fri 2", "Sat 3", "Sun 4", "Mon 5", "Tue 6", "Wed 7"]) {
+    await expect(chart.getByText(day, { exact: true })).toBeVisible();
+  }
+});
+
 test("auth layout renders the product panel", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByText("Import Tracking System")).toBeVisible();

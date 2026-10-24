@@ -18,6 +18,8 @@ const buttonVariants = cva(
       size: {
         default: "h-9 px-4 text-sm",
         sm: "h-8 px-3 text-[13px]",
+        // Page-header primary action ("+ New order", "+ Record payment", "+ Record receipt": 05, 16, 22).
+        header: "h-[34px] px-3.5 text-sm",
         lg: "h-[46px] min-w-[178px] px-8 text-base",
         icon: "size-9",
         "icon-sm": "size-8",

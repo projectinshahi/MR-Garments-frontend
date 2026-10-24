@@ -24,6 +24,8 @@ const eslintConfig = defineConfig([
     ".claude/worktrees/**",
     // Vendored Impeccable skill scripts (third-party, updated by `impeccable update`):
     ".claude/skills/**",
+    // Git-ignored screenshot comparison output (scripts/visual-diff.mjs) and throwaway measuring scripts:
+    ".visual/**",
   ]),
 ]);
 

@@ -26,7 +26,8 @@ declare module "@tanstack/react-table" {
 
 // dense rows have no fixed height: 9 px padding around a 16 px line gives 35 px text rows and 39 px rows with a
 // 20 px StatusPill, as in the dashboard cards (04).
-const ROW_HEIGHT = { dense: "", compact: "h-[39px]", default: "h-[53px]", tall: "h-[58px]" } as const;
+// snug 49: bordered tables inside order-detail cards (08, 12, 13, 14).
+const ROW_HEIGHT = { dense: "", compact: "h-[39px]", snug: "h-[49px]", default: "h-[53px]", tall: "h-[58px]" } as const;
 const ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
 type DataTablePagination = {
@@ -46,9 +47,14 @@ type DataTableProps<TData, TValue> = {
   getRowId?: (row: TData) => string;
   /**
    * Row height: dense (dashboard cards: 12 px headers, 13.5 px cells, 35 px rows or 39 px with pills, 6 px outer
-   * padding), compact 39, default 53 (settings), tall 58 (orders).
+   * padding), compact 39, snug 49 (order-detail tables), default 53 (settings), tall 58 (orders).
    */
   density?: keyof typeof ROW_HEIGHT;
+  /**
+   * sm: the header and padding measured in the Wave 1 bordered tables (05, 07–14, 20, 22): 34 px header row with
+   * 12.5 px text, 14.5 px cell padding in `card`. Row height still comes from `density`. No effect with `dense`.
+   */
+  size?: "default" | "sm";
   /** card: bordered box with a tinted header (list pages). plain: no box, white header (tables inside a SectionCard). */
   variant?: "card" | "plain";
   /** Highlights the row (blue tint and left bar), as on Deposits & Payments and Landed Cost. */
@@ -70,6 +76,7 @@ export function DataTable<TData, TValue>({
   data,
   getRowId,
   density = "default",
+  size = "default",
   variant = "card",
   selectedRowId,
   onRowClick,
@@ -95,8 +102,15 @@ export function DataTable<TData, TValue>({
   const rows = table.getRowModel().rows;
   const hasFooter = columns.some((column) => column.footer !== undefined);
   const dense = density === "dense";
+  const sm = size === "sm" && !dense;
   const cellPad =
-    variant === "card" ? "px-5 first:pl-5 last:pr-5" : dense ? "px-2 first:pl-1.5 last:pr-1.5" : "px-2 first:pl-2 last:pr-2";
+    variant === "card"
+      ? sm
+        ? "px-[14.5px] first:pl-[14.5px] last:pr-[14.5px]"
+        : "px-5 first:pl-5 last:pr-5"
+      : dense
+        ? "px-2 first:pl-1.5 last:pr-1.5"
+        : "px-2 first:pl-2 last:pr-2";
   const cellText = dense ? "py-[9px] text-[13.5px] leading-4" : "text-sm";
 
   return (
@@ -110,8 +124,8 @@ export function DataTable<TData, TValue>({
                   key={header.id}
                   className={cn(
                     // dense: the header sits right under a SectionCard title (titleGap="none"), text low in its 36 px.
-                    dense ? "h-9 pt-[7px]" : density === "compact" ? "h-9" : "h-11",
-                    dense ? "text-xs" : "text-[13px]",
+                    dense ? "h-9 pt-[7px]" : sm ? "h-[34px]" : density === "compact" ? "h-9" : "h-11",
+                    dense ? "text-xs" : sm ? "text-[12.5px]" : "text-[13px]",
                     "font-bold text-table-head-foreground",
                     cellPad,
                     ALIGN[header.column.columnDef.meta?.align ?? "left"],

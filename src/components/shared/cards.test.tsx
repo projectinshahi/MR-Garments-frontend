@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { CardLink, KpiCard, KpiRow, SectionCard, TodayPill } from "@/components/shared/cards";
+import { Callout, CardLink, KpiCard, KpiRow, SectionCard, TodayPill } from "@/components/shared/cards";
 
 // Size options are opt-in: each default must stay as the other screens were measured.
 describe("SectionCard titleGap", () => {
@@ -11,6 +11,32 @@ describe("SectionCard titleGap", () => {
     expect(titleRow()).toHaveClass("mb-4");
     rerender(<SectionCard title="Payments due" titleGap="none">body</SectionCard>);
     expect(titleRow()).not.toHaveClass("mb-4");
+  });
+});
+
+describe("SectionCard bottomGap", () => {
+  it("keeps 20 px bottom padding by default and 6 px when tight", () => {
+    const { rerender } = render(<SectionCard title="Cost breakdown">table</SectionCard>);
+    const card = () => screen.getByRole("heading", { name: "Cost breakdown" }).closest("section");
+    expect(card()).toHaveClass("pt-4", "pb-5");
+    rerender(<SectionCard title="Cost breakdown" bottomGap="tight">table</SectionCard>);
+    expect(card()).toHaveClass("pt-4", "pb-1.5");
+    expect(card()).not.toHaveClass("pb-5");
+  });
+});
+
+describe("Callout size", () => {
+  it("keeps 15 px text by default and uses 13.5 px with tighter padding when sm", () => {
+    render(
+      <>
+        <Callout>Default note</Callout>
+        <Callout size="sm" tone="warning">
+          Small note
+        </Callout>
+      </>,
+    );
+    expect(screen.getByText("Default note")).toHaveClass("px-4", "py-3", "text-[15px]", "leading-5");
+    expect(screen.getByText("Small note")).toHaveClass("px-3.5", "py-2.5", "text-[13.5px]", "leading-5", "border");
   });
 });
 
@@ -45,7 +71,13 @@ describe("KpiCard size and KpiRow gap", () => {
     expect(screen.getByText("Default").parentElement).toHaveClass("pt-4", "pb-3");
     expect(screen.getByText("Small").parentElement).toHaveClass("pt-[15px]", "pb-[10.5px]");
     expect(screen.getByText("8")).toHaveClass("mt-[3px]");
-    expect(screen.getByText("50")).toHaveClass("mt-1");
+    expect(screen.getByText("50")).toHaveClass("mt-1", "text-[30px]");
+  });
+
+  it("sets the 91.5 px card with a 28 px value when xs", () => {
+    render(<KpiCard label="Order value" value="¥80,000" sub="2,500 pcs × ¥32.00" size="xs" />);
+    expect(screen.getByText("Order value").parentElement).toHaveClass("px-5", "pt-[15px]", "pb-[2.5px]");
+    expect(screen.getByText("¥80,000")).toHaveClass("mt-1", "text-[28px]", "leading-8");
   });
 });
 

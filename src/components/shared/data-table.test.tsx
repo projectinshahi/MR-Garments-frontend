@@ -67,6 +67,17 @@ describe("DataTable", () => {
     expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass("text-[13px]");
   });
 
+  it("keeps the 44 px header, 13 px header text and 20 px card padding unless size is sm", () => {
+    const { rerender } = render(<DataTable columns={columns} data={rows} />);
+    const head = () => screen.getByRole("columnheader", { name: "Name" });
+    expect(head()).toHaveClass("h-11", "text-[13px]", "px-5", "first:pl-5");
+    rerender(<DataTable columns={columns} data={rows} size="sm" density="snug" />);
+    expect(head()).toHaveClass("h-[34px]", "text-[12.5px]", "px-[14.5px]", "first:pl-[14.5px]");
+    expect(head()).not.toHaveClass("h-11");
+    expect(screen.getByText("Alpha").closest("tr")).toHaveClass("h-[49px]");
+    expect(screen.getByText("Alpha")).toHaveClass("text-sm", "px-[14.5px]");
+  });
+
   it("sizes dense rows by padding, with 12 px headers, 13.5 px cells and 6 px outer padding", () => {
     render(<DataTable columns={columns} data={rows} density="dense" variant="plain" />);
     const cell = screen.getByText("Alpha");

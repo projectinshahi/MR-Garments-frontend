@@ -14,6 +14,7 @@ export type FilterOption = { value: string; label: string; /** "danger" colors t
 /**
  * Pill toggle group ("All 50 · Late 3 · Due soon 5"): active = navy. variant="segmented" is the boxed
  * control on Landed Cost (By order / By team / By item). Labels include their counts as shown.
+ * size="sm" (chips): 32 px pills with 13 px bold slate text, as in the list filters (05, 20, 22).
  */
 export function FilterChips({
   options,
@@ -21,6 +22,7 @@ export function FilterChips({
   onValueChange,
   label,
   variant = "chips",
+  size = "default",
   className,
 }: {
   options: FilterOption[];
@@ -29,8 +31,10 @@ export function FilterChips({
   /** Accessible name of the group. */
   label: string;
   variant?: "chips" | "segmented";
+  size?: "default" | "sm";
   className?: string;
 }) {
+  const sm = size === "sm" && variant === "chips";
   return (
     <div
       role="group"
@@ -46,11 +50,17 @@ export function FilterChips({
             aria-pressed={active}
             onClick={() => onValueChange(option.value)}
             className={cn(
-              "text-sm font-bold whitespace-nowrap outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
-              variant === "chips" ? "h-[33px] rounded-full border px-3" : "h-[30px] rounded-[7px] px-[18px]",
+              sm ? "text-[13px]" : "text-sm",
+              "font-bold whitespace-nowrap outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
+              variant === "chips"
+                ? cn("rounded-full border", sm ? "h-8 px-3.5" : "h-[33px] px-3")
+                : "h-[30px] rounded-[7px] px-[18px]",
               active
                 ? "border-navy bg-navy text-white"
-                : cn("bg-card hover:bg-neutral-soft", option.tone === "danger" ? "text-danger" : "text-foreground"),
+                : cn(
+                    "bg-card hover:bg-neutral-soft",
+                    option.tone === "danger" ? "text-danger" : sm ? "text-label" : "text-foreground",
+                  ),
             )}
           >
             {option.label}
@@ -64,6 +74,7 @@ export function FilterChips({
 /**
  * Dropdown filter button: "Stage  All stages ▾" (inline label) or "All suppliers ▾". The trigger is a plain
  * button, so it renders identically before hydration.
+ * size="sm": 14 px slate value with a solid 6 × 5 triangle 5 px after it, as in the list filters (05, 20, 22).
  */
 export function FilterSelect({
   label,
@@ -71,6 +82,7 @@ export function FilterSelect({
   value,
   options,
   onValueChange,
+  size = "default",
   className,
 }: {
   /** Accessible name; shown inline in small muted text when showLabel is set. */
@@ -79,22 +91,34 @@ export function FilterSelect({
   value: string;
   options: FilterOption[];
   onValueChange: (value: string) => void;
+  size?: "default" | "sm";
   className?: string;
 }) {
   const current = options.find((o) => o.value === value)?.label ?? value;
+  const sm = size === "sm";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${label}: ${current}`}
         className={cn(
-          "inline-flex h-10 shrink-0 items-center gap-[9px] rounded-lg border bg-card px-[15px] text-[15px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "inline-flex h-10 shrink-0 items-center gap-[9px] rounded-lg border bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          sm ? "pr-3.5 pl-[15px] text-sm text-label" : "px-[15px] text-[15px] text-foreground",
           className,
         )}
       >
         {showLabel ? <span className="text-xs text-muted-foreground">{label}</span> : null}
-        <span>
-          {current} <span aria-hidden>▾</span>
-        </span>
+        {sm ? (
+          <span className="inline-flex items-center gap-[5px]">
+            {current}
+            <svg aria-hidden viewBox="0 0 6 5" className="h-[5px] w-1.5 fill-current">
+              <path d="M0 0h6L3 5z" />
+            </svg>
+          </span>
+        ) : (
+          <span>
+            {current} <span aria-hidden>▾</span>
+          </span>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-44">
         <DropdownMenuRadioGroup value={value} onValueChange={onValueChange}>

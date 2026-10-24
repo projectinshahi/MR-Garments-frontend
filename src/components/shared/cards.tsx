@@ -9,12 +9,22 @@ type SectionCardProps = Omit<React.ComponentProps<"section">, "title"> & {
   aside?: React.ReactNode;
   /** Space between the title row and the content: 16 px, or none for a dense DataTable header right under the title. */
   titleGap?: "default" | "none";
+  /** Bottom padding: 20 px, or 6 px (`tight`) for a card that ends with a bordered table (07, 08, 12, 13). */
+  bottomGap?: "default" | "tight";
 };
 
-/** White card, 12 px radius, 1 px border, 20 px padding, 16 px bold title. */
-export function SectionCard({ title, aside, titleGap = "default", className, children, ...props }: SectionCardProps) {
+/** White card, 12 px radius, 1 px border, 20 px side padding, 16 px bold title. */
+export function SectionCard({
+  title,
+  aside,
+  titleGap = "default",
+  bottomGap = "default",
+  className,
+  children,
+  ...props
+}: SectionCardProps) {
   return (
-    <section className={cn("rounded-xl border bg-card px-5 pt-4 pb-5", className)} {...props}>
+    <section className={cn("rounded-xl border bg-card px-5 pt-4", bottomGap === "tight" ? "pb-1.5" : "pb-5", className)} {...props}>
       {title || aside ? (
         <div className={cn("flex items-baseline justify-between gap-4", titleGap === "default" && "mb-4")}>
           {title ? <h2 className="text-base leading-[22px] font-bold">{title}</h2> : <span />}
@@ -46,19 +56,28 @@ type KpiCardProps = {
   sub?: React.ReactNode;
   /** "danger" renders the value in strong red (late counts, shortages). */
   tone?: "default" | "danger";
-  /** default 106 px tall; sm 104 px with the text set tighter, as on the dashboard (04). */
-  size?: "default" | "sm";
+  /**
+   * default 106 px tall; sm 104 px with the text set tighter (dashboard, 04); xs 91.5 px with a 28 px value
+   * (order detail, payments, receiving: 08, 09, 12, 16, 22).
+   */
+  size?: "default" | "sm" | "xs";
   className?: string;
 };
 
-/** KPI tile: 13 px label, 30 px bold value, 13 px sub-line. */
+const KPI_SIZES = {
+  default: { box: "pt-4 pb-3", value: "mt-1 text-[30px] leading-9", sub: "" },
+  sm: { box: "pt-[15px] pb-[10.5px]", value: "mt-[3px] text-[30px] leading-9", sub: "mt-[1.5px]" },
+  xs: { box: "pt-[15px] pb-[2.5px]", value: "mt-1 text-[28px] leading-8", sub: "" },
+} as const;
+
+/** KPI tile: 13 px label, bold value, 13 px sub-line. */
 export function KpiCard({ label, value, sub, tone = "default", size = "default", className }: KpiCardProps) {
-  const sm = size === "sm";
+  const s = KPI_SIZES[size];
   return (
-    <div className={cn("rounded-xl border bg-card px-5", sm ? "pt-[15px] pb-[10.5px]" : "pt-4 pb-3", className)}>
+    <div className={cn("rounded-xl border bg-card px-5", s.box, className)}>
       <p className="text-[13px] leading-[18px] text-muted-foreground">{label}</p>
-      <p className={cn(sm ? "mt-[3px]" : "mt-1", "text-[30px] leading-9 font-bold", tone === "danger" && "text-danger-strong")}>{value}</p>
-      {sub ? <p className={cn("text-[13px] leading-[18px] text-muted-foreground", sm && "mt-[1.5px]")}>{sub}</p> : null}
+      <p className={cn(s.value, "font-bold", tone === "danger" && "text-danger-strong")}>{value}</p>
+      {sub ? <p className={cn("text-[13px] leading-[18px] text-muted-foreground", s.sub)}>{sub}</p> : null}
     </div>
   );
 }
@@ -79,9 +98,27 @@ const CALLOUT_TONES = {
   warning: "border border-callout-warning-border bg-callout-warning text-callout-warning-foreground",
 };
 
-/** Tinted note box: "How the INR figure is found", "Good to know", the late-deliveries banner. */
-export function Callout({ tone = "info", className, ...props }: React.ComponentProps<"div"> & { tone?: keyof typeof CALLOUT_TONES }) {
-  return <div className={cn("rounded-[10px] px-4 py-3 text-[15px] leading-5", CALLOUT_TONES[tone], className)} {...props} />;
+/**
+ * Tinted note box: "How the INR figure is found", "Good to know", the late-deliveries banner.
+ * size: default 15 px text; sm 13.5 px text with tighter padding (08, 10, 12, 16, 19).
+ */
+export function Callout({
+  tone = "info",
+  size = "default",
+  className,
+  ...props
+}: React.ComponentProps<"div"> & { tone?: keyof typeof CALLOUT_TONES; size?: "default" | "sm" }) {
+  return (
+    <div
+      className={cn(
+        "rounded-[10px]",
+        size === "sm" ? "px-3.5 py-2.5 text-[13.5px] leading-5" : "px-4 py-3 text-[15px] leading-5",
+        CALLOUT_TONES[tone],
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 /**
