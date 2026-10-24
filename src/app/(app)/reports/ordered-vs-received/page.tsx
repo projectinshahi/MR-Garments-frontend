@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Ordered vs received" references="35_13.3_Ordered_vs_received.jpeg" />;
+import { getOrderedVsReceivedReport } from "@/features/reports/data/queries";
+import { OrderedVsReceivedScreen } from "@/features/reports/report-screens";
+
+export const metadata: Metadata = { title: "Ordered vs received" };
+
+export default async function OrderedVsReceivedPage() {
+  const lines = await getOrderedVsReceivedReport();
+  return <OrderedVsReceivedScreen lines={lines} />;
 }

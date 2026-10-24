@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Containers timeline" references="36_13.4_Containers_timeline.jpeg" />;
+import { getContainersTimelineReport } from "@/features/reports/data/queries";
+import { ContainersTimelineScreen } from "@/features/reports/report-screens";
+
+export const metadata: Metadata = { title: "Containers timeline" };
+
+export default async function ContainersTimelinePage() {
+  const data = await getContainersTimelineReport();
+  return <ContainersTimelineScreen data={data} />;
 }

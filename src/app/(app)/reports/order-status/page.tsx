@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Order status" references="33_13.1_Order_status.jpeg" />;
+import { getOrderStatusReport } from "@/features/reports/data/queries";
+import { OrderStatusScreen } from "@/features/reports/report-screens";
+
+export const metadata: Metadata = { title: "Order status" };
+
+export default async function OrderStatusPage() {
+  const data = await getOrderStatusReport();
+  return <OrderStatusScreen data={data} />;
 }

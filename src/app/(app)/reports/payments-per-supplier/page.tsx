@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Payments per supplier" references="37_13.5_Payments_per_supplier.jpeg" />;
+import { getPaymentsPerSupplierReport } from "@/features/reports/data/queries";
+import { PaymentsPerSupplierScreen } from "@/features/reports/report-screens";
+
+export const metadata: Metadata = { title: "Payments per supplier" };
+
+export default async function PaymentsPerSupplierPage() {
+  const data = await getPaymentsPerSupplierReport();
+  return <PaymentsPerSupplierScreen data={data} />;
 }

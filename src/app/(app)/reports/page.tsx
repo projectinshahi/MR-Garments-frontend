@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Reports" references="32_13_Reports.jpeg" />;
+import { getReportsHub } from "@/features/reports/data/queries";
+import { ReportsHub } from "@/features/reports/reports-hub";
+
+export const metadata: Metadata = { title: "Reports" };
+
+export default async function ReportsPage() {
+  const data = await getReportsHub();
+  return <ReportsHub data={data} />;
 }

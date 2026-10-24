@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Deliveries per day" references="34_13.2_Deliveries_per_day.jpeg" />;
+import { getDeliveriesPerDayReport } from "@/features/reports/data/queries";
+import { DeliveriesPerDayScreen } from "@/features/reports/report-screens";
+
+export const metadata: Metadata = { title: "Deliveries per day" };
+
+export default async function DeliveriesPerDayPage() {
+  const data = await getDeliveriesPerDayReport();
+  return <DeliveriesPerDayScreen data={data} />;
 }
