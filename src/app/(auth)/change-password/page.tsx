@@ -1,9 +1,11 @@
-// Placeholder: replaced by W3-auth (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return (
-    <>
-      <h1 className="text-[27px] font-bold">Change password</h1>
-      <p className="mt-2 text-[15px] text-muted-foreground">Screen not built yet. Reference: 03_1.2_Change_password.jpeg</p>
-    </>
-  );
+import type { Metadata } from "next";
+
+import { ChangePasswordScreen } from "@/features/auth/change-password-screen";
+import { getChangePassword } from "@/features/auth/data/queries";
+
+export const metadata: Metadata = { title: "Change password" };
+
+export default async function ChangePasswordPage() {
+  const data = await getChangePassword();
+  return <ChangePasswordScreen data={data} />;
 }
