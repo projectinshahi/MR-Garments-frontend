@@ -50,6 +50,29 @@ message. Plan for agents that start and finish at different times.
 If Git Bash is missing and hooks fall back to PowerShell, `$CLAUDE_PROJECT_DIR` may not expand and the guard
 would fail open. Check this once with a blocked command before a real run.
 
+## Browser tests (machine constraint, 2026-10-23)
+
+On the development machine, two or more Chromium processes that load `localhost` pages at the same time stall. The
+requests, sometimes even the HTML document, never get a response. This was measured outside Playwright with fresh
+browsers loading `/`, 3 rounds each:
+
+| Browsers at once | Next production server | Bare `node:http` server |
+| --- | --- | --- |
+| 1 | 0 of 3 loads hung | 0 of 3 |
+| 2 | 2 of 6 | 2 of 6 |
+| 3 | 9 of 9 | 9 of 9 |
+| 4 | 12 of 12 | 12 of 12 |
+
+- **Not a Next.js or test problem:**
+  - One browser with six contexts never hung (0 of 30), and the server log stayed clean.
+  - `localhost` and `127.0.0.1` behave the same.
+  - Two browsers on two different servers also hang (2 of 8).
+- **Suspected cause (not confirmed):** the antivirus web filter (Avast is the active antivirus; Windows Defender is off).
+  - It is only a suspect: Avast's settings could not be read, and confirming it would need a security-setting change.
+  - Antivirus settings are the user's decision. Agents do not change or recommend changing them without the user's approval.
+- **Mitigation in the repo:** `playwright.config.ts` runs one worker. That fixed `shell.spec.ts`, which failed at random with several workers. Every assertion is unchanged.
+- **For parallel agents:** the effect is machine-wide. Run browser tests from one agent at a time, or have the orchestrator run `npm run test:e2e` after the agents finish.
+
 ## Workflow
 
 ### Phase 0: Foundation (done)

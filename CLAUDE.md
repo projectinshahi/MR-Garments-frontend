@@ -127,7 +127,7 @@ Create a feature folder only when a screen is assigned. Do not create empty modu
 - **It is a QA aid only.** It never authorizes redesign, and the reference screenshot always wins over its suggestions.
   - **Allowed:** `/impeccable audit <target>` and `/impeccable critique <target>` (reports), `detect` (deterministic anti-pattern scan), and `/impeccable hooks status`.
   - **Orchestrator or user only:** `init`/`teach`, `document`, `doctor`, `pin`, and `hooks on|off|ignore-*|reset`.
-  - **Handling findings:** fix findings that the reference does not contradict (accessibility, overflow, broken states). A finding that conflicts with the reference (for example the gradient sidebar, the selected-row side stripe, or the Arial-metric font) is reported and **not changed**. The orchestrator records it as an Impeccable ignore with the reason "matches reference screenshot".
+  - **Handling findings:** fix findings that the reference does not contradict (accessibility, overflow, broken states). A finding that conflicts with the reference (for example the gradient sidebar, the selected-row side stripe, or the Arial-metric font) is reported and **not changed**. The orchestrator records it as an Impeccable ignore with the reason "matches reference screenshot", but only where the detector supports a narrow ignore. Otherwise it is listed under "Known, accepted warnings and exceptions".
   - **Not allowed on referenced screens:** `craft`, `shape`, `bolder`, `quieter`, `colorize`, `typeset`, `layout`, `animate`, `delight`, `overdrive`, `distill`, `polish`, `live`, `generate`, `adapt`, `harden`, `onboard`, `clarify`, `optimize`, `extract`. They change the design or copy. The orchestrator may approve one explicitly for undesigned states.
 
 ## Known, accepted warnings and exceptions
@@ -135,6 +135,11 @@ Create a feature folder only when a screen is assigned. Do not create empty modu
 - `react-hooks/incompatible-library` warning on `useReactTable` in `src/components/shared/data-table.tsx`. React Compiler is off, so it is informational.
 - One `eslint-disable-next-line @typescript-eslint/no-unused-vars` in `data-table.tsx`: TanStack's `ColumnMeta` augmentation must repeat the library's unused type-parameter names.
 - `npm audit` reports `braces` (via ESLint/shadcn CLI tooling). Dev-only, and no patched version exists. `npm audit --omit=dev` is clean.
+- **Impeccable contrast findings that come from the references.** No ignore is recorded for them, because `low-contrast` has no value-level ignore; the only exception the tool offers is for a whole page or file. Dashboard (04):
+  - Search placeholder `--placeholder` #959ba7 on #fbfcfe, 2.72:1. The reference itself samples about 2.67:1.
+  - TodayPill `--primary` #2f6fed on `--callout-info` #eff3ff, 4.10:1. The reference blue is confirmed by matching large areas; small text in the JPEG samples darker.
+  - Sidebar section labels: an advisory only. The tool compares them with the gradient's end color #1c3160 (4.38:1). At the labels' actual positions they measure 4.79–5.17:1, which passes.
+- **Browser tests run with one worker.** Concurrent Chromium processes stall on this machine (see docs/multi-agent-plan.md, "Browser tests"). Do not raise `workers` here.
 
 ## Multi-agent work
 

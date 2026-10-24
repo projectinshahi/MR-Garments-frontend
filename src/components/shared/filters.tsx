@@ -109,13 +109,17 @@ export function FilterSelect({
   );
 }
 
-/** Search field without an icon. inlineLabel renders the small "Search" prefix used on settings and users. */
+/**
+ * Search field without an icon. inlineLabel renders the small "Search" prefix used on settings and users.
+ * size: default 40 px with 15 px text; sm 38 px with 13.5 px text (the dashboard header search).
+ */
 export function SearchInput({
   label,
   inlineLabel,
   value,
   onValueChange,
   placeholder,
+  size = "default",
   className,
 }: {
   /** Accessible name. */
@@ -124,12 +128,14 @@ export function SearchInput({
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
+  size?: "default" | "sm";
   className?: string;
 }) {
   return (
     <label
       className={cn(
-        "flex h-10 items-center gap-[11px] rounded-lg border bg-input-background px-3.5 focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25",
+        "flex items-center gap-[11px] rounded-lg border bg-input-background px-3.5 focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25",
+        size === "sm" ? "h-[38px]" : "h-10",
         className,
       )}
     >
@@ -144,7 +150,10 @@ export function SearchInput({
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         placeholder={placeholder}
-        className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-placeholder"
+        className={cn(
+          "h-full min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-placeholder",
+          size === "sm" ? "text-[13.5px]" : "text-[15px]",
+        )}
       />
     </label>
   );

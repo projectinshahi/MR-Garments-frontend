@@ -24,7 +24,9 @@ declare module "@tanstack/react-table" {
   }
 }
 
-const ROW_HEIGHT = { compact: "h-[39px]", default: "h-[53px]", tall: "h-[58px]" } as const;
+// dense rows have no fixed height: 9 px padding around a 16 px line gives 35 px text rows and 39 px rows with a
+// 20 px StatusPill, as in the dashboard cards (04).
+const ROW_HEIGHT = { dense: "", compact: "h-[39px]", default: "h-[53px]", tall: "h-[58px]" } as const;
 const ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
 type DataTablePagination = {
@@ -42,7 +44,10 @@ type DataTableProps<TData, TValue> = {
   /** Already searched/filtered by the caller. */
   data: TData[];
   getRowId?: (row: TData) => string;
-  /** Row height: compact 39 (dashboard), default 53 (settings), tall 58 (orders). */
+  /**
+   * Row height: dense (dashboard cards: 12 px headers, 13.5 px cells, 35 px rows or 39 px with pills, 6 px outer
+   * padding), compact 39, default 53 (settings), tall 58 (orders).
+   */
   density?: keyof typeof ROW_HEIGHT;
   /** card: bordered box with a tinted header (list pages). plain: no box, white header (tables inside a SectionCard). */
   variant?: "card" | "plain";
@@ -89,7 +94,10 @@ export function DataTable<TData, TValue>({
   });
   const rows = table.getRowModel().rows;
   const hasFooter = columns.some((column) => column.footer !== undefined);
-  const cellPad = variant === "card" ? "px-5 first:pl-5 last:pr-5" : "px-2 first:pl-2 last:pr-2";
+  const dense = density === "dense";
+  const cellPad =
+    variant === "card" ? "px-5 first:pl-5 last:pr-5" : dense ? "px-2 first:pl-1.5 last:pr-1.5" : "px-2 first:pl-2 last:pr-2";
+  const cellText = dense ? "py-[9px] text-[13.5px] leading-4" : "text-sm";
 
   return (
     <div className={cn(variant === "card" && "overflow-hidden rounded-xl border bg-card", className)}>
@@ -101,8 +109,10 @@ export function DataTable<TData, TValue>({
                 <TableHead
                   key={header.id}
                   className={cn(
-                    density === "compact" ? "h-9" : "h-11",
-                    "text-[13px] font-bold text-table-head-foreground",
+                    // dense: the header sits right under a SectionCard title (titleGap="none"), text low in its 36 px.
+                    dense ? "h-9 pt-[7px]" : density === "compact" ? "h-9" : "h-11",
+                    dense ? "text-xs" : "text-[13px]",
+                    "font-bold text-table-head-foreground",
                     cellPad,
                     ALIGN[header.column.columnDef.meta?.align ?? "left"],
                     header.column.columnDef.meta?.className,
@@ -130,7 +140,7 @@ export function DataTable<TData, TValue>({
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
                     key={cell.id}
-                    className={cn("text-sm", cellPad, ALIGN[cell.column.columnDef.meta?.align ?? "left"], cell.column.columnDef.meta?.className)}
+                    className={cn(cellText, cellPad, ALIGN[cell.column.columnDef.meta?.align ?? "left"], cell.column.columnDef.meta?.className)}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
@@ -152,7 +162,7 @@ export function DataTable<TData, TValue>({
                 {footerGroup.headers.map((header) => (
                   <TableCell
                     key={header.id}
-                    className={cn("text-sm", cellPad, ALIGN[header.column.columnDef.meta?.align ?? "left"], header.column.columnDef.meta?.className)}
+                    className={cn(cellText, cellPad, ALIGN[header.column.columnDef.meta?.align ?? "left"], header.column.columnDef.meta?.className)}
                   >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
                   </TableCell>

@@ -22,11 +22,11 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 
 | Export | Kind | Props and usage |
 | --- | --- | --- |
-| `SectionCard` | Server | `title?`, `aside?` (use `CardLink` for "View all orders" or `CardNote` for muted notes), children. 12 px radius, 1 px border, padding 16/20/20, 16 px bold title. |
-| `CardLink`, `CardNote` | Server | Right-side title-row link (15 px bold primary) and muted note (14 px). |
-| `KpiCard`, `KpiRow` | Server | `label`, `value`, `sub?`, `tone?: "default" \| "danger"` (strong red value). The row lays out equal-width cards with an 18 px gap. |
+| `SectionCard` | Server | `title?`, `aside?` (use `CardLink` for "View all orders" or `CardNote` for muted notes), children. 12 px radius, 1 px border, padding 16/20/20, 16 px bold title. `titleGap?: "default" \| "none"`: 16 px between the title row and the content, or none, so a `density="dense"` table header sits right under the title (dashboard). |
+| `CardLink`, `CardNote` | Server | Right-side title-row link (15 px bold primary; `size="sm"` 13 px, dashboard) and muted note (14 px). |
+| `KpiCard`, `KpiRow` | Server | `KpiCard`: `label`, `value`, `sub?`, `tone?: "default" \| "danger"` (strong red value), `size?: "default" \| "sm"` (106 px tall, or 104 px with tighter spacing, dashboard). `KpiRow`: equal-width cards, `gap?: "default" \| "sm"` (18 px, or 16 px on the dashboard). |
 | `Callout` | Server | `tone?: "info" \| "success" \| "warning"`. Tinted note box (warning has a border, as in the week view's late banner). |
-| `TodayPill` | Server | `style?: "today" \| "weekday"`, giving "Today, 30 Sep 2026" or "Wed, 30 Sep 2026" from `MOCK_TODAY`. |
+| `TodayPill` | Server | `style?: "today" \| "weekday"`, giving "Today, 30 Sep 2026" or "Wed, 30 Sep 2026" from `MOCK_TODAY`. `size?: "default" \| "sm"`: 14 px text, or 13.5 px (dashboard). |
 | `StatusPill` | Server | `tone: "danger" \| "warning" \| "success" \| "info" \| "purple" \| "neutral"`. 20 px pill, 12 px bold. |
 | `TermsBadge` | Server | `terms: "FOB" \| "CNF"`, `size?: "sm" \| "md"`. Boxed FOB (info) and CNF (purple). |
 | `KeyValueList` | Server | `items: { label, value, muted? }[]`, `total?: { label, value }` (under a 2 px navy rule), `boldValues?`. |
@@ -39,7 +39,7 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 | `DataTable` | Client | See below. |
 | `FilterChips` | Client | `options: { value, label, tone?: "danger" }[]`, `value`, `onValueChange`, `label`, `variant?: "chips" \| "segmented"`. Labels include counts exactly as shown ("All 50", "Active (6)"). |
 | `FilterSelect` | Client | `label`, `showLabel?` ("Stage  All stages ▾"), `value`, `options`, `onValueChange`. A 40 px button that opens a radio menu. The trigger renders before hydration. |
-| `SearchInput` | Client | `label` (accessible), `inlineLabel?` ("Search" prefix on settings and users), `placeholder`, `value`, `onValueChange`. 40 px, no icon. Pass `className="h-[38px] w-[250px]"` for the header search. |
+| `SearchInput` | Client | `label` (accessible), `inlineLabel?` ("Search" prefix on settings and users), `placeholder`, `value`, `onValueChange`, `size?: "default" \| "sm"`. No icon. Default 40 px with 15 px text; `sm` 38 px with 13.5 px text (the dashboard header search). Set the width with `className` (`w-[250px]` in the header). |
 | `RequiredMark`, `NativeSelect`, `FormFooter` | Server-safe | Red `*` after a label, a 42 px native select with ▼, and right-aligned form actions (use `Button size="lg"`). |
 | `notInPrototype(action)` | Client fn | **D5.** Shows the toast "⟨action⟩ is not included in the current prototype." The only allowed behavior for undesigned actions. |
 | `LoadingState`, `EmptyState`, `ErrorState` | Server-safe | Used by the `(app)` loading and error boundaries and by placeholders. |
@@ -49,7 +49,7 @@ Living examples: **`/preview`** (`src/app/(app)/preview/`). Geometry is in CSS p
 | Prop | Contract |
 | --- | --- |
 | `columns`, `data`, `getRowId?` | TanStack v8 column definitions. The caller filters `data`. |
-| `density?` | `compact` (39 px rows, 36 px header, dashboard), `default` (53 px, settings), `tall` (58 px, orders). |
+| `density?` | `dense` (dashboard cards, 04): 12 px headers in a 36 px header row, 13.5 px cells, rows sized by 9 px padding around a 16 px line (35 px text rows, 39 px rows with a `StatusPill`), 6 px outer cell padding in `plain`. Pair it with `SectionCard titleGap="none"`. `compact` (39 px rows, 36 px header), `default` (53 px, settings), `tall` (58 px, orders). Header 13 px and cells 14 px unless `dense`. |
 | `variant?` | `card` (bordered box with a tinted header, list pages) or `plain` (no box, white header, tables inside a `SectionCard`). |
 | column `meta` | `{ align?: "left" \| "right" \| "center", className? }`. Numbers are right-aligned. |
 | column `footer` | Any column with `footer` makes a totals row under a 2 px navy rule ("Total, 4 containers"). |

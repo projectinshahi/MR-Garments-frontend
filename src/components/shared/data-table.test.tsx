@@ -56,6 +56,25 @@ describe("DataTable", () => {
     expect(onRowClick).toHaveBeenCalledWith(rows[2]);
   });
 
+  it.each([
+    ["default", "h-[53px]"],
+    ["compact", "h-[39px]"],
+    ["tall", "h-[58px]"],
+  ] as const)("keeps %s rows at their fixed height with 13 px headers and 14 px cells", (density, height) => {
+    render(<DataTable columns={columns} data={rows} density={density} variant="plain" />);
+    expect(screen.getByText("Alpha").closest("tr")).toHaveClass(height);
+    expect(screen.getByText("Alpha")).toHaveClass("text-sm", "first:pl-2");
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass("text-[13px]");
+  });
+
+  it("sizes dense rows by padding, with 12 px headers, 13.5 px cells and 6 px outer padding", () => {
+    render(<DataTable columns={columns} data={rows} density="dense" variant="plain" />);
+    const cell = screen.getByText("Alpha");
+    expect(cell).toHaveClass("py-[9px]", "text-[13.5px]", "leading-4", "first:pl-1.5", "last:pr-1.5");
+    expect(cell.closest("tr")?.className).not.toMatch(/\bh-\[/);
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass("text-xs", "h-9", "pt-[7px]");
+  });
+
   it("shows the empty state", () => {
     render(<DataTable columns={columns.map((c) => ({ ...c, footer: undefined }))} data={[]} emptyState="Nothing found" />);
     expect(screen.getByText("Nothing found")).toBeInTheDocument();

@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Dashboard" references="04_2_Dashboard.jpeg" />;
+import { getDashboard } from "@/features/dashboard/data/queries";
+import { DashboardScreen } from "@/features/dashboard/dashboard-screen";
+
+export const metadata: Metadata = { title: "Dashboard" };
+
+export default async function DashboardPage() {
+  const data = await getDashboard();
+  return <DashboardScreen data={data} />;
 }
