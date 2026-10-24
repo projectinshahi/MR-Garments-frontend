@@ -1,6 +1,6 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import { getCalendar } from "@/features/calendar/data/queries";
+import { ListView } from "@/features/calendar/list-view";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Delivery Calendar" references="20_6.c_List.jpeg" />;
+export default async function CalendarListPage() {
+  return <ListView {...await getCalendar()} />;
 }
