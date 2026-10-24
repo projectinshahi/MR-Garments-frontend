@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Receiving (China)" references="22_7.1_Receiving_list.jpeg" />;
+import { getReceivingList } from "@/features/receiving/data/queries";
+import { ReceivingListScreen } from "@/features/receiving/receiving-list-screen";
+
+export const metadata: Metadata = { title: "Receiving (China)" };
+
+export default async function ReceivingPage() {
+  const data = await getReceivingList();
+  return <ReceivingListScreen data={data} />;
 }

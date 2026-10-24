@@ -1,6 +1,11 @@
-import { RoutePlaceholder } from "@/components/layout/route-placeholder";
+import type { Metadata } from "next";
 
-// Placeholder: replaced by the owning screen agent (docs/proposed-build-plan.md §6).
-export default function Page() {
-  return <RoutePlaceholder title="Record receipt" references="21_7_Receiving_(China)_-_Stage_2_form.jpeg" />;
+import { getRecordReceipt } from "@/features/receiving/data/queries";
+import { RecordReceiptScreen } from "@/features/receiving/record-receipt-screen";
+
+export const metadata: Metadata = { title: "Record receipt" };
+
+export default async function RecordReceiptPage() {
+  const data = await getRecordReceipt();
+  return <RecordReceiptScreen data={data} />;
 }
