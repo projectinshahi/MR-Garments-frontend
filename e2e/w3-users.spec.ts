@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-// W3-users: Users list (47_16.1), Add or edit user (48_16.2) and Roles (49_16.3). Role/label locators only (hidden <Activity> routes).
+// W3-users: Users list (47_16.1), Add or edit user (48_16.2) and Roles (49_16.3), on the seeded Batch 1 API, signed in
+// as Suresh (Management). Role/label locators only (hidden <Activity> routes). Nothing here is saved; the saving flows
+// are in batch1-a2-users.spec.ts, which runs first and leaves the 8 seeded users active (Test User inactive).
 
 test.use({ viewport: { width: 1440, height: 900 } });
+
+const LAST_SIGN_IN = /^(–|Today, \d\d:\d\d|Yesterday, \d\d:\d\d|\d{1,2} [A-Z][a-z]{2}( \d{4})?, \d\d:\d\d)$/;
 
 test("users list filters by search, role and status", async ({ page }) => {
   await page.goto("/users");
@@ -12,9 +16,13 @@ test("users list filters by search, role and status", async ({ page }) => {
   const table = page.getByRole("table");
   const rows = table.getByRole("row");
   await expect(rows).toHaveCount(9);
-  await expect(table.getByRole("row", { name: /Chen Yu/ })).toContainText("Yesterday, 15:31");
-  await expect(table.getByRole("row", { name: /Suresh Menon/ })).toContainText("Management");
-  await expect(table.getByRole("row", { name: /Joseph M/ })).toContainText("Main warehouse");
+  const suresh = table.getByRole("row", { name: /Suresh Menon/ });
+  await expect(suresh).toContainText("Management");
+  // No office for the Head office users yet (U28); Suresh signed in for this run, so his last sign-in is today.
+  await expect(suresh.getByRole("cell").nth(2)).toHaveText("");
+  await expect(suresh.getByRole("cell").nth(3)).toHaveText(/^Today, \d\d:\d\d$/);
+  await expect(table.getByRole("row", { name: /Joseph M/ }).getByRole("cell").nth(2)).toHaveText("Main warehouse");
+  await expect(table.getByRole("row", { name: /Li Wei/ }).getByRole("cell").nth(3)).toHaveText(LAST_SIGN_IN);
   await expect(page.getByText("Staff with an entry role can enter data for their own stage only.", { exact: false })).toBeVisible();
 
   await page.getByRole("searchbox", { name: "Search users by name or email" }).fill("WANG@");
@@ -29,31 +37,32 @@ test("users list filters by search, role and status", async ({ page }) => {
   await page.getByRole("menuitemradio", { name: "All roles" }).click();
 
   const status = page.getByRole("group", { name: "User status" });
-  await status.getByRole("button", { name: "Inactive (0)" }).click();
-  await expect(table.getByText("No users match these filters.")).toBeVisible();
+  await status.getByRole("button", { name: /^Inactive \(\d+\)$/ }).click();
+  await expect(table.getByRole("row", { name: /Wang Fang/ })).toHaveCount(0);
   await status.getByRole("button", { name: "All", exact: true }).click();
-  await expect(rows).toHaveCount(9);
+  await expect(table.getByRole("row", { name: /Wang Fang/ })).toHaveCount(1);
   await status.getByRole("button", { name: "Active (8)" }).click();
   await expect(rows).toHaveCount(9);
 
-  await expect(page.getByRole("link", { name: "Edit Wang Fang" })).toHaveAttribute("href", "/users/edit");
-  await page.getByRole("button", { name: "Edit Priya Nair" }).click();
-  await expect(page.getByText("Edit Priya Nair is not included in the current prototype.")).toBeVisible();
-  await page.getByRole("button", { name: "+ Add user" }).click();
-  await expect(page.getByText("Add user is not included in the current prototype.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Wang Fang" })).toHaveAttribute("href", /^\/users\/edit\?id=[0-9a-f-]{36}$/);
+  await expect(page.getByRole("link", { name: "+ Add user" })).toHaveAttribute("href", "/users/edit");
 });
 
-test("edit user form holds Wang Fang's details as client state", async ({ page }) => {
-  await page.goto("/users/edit");
+test("edit user form holds Wang Fang's details", async ({ page }) => {
+  await page.goto("/users");
+  await page.getByRole("link", { name: "Edit Wang Fang" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Users" })).toBeVisible();
-  await expect(page.getByLabel("Full name")).toHaveValue("Wang Fang");
-  await expect(page.getByLabel("Email")).toHaveValue("wang@mrgarments.com");
-  await expect(page.getByLabel("Phone")).toHaveValue("+86 138 2210 7745");
-  await expect(page.getByLabel("Role")).toHaveValue("China staff");
-  await expect(page.getByLabel("Office")).toHaveValue("Guangzhou office");
-  await expect(page.getByLabel("Language")).toHaveValue("English");
-  await expect(page.getByLabel("Password")).toHaveAttribute("placeholder", "Set by user at first sign-in");
-  await expect(page.getByLabel("Status")).toHaveValue("Active");
+  await expect(page.getByRole("textbox", { name: "Full name" })).toHaveValue("Wang Fang");
+  await expect(page.getByRole("textbox", { name: "Email" })).toHaveValue("wang@mrgarments.com");
+  // The seed holds no phone numbers (48 draws +86 138 2210 7745).
+  await expect(page.getByRole("textbox", { name: "Phone" })).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "Role" })).toHaveValue("China staff");
+  await expect(page.getByRole("combobox", { name: "Office" }).locator("option:checked")).toHaveText("Guangzhou office");
+  await expect(page.getByRole("combobox", { name: "Language" })).toHaveValue("English");
+  const password = page.getByLabel("Password");
+  await expect(password).toHaveAttribute("placeholder", "Set by user at first sign-in");
+  await expect(password).not.toBeEditable();
+  await expect(page.getByRole("combobox", { name: "Status" })).toHaveValue("Active");
 
   await expect(page.getByRole("checkbox", { name: "Receiving (China)" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Container loading" })).toBeChecked();
@@ -62,18 +71,18 @@ test("edit user form holds Wang Fang's details as client state", async ({ page }
   await transport.click();
   await expect(transport).toBeChecked();
 
-  await page.getByLabel("Phone").fill("+86 100");
-  await expect(page.getByLabel("Phone")).toHaveValue("+86 100");
-
   const roleCard = page.locator("section").filter({ has: page.getByRole("heading", { name: "What this role can do" }) });
   await expect(roleCard.getByText("China staff can enter receipts and container loading.", { exact: false })).toBeVisible();
   await expect(roleCard.getByRole("listitem")).toHaveCount(6);
   await expect(roleCard.getByRole("listitem").filter({ hasText: "Container loading" })).toContainText("Enter");
   await expect(roleCard.getByRole("listitem").filter({ hasText: "Reports" })).toContainText("No");
 
+  // Cancel (K8) goes back to the list without saving.
   await expect(page.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/users");
-  await page.getByRole("button", { name: "Save user" }).click();
-  await expect(page.getByText("Save user is not included in the current prototype.")).toBeVisible();
+  await page.getByRole("link", { name: "Cancel" }).click();
+  await expect(page).toHaveURL("/users");
+  await page.getByRole("link", { name: "Edit Wang Fang" }).click();
+  await expect(page.getByRole("checkbox", { name: "Transport" })).not.toBeChecked();
 });
 
 test("roles tab shows the read-only permission matrix", async ({ page }) => {

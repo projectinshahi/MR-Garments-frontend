@@ -1,159 +1,228 @@
 "use client";
 
-import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
+import { PageContainer } from "@/components/layout/page-header";
 import { Callout, SectionCard } from "@/components/shared/cards";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiClient } from "@/lib/api/client";
+import { handleApiError, notifySuccess, SUCCESS } from "@/lib/feedback";
 import type { RecordStatus } from "@/types/domain";
 
 import type { EditUserData } from "./data/queries";
+import { buildRoleCard } from "./role-card";
+import { FORM_FIELDS, STAGE_OPTIONS, toFormValues, toggleStage, toPayload, userFormSchema, type UserFormValues } from "./user-form";
+import { UsersHeader } from "./users-header";
 
+const FORM_ID = "edit-user-form";
 const STATUSES: RecordStatus[] = ["Active", "Inactive"];
-
-type FormField = "name" | "email" | "phone" | "role" | "office" | "language" | "password" | "status";
+const ACCESS_TONE = { Full: "success", Enter: "success", View: "info", No: "neutral" } as const;
 
 const labelClass = "gap-0.5 text-[13px] leading-[15px] font-bold text-label";
 // The cards in 48 end 18 px below their last row (SectionCard pads 20).
 const rowClass = "flex items-center border-b border-border-subtle py-[9px] last:border-0";
 
-/** Add or edit user (48): user details, the stages the person can enter, and what the role can do. */
-export function EditUserForm({ data }: { data: EditUserData }) {
-  // Mock mutation: client state only, resets on reload
-  const [form, setForm] = useState<Record<FormField, string>>({
-    name: data.user.name,
-    email: data.user.email,
-    phone: data.phone,
-    role: data.user.role,
-    office: data.user.office,
-    language: data.language,
-    password: "",
-    status: data.user.status,
+/**
+ * Add or edit user (48): user details, the stages the person can enter, and what the role can do.
+ * Saves through USR-3 (add) or USR-4 (edit), then goes to /users with K5 or K6. API field errors show under their
+ * fields (E1-E3) with focus on the first; the values stay and Save is disabled only while the request runs (E14).
+ */
+export function EditUserForm({ user, options, matrix }: EditUserData) {
+  const router = useRouter();
+  const { register, control, handleSubmit, reset, setError, formState } = useForm<UserFormValues>({
+    resolver: zodResolver(userFormSchema),
+    defaultValues: toFormValues(user),
   });
-  // Mock mutation: client state only, resets on reload
-  const [stages, setStages] = useState(() => new Set(data.stages.filter((s) => s.checked).map((s) => s.id)));
+  const { errors, isSubmitting } = formState;
+  const card = buildRoleCard(useWatch({ control, name: "role" }), matrix);
+  // A user whose office was closed keeps it as a choice, so saving other fields doesn't drop it.
+  const offices =
+    user?.officeId && !options.offices.some((office) => office.id === user.officeId)
+      ? [...options.offices, { id: user.officeId, name: user.office ?? "" }]
+      : options.offices;
 
-  const field = (key: FormField) => ({
-    value: form[key],
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [key]: event.target.value })),
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      if (user) await apiClient.patch(`/users/${user.id}`, toPayload(values));
+      else await apiClient.post("/users", toPayload(values));
+    } catch (error) {
+      const fields = handleApiError(error) ?? {};
+      FORM_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
+        setError(key, { type: "server", message: fields[key] }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
+    notifySuccess(user ? SUCCESS.userSaved : SUCCESS.userAdded);
+    // The page stays mounted (Activity), so the next visit starts from the saved values, or empty after an add.
+    reset(user ? values : toFormValues(null));
+    router.push("/users");
   });
-  const toggleStage = (id: string, checked: boolean) =>
-    setStages((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
 
   return (
-    <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1fr_400px]">
-      <div className="flex flex-col gap-5">
-        <SectionCard title="User details" titleGap="none" bottomGap="form">
-          <div className="mt-[11px] grid gap-x-4 gap-y-[13px] sm:grid-cols-3">
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-name" className={labelClass}>
-                Full name <RequiredMark />
-              </FieldLabel>
-              <Input size="sm" id="user-name" required autoComplete="off" {...field("name")} />
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-email" className={labelClass}>
-                Email <RequiredMark />
-              </FieldLabel>
-              <Input size="sm" id="user-email" type="email" required autoComplete="off" {...field("email")} />
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-phone" className={labelClass}>
-                Phone
-              </FieldLabel>
-              <Input size="sm" id="user-phone" type="tel" autoComplete="off" {...field("phone")} />
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-role" className={labelClass}>
-                Role <RequiredMark />
-              </FieldLabel>
-              <NativeSelect size="sm" id="user-role" required {...field("role")}>
-                {data.roles.map((role) => (
-                  <option key={role}>{role}</option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-office" className={labelClass}>
-                Office
-              </FieldLabel>
-              <NativeSelect size="sm" id="user-office" {...field("office")}>
-                {data.offices.map((office) => (
-                  <option key={office}>{office}</option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-language" className={labelClass}>
-                Language
-              </FieldLabel>
-              <NativeSelect size="sm" id="user-language" {...field("language")}>
-                {data.languages.map((language) => (
-                  <option key={language}>{language}</option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field className="gap-1.5 sm:col-span-2">
-              <FieldLabel htmlFor="user-password" className={labelClass}>
-                Password
-              </FieldLabel>
-              <Input size="sm" id="user-password" type="password" autoComplete="new-password" placeholder={data.passwordPlaceholder} {...field("password")} />
-            </Field>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="user-status" className={labelClass}>
-                Status
-              </FieldLabel>
-              <NativeSelect size="sm" id="user-status" {...field("status")}>
-                {STATUSES.map((status) => (
-                  <option key={status}>{status}</option>
-                ))}
-              </NativeSelect>
-            </Field>
+    <>
+      <UsersHeader
+        actions={
+          <>
+            {/* The header buttons in 48 are padded 16 px (Button size="header" pads 14). */}
+            <Button asChild variant="outline" size="header" className="px-4">
+              <Link href="/users" onClick={() => reset()}>
+                Cancel
+              </Link>
+            </Button>
+            <Button type="submit" form={FORM_ID} size="header" className="px-4" disabled={isSubmitting}>
+              Save user
+            </Button>
+          </>
+        }
+      />
+      <PageContainer>
+        <form id={FORM_ID} noValidate onSubmit={onSubmit} className="grid items-start gap-(--page-gap) lg:grid-cols-[1fr_400px]">
+          <div className="flex flex-col gap-5">
+            <SectionCard title="User details" titleGap="none" bottomGap="form">
+              <div className="mt-[11px] grid gap-x-4 gap-y-[13px] sm:grid-cols-3">
+                <Field className="gap-1.5" data-invalid={!!errors.name}>
+                  <FieldLabel htmlFor="user-name" className={labelClass}>
+                    Full name <RequiredMark />
+                  </FieldLabel>
+                  <Input size="sm" id="user-name" required autoComplete="off" aria-invalid={!!errors.name} {...register("name")} />
+                  <FieldError errors={[errors.name]} />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.email}>
+                  <FieldLabel htmlFor="user-email" className={labelClass}>
+                    Email <RequiredMark />
+                  </FieldLabel>
+                  <Input size="sm" id="user-email" type="email" required autoComplete="off" aria-invalid={!!errors.email} {...register("email")} />
+                  <FieldError errors={[errors.email]} />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.phone}>
+                  <FieldLabel htmlFor="user-phone" className={labelClass}>
+                    Phone
+                  </FieldLabel>
+                  <Input size="sm" id="user-phone" type="tel" autoComplete="off" aria-invalid={!!errors.phone} {...register("phone")} />
+                  <FieldError errors={[errors.phone]} />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.role}>
+                  <FieldLabel htmlFor="user-role" className={labelClass}>
+                    Role <RequiredMark />
+                  </FieldLabel>
+                  <NativeSelect size="sm" id="user-role" required aria-invalid={!!errors.role} {...register("role")}>
+                    {user ? null : <option value="" />}
+                    {options.roles.map((role) => (
+                      <option key={role}>{role}</option>
+                    ))}
+                  </NativeSelect>
+                  <FieldError errors={[errors.role]} />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.officeId}>
+                  <FieldLabel htmlFor="user-office" className={labelClass}>
+                    Office
+                  </FieldLabel>
+                  {/* Empty for no office: the Head office is deferred (U28). */}
+                  <NativeSelect size="sm" id="user-office" aria-invalid={!!errors.officeId} {...register("officeId")}>
+                    <option value="" />
+                    {offices.map((office) => (
+                      <option key={office.id} value={office.id}>
+                        {office.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FieldError errors={[errors.officeId]} />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.language}>
+                  <FieldLabel htmlFor="user-language" className={labelClass}>
+                    Language
+                  </FieldLabel>
+                  <NativeSelect size="sm" id="user-language" aria-invalid={!!errors.language} {...register("language")}>
+                    {options.languages.map((language) => (
+                      <option key={language}>{language}</option>
+                    ))}
+                  </NativeSelect>
+                  <FieldError errors={[errors.language]} />
+                </Field>
+                <Field className="gap-1.5 sm:col-span-2">
+                  <FieldLabel htmlFor="user-password" className={labelClass}>
+                    Password
+                  </FieldLabel>
+                  {/* C5: read-only, never sent; drawn with the normal field fill. Users set it from their invite link. */}
+                  <Input
+                    size="sm"
+                    id="user-password"
+                    type="password"
+                    readOnly
+                    autoComplete="off"
+                    placeholder="Set by user at first sign-in"
+                    className="read-only:bg-input-background"
+                  />
+                </Field>
+                <Field className="gap-1.5" data-invalid={!!errors.status}>
+                  <FieldLabel htmlFor="user-status" className={labelClass}>
+                    Status
+                  </FieldLabel>
+                  <NativeSelect size="sm" id="user-status" aria-invalid={!!errors.status} {...register("status")}>
+                    {STATUSES.map((status) => (
+                      <option key={status}>{status}</option>
+                    ))}
+                  </NativeSelect>
+                  <FieldError errors={[errors.status]} />
+                </Field>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Stages this person can enter data for" titleGap="none" bottomGap="form">
+              <p className="mt-[3px] text-[12.5px] leading-[18px] text-muted-foreground">Entry staff see only the stages ticked here.</p>
+              <Controller
+                control={control}
+                name="stages"
+                render={({ field }) => (
+                  <ul className="mt-0.5">
+                    {STAGE_OPTIONS.map(({ stage, label }, index) => (
+                      <li key={stage} className={`${rowClass} gap-2`}>
+                        <Checkbox
+                          id={`stage-${stage}`}
+                          ref={index === 0 ? field.ref : undefined}
+                          checked={field.value.includes(stage)}
+                          aria-invalid={!!errors.stages}
+                          onCheckedChange={(checked) => field.onChange(toggleStage(field.value, stage, checked === true))}
+                        />
+                        <Label htmlFor={`stage-${stage}`} className="text-sm leading-5 font-normal">
+                          {label}
+                        </Label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              />
+              <FieldError errors={[errors.stages]} />
+            </SectionCard>
           </div>
-        </SectionCard>
 
-        <SectionCard title="Stages this person can enter data for" titleGap="none" bottomGap="form">
-          <p className="mt-[3px] text-[12.5px] leading-[18px] text-muted-foreground">Entry staff see only the stages ticked here.</p>
-          <ul className="mt-0.5">
-            {data.stages.map((stage) => (
-              <li key={stage.id} className={`${rowClass} gap-2`}>
-                <Checkbox
-                  id={`stage-${stage.id}`}
-                  checked={stages.has(stage.id)}
-                  onCheckedChange={(checked) => toggleStage(stage.id, checked === true)}
-                />
-                <Label htmlFor={`stage-${stage.id}`} className="text-sm leading-5 font-normal">
-                  {stage.label}
-                </Label>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      </div>
-
-      <SectionCard title="What this role can do" titleGap="none" bottomGap="form">
-        {/* 13.5 px text as in Callout size="sm"; the reference pads it 11.5 px vertically (sm pads 10). */}
-        <Callout size="sm" className="mt-3 py-[11.5px]">
-          {data.roleCard.summary}
-        </Callout>
-        <ul className="mt-[11px]">
-          {data.roleCard.abilities.map((ability) => (
-            <li key={ability.label} className={`${rowClass} justify-between gap-4 text-sm`}>
-              {ability.label}
-              <StatusPill tone={ability.access === "Enter" ? "success" : "neutral"}>{ability.access}</StatusPill>
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-    </div>
+          <SectionCard title="What this role can do" titleGap="none" bottomGap="form">
+            {card.summary ? (
+              // 13.5 px text as in Callout size="sm"; the reference pads it 11.5 px vertically (sm pads 10).
+              <Callout size="sm" className="mt-3 py-[11.5px]">
+                {card.summary}
+              </Callout>
+            ) : null}
+            <ul className="mt-[11px]">
+              {card.abilities.map((ability) => (
+                <li key={ability.label} className={`${rowClass} justify-between gap-4 text-sm`}>
+                  {ability.label}
+                  <StatusPill tone={ACCESS_TONE[ability.access]}>{ability.access}</StatusPill>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        </form>
+      </PageContainer>
+    </>
   );
 }
