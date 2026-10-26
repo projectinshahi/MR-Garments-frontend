@@ -126,6 +126,9 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(page).toHaveURL(/\?dialog=add-supplier$/);
 
   await dialog.getByRole("button", { name: "Cancel" }).click();
+  // Cancel removes ?dialog=add-supplier with a soft navigation; reload only once it has, or the dialog reopens.
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await page.reload();
   await expect(rows(page)).toHaveCount(7);
   await expect(page.getByRole("table").getByRole("row", { name: /ningbo denim works/i })).toHaveCount(1);
