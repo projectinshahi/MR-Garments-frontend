@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { MANAGEMENT_STATE, SIGNED_OUT } from "./sessions";
+import { SIGNED_OUT } from "./sessions";
 
 // Batch 1 A1: sign in, sign out and sessions through the browser (backend docs/batch1-decisions.md, Part 6).
 // Every test starts signed out and signs in through the form. The saved-session users (suresh, chen) are never
@@ -62,26 +62,7 @@ test("a wrong password and an unknown email get the same M2; the email stays, th
   }
 });
 
-test("an inactive user gets the same M2 (AT-A5)", async ({ page, browser, baseURL }) => {
-  // Li Wei is made inactive through the Users edit form (A2) and made active again afterwards.
-  const admin = await browser.newContext({ baseURL, viewport: VIEWPORT, storageState: MANAGEMENT_STATE });
-  const adminPage = await admin.newPage();
-  const setLiWei = async (status: "Active" | "Inactive") => {
-    await adminPage.goto("/users");
-    await adminPage.getByRole("link", { name: "Edit Li Wei" }).click();
-    await adminPage.getByRole("combobox", { name: "Status" }).selectOption(status);
-    await adminPage.getByRole("button", { name: "Save user" }).click();
-    await expect(adminPage.getByText("User saved")).toBeVisible();
-  };
-  await setLiWei("Inactive");
-  try {
-    expect(await signIn(page, "li@mrgarments.com")).toBe(401);
-    await expect(page.getByText(M2, { exact: true })).toBeVisible();
-  } finally {
-    await setLiWei("Active");
-    await admin.close();
-  }
-});
+// AT-A5 (inactive user gets M2): API test in the backend's login.test.ts; browser side in A2's AT-T1 spec.
 
 test("the 6th failed attempt within 15 minutes shows M3 (AT-A6)", async ({ page }) => {
   // An email no other spec signs in with, so the 15-minute block (B9.1) can't lock anyone else out.
