@@ -71,16 +71,16 @@ test("undesigned actions show the prototype notice", async ({ page }) => {
   await expect(page.getByText("Edit Dragon Cargo is not included in the current prototype.")).toBeVisible();
 });
 
-test("the Add supplier dialog opens prefilled, closes and validates", async ({ page }) => {
+// The dialog opens empty by user decision (2026-10-26), unlike 53's prefilled Ningbo values.
+test("the Add supplier dialog opens empty, closes and validates", async ({ page }) => {
   await page.goto("/settings/suppliers");
   await page.getByRole("link", { name: "+ Add supplier" }).click();
   await expect(page).toHaveURL(/\?dialog=add-supplier$/);
   const dialog = page.getByRole("dialog", { name: "Add supplier" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Supplier name")).toHaveValue("Ningbo Denim Works");
-  await expect(dialog.getByLabel("City")).toHaveValue("Ningbo");
-  await expect(dialog.getByLabel("Contact person")).toHaveValue("Mr. Xu Feng");
-  await expect(dialog.getByLabel("Phone / WeChat")).toHaveValue("+86 138 5740 9921");
+  for (const label of ["Supplier name", "City", "Contact person", "Phone / WeChat", "Address", "Notes"]) {
+    await expect(dialog.getByLabel(label)).toHaveValue("");
+  }
   await expect(dialog.getByLabel("Currency")).toHaveValue("CNY");
   await expect(dialog.getByLabel("Address")).toHaveAttribute("placeholder", "Enter address");
 
@@ -95,7 +95,6 @@ test("the Add supplier dialog opens prefilled, closes and validates", async ({ p
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
 
   await page.getByRole("link", { name: "+ Add supplier" }).click();
-  await dialog.getByLabel("Supplier name").fill("");
   await dialog.getByRole("button", { name: "Save supplier" }).click();
   await expect(dialog.getByText("Enter the supplier name.")).toBeVisible();
   await expect(dialog).toBeVisible();

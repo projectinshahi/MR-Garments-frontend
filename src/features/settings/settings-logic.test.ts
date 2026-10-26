@@ -32,21 +32,29 @@ describe("filterRecords", () => {
 });
 
 describe("add supplier", () => {
-  it("requires a supplier name", () => {
-    const result = supplierSchema.safeParse({ ...supplierDraft, name: "   " });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]).toMatchObject({ path: ["name"], message: "Enter the supplier name." });
-    expect(supplierSchema.parse(supplierDraft).name).toBe("Ningbo Denim Works");
+  const ningbo = {
+    name: "Ningbo Denim Works",
+    city: "Ningbo",
+    contactPerson: "Mr. Xu Feng",
+    phone: "+86 138 5740 9921",
+    currency: "CNY" as const,
+    address: "",
+    notes: "",
+  };
+
+  it("opens empty with yuan selected, and requires a supplier name", () => {
+    expect(supplierDraft).toEqual({ name: "", city: "", contactPerson: "", phone: "", currency: "CNY", address: "", notes: "" });
+    for (const name of ["", "   "]) {
+      const result = supplierSchema.safeParse({ ...ningbo, name });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]).toMatchObject({ path: ["name"], message: "Enter the supplier name." });
+    }
+    expect(supplierSchema.parse(ningbo).name).toBe("Ningbo Denim Works");
   });
 
   it("produces exactly the MD-2 body, trimmed", () => {
-    expect(supplierSchema.parse({ ...supplierDraft, name: " Ningbo Denim Works ", notes: " Denim only " })).toEqual({
-      name: "Ningbo Denim Works",
-      city: "Ningbo",
-      contactPerson: "Mr. Xu Feng",
-      phone: "+86 138 5740 9921",
-      currency: "CNY",
-      address: "",
+    expect(supplierSchema.parse({ ...ningbo, name: " Ningbo Denim Works ", notes: " Denim only " })).toEqual({
+      ...ningbo,
       notes: "Denim only",
     });
   });
