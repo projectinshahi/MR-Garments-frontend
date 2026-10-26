@@ -2,40 +2,47 @@
 
 import { CheckIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { notInPrototype } from "@/components/shared/prototype";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { apiClient } from "@/lib/api/client";
+import { handleApiError, notifySuccess, SUCCESS } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 import { AuthHeading, PasswordInput, labelClass, linkClass, submitClass } from "./auth-parts";
-import type { ChangePasswordData } from "./data/queries";
 import { STRENGTH_SEGMENTS, passwordStrength } from "./password-strength";
 
-const FIELDS = [
-  { key: "current", id: "current-password", label: "Current password", autoComplete: "current-password" },
-  { key: "next", id: "new-password", label: "New password", autoComplete: "new-password" },
-  { key: "confirm", id: "confirm-password", label: "Confirm new password", autoComplete: "new-password" },
-] as const;
+/** A password field of 03. `name` is the API's field name, so `fields` from the API map straight onto it. */
+export type PasswordFieldDef = { name: string; id: string; label: string; autoComplete: string };
+export type FieldErrors = Record<string, string | undefined>;
 
-/** Change password (03_1.2_Change_password.jpeg), prefilled so the meter shows 3 of 4 with 2 of 3 rules met. */
-export function ChangePasswordScreen({ data }: { data: ChangePasswordData }) {
-  // Mock mutation: client state only, resets on reload
-  const [values, setValues] = useState(data);
-  const { rules, score } = passwordStrength(values.next);
+/** Moves focus to the first field with a problem (E1). Scoped to the form, as hidden <Activity> routes stay mounted. */
+export function focusFirstError(form: HTMLFormElement, fields: readonly PasswordFieldDef[], errors: FieldErrors) {
+  const first = fields.find((field) => errors[field.name]);
+  if (first) form.querySelector<HTMLInputElement>(`#${first.id}`)?.focus();
+}
 
+/** The labelled Show/Hide fields of 03, each with its error (E1); the strength meter and rules sit under `newPassword`. */
+export function PasswordFields({
+  fields,
+  values,
+  errors,
+  onChange,
+}: {
+  fields: readonly PasswordFieldDef[];
+  values: Record<string, string>;
+  errors: FieldErrors;
+  onChange: (name: string, value: string) => void;
+}) {
+  const { rules, score } = passwordStrength(values.newPassword ?? "");
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        notInPrototype("Save new password");
-      }}
-    >
-      <AuthHeading title="Change password" description="Choose a new password for your account." />
-      <div className="mt-[26px] flex flex-col gap-[25px]">
-        {FIELDS.map((field) => (
-          <Field key={field.key}>
+    <div className="mt-[26px] flex flex-col gap-[25px]">
+      {fields.map((field) => {
+        const error = errors[field.name];
+        return (
+          <Field key={field.name} data-invalid={!!error}>
             <FieldLabel htmlFor={field.id} className={labelClass}>
               {field.label}
             </FieldLabel>
@@ -44,10 +51,13 @@ export function ChangePasswordScreen({ data }: { data: ChangePasswordData }) {
               name={field.id}
               label={field.label.toLowerCase()}
               autoComplete={field.autoComplete}
-              value={values[field.key]}
-              onChange={(event) => setValues((v) => ({ ...v, [field.key]: event.target.value }))}
+              value={values[field.name] ?? ""}
+              aria-invalid={!!error}
+              aria-describedby={error ? `${field.id}-error` : undefined}
+              onChange={(event) => onChange(field.name, event.target.value)}
             />
-            {field.key === "next" && (
+            <FieldError id={`${field.id}-error`}>{error}</FieldError>
+            {field.name === "newPassword" && (
               <>
                 <div
                   role="meter"
@@ -85,13 +95,77 @@ export function ChangePasswordScreen({ data }: { data: ChangePasswordData }) {
               </>
             )}
           </Field>
-        ))}
-      </div>
-      <Button type="submit" size="lg" className={`mt-[26px] ${submitClass}`}>
+        );
+      })}
+    </div>
+  );
+}
+
+const FIELDS = [
+  { name: "currentPassword", id: "current-password", label: "Current password", autoComplete: "current-password" },
+  { name: "newPassword", id: "new-password", label: "New password", autoComplete: "new-password" },
+  { name: "confirmPassword", id: "confirm-password", label: "Confirm new password", autoComplete: "new-password" },
+] as const;
+
+const EMPTY = { currentPassword: "", newPassword: "", confirmPassword: "" };
+
+/**
+ * Change password (03_1.2_Change_password.jpeg) through AUTH-5. The fields start empty (the reference's example
+ * values can't be prefilled into a real password form). Success: "Password changed", then /profile (K3).
+ */
+export function ChangePasswordScreen() {
+  const router = useRouter();
+  const [values, setValues] = useState(EMPTY);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [pending, setPending] = useState(false);
+
+  async function submit(form: HTMLFormElement) {
+    setPending(true);
+    setErrors({});
+    try {
+      await apiClient.post("/auth/change-password", values);
+      // The route stays mounted after leaving (<Activity>), so clear the passwords.
+      setValues(EMPTY);
+      notifySuccess(SUCCESS.passwordChanged);
+      router.push("/profile");
+    } catch (error) {
+      const fields = handleApiError(error);
+      if (fields) {
+        setErrors(fields);
+        focusFirstError(form, FIELDS, fields);
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit(event.currentTarget);
+      }}
+    >
+      <AuthHeading title="Change password" description="Choose a new password for your account." />
+      <PasswordFields
+        fields={FIELDS}
+        values={values}
+        errors={errors}
+        onChange={(name, value) => setValues((v) => ({ ...v, [name]: value }))}
+      />
+      <Button type="submit" size="lg" disabled={pending} className={`mt-[26px] ${submitClass}`}>
         Save new password
       </Button>
       <p className="mt-[18px] text-center text-sm leading-4">
-        <Link href="/profile" className={linkClass}>
+        <Link
+          href="/profile"
+          className={linkClass}
+          onClick={() => {
+            setValues(EMPTY);
+            setErrors({});
+          }}
+        >
           Cancel
         </Link>
       </p>

@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { getChangePassword } from "./data/queries";
 import { passwordStrength } from "./password-strength";
 
 const met = (password: string) => passwordStrength(password).rules.map((rule) => rule.met);
 
 describe("passwordStrength", () => {
-  it("reproduces the reference with the prefilled new password: 3 of 4, capital letter missing", async () => {
-    const { next, confirm } = await getChangePassword();
-    expect(next).toHaveLength(12);
-    expect(confirm).toBe(next);
-    expect(passwordStrength(next).score).toBe(3);
-    expect(met(next)).toEqual([true, true, false]);
+  it("reproduces the reference's state for a 12-character password without a capital: 3 of 4", () => {
+    expect(passwordStrength("garments2026").score).toBe(3);
+    expect(met("garments2026")).toEqual([true, true, false]);
   });
 
   it("checks each rule on its own", () => {
