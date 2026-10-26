@@ -45,6 +45,8 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+# saved browser-test sign-ins (e2e/auth.setup.ts, B4)
+/playwright/.auth/
 
 # claude code subagent worktrees
 /.claude/worktrees/

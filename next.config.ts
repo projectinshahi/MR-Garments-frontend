@@ -2,8 +2,11 @@ import { realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { NextConfig } from "next";
 
+// The Batch 1 API (MR-Garments-Backend). The browser calls /api/* on this origin and Next forwards it, so the session
+// cookie stays first-party. Read at build time: set API_URL before `next build` (each worktree's .env.local).
+const API_URL = process.env.API_URL ?? "http://localhost:4000";
+
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
@@ -18,6 +21,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  rewrites: async () => [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }],
 };
 
 export default nextConfig;
