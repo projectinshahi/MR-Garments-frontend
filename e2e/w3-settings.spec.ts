@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-// W3-settings: Settings tabs 1–7 (40–46) and the Add supplier dialog (53_17.4). Role/label locators only (hidden
-// <Activity> routes stay in the DOM).
+// W3-settings: Settings tabs 1–7 (40–46) and the Add supplier dialog (53_17.4), on the seeded test database. Role/label
+// locators only (hidden <Activity> routes stay in the DOM). Saving a supplier is covered by batch1-a4-settings.spec.ts;
+// this file adds none and allows for the one that spec adds, so the two run in either order.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const TABS = [
-  { name: "Suppliers", path: "/settings/suppliers", action: "+ Add supplier", record: "Guangzhou Textile Co.", rows: 5 },
+  // At least the 5 seeded suppliers (batch1-a4-settings.spec.ts may have added one).
+  { name: "Suppliers", path: "/settings/suppliers", action: "+ Add supplier", record: "Guangzhou Textile Co.", rows: null },
   { name: "Shipping agents", path: "/settings/shipping-agents", action: "+ Add shipping agent", record: "Sino Freight", rows: 2 },
   { name: "Clearing agents", path: "/settings/clearing-agents", action: "+ Add clearing agent", record: "Kochi Clearing Services", rows: 2 },
   { name: "Transport companies", path: "/settings/transport-companies", action: "+ Add transport company", record: "Kerala Roadways", rows: 2 },
@@ -27,15 +29,13 @@ test("the settings redirect and tab links reach all seven tabs", async ({ page }
     await expect(tabs.getByRole("link", { name: tab.name })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole(tab.name === "Suppliers" ? "link" : "button", { name: tab.action })).toBeVisible();
     const table = page.getByRole("table");
-    await expect(table.getByRole("row")).toHaveCount(tab.rows + 1);
+    if (tab.rows !== null) await expect(table.getByRole("row")).toHaveCount(tab.rows + 1);
     await expect(table.getByRole("row", { name: new RegExp(tab.record) })).toContainText("Active");
   }
 
+  // Teams hold no stock yet: pieces 0, cost ₹0 and the average "–" (B6, B6.2).
   await tabs.getByRole("link", { name: "Teams" }).click();
-  const retail = page.getByRole("row", { name: /Retail team/ });
-  await expect(retail).toContainText("6,000");
-  await expect(retail).toContainText("₹16,95,080");
-  await expect(retail).toContainText("₹282.51");
+  await expect(page.getByRole("row", { name: /Retail team/ }).getByRole("cell")).toHaveText(["Retail team", "0", "₹0", "–", "Active", "Edit"]);
 });
 
 test("search and status chips filter the table on the client", async ({ page }) => {
@@ -53,10 +53,13 @@ test("search and status chips filter the table on the client", async ({ page }) 
   await expect(table.getByRole("row").nth(1)).toContainText("Yiwu Trims Ltd.");
   await search.fill("");
 
+  // The cleared search re-renders every row in one commit; then read how many Active rows there are.
+  await expect.poll(() => table.getByRole("row").count()).toBeGreaterThanOrEqual(6);
+  const active = await table.getByRole("row").count();
   await status.getByRole("button", { name: "Inactive" }).click();
   await expect(table.getByText("No suppliers match these filters.")).toBeVisible();
   await status.getByRole("button", { name: "All" }).click();
-  await expect(table.getByRole("row")).toHaveCount(6);
+  await expect(table.getByRole("row")).toHaveCount(active);
 });
 
 test("undesigned actions show the prototype notice", async ({ page }) => {
@@ -68,7 +71,7 @@ test("undesigned actions show the prototype notice", async ({ page }) => {
   await expect(page.getByText("Edit Dragon Cargo is not included in the current prototype.")).toBeVisible();
 });
 
-test("the Add supplier dialog opens prefilled, closes, validates and saves", async ({ page }) => {
+test("the Add supplier dialog opens prefilled, closes and validates", async ({ page }) => {
   await page.goto("/settings/suppliers");
   await page.getByRole("link", { name: "+ Add supplier" }).click();
   await expect(page).toHaveURL(/\?dialog=add-supplier$/);
@@ -96,15 +99,6 @@ test("the Add supplier dialog opens prefilled, closes, validates and saves", asy
   await dialog.getByRole("button", { name: "Save supplier" }).click();
   await expect(dialog.getByText("Enter the supplier name.")).toBeVisible();
   await expect(dialog).toBeVisible();
-
-  await dialog.getByLabel("Supplier name").fill("Ningbo Denim Works");
-  await dialog.getByRole("button", { name: "Save supplier" }).click();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(/\/settings\/suppliers$/);
-  const added = page.getByRole("row", { name: /Ningbo Denim Works/ });
-  await expect(added).toContainText("Mr. Xu Feng");
-  await expect(added).toContainText("Ningbo");
-  await expect(added).toContainText("Active");
-  await expect(added.getByRole("cell").nth(5)).toHaveText("0");
-  await expect(page.getByRole("table").getByRole("row")).toHaveCount(7);
 });

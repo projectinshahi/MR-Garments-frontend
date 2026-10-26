@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import type { RecordStatus, Supplier } from "@/types/domain";
+import type { ItemRow } from "@/lib/api/types";
+import { MESSAGES } from "@/lib/feedback";
+import { formatINR, formatNumber } from "@/lib/formatters";
+import type { RecordStatus } from "@/types/domain";
 
 export type StatusFilter = RecordStatus | "All";
 
@@ -19,9 +22,9 @@ export function filterRecords<T extends { status: RecordStatus }>(
   );
 }
 
-/** Add supplier dialog (53_17.4). Only the supplier name is required; currency is yuan only (Q8). */
+/** Add supplier dialog (53_17.4), the MD-2 body. Only the supplier name is required; currency is yuan only (Q8). */
 export const supplierSchema = z.object({
-  name: z.string().trim().min(1, "Enter the supplier name."),
+  name: z.string().trim().min(1, MESSAGES.supplierNameEmpty),
   city: z.string().trim(),
   contactPerson: z.string().trim(),
   phone: z.string().trim(),
@@ -31,8 +34,9 @@ export const supplierSchema = z.object({
 });
 export type SupplierDraft = z.infer<typeof supplierSchema>;
 
-/** A saved supplier joins the table as Active with no open orders. */
-export function addSupplier(rows: Supplier[], draft: SupplierDraft): Supplier[] {
-  const { name, contactPerson, phone, city, currency } = draft;
-  return [...rows, { id: `sup-new-${rows.length + 1}`, name, contactPerson, phone, city, currency, openOrders: 0, status: "Active" }];
-}
+/** Teams "Average per piece": "–" until the team holds stock (B6.2, 5.6). */
+export const averagePerPieceText = (value: number | null) => (value === null ? "–" : formatINR(value, 2));
+
+/** Items "Pieces per bundle": the bundle label ("Roll") when set, otherwise the number (MD-19 sets exactly one). */
+export const perBundleText = ({ perBundle, bundleLabel }: Pick<ItemRow, "perBundle" | "bundleLabel">) =>
+  bundleLabel ?? formatNumber(perBundle ?? 0);

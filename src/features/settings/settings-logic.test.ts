@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { suppliers } from "@/mocks/data/master";
 
 import { supplierDraft } from "./data/fixtures";
-import { addSupplier, filterRecords, supplierSchema } from "./settings-logic";
+import { averagePerPieceText, filterRecords, perBundleText, supplierSchema } from "./settings-logic";
 
 const search = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 const names = (rows: { name: string }[]) => rows.map((row) => row.name);
@@ -35,24 +35,33 @@ describe("add supplier", () => {
   it("requires a supplier name", () => {
     const result = supplierSchema.safeParse({ ...supplierDraft, name: "   " });
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(["name"]);
+    expect(result.error?.issues[0]).toMatchObject({ path: ["name"], message: "Enter the supplier name." });
     expect(supplierSchema.parse(supplierDraft).name).toBe("Ningbo Denim Works");
   });
 
-  it("appends the supplier as Active with no open orders", () => {
-    const rows = addSupplier(suppliers, supplierSchema.parse(supplierDraft));
-    expect(rows).toHaveLength(6);
-    expect(suppliers).toHaveLength(5);
-    expect(rows[5]).toEqual({
-      id: "sup-new-6",
+  it("produces exactly the MD-2 body, trimmed", () => {
+    expect(supplierSchema.parse({ ...supplierDraft, name: " Ningbo Denim Works ", notes: " Denim only " })).toEqual({
       name: "Ningbo Denim Works",
+      city: "Ningbo",
       contactPerson: "Mr. Xu Feng",
       phone: "+86 138 5740 9921",
-      city: "Ningbo",
       currency: "CNY",
-      openOrders: 0,
-      status: "Active",
+      address: "",
+      notes: "Denim only",
     });
-    expect(new Set(addSupplier(rows, supplierDraft).map((row) => row.id)).size).toBe(7);
+  });
+});
+
+describe("read-only tab cells", () => {
+  it("shows the team average per piece, or – while the team has no stock (B6.2)", () => {
+    expect(averagePerPieceText(null)).toBe("–");
+    expect(averagePerPieceText(282.51)).toBe("₹282.51");
+    expect(averagePerPieceText(0)).toBe("₹0.00");
+  });
+
+  it("shows the bundle label when set, otherwise the pieces per bundle", () => {
+    expect(perBundleText({ perBundle: 50, bundleLabel: null })).toBe("50");
+    expect(perBundleText({ perBundle: 1200, bundleLabel: null })).toBe("1,200");
+    expect(perBundleText({ perBundle: null, bundleLabel: "Roll" })).toBe("Roll");
   });
 });
