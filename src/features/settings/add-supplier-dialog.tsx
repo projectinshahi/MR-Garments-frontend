@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { apiClient } from "@/lib/api/client";
+import type { SupplierRow } from "@/lib/api/types";
+import { handleApiError, notifySuccess, SUCCESS } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 import { supplierSchema, type SupplierDraft } from "./settings-logic";
@@ -23,9 +26,10 @@ const footerButtonClass = "h-[42px] px-[17px]";
 
 /**
  * Open while the URL has ?dialog=add-supplier (read with useSearchParams, so render it inside <Suspense>).
- * The × and Cancel remove the parameter; Save validates, hands the supplier to `onSave` and closes.
+ * The × and Cancel remove the parameter. Save posts MD-2; on success (K7) it toasts "Supplier added", removes the
+ * parameter and reloads the list from the server.
  */
-export function AddSupplierDialog({ draft, onSave }: { draft: SupplierDraft; onSave: (supplier: SupplierDraft) => void }) {
+export function AddSupplierDialog({ draft }: { draft: SupplierDraft }) {
   const open = useSearchParams().get("dialog") === "add-supplier";
   const router = useRouter();
   const close = () => router.replace("/settings/suppliers", { scroll: false });
@@ -47,9 +51,10 @@ export function AddSupplierDialog({ draft, onSave }: { draft: SupplierDraft; onS
         <AddSupplierForm
           draft={draft}
           onCancel={close}
-          onSave={(supplier) => {
-            onSave(supplier);
+          onSaved={() => {
+            notifySuccess(SUCCESS.supplierAdded);
             close();
+            router.refresh();
           }}
         />
       </DialogContent>
@@ -61,17 +66,30 @@ export function AddSupplierDialog({ draft, onSave }: { draft: SupplierDraft; onS
 function AddSupplierForm({
   draft,
   onCancel,
-  onSave,
+  onSaved,
 }: {
   draft: SupplierDraft;
   onCancel: () => void;
-  onSave: (supplier: SupplierDraft) => void;
+  onSaved: () => void;
 }) {
-  const { register, handleSubmit, formState } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: draft });
+  const { register, handleSubmit, setError, formState } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: draft });
   const nameError = formState.errors.name;
 
+  async function save(supplier: SupplierDraft) {
+    try {
+      await apiClient.post<{ supplier: SupplierRow }>("/suppliers", supplier);
+    } catch (error) {
+      // E1/E2: M21 or M22 under Supplier name, focused, values kept. Other failures toast (handleApiError).
+      Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) =>
+        setError(field as keyof SupplierDraft, { message }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
+    onSaved();
+  }
+
   return (
-    <form noValidate onSubmit={handleSubmit(onSave)} className="mt-[14px]">
+    <form noValidate onSubmit={handleSubmit(save)} className="mt-[14px]">
       <div className="grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
         <Field className={cn(fieldClass, "sm:col-span-2")} data-invalid={!!nameError}>
           <FieldLabel htmlFor="supplier-name" className={labelClass}>
@@ -123,7 +141,8 @@ function AddSupplierForm({
         <Button type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" className={footerButtonClass}>
+        {/* E14: disabled while the request runs (no spinner is designed). */}
+        <Button type="submit" className={footerButtonClass} disabled={formState.isSubmitting}>
           Save supplier
         </Button>
       </DialogFooter>
