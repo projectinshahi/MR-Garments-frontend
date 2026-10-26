@@ -7,7 +7,9 @@ import { SIGNED_OUT } from "./sessions";
 
 test.use({ viewport: { width: 1440, height: 900 }, storageState: SIGNED_OUT });
 
-test("sign in toggles the password, links to forgot password and opens the dashboard", async ({ page }) => {
+test("sign in toggles the password, links to forgot password and signs in as Suresh (AT-A2)", async ({ page }) => {
+  const e2ePassword = process.env.E2E_PASSWORD;
+  expect(e2ePassword, "Set E2E_PASSWORD in .env.test.local").toBeTruthy();
   await page.goto("/login");
   await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
 
@@ -30,9 +32,15 @@ test("sign in toggles the password, links to forgot password and opens the dashb
   await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password");
   await expect(page.getByText("Need access? Ask your manager for an account.")).toBeVisible();
 
+  await email.fill("suresh@mrgarments.com");
+  await password.fill(e2ePassword ?? "");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  // B2: the sidebar block shows "SM · Suresh Menon · Full access".
+  const block = page.getByRole("button", { name: /Suresh Menon/ });
+  await expect(block).toContainText("SM");
+  await expect(block).toContainText("Full access");
 });
 
 test("forgot password is prefilled and its action is not in the prototype", async ({ page }) => {
