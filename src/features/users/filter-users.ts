@@ -22,5 +22,3 @@ export function filterUsers<T extends User>(users: T[], { query, role, status }:
       (status === ALL || user.status === STATUS[status]),
   );
 }
-
-export const countByStatus = (users: User[], status: RecordStatus) => users.filter((u) => u.status === status).length;

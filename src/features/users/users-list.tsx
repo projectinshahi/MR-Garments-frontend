@@ -6,30 +6,24 @@ import { useState } from "react";
 
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filters";
-import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
-import type { Role } from "@/types/domain";
+import type { Role, User } from "@/types/domain";
 
-import type { UserRow, UsersListData } from "./data/queries";
-import { ALL, countByStatus, filterUsers, type UserFilters, type UserStatusFilter } from "./filter-users";
+import type { UsersListData } from "./data/queries";
+import { ALL, filterUsers, type UserFilters, type UserStatusFilter } from "./filter-users";
 
 const editClass = "rounded-sm text-[13px] font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50";
 
-function EditAction({ user }: { user: UserRow }) {
-  const label = `Edit ${user.name}`;
-  return user.editable ? (
-    <Link href="/users/edit" aria-label={label} className={editClass}>
+function EditAction({ user }: { user: User }) {
+  return (
+    <Link href={`/users/edit?id=${encodeURIComponent(user.id)}`} aria-label={`Edit ${user.name}`} className={editClass}>
       Edit
     </Link>
-  ) : (
-    <button type="button" aria-label={label} onClick={() => notInPrototype(label)} className={editClass}>
-      Edit
-    </button>
   );
 }
 
 // Column widths from 47_16.1_Users_list.jpeg (cells padded 14.5 px). Edit takes the rest.
-const columns: ColumnDef<UserRow>[] = [
+const columns: ColumnDef<User>[] = [
   {
     accessorKey: "name",
     header: "User",
@@ -59,7 +53,7 @@ const columns: ColumnDef<UserRow>[] = [
 ];
 
 /** Users list body (47): search, role and status filters, the users table and its footnote. Filters run on the client. */
-export function UsersList({ users, roles }: UsersListData) {
+export function UsersList({ users, counts, roles }: UsersListData) {
   const [filters, setFilters] = useState<UserFilters>({ query: "", role: ALL, status: "active" });
   const set = (patch: Partial<UserFilters>) => setFilters((current) => ({ ...current, ...patch }));
   const rows = filterUsers(users, filters);
@@ -91,8 +85,8 @@ export function UsersList({ users, roles }: UsersListData) {
           label="User status"
           size="sm"
           options={[
-            { value: "active", label: `Active (${countByStatus(users, "Active")})` },
-            { value: "inactive", label: `Inactive (${countByStatus(users, "Inactive")})` },
+            { value: "active", label: `Active (${counts.active})` },
+            { value: "inactive", label: `Inactive (${counts.inactive})` },
             { value: ALL, label: "All" },
           ]}
           value={filters.status}
