@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 // Batch 1 acceptance tests AT-S1 to AT-S7 (Settings part; the Roles tab belongs to the Users spec), signed in as
 // Management on the seeded test database, which is reset at the start of every run. Serial: AT-S1 counts the seeded
@@ -34,6 +34,16 @@ async function openAddSupplier(page: Page) {
   const dialog = dialogOf(page);
   await expect(dialog).toBeVisible();
   return dialog;
+}
+
+// The dialog opens empty (user decision, 2026-10-26), so AT-S4 and AT-S5 fill every field.
+async function fillSupplier(dialog: Locator, name: string) {
+  await dialog.getByLabel("Supplier name").fill(name);
+  await dialog.getByLabel("City").fill(NINGBO.city);
+  await dialog.getByLabel("Contact person").fill(NINGBO.contactPerson);
+  await dialog.getByLabel("Phone / WeChat").fill(NINGBO.phone);
+  await dialog.getByLabel("Address").fill(NINGBO.address);
+  await dialog.getByLabel("Notes").fill(NINGBO.notes);
 }
 
 test("AT-S1: Suppliers lists the 5 seeded suppliers as 40, with 0 open orders", async ({ page }) => {
@@ -72,25 +82,22 @@ test("AT-S2: search by name or phone and the Active/Inactive/All chips filter th
 test("AT-S3: Save with the supplier name empty shows M21 under Supplier name", async ({ page }) => {
   const dialog = await openAddSupplier(page);
   const name = dialog.getByLabel("Supplier name");
-  await name.fill("");
+  await expect(name).toHaveValue("");
+  // Nothing typed in Supplier name; City shows that entered values are kept.
+  await dialog.getByLabel("City").fill(NINGBO.city);
   await dialog.getByRole("button", { name: "Save supplier" }).click();
 
   await expect(dialog.getByText("Enter the supplier name.")).toBeVisible();
   await expect(name).toHaveAttribute("aria-invalid", "true");
   await expect(name).toBeFocused();
-  await expect(dialog.getByLabel("City")).toHaveValue("Ningbo");
+  await expect(dialog.getByLabel("City")).toHaveValue(NINGBO.city);
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(rows(page)).toHaveCount(6);
 });
 
 test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists with address and notes", async ({ page }) => {
   const dialog = await openAddSupplier(page);
-  await dialog.getByLabel("Supplier name").fill(NINGBO.name);
-  await dialog.getByLabel("City").fill(NINGBO.city);
-  await dialog.getByLabel("Contact person").fill(NINGBO.contactPerson);
-  await dialog.getByLabel("Phone / WeChat").fill(NINGBO.phone);
-  await dialog.getByLabel("Address").fill(NINGBO.address);
-  await dialog.getByLabel("Notes").fill(NINGBO.notes);
+  await fillSupplier(dialog, NINGBO.name);
   await dialog.getByRole("button", { name: "Save supplier" }).click();
 
   // K7: the dialog closes, ?dialog=add-supplier leaves the address, the toast shows, the list reloads (Active chip).
@@ -114,7 +121,7 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   const dialog = await openAddSupplier(page);
   const name = dialog.getByLabel("Supplier name");
   const save = dialog.getByRole("button", { name: "Save supplier" });
-  await name.fill("ningbo denim works");
+  await fillSupplier(dialog, "ningbo denim works");
   await save.click();
 
   await expect(dialog.getByText(M22)).toBeVisible();
@@ -122,6 +129,7 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(name).toBeFocused();
   await expect(name).toHaveValue("ningbo denim works");
   await expect(dialog.getByLabel("Contact person")).toHaveValue(NINGBO.contactPerson);
+  await expect(dialog.getByLabel("Notes")).toHaveValue(NINGBO.notes);
   await expect(save).toBeEnabled();
   await expect(page).toHaveURL(/\?dialog=add-supplier$/);
 

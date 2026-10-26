@@ -62,7 +62,7 @@ export function AddSupplierDialog({ draft }: { draft: SupplierDraft }) {
   );
 }
 
-// Rendered inside DialogContent, which unmounts on close, so the form opens prefilled every time.
+// Rendered inside DialogContent, which unmounts on close, so the form opens from the (empty) draft every time.
 function AddSupplierForm({
   draft,
   onCancel,
