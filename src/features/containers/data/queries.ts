@@ -1,27 +1,31 @@
-import { listShippingAgents } from "@/lib/data/master";
+import { apiGet } from "@/lib/api/server";
+import type { ContainerListItem, ContainerOptions } from "@/lib/api/types";
+import { todayInIndia } from "@/lib/today";
 
-import * as fixtures from "./fixtures";
+import { agentNames, containerKpis, listFootnote, toContainerRow } from "../containers-logic";
 
-export type { ContainerRow, ContainerStatus, LoadContainer, LoadLine, OrderLoad } from "./fixtures";
+export type { ContainerRow, ContainerStatus } from "../containers-logic";
+
+// Containers screens (24, 23) read the live API. These calls read the session cookie, so the pages render inside the
+// (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
 export type ContainersListData = Awaited<ReturnType<typeof getContainersList>>;
 export type LoadContainerData = Awaited<ReturnType<typeof getLoadContainer>>;
 
-const agentNames = async () => (await listShippingAgents()).map((a) => a.name);
-
-/** Containers list: KPIs, rows, footnote and the agent filter options. Async and copied so a real API can replace it. */
+/** Containers list (24): CON-1 rows, with the KPIs counted against today in India. */
 export async function getContainersList() {
-  const agents = await agentNames();
-  return structuredClone({
-    kpis: fixtures.containerKpis,
-    containers: fixtures.containers,
-    footnote: fixtures.listFootnote,
-    agents,
-  });
+  const containers = (await apiGet<ContainerListItem[]>("/containers")).map(toContainerRow);
+  return {
+    containers,
+    kpis: containerKpis(containers, todayInIndia()),
+    footnote: listFootnote(containers),
+    // From the rows, not CON-2: that needs Enter access and the list only View.
+    agents: agentNames(containers),
+  };
 }
 
-/** Load container form, prefilled for FCIU 5527310 as in the reference. */
+/** Load container (23): CON-2's active agents and loadable lines, and today (the default loading date). */
 export async function getLoadContainer() {
-  const agents = await agentNames();
-  return structuredClone({ ...fixtures.loadContainer, agents });
+  const options = await apiGet<ContainerOptions>("/containers/options");
+  return { ...options, today: todayInIndia() };
 }

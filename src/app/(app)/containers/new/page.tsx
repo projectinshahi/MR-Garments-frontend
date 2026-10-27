@@ -7,5 +7,5 @@ export const metadata: Metadata = { title: "Load container" };
 
 export default async function LoadContainerPage() {
   const data = await getLoadContainer();
-  return <LoadContainerScreen data={data} />;
+  return <LoadContainerScreen {...data} />;
 }
