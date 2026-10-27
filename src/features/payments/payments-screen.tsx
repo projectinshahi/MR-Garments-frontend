@@ -1,43 +1,41 @@
 import { KpiCard, KpiRow } from "@/components/shared/cards";
-import { formatINR, formatShortDate } from "@/lib/formatters";
+import { formatCNY, formatINR, formatShortDate } from "@/lib/formatters";
 
-import type { PaymentsData } from "./data/queries";
-import { PaymentDetailCard } from "./payment-detail";
+import type { DueWindow, PaymentsData } from "./data/queries";
 import { PaymentsView } from "./payments-view";
 
 const payments = (count: number) => `${count} payment${count === 1 ? "" : "s"}`;
 
-/** Deposits & Payments (16_5_Deposits_&_Payments.jpeg): KPI row, payments by order, and PO-2041's payment detail. */
+/** Deposits & Payments (16_5_Deposits_&_Payments.jpeg): KPI row, payments by order, and the selected order's payments. */
 export function PaymentsScreen({ data }: { data: PaymentsData }) {
-  const { kpis, orders, detail } = data;
+  const { kpis, orders, payments: records, defaultPo } = data;
 
   return (
     <PaymentsView
       orders={orders}
-      selectedPo={detail.po}
+      payments={records}
+      defaultPo={defaultPo}
       kpis={
         <KpiRow gap="sm">
           <KpiCard
             size="xs"
             label="Paid so far (INR)"
-            value={formatINR(kpis.paidSoFar)}
+            value={formatINR(kpis.paidSoFarInr)}
             sub={`across ${kpis.openOrders} open orders`}
           />
-          <KpiCard
-            size="xs"
-            label="Due in next 7 days"
-            value={formatINR(kpis.dueNext7Days)}
-            sub={`${payments(kpis.dueNext7Count)} · ${kpis.dueNext7First.po} on ${formatShortDate(kpis.dueNext7First.due)}`}
-          />
+          {/* Due payments have no INR rate until paid (PAY-1), so these show the CNY amount. */}
+          <KpiCard size="xs" label="Due in next 7 days" value={formatCNY(kpis.dueNext7.amountCny)} sub={dueSub(kpis.dueNext7)} />
           <KpiCard
             size="xs"
             label="Due in next 30 days"
-            value={formatINR(kpis.dueNext30Days)}
-            sub={payments(kpis.dueNext30Count)}
+            value={formatCNY(kpis.dueNext30.amountCny)}
+            sub={payments(kpis.dueNext30.count)}
           />
         </KpiRow>
       }
-      detail={<PaymentDetailCard detail={detail} />}
     />
   );
 }
+
+const dueSub = ({ count, first }: DueWindow) =>
+  first ? `${payments(count)} · ${first.po} on ${formatShortDate(first.due)}` : payments(count);
