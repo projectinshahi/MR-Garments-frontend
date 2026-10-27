@@ -90,3 +90,171 @@ export type ItemRow = {
 export type ApiErrorBody = { error: { code: string; message: string; fields?: Record<string, string> } };
 
 export type { RecordStatus, Role };
+
+// ---------------------------------------------------------------------------------------------------------------
+// Live screens (backend docs/live-screens-contracts.md): Orders, Deposits & Payments, Delivery calendar, Receiving
+// in China, Container loading. Dates YYYY-MM-DD; money CNY; rateInr is INR per CNY; quantities are whole numbers.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type Unit = "m" | "pcs";
+export type OrderStage = 1 | 2 | 3 | 4 | 5 | 6;
+type Named = { id: string; name: string };
+
+/** ORD-1 GET /api/v1/orders. Item, quantity and received are the main line's (position 0). */
+export type OrderListItem = {
+  id: string;
+  po: string;
+  orderDate: string;
+  deliveryDate: string;
+  stage: OrderStage;
+  supplier: Named;
+  item: string;
+  quantity: number;
+  unit: Unit;
+  received: number;
+  orderValueCny: number;
+  paidCny: number;
+  paidInr: number;
+};
+
+/** ORD-2 GET /api/v1/orders/options */
+export type OrderOptions = {
+  nextPo: string;
+  suppliers: (Named & { contactPerson: string; phone: string; city: string })[];
+  items: (Named & { unit: Unit })[];
+  /** Active shipping agents: the other kind of deposit payee. */
+  agents: Named[];
+};
+
+export type PayeeRole = "supplier" | "agent";
+
+/** ORD-3 POST /api/v1/orders body; answers 201 `{ order: { id, po } }`. */
+export type CreateOrderBody = {
+  supplierId: string;
+  orderDate: string;
+  deliveryDate: string;
+  lines: { itemId: string; quantity: number; rateCny: number }[];
+  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr: number; mode: string }[];
+};
+export type CreateOrderResponse = { order: { id: string; po: string } };
+
+/** CAL-1 GET /api/v1/deliveries: orders at stage 1-2, due date oldest first. */
+export type DeliveryItem = {
+  orderId: string;
+  po: string;
+  supplier: string;
+  item: string;
+  quantity: number;
+  unit: Unit;
+  received: number;
+  due: string;
+};
+
+/** PAY-1 GET /api/v1/payments */
+export type PaymentsResponse = {
+  orders: {
+    orderId: string;
+    po: string;
+    supplier: string;
+    orderValueCny: number;
+    paidCny: number;
+    paidInr: number;
+    balanceCny: number;
+    /** Earliest due payment, or null ("Not yet due"). */
+    nextDue: string | null;
+  }[];
+  payments: {
+    id: string;
+    orderId: string;
+    po: string;
+    kind: "Deposit" | "Balance";
+    payee: string;
+    payeeRole: PayeeRole;
+    amountCny: number;
+    status: "paid" | "due";
+    paidOn: string | null;
+    dueDate: string | null;
+    rateInr: number | null;
+    mode: string | null;
+  }[];
+};
+
+/** REC-1 GET /api/v1/receipts, received date newest first. Main-line figures. */
+export type ReceiptListItem = {
+  id: string;
+  receivedOn: string;
+  orderId: string;
+  po: string;
+  supplier: string;
+  item: string;
+  office: string;
+  ordered: number;
+  unit: Unit;
+  thisReceipt: number;
+  /** This receipt plus every earlier one. */
+  totalSoFar: number;
+  bundles: number;
+  receivedBy: string;
+};
+
+/** REC-2 GET /api/v1/receipts/options */
+export type ReceiptOptions = {
+  offices: Named[];
+  orders: {
+    orderId: string;
+    po: string;
+    supplier: string;
+    orderValueCny: number;
+    depositsPaidCny: number;
+    lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number }[];
+  }[];
+};
+
+/** REC-3 POST /api/v1/receipts body; answers 201 `{ receipt: { id } }`. */
+export type CreateReceiptBody = {
+  orderId: string;
+  receivedOn: string;
+  locationId: string;
+  bundles: number;
+  deliveryNote: string;
+  shortRemark: string;
+  lines: { orderLineId: string; quantity: number }[];
+};
+
+export type ContainerTerms = "FOB" | "CNF";
+export type ContainerState = "loading" | "sea" | "arrived";
+
+/** CON-1 GET /api/v1/containers, newest first. */
+export type ContainerListItem = {
+  id: string;
+  number: string;
+  agent: Named;
+  terms: ContainerTerms;
+  loadedOn: string | null;
+  sailedOn: string | null;
+  eta: string;
+  etaEstimated: boolean;
+  status: ContainerState;
+  bundles: number;
+  /** `part`: some line of that order is not fully loaded in this container. */
+  orders: { po: string; part: boolean }[];
+};
+
+/** CON-2 GET /api/v1/containers/options */
+export type ContainerOptions = {
+  agents: Named[];
+  lines: { orderLineId: string; orderId: string; po: string; item: string; unit: Unit; received: number; loaded: number }[];
+};
+
+/** CON-3 POST /api/v1/containers body; answers 201 `{ container: { id } }`. */
+export type CreateContainerBody = {
+  number: string;
+  shippingAgentId: string;
+  terms: ContainerTerms;
+  portOfLoading: string;
+  portOfArrival: string;
+  loadedOn: string;
+  sailedOn: string | null;
+  eta: string;
+  lines: { orderLineId: string; bundles: number; quantity: number }[];
+};
