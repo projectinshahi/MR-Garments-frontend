@@ -11,7 +11,6 @@ import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filt
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
 import type { Tone } from "@/types/domain";
 
 import type { ReceiptRow, ReceiptState, ReceivingListData } from "./data/queries";
@@ -26,8 +25,6 @@ const CHIPS = [
   { value: "complete", label: "Complete" },
 ];
 
-const qty = (value: number, unit?: string) => (unit ? formatQty(value, unit) : formatNumber(value));
-
 const columns: ColumnDef<ReceiptRow>[] = [
   { accessorKey: "receivedOn", header: "Received on", cell: ({ row }) => formatShortDate(row.original.receivedOn) },
   { accessorKey: "po", header: "PO", meta: { className: "font-bold" } },
@@ -40,13 +37,9 @@ const columns: ColumnDef<ReceiptRow>[] = [
     accessorKey: "short",
     header: "Short",
     meta: { align: "right" },
-    cell: ({ row }) => {
-      const { short, shortUnit } = row.original;
-      if (short === null) return "–";
-      return <span className={cn(short > 0 && "font-bold text-danger")}>{qty(short, shortUnit)}</span>;
-    },
+    cell: ({ row }) => (row.original.short === null ? "–" : formatNumber(row.original.short)),
   },
-  { accessorKey: "bundles", header: "Bundles", meta: { align: "right" }, cell: ({ row }) => qty(row.original.bundles, row.original.bundleUnit) },
+  { accessorKey: "bundles", header: "Bundles", meta: { align: "right" }, cell: ({ row }) => formatNumber(row.original.bundles) },
   { accessorKey: "receivedBy", header: "Received by" },
   {
     accessorKey: "statusLabel",
@@ -55,7 +48,7 @@ const columns: ColumnDef<ReceiptRow>[] = [
   },
 ];
 
-/** Receiving (China) list (22_7.1_Receiving_list.jpeg). Search and filters narrow the receipts on the client. */
+/** Receiving (China) list (22_7.1_Receiving_list.jpeg), live from REC-1. Search and filters narrow the rows on the client. */
 export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
   const { kpis } = data;
   const [filters, setFilters] = useState<ReceiptFilters>({ query: "", office: ALL, supplier: ALL, state: ALL });
@@ -110,13 +103,14 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
         </div>
 
         <KpiRow gap="sm">
-          <KpiCard size="xs" label="Receipts in September" value={kpis.receiptsThisMonth} sub={`from ${kpis.receiptsSupplierCount} suppliers`} />
-          <KpiCard size="xs" label="Waiting to be received" value={kpis.waitingToBeReceived} sub="orders not yet in China office" />
+          <KpiCard size="xs" label={`Receipts in ${kpis.month}`} value={kpis.receiptsThisMonth} sub={`from ${kpis.receiptsSupplierCount} suppliers`} />
+          <KpiCard size="xs" label="Waiting to be received" value={kpis.waitingToBeReceived ?? "–"} sub="orders not yet in China office" />
           <KpiCard size="xs" label="Partly received" value={kpis.partlyReceived} sub={kpis.partlyReceivedPos.join(" · ")} />
-          <KpiCard size="xs" label="Short items this month" value={kpis.shortItems} sub={kpis.shortItemPos.join(" · ")} tone="danger" />
+          {/* REC-1 has no counted-short fact, so short items are unknown ("–") until the contract adds one. */}
+          <KpiCard size="xs" label="Short items this month" value="–" />
         </KpiRow>
 
-        <DataTable columns={columns} data={rows} getRowId={(r) => r.id} size="sm" header="tall" emptyState="No receipts match these filters." />
+        <DataTable columns={columns} data={rows} getRowId={(r) => r.id} size="sm" header="tall" emptyState={data.receipts.length ? "No receipts match these filters." : "No receipts yet."} />
       </PageContainer>
     </>
   );

@@ -7,5 +7,6 @@ export const metadata: Metadata = { title: "Record receipt" };
 
 export default async function RecordReceiptPage() {
   const data = await getRecordReceipt();
-  return <RecordReceiptScreen data={data} />;
+  // A saved receipt changes the count, so the form remounts with the fresh REC-2 choices after router.refresh().
+  return <RecordReceiptScreen key={data.receipts.length} data={data} />;
 }
