@@ -13,8 +13,9 @@ no backend, auth API, database, or persistence.
   - The foundation, the screenshot inventory (`docs/screenshot-inventory.md`), and decisions D1–D6 and B1–B4 (`docs/proposed-build-plan.md`).
   - **Phase 2 shared setup:** shell, tokens, Arimo, shared components, master data, route registration, guard hook.
   - **Impeccable installed and verified** (see the Impeccable section below).
-- **Next:** one pilot screen agent (`W1-dashboard`), then the rest of Wave 1, each **only after explicit user approval**.
-- Every route already exists as a placeholder page. A screen agent replaces only the pages and feature folders its assignment lists.
+  - **All reference screens built and calibration complete.** The validated calibration commit is `ca94b78`. `main` is pushed to GitHub, and `main` and `origin/main` match.
+  - **Last reported validation:** lint 0 errors (1 known warning), typecheck pass, 165/165 unit tests, production build pass, Playwright E2E 73/73, and all 51 reference screenshots match the validated capture set.
+- **Next:** Backend Batch 1 (sign-in, users, suppliers, passwords), approved 2026-10-26. It is built on local `batch1/*` branches and worktrees; `main` changes only after a separately approved merge.
 
 ## Commands
 
