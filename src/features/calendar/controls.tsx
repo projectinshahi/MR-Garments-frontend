@@ -43,7 +43,7 @@ export function NavButton({ label, direction }: { label: string; direction: "pre
   );
 }
 
-/** A PO number. No calendar PO has an order-detail page (only PO-2028 does), so every one shows the toast. */
+/** A PO number. Opening its order from the calendar has no reference design, so it shows the toast. */
 export function PoButton({ po, className }: { po: string; className?: string }) {
   return (
     <button

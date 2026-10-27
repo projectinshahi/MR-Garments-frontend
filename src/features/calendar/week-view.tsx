@@ -2,7 +2,6 @@ import { format } from "date-fns";
 
 import { PageContainer } from "@/components/layout/page-header";
 import { Callout, SectionCard } from "@/components/shared/cards";
-import { MOCK_TODAY } from "@/lib/constants";
 import { formatQty, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -12,8 +11,8 @@ import type { CalendarData } from "./data/queries";
 import { dueOn, isoDay, weekDays } from "./deliveries";
 
 /** b Week (19_6.b_Week.jpeg): late banner and seven day columns of delivery cards. */
-export function WeekView({ deliveries }: CalendarData) {
-  const days = weekDays();
+export function WeekView({ today, deliveries }: CalendarData) {
+  const days = weekDays(today);
   const title = `${format(days[0], "d MMM")} – ${format(days[6], "d MMM yyyy")}`;
   const lateBefore = deliveries.filter((d) => d.status === "late" && d.due < isoDay(days[0]));
 
@@ -32,20 +31,20 @@ export function WeekView({ deliveries }: CalendarData) {
           <div role="table" aria-label={title} className="grid min-w-[980px] grid-cols-7">
             <div role="row" className="contents">
               {days.map((day) => {
-                const today = isoDay(day) === MOCK_TODAY;
+                const isToday = isoDay(day) === today;
                 return (
                   <div
                     key={isoDay(day)}
                     role="columnheader"
                     className={cn(
                       "flex h-[38px] items-center border-r border-b px-3 text-[13px] leading-5 font-bold text-muted-foreground last:border-r-0",
-                      today ? "bg-callout-info" : "bg-table-head",
+                      isToday ? "bg-callout-info" : "bg-table-head",
                     )}
                   >
                     <span>
                       {format(day, "EEE")}{" "}
-                      <span className={cn("ml-1 text-[15px]", today ? "text-primary" : "text-foreground")}>{format(day, "d MMM")}</span>
-                      {today ? " · Today" : null}
+                      <span className={cn("ml-1 text-[15px]", isToday ? "text-primary" : "text-foreground")}>{format(day, "d MMM")}</span>
+                      {isToday ? " · Today" : null}
                     </span>
                   </div>
                 );

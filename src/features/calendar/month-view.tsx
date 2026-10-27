@@ -4,7 +4,6 @@ import { PageContainer } from "@/components/layout/page-header";
 import { BarChart } from "@/components/shared/bar-chart";
 import { Callout, CardNote, SectionCard } from "@/components/shared/cards";
 import { StatusPill } from "@/components/shared/status-pill";
-import { MOCK_TODAY } from "@/lib/constants";
 import { formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +15,7 @@ import { deliveriesPerDay, dueOn, isoDay, lateBy, monthWeeks } from "./deliverie
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /** a Month (18_6.a_Month.jpeg): month grid with PO chips, and the per-day, late and reminder cards. */
-export function MonthView({ month, deliveries }: CalendarData) {
+export function MonthView({ month, today, deliveries }: CalendarData) {
   const first = parseISO(month);
   const title = format(first, "MMMM yyyy");
   const late = deliveries.filter((d) => d.status === "late");
@@ -44,7 +43,7 @@ export function MonthView({ month, deliveries }: CalendarData) {
                   {week.map((day) => {
                     const items = dueOn(deliveries, day);
                     const outside = !isSameMonth(day, first);
-                    const today = isoDay(day) === MOCK_TODAY;
+                    const isToday = isoDay(day) === today;
                     return (
                       <div
                         key={isoDay(day)}
@@ -53,10 +52,10 @@ export function MonthView({ month, deliveries }: CalendarData) {
                       >
                         <div className="flex h-5 items-start justify-between gap-1">
                           <span
-                            aria-current={today ? "date" : undefined}
+                            aria-current={isToday ? "date" : undefined}
                             className={cn(
                               "text-[13px] leading-5 font-bold",
-                              today
+                              isToday
                                 ? "-mt-px -ml-1 flex size-6 items-center justify-center rounded-full bg-primary text-white"
                                 : outside
                                   ? "text-table-head-foreground/50"
@@ -95,23 +94,27 @@ export function MonthView({ month, deliveries }: CalendarData) {
 
         <div className="flex flex-col gap-(--page-gap)">
           <SectionCard title="Deliveries per day" aside={<CardNote>next 7 days</CardNote>}>
-            <BarChart size="sm" data={deliveriesPerDay(deliveries)} label="Deliveries per day, next 7 days" className="h-[126px]" />
+            <BarChart size="sm" data={deliveriesPerDay(deliveries, today)} label="Deliveries per day, next 7 days" className="h-[126px]" />
           </SectionCard>
 
           <SectionCard title="Late deliveries" titleGap="none" aside={<StatusPill tone="danger">{late.length}</StatusPill>}>
-            <ul aria-label="Late deliveries" className="mt-1">
-              {late.map((d) => (
-                <li key={d.po} className="flex items-center justify-between gap-3 border-b border-border-subtle py-[9px] last:border-0 last:pb-2">
-                  <div className="min-w-0">
-                    <PoButton po={d.po} className="text-sm leading-[18px] font-bold" />
-                    <p className="text-[12.5px] leading-4 text-muted-foreground">
-                      {d.supplier} · due {formatShortDate(d.due)}
-                    </p>
-                  </div>
-                  <StatusPill tone="danger">{lateBy(d.due)}</StatusPill>
-                </li>
-              ))}
-            </ul>
+            {late.length ? (
+              <ul aria-label="Late deliveries" className="mt-1">
+                {late.map((d) => (
+                  <li key={d.po} className="flex items-center justify-between gap-3 border-b border-border-subtle py-[9px] last:border-0 last:pb-2">
+                    <div className="min-w-0">
+                      <PoButton po={d.po} className="text-sm leading-[18px] font-bold" />
+                      <p className="text-[12.5px] leading-4 text-muted-foreground">
+                        {d.supplier} · due {formatShortDate(d.due)}
+                      </p>
+                    </div>
+                    <StatusPill tone="danger">{lateBy(d.due, today)}</StatusPill>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 py-[9px] text-[12.5px] leading-4 text-muted-foreground">No late deliveries.</p>
+            )}
           </SectionCard>
 
           <Callout tone="info" className="rounded-xl border border-info/15 px-5 pt-[13px] pb-[19px]">
