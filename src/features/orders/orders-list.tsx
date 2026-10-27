@@ -1,8 +1,6 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { DataTable } from "@/components/shared/data-table";
@@ -14,7 +12,7 @@ import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
 import type { OrderRow, OrdersListData } from "./data/queries";
-import { filterOrders, isFiltered, type OrderChip } from "./filter-orders";
+import { filterOrders, type OrderChip } from "./filter-orders";
 
 const ALL = "all";
 const PAGE_SIZE = 10;
@@ -26,14 +24,10 @@ const STAGE_OPTIONS: FilterOption[] = [
 
 const focusRing = "rounded-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
+// Live orders have no designed detail view. No handler: the click bubbles to the row (notInPrototype). The button
+// makes the row keyboard-reachable.
 function PoCell({ order }: { order: OrderRow }) {
-  return order.hasDetail ? (
-    // The row would navigate too, so the link keeps its own click.
-    <Link href={`/orders/${order.po}`} onClick={(event) => event.stopPropagation()} className={`${focusRing} hover:underline`}>
-      {order.po}
-    </Link>
-  ) : (
-    // No handler: the click bubbles to the row (notInPrototype). The button makes the row keyboard-reachable.
+  return (
     <button type="button" className={focusRing}>
       {order.po}
     </button>
@@ -66,22 +60,19 @@ const columns: ColumnDef<OrderRow>[] = [
     cell: ({ row }) => <StatusPill tone={row.original.tone}>{row.original.status}</StatusPill>,
   },
   {
-    accessorKey: "paidSoFar",
+    accessorKey: "paidInr",
     header: "Paid so far (INR)",
     meta: { align: "right", className: "w-[137px]" },
-    cell: ({ row }) => formatINR(row.original.paidSoFar),
+    cell: ({ row }) => formatINR(row.original.paidInr),
   },
 ];
 
-/** Filter row and the orders table. Filters apply to the loaded page (the 10 transcribed rows). */
+/** Filter row and the orders table. Every order is loaded; filters and pages run on the client. */
 export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState(ALL);
   const [supplier, setSupplier] = useState(ALL);
   const [chip, setChip] = useState<OrderChip>("all");
-  // The pager is uncontrolled; remounting it after "More orders" keeps page 1 selected (pages 2–5 are not designed).
-  const [pagerKey, setPagerKey] = useState(0);
 
   const chips = [
     { value: "all", label: `All ${counts.all}` },
@@ -125,27 +116,17 @@ export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
         />
       </div>
       <DataTable
-        key={pagerKey}
+        // Remount on a filter change so the pager returns to page 1.
+        key={JSON.stringify(filters)}
         columns={columns}
         data={rows}
         getRowId={(order) => order.po}
         density="tall"
         size="sm"
         header="tall"
-        onRowClick={(order) =>
-          order.hasDetail ? router.push(`/orders/${order.po}`) : notInPrototype(`Order detail for ${order.po}`)
-        }
-        emptyState="No orders match these filters."
-        pagination={{
-          pageSize: PAGE_SIZE,
-          // Unfiltered, the pager shows all 50 orders as in the reference; filtered, only the matching loaded rows.
-          rowCount: isFiltered(filters) ? rows.length : counts.all,
-          itemLabel: "orders",
-          onPageChange: () => {
-            notInPrototype("More orders");
-            setPagerKey((key) => key + 1);
-          },
-        }}
+        onRowClick={(order) => notInPrototype(`Order detail for ${order.po}`)}
+        emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
+        pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
       />
     </div>
   );

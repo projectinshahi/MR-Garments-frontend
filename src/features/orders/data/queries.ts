@@ -1,22 +1,32 @@
-import { listOrderDetailPOs } from "@/features/order-detail/shared/queries";
-import { listSuppliers } from "@/lib/data/master";
+import { apiGet } from "@/lib/api/server";
+import type { OrderListItem, OrderOptions } from "@/lib/api/types";
+import { todayInIndia } from "@/lib/today";
 
-import * as fixtures from "./fixtures";
+import { orderStatus, type OrderStatus, type StatusChip } from "../order-status";
 
-export type { OrderCounts } from "./fixtures";
+// Orders list (05) reads ORD-1 and ORD-2. These calls read the session cookie, so the page renders inside the
+// (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
-export type OrderRow = fixtures.OrderListRow & {
-  /** True when the PO has a designed detail view (only PO-2028); other rows call notInPrototype (D5). */
-  hasDetail: boolean;
+export type OrderRow = Omit<OrderListItem, "supplier"> & {
+  supplier: string;
+  status: string;
+  tone: OrderStatus["tone"];
+  chip: StatusChip;
 };
-
+export type OrderCounts = { all: number; late: number; dueSoon: number; shortReceived: number };
 export type OrdersListData = Awaited<ReturnType<typeof getOrdersList>>;
 
-/** Page 1 of the orders list, the chip counts, and the supplier filter options. Async so a real API can replace it. */
+/** Every order with its status for today in India, the chip counts, and the supplier filter options. */
 export async function getOrdersList() {
-  const [suppliers, detailPOs] = await Promise.all([listSuppliers(), listOrderDetailPOs()]);
-  const orders: OrderRow[] = fixtures.orders.map((order) => ({ ...order, hasDetail: detailPOs.includes(order.po) }));
-  // Master suppliers, plus any shown on this page that the master lacks (Hangzhou Silk House), so every row can be filtered.
-  const supplierNames = [...new Set([...suppliers.map((s) => s.name), ...orders.map((o) => o.supplier)])];
-  return { orders, counts: { ...fixtures.counts }, supplierNames };
+  const [list, options] = await Promise.all([apiGet<OrderListItem[]>("/orders"), apiGet<OrderOptions>("/orders/options")]);
+  const today = todayInIndia();
+  const orders: OrderRow[] = list.map((order) => {
+    const { label, tone, chip } = orderStatus(order, today);
+    return { ...order, supplier: order.supplier.name, status: label, tone, chip };
+  });
+  const count = (chip: StatusChip) => orders.filter((o) => o.chip === chip).length;
+  const counts: OrderCounts = { all: orders.length, late: count("late"), dueSoon: count("dueSoon"), shortReceived: count("shortReceived") };
+  // Active suppliers, plus any inactive one that still has orders, so every row can be filtered.
+  const supplierNames = [...new Set([...options.suppliers.map((s) => s.name), ...orders.map((o) => o.supplier)])];
+  return { orders, counts, supplierNames };
 }

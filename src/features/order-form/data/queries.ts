@@ -1,13 +1,14 @@
-import { listSuppliers } from "@/lib/data/master";
+import { apiGet } from "@/lib/api/server";
+import type { OrderOptions } from "@/lib/api/types";
+import { todayInIndia } from "@/lib/today";
 
-import * as fixtures from "./fixtures";
-
-export type { Deposit, NewOrderDraft, OrderLine } from "./fixtures";
+// New order (15) reads ORD-2 (the next PO, suppliers, items and agents). The call reads the session cookie, so the
+// page renders inside the (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
 export type NewOrderData = Awaited<ReturnType<typeof getNewOrder>>;
 
-/** New order form (Stage 1), prefilled for PO-2050 as in the reference, with the master suppliers as options. */
+/** The form's choices and today in India (the default order date). */
 export async function getNewOrder() {
-  const suppliers = await listSuppliers();
-  return structuredClone({ ...fixtures.newOrder, suppliers: suppliers.map((s) => s.name) });
+  const options = await apiGet<OrderOptions>("/orders/options");
+  return { options, today: todayInIndia() };
 }
