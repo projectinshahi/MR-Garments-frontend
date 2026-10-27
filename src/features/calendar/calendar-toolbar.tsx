@@ -9,7 +9,7 @@ export const STATUS_TEXT: Record<DeliveryStatus, string> = { late: "text-danger"
 
 const LEGEND: { status: DeliveryStatus; label: string }[] = [
   { status: "late", label: "Late" },
-  { status: "due-soon", label: "Due within 2 days" },
+  { status: "due-soon", label: "Due within 7 days" },
   { status: "on-track", label: "On track" },
 ];
 

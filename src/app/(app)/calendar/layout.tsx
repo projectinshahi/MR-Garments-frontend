@@ -17,7 +17,7 @@ const TABS: RouteTab[] = [
 ];
 
 export default async function CalendarLayout({ children }: LayoutProps<"/calendar">) {
-  const { deliveries } = await getCalendar();
+  const { deliveries, today } = await getCalendar();
   return (
     <>
       <PageHeader
@@ -25,7 +25,7 @@ export default async function CalendarLayout({ children }: LayoutProps<"/calenda
         actions={
           <>
             <PrototypeSelect label="Supplier" options={supplierOptions(deliveries)} action="Filter by supplier" className="h-[38px]" />
-            <TodayPill size="sm" />
+            <TodayPill size="sm" today={today} />
           </>
         }
       />

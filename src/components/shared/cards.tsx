@@ -128,7 +128,16 @@ export function Callout({
  * "Today, 30 Sep 2026" (dashboard, calendar) or "Wed, 30 Sep 2026" (staff home), from MOCK_TODAY.
  * Text is 14 px, or 13.5 px with `size="sm"` (dashboard).
  */
-export function TodayPill({ style = "today", size = "default" }: { style?: "today" | "weekday"; size?: "default" | "sm" }) {
+export function TodayPill({
+  style = "today",
+  size = "default",
+  today,
+}: {
+  style?: "today" | "weekday";
+  size?: "default" | "sm";
+  /** YYYY-MM-DD; live screens pass todayInIndia(). Mock screens omit it and show MOCK_TODAY. */
+  today?: string;
+}) {
   return (
     <span
       className={cn(
@@ -136,7 +145,7 @@ export function TodayPill({ style = "today", size = "default" }: { style?: "toda
         size === "sm" ? "text-[13.5px]" : "text-sm",
       )}
     >
-      {formatToday(style)}
+      {formatToday(style, today)}
     </span>
   );
 }

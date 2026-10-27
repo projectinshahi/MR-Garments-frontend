@@ -18,7 +18,7 @@ const STATUS_TONE: Record<DeliveryStatus, Tone> = { late: "danger", "due-soon": 
 
 const STATUS_FILTERS: { value: DeliveryStatus; label: string }[] = [
   { value: "late", label: "Late" },
-  { value: "due-soon", label: "Due within 2 days" },
+  { value: "due-soon", label: "Due within 7 days" },
   { value: "on-track", label: "On track" },
 ];
 
