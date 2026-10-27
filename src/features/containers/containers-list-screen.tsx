@@ -52,7 +52,7 @@ const columns: ColumnDef<ContainerRow>[] = [
   },
 ];
 
-/** Containers list (24_8.1_Containers_list.jpeg). Search, selects and chips narrow the rows on the client. */
+/** Containers list (24_8.1_Containers_list.jpeg), from CON-1. Search, selects and chips narrow the rows on the client. */
 export function ContainersListScreen({ data }: { data: ContainersListData }) {
   const { kpis } = data;
   const [filters, setFilters] = useState<ContainerFilters>({ query: "", agent: ALL, terms: ALL, chip: "active" });
@@ -110,11 +110,11 @@ export function ContainersListScreen({ data }: { data: ContainersListData }) {
         <DataTable
           columns={columns}
           data={rows}
-          getRowId={(r) => r.number}
+          getRowId={(r) => r.id}
           size="sm"
           header="tall"
           density="relaxed"
-          emptyState="No containers match these filters."
+          emptyState={data.containers.length ? "No containers match these filters." : "No containers yet."}
         />
         <p className="text-[13px] leading-4 text-muted-foreground">{data.footnote}</p>
       </PageContainer>

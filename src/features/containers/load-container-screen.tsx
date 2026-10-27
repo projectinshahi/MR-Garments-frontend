@@ -1,8 +1,10 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm, useWatch } from "react-hook-form";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
@@ -12,15 +14,29 @@ import { ProgressBar } from "@/components/shared/progress";
 import { notInPrototype } from "@/components/shared/prototype";
 import { Journey } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatDate, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { apiClient } from "@/lib/api/client";
+import { handleApiError, notifySuccess } from "@/lib/feedback";
+import { formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { Terms } from "@/types/domain";
 
-import { contents, orderLoaded, parseCount } from "./containers-logic";
+import {
+  contents,
+  LOAD_FIELDS,
+  lineLoads,
+  loadContainerSchema,
+  parseCount,
+  toContainerBody,
+  toLoadValues,
+  type LoadContainerValues,
+} from "./containers-logic";
 import type { LoadContainerData } from "./data/queries";
+
+// Proposed wording: SUCCESS has no container message yet.
+const CONTAINER_SAVED = "Container saved";
 
 // Measured from 23_8_Container_loading_-_Stage_3_form.jpeg: 12.5 px bold labels 5 px above 42 px fields, 12 px
 // table headers in a 30 px row, 60 px item rows. Cards use titleGap="none" and place their content where the
@@ -63,22 +79,47 @@ function LineTermsSelect({ value, onChange, label }: { value: Terms; onChange: (
   );
 }
 
-/** Load container, Stage 3 (23_8_Container_loading_-_Stage_3_form.jpeg), prefilled for FCIU 5527310. */
-export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
-  // Mock mutation: client state only, resets on reload
-  const [edits, setEdits] = useState(() =>
-    data.lines.map((line) => ({ bundles: String(line.bundles), quantity: formatQty(line.quantity, line.unit), terms: line.terms })),
-  );
-  const lines = data.lines.map((line, i) => ({
-    ...line,
-    bundles: parseCount(edits[i].bundles),
-    quantity: parseCount(edits[i].quantity),
-    terms: edits[i].terms,
-  }));
-  const edit = (index: number, patch: Partial<(typeof edits)[number]>) =>
-    setEdits((current) => current.map((e, i) => (i === index ? { ...e, ...patch } : e)));
+const shortDate = (value: string) => (value ? formatShortDate(value) : "–");
+
+/**
+ * Load container, Stage 3 (23_8_Container_loading_-_Stage_3_form.jpeg). CON-2's loadable lines are listed with an
+ * empty quantity (not loaded); Save posts CON-3 with the lines that have one, then goes to /containers.
+ */
+export function LoadContainerScreen({ agents, lines: loadable, today }: LoadContainerData) {
+  const router = useRouter();
+  const { register, control, handleSubmit, reset, setError, formState } = useForm<LoadContainerValues>({
+    resolver: zodResolver(loadContainerSchema),
+    defaultValues: toLoadValues(loadable, today),
+  });
+  const { errors, isSubmitting } = formState;
+  const [terms, agentId, loadedOn, sailedOn, eta, values] = useWatch({
+    control,
+    name: ["terms", "shippingAgentId", "loadedOn", "sailedOn", "eta", "lines"],
+  });
+  const lines = values.map((line) => ({ ...line, bundles: parseCount(line.bundles), quantity: parseCount(line.quantity) }));
   const glance = contents(lines);
-  const seaDays = differenceInCalendarDays(parseISO(data.eta), parseISO(data.etd));
+  const loads = lineLoads(lines);
+  const departs = sailedOn || loadedOn;
+  const seaDays = departs && eta ? differenceInCalendarDays(parseISO(eta), parseISO(departs)) : null;
+  const agent = agents.find((a) => a.id === agentId)?.name;
+  const linesError = errors.lines?.root?.message ?? errors.lines?.message;
+
+  const onSubmit = handleSubmit(async (form) => {
+    try {
+      await apiClient.post<{ container: { id: string } }>("/containers", toContainerBody(form));
+    } catch (error) {
+      const fields = handleApiError(error) ?? {};
+      LOAD_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
+        setError(key, { type: "server", message: fields[key] }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
+    notifySuccess(CONTAINER_SAVED);
+    // The page stays mounted (Activity), so the next visit starts from an empty form.
+    reset();
+    router.push("/containers");
+    router.refresh();
+  });
 
   return (
     <>
@@ -87,76 +128,80 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
         parent={{ label: "Containers", href: "/containers" }}
         actions={
           <Button asChild variant="outline">
-            <Link href="/containers">Cancel</Link>
+            <Link href="/containers" onClick={() => reset()}>
+              Cancel
+            </Link>
           </Button>
         }
       />
       <PageContainer>
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1fr)_400px]">
-          <form
-            className="flex min-w-0 flex-col gap-(--page-gap)"
-            onSubmit={(event) => {
-              event.preventDefault();
-              notInPrototype("Save container");
-            }}
-          >
+          <form noValidate className="flex min-w-0 flex-col gap-(--page-gap)" onSubmit={onSubmit}>
             <SectionCard title="Container details" titleGap="none">
               <FieldGroup className="mt-3 grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.number}>
                   <FieldLabel htmlFor="container-number" className={labelClass}>
                     Container number <RequiredMark />
                   </FieldLabel>
-                  <Input size="sm" id="container-number" required defaultValue={data.number} />
+                  <Input size="sm" id="container-number" required autoComplete="off" aria-invalid={!!errors.number} {...register("number")} />
+                  <FieldError errors={[errors.number]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.shippingAgentId}>
                   <FieldLabel htmlFor="shipping-agent" className={labelClass}>
                     Shipping agent <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect size="sm" id="shipping-agent" required defaultValue={data.agent}>
-                    {data.agents.map((agent) => (
-                      <option key={agent}>{agent}</option>
+                  <NativeSelect size="sm" id="shipping-agent" required aria-invalid={!!errors.shippingAgentId} {...register("shippingAgentId")}>
+                    <option value="" />
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
                     ))}
                   </NativeSelect>
+                  <FieldError errors={[errors.shippingAgentId]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.terms}>
                   <FieldLabel htmlFor="container-terms" className={labelClass}>
                     Container terms <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect size="sm" id="container-terms" required defaultValue={data.terms}>
-                    {TERMS.map((terms) => (
-                      <option key={terms}>{terms}</option>
+                  <NativeSelect size="sm" id="container-terms" required aria-invalid={!!errors.terms} {...register("terms")}>
+                    {TERMS.map((t) => (
+                      <option key={t}>{t}</option>
                     ))}
                   </NativeSelect>
+                  <FieldError errors={[errors.terms]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.loadedOn}>
                   <FieldLabel htmlFor="loaded-on" className={labelClass}>
                     Loaded on
                   </FieldLabel>
-                  <Input size="sm" id="loaded-on" defaultValue={formatDate(data.loadedOn)} />
+                  <Input size="sm" id="loaded-on" type="date" aria-invalid={!!errors.loadedOn} {...register("loadedOn")} />
+                  <FieldError errors={[errors.loadedOn]} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="etd" className={labelClass}>
                     Expected departure (ETD)
                   </FieldLabel>
-                  <Input size="sm" id="etd" defaultValue={formatDate(data.etd)} />
+                  <Input size="sm" id="etd" type="date" {...register("sailedOn")} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.eta}>
                   <FieldLabel htmlFor="eta" className={labelClass}>
                     Expected arrival in India (ETA)
                   </FieldLabel>
-                  <Input size="sm" id="eta" defaultValue={formatDate(data.eta)} />
+                  <Input size="sm" id="eta" type="date" aria-invalid={!!errors.eta} {...register("eta")} />
+                  <FieldError errors={[errors.eta]} />
                 </Field>
                 <Field className={cn(fieldClass, "sm:col-span-2")}>
                   <FieldLabel htmlFor="port-of-loading" className={labelClass}>
                     Port of loading
                   </FieldLabel>
-                  <Input size="sm" id="port-of-loading" defaultValue={data.portOfLoading} />
+                  <Input size="sm" id="port-of-loading" {...register("portOfLoading")} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="port-of-arrival" className={labelClass}>
                     Port of arrival
                   </FieldLabel>
-                  <Input size="sm" id="port-of-arrival" defaultValue={data.portOfArrival} />
+                  <Input size="sm" id="port-of-arrival" {...register("portOfArrival")} />
                 </Field>
               </FieldGroup>
             </SectionCard>
@@ -173,38 +218,57 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {lines.length === 0 ? (
+                    <TableRow className="h-[60px] hover:bg-transparent">
+                      <TableCell colSpan={5} className={cn(cellClass, "text-center text-muted-foreground")}>
+                        Nothing received is waiting to be loaded.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                   {lines.map((line, i) => {
                     const name = `${line.po} ${line.item}`;
+                    const quantityError = errors.lines?.[i]?.quantity;
                     return (
-                      <TableRow key={line.id} className="h-[60px] border-border-subtle hover:bg-transparent">
+                      <TableRow key={line.orderLineId} className="h-[60px] border-border-subtle hover:bg-transparent">
                         <TableCell className={cn(cellClass, "font-bold")}>{line.po}</TableCell>
-                        <TableCell className={cellClass}>{line.item}</TableCell>
+                        <TableCell className={cellClass}>
+                          {line.item}
+                          <span className="block text-[12px] leading-4 text-muted-foreground">
+                            {formatQty(line.received, line.unit)} received · {formatNumber(line.loaded)} loaded
+                          </span>
+                        </TableCell>
                         {/* The reference sets the inputs 8 px from the row top, above the text line. */}
                         <TableCell className={cn(cellClass, "pt-2 text-right align-top")}>
                           <Input
                             aria-label={`Bundles, ${name}`}
                             inputMode="numeric"
-                            value={edits[i].bundles}
-                            onChange={(event) => edit(i, { bundles: event.target.value })}
+                            autoComplete="off"
+                            {...register(`lines.${i}.bundles`)}
                             className={cn(lineInputClass, "w-[91px]")}
                           />
                         </TableCell>
-                        <TableCell className={cn(cellClass, "pt-2 text-right align-top")}>
+                        <TableCell className={cn(cellClass, "pt-2 pb-1 text-right align-top")}>
                           <Input
                             aria-label={`Quantity, ${name}`}
-                            value={edits[i].quantity}
-                            onChange={(event) => edit(i, { quantity: event.target.value })}
-                            className={cn(lineInputClass, "w-[155px]")}
+                            inputMode="numeric"
+                            autoComplete="off"
+                            placeholder={line.unit}
+                            aria-invalid={!!quantityError}
+                            {...register(`lines.${i}.quantity`)}
+                            className={cn(lineInputClass, "ml-auto w-[155px]")}
                           />
+                          <FieldError className="mt-1 text-[12px]" errors={[quantityError]} />
                         </TableCell>
                         <TableCell className={cn(cellClass, "text-right")}>
-                          <LineTermsSelect label={`Terms, ${name}`} value={line.terms} onChange={(terms) => edit(i, { terms })} />
+                          {/* CON-3 has no per-line terms: the line follows the container's. */}
+                          <LineTermsSelect label={`Terms, ${name}`} value={terms} onChange={() => notInPrototype("Per-item terms")} />
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
+              <FieldError className="mt-2" errors={linesError ? [{ message: linesError }] : []} />
 
               <button
                 type="button"
@@ -229,7 +293,7 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                 >
                   Save draft
                 </Button>
-                <Button type="submit" size="lg" className="w-[210px] min-w-0 text-[15px]">
+                <Button type="submit" size="lg" className="w-[210px] min-w-0 text-[15px]" disabled={isSubmitting}>
                   Save container
                 </Button>
               </FormFooter>
@@ -243,13 +307,13 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
                 align="edges"
                 className="mt-3"
                 steps={[
-                  { title: formatShortDate(data.loadedOn), lines: ["Loaded"], marker: "dot" },
-                  { title: formatShortDate(data.etd), lines: ["Departs"], marker: "ring" },
-                  { title: formatShortDate(data.eta), lines: ["Arrives"], marker: "ring" },
+                  { title: shortDate(loadedOn), lines: ["Loaded"], marker: "dot" },
+                  { title: shortDate(sailedOn), lines: ["Departs"], marker: "ring" },
+                  { title: shortDate(eta), lines: ["Arrives"], marker: "ring" },
                 ]}
               />
               <p className="mt-2 text-sm leading-5 text-label">
-                About {seaDays} days at sea. Agent: {data.agent}.
+                {seaDays !== null ? `About ${seaDays} days at sea. ` : ""}Agent: {agent ?? "–"}.
               </p>
             </SectionCard>
 
@@ -267,22 +331,21 @@ export function LoadContainerScreen({ data }: { data: LoadContainerData }) {
 
             <SectionCard title="Where each order is loaded" titleGap="none">
               <ul className="mt-3">
-                {data.orderLoads.map((load) => {
-                  const loaded = orderLoaded(load, lines);
-                  const title = `${load.po} · ${load.item}`;
-                  return (
-                    <li key={load.po} className="border-b border-border-subtle py-2.5 last:border-b-0 last:pb-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <span className="text-sm leading-5 font-bold">{title}</span>
-                        <span className="text-[12.5px] leading-[18px] whitespace-nowrap text-muted-foreground">
-                          {formatNumber(loaded)} of {formatNumber(load.ordered)}
-                        </span>
-                      </div>
-                      <ProgressBar size="sm" value={loaded} max={load.ordered} label={`${title} loaded`} className="mt-[7px]" />
-                      <p className="mt-[7px] text-[12.5px] leading-[17.5px] text-muted-foreground">{load.note}</p>
-                    </li>
-                  );
-                })}
+                {loads.length === 0 ? <li className="text-sm leading-5 text-muted-foreground">Nothing loaded yet.</li> : null}
+                {loads.map((load) => (
+                  <li key={load.orderLineId} className="border-b border-border-subtle py-2.5 last:border-b-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="text-sm leading-5 font-bold">{load.title}</span>
+                      <span className="text-[12.5px] leading-[18px] whitespace-nowrap text-muted-foreground">
+                        {formatNumber(load.loaded)} of {formatNumber(load.received)}
+                      </span>
+                    </div>
+                    <ProgressBar size="sm" value={load.loaded} max={load.received} label={`${load.title} loaded`} className="mt-[7px]" />
+                    <p className="mt-[7px] text-[12.5px] leading-[17.5px] text-muted-foreground">
+                      {load.rest > 0 ? `Rest, ${formatQty(load.rest, load.unit)}, goes in the next container` : "Everything received is loaded"}
+                    </p>
+                  </li>
+                ))}
               </ul>
             </SectionCard>
           </div>
