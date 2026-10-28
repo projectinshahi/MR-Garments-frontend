@@ -76,7 +76,7 @@ export function SettingsList<T extends SettingsRecord>({
   searchText: (row: T) => string[];
   action: React.ReactNode;
   footnote: string;
-  /** Plural record noun for the empty state ("suppliers"). */
+  /** Plural record noun for the empty states ("suppliers"). */
   noun: string;
 }) {
   const [query, setQuery] = useState("");
@@ -116,7 +116,8 @@ export function SettingsList<T extends SettingsRecord>({
             getRowId={(row) => row.id}
             size="sm"
             header="tall"
-            emptyState={`No ${noun} match these filters.`}
+            // The API returned no records at all, or the search and status chips hide every one.
+            emptyState={rows.length === 0 ? `No ${noun} yet.` : `No ${noun} match these filters.`}
           />
           <p className="text-[12.5px] leading-5 text-muted-foreground">{footnote}</p>
         </div>

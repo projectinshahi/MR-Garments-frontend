@@ -1,3 +1,4 @@
+import { SampleDataNotice } from "@/components/layout/sample-data-notice";
 import { APP_NAME, PRODUCT_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,9 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           </ol>
         </div>
       </aside>
-      <main className="flex flex-1 items-center justify-center p-4">
+      <main className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
+        {/* Forgot password only; renders nothing on the live sign-in pages, which keep their layout. */}
+        <SampleDataNotice className="w-full max-w-[440px] rounded-lg px-4" />
         {/* The references draw the card from x 850 to 1290 with its content starting 41 px inside the left edge. */}
         <div className="w-full max-w-[440px] rounded-2xl border border-border-subtle bg-card p-6 shadow-[0_12px_40px_rgb(19_33_60/8%)] sm:p-10">
           {children}

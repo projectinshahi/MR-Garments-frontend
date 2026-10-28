@@ -48,12 +48,16 @@ export const SUCCESS = {
 
 
 export const notifySuccess = (message: string) => toast.success(message);
+/** A message that has no field on the form (a field error the form doesn't show, or a rule about the whole record). */
+export const notifyError = (message: string) => toast.error(message);
 
 /**
  * Handles a failed request per E1-E14 and returns any field errors for the form to show under its fields.
  * - 401: the session ended, so go to sign-in with M4 (E6).
  * - 403: toast M23 (E8).
- * - 409/422 with `fields`: returned for the form (E1-E3); nothing else is shown.
+ * - 409/422 with `fields`: returned for the form (E1-E3); nothing else is shown. The form must show every one.
+ * - 409/422 without `fields`: toast the API's own message. It is written for users ("This container has arrived and
+ *   can't be changed.") and never carries internals; 5xx bodies always say M24.
  * - Anything else (400, 5xx, network): toast M24 and keep the entered values (E11, E12).
  */
 export function handleApiError(error: unknown): Record<string, string> | undefined {
@@ -66,7 +70,11 @@ export function handleApiError(error: unknown): Record<string, string> | undefin
       toast.error(MESSAGES.noAccess);
       return undefined;
     }
-    if ((error.status === 409 || error.status === 422) && error.fields) return error.fields;
+    if (error.status === 409 || error.status === 422) {
+      if (error.fields) return error.fields;
+      toast.error(error.message);
+      return undefined;
+    }
   }
   toast.error(MESSAGES.somethingWrong, { description: MESSAGES.tryAgain });
   return undefined;

@@ -1,7 +1,9 @@
 import { addDays, format, parseISO } from "date-fns";
 
+import { canOpen, hasAccess } from "@/config/navigation";
 import { apiGet } from "@/lib/api/server";
-import type { PaymentsResponse } from "@/lib/api/types";
+import type { OrderOptions, PaymentsResponse } from "@/lib/api/types";
+import { getMe } from "@/lib/session";
 import { todayInIndia } from "@/lib/today";
 import type { Tone } from "@/types/domain";
 
@@ -11,6 +13,7 @@ import type { Tone } from "@/types/domain";
 export type Payment = PaymentsResponse["payments"][number];
 
 export type OrderPaymentRow = {
+  orderId: string;
   po: string;
   supplier: string;
   /** CNY */
@@ -30,7 +33,8 @@ export type OrderPaymentRow = {
 /** Due payments whose due date falls from today to today + N days. The API has no INR rate for them: CNY only. */
 export type DueWindow = { amountCny: number; count: number; first: { po: string; due: string } | null };
 
-export type PaymentsKpis = { paidSoFarInr: number; openOrders: number; dueNext7: DueWindow; dueNext30: DueWindow };
+/** `paidOrders`: how many orders `paidSoFarInr` comes from (something paid). */
+export type PaymentsKpis = { paidSoFarInr: number; paidOrders: number; dueNext7: DueWindow; dueNext30: DueWindow };
 
 export type PaymentsData = {
   kpis: PaymentsKpis;
@@ -65,6 +69,7 @@ function dueTone(nextDue: string | null, today: string): Tone | undefined {
 export function toPaymentsData({ orders, payments }: PaymentsResponse, today: string): PaymentsData {
   const rows = orders.map(
     (o): OrderPaymentRow => ({
+      orderId: o.orderId,
       po: o.po,
       supplier: o.supplier,
       orderValue: o.orderValueCny,
@@ -78,7 +83,7 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
   return {
     kpis: {
       paidSoFarInr: orders.reduce((sum, o) => sum + o.paidInr, 0),
-      openOrders: orders.filter((o) => o.balanceCny > 0).length,
+      paidOrders: orders.filter((o) => o.paidCny > 0).length,
       dueNext7: dueWithin(payments, today, 7),
       dueNext30: dueWithin(payments, today, 30),
     },
@@ -88,8 +93,27 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
   };
 }
 
+export type PaymentsScreenData = Awaited<ReturnType<typeof getPayments>>;
+
+/**
+ * What the signed-in user may do here. `agents`: null when they can't record payments (payments below Enter), else
+ * ORD-2's shipping agents to offer as payees; a 403 or any failure there just means none. `linkPo`: POs open the
+ * order page.
+ */
+async function getAccess() {
+  const me = await getMe();
+  const agents =
+    me && hasAccess(me, "payments", "Enter")
+      ? await apiGet<OrderOptions>("/orders/options").then(
+          (options) => options.agents,
+          (): OrderOptions["agents"] => [],
+        )
+      : null;
+  return { agents, linkPo: !!me && canOpen(me, "/orders") };
+}
+
 /** PAY-1 GET /api/v1/payments. Today is read after the API call (Cache Components). */
 export async function getPayments() {
-  const response = await apiGet<PaymentsResponse>("/payments");
-  return toPaymentsData(response, todayInIndia());
+  const [response, access] = await Promise.all([apiGet<PaymentsResponse>("/payments"), getAccess()]);
+  return { ...toPaymentsData(response, todayInIndia()), ...access };
 }

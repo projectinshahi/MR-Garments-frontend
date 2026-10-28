@@ -81,6 +81,7 @@ test("clearing form recalculates the total clearing cost as charges change", asy
 test("an unknown container shows the not-found page", async ({ page }) => {
   // Partial prerendering streams the shell first, so the HTTP status stays 200; assert the not-found UI instead.
   await page.goto("/clearing/MEDU-4470912");
-  await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+  // The (app) not-found page added with the live five tabs.
+  await expect(page.getByText("Not found", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Container MEDU 4470912" })).toHaveCount(0);
 });

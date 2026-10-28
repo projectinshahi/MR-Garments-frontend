@@ -3,7 +3,18 @@ import { describe, expect, it } from "vitest";
 import type { ReceiptListItem, ReceiptOptions } from "@/lib/api/types";
 
 import type { ReceiptLine } from "./data/queries";
-import { ALL, deliveryEvents, filterReceipts, lineShort, paymentEffect, receiptSchema, receivingKpis, toReceiptRow } from "./receiving-logic";
+import {
+  ALL,
+  deliveryEvents,
+  filterReceipts,
+  lineShort,
+  paymentEffect,
+  receiptSchema,
+  receivingKpis,
+  remarkRequired,
+  SHORT_REMARK,
+  toReceiptRow,
+} from "./receiving-logic";
 
 const rec = (r: Partial<ReceiptListItem> & Pick<ReceiptListItem, "id" | "orderId" | "po">): ReceiptListItem => ({
   receivedOn: "2026-10-20",
@@ -71,7 +82,6 @@ describe("filterReceipts", () => {
 
   it("filters by status chip, supplier, office and search", () => {
     expect(filterReceipts(rows, all)).toHaveLength(3);
-    expect(filterReceipts(rows, { ...all, state: "short" })).toHaveLength(0);
     expect(filterReceipts(rows, { ...all, state: "partly" }).map((r) => r.id)).toEqual(["r3", "r1"]);
     expect(filterReceipts(rows, { ...all, supplier: "Hangzhou Knits" }).map((r) => r.po)).toEqual(["PO-2034"]);
     expect(filterReceipts(rows, { ...all, query: "po-2035" })).toHaveLength(2);
@@ -123,11 +133,37 @@ describe("receiptSchema", () => {
 
   it("blocks over-receipt, no quantity, decimals and a future date", () => {
     expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "501" }] })).toEqual([["lines.0.quantity", "Only 500 pcs left to receive."]]);
-    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "" }] })).toEqual([["lines", "Enter what was received for at least one item."]]);
-    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "1.5" }], bundles: "-1" })).toEqual([
+    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "" }], shortRemark: "x" })).toEqual([["lines", "Enter what was received for at least one item."]]);
+    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "1.5" }], bundles: "-1", shortRemark: "x" })).toEqual([
       ["bundles", "Enter a whole number."],
       ["lines.0.quantity", "Enter a whole number."],
     ]);
     expect(issues({ ...valid, receivedOn: "2026-10-28" })).toEqual([["receivedOn", "The date can't be after today."]]);
+  });
+
+  it("needs a short remark exactly when a line is still short after this receipt", () => {
+    const short = { ...valid, lines: [{ orderLineId: "l1", quantity: "460" }] };
+    expect(issues(short)).toEqual([["shortRemark", SHORT_REMARK]]);
+    expect(issues({ ...short, shortRemark: "   " })).toEqual([["shortRemark", SHORT_REMARK]]);
+    expect(schema.safeParse({ ...short, shortRemark: "40 jackets to follow." }).success).toBe(true);
+    expect(schema.safeParse({ ...valid, shortRemark: "" }).success).toBe(true);
+  });
+});
+
+describe("remarkRequired", () => {
+  const order: ReceiptOptions["orders"][number] = {
+    ...options.orders[0]!,
+    lines: [
+      { orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 },
+      { orderLineId: "l2", item: "Care labels", unit: "pcs", ordered: 1200, receivedEarlier: 1100, unitPriceCny: 0 },
+    ],
+  };
+
+  it("counts earlier receipts and this one against the order, over every line", () => {
+    expect(remarkRequired(order, [{ orderLineId: "l1", quantity: "500" }, { orderLineId: "l2", quantity: "100" }])).toBe(false);
+    expect(remarkRequired(order, [{ orderLineId: "l1", quantity: "500" }, { orderLineId: "l2", quantity: "99" }])).toBe(true);
+    expect(remarkRequired(order, [{ orderLineId: "l1", quantity: "500" }, { orderLineId: "l2", quantity: "" }])).toBe(true);
+    expect(remarkRequired(order, [{ orderLineId: "l1", quantity: "500" }])).toBe(true);
+    expect(remarkRequired(undefined, [])).toBe(false);
   });
 });

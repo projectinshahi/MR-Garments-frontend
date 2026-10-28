@@ -11,7 +11,6 @@ import { SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { ProgressBar } from "@/components/shared/progress";
-import { notInPrototype } from "@/components/shared/prototype";
 import { Journey } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -48,36 +47,6 @@ const cellClass = "px-1.5 py-0";
 const lineInputClass = "h-[38px] pr-2.5 text-right text-sm font-bold text-label";
 
 const TERMS: Terms[] = ["FOB", "CNF"];
-const TERMS_TONE: Record<Terms, string> = {
-  FOB: "border-info/25 bg-info-soft text-info",
-  CNF: "border-purple-border bg-purple-soft text-purple",
-};
-
-/** Per-line terms, drawn like the FOB/CNF badge with a ▾. Native select, so it is keyboard-accessible. */
-function LineTermsSelect({ value, onChange, label }: { value: Terms; onChange: (value: Terms) => void; label: string }) {
-  return (
-    <span
-      className={cn(
-        "relative inline-flex h-[35px] w-[65px] items-center rounded-md border focus-within:ring-3 focus-within:ring-ring/40",
-        TERMS_TONE[value],
-      )}
-    >
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value as Terms)}
-        className="h-full w-full cursor-pointer appearance-none bg-transparent pr-4 pl-3 text-sm font-bold outline-none"
-      >
-        {TERMS.map((terms) => (
-          <option key={terms}>{terms}</option>
-        ))}
-      </select>
-      <svg aria-hidden viewBox="0 0 7 8" className="pointer-events-none absolute top-[14px] right-[10.5px] h-2 w-[7px] fill-current">
-        <path d="M0 0h7L3.5 8z" />
-      </svg>
-    </span>
-  );
-}
 
 const shortDate = (value: string) => (value ? formatShortDate(value) : "–");
 
@@ -92,9 +61,9 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
     defaultValues: toLoadValues(loadable, today),
   });
   const { errors, isSubmitting } = formState;
-  const [terms, agentId, loadedOn, sailedOn, eta, values] = useWatch({
+  const [agentId, loadedOn, sailedOn, eta, values] = useWatch({
     control,
-    name: ["terms", "shippingAgentId", "loadedOn", "sailedOn", "eta", "lines"],
+    name: ["shippingAgentId", "loadedOn", "sailedOn", "eta", "lines"],
   });
   const lines = values.map((line) => ({ ...line, bundles: parseCount(line.bundles), quantity: parseCount(line.quantity) }));
   const glance = contents(lines);
@@ -214,13 +183,12 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
                     <TableHead className={headClass}>Item</TableHead>
                     <TableHead className={cn(headClass, "w-[103px] text-right")}>Bundles</TableHead>
                     <TableHead className={cn(headClass, "w-[167px] text-right")}>Quantity</TableHead>
-                    <TableHead className={cn(headClass, "w-[136px] text-right")}>Terms</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lines.length === 0 ? (
                     <TableRow className="h-[60px] hover:bg-transparent">
-                      <TableCell colSpan={5} className={cn(cellClass, "text-center text-muted-foreground")}>
+                      <TableCell colSpan={4} className={cn(cellClass, "text-center text-muted-foreground")}>
                         Nothing received is waiting to be loaded.
                       </TableCell>
                     </TableRow>
@@ -259,10 +227,6 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
                           />
                           <FieldError className="mt-1 text-[12px]" errors={[quantityError]} />
                         </TableCell>
-                        <TableCell className={cn(cellClass, "text-right")}>
-                          {/* CON-3 has no per-line terms: the line follows the container's. */}
-                          <LineTermsSelect label={`Terms, ${name}`} value={terms} onChange={() => notInPrototype("Per-item terms")} />
-                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -270,29 +234,12 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
               </Table>
               <FieldError className="mt-2" errors={linesError ? [{ message: linesError }] : []} />
 
-              <button
-                type="button"
-                onClick={() => notInPrototype("Add item from another order")}
-                className="mt-2 rounded-sm text-[13.5px] leading-5 font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-              >
-                + Add item from another order
-              </button>
-
               <p className="mt-[11px] rounded-[10px] border bg-table-head px-3.5 py-[10.5px] text-[13px] leading-5 text-label">
                 <strong>FOB</strong>: we pay the freight from the China port. <strong>CNF</strong>: the supplier pays the freight
-                up to India. Each item can have its own term.
+                up to India.
               </p>
 
               <FormFooter className="mt-[17px] gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-[150px] min-w-0 text-[15px]"
-                  onClick={() => notInPrototype("Save draft")}
-                >
-                  Save draft
-                </Button>
                 <Button type="submit" size="lg" className="w-[210px] min-w-0 text-[15px]" disabled={isSubmitting}>
                   Save container
                 </Button>

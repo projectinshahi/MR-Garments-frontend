@@ -63,7 +63,7 @@ describe("NewOrderScreen", () => {
     expect(ui.field("City")).toHaveAttribute("readonly");
   });
 
-  it("posts ORD-3 with lines and deposits, then toasts and returns to the orders list", async () => {
+  it("posts ORD-3 with lines and deposits, then toasts, empties the form and opens the new order", async () => {
     post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" } });
     const ui = open();
     await fillOrder(ui);
@@ -105,9 +105,27 @@ describe("NewOrderScreen", () => {
       ],
     });
     expect(toast.success).toHaveBeenCalledWith("Order PO-2050 placed");
-    expect(router.push).toHaveBeenCalledWith("/orders");
+    expect(router.push).toHaveBeenCalledWith("/orders/PO-2050");
     expect(router.push.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
+    // The route stays mounted, so the next visit must not show this order again.
+    expect(ui.field("Supplier")).toHaveValue("");
+    expect(ui.field("Delivery date")).toHaveValue("");
+    expect(screen.queryByLabelText(/^Item, line 2/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Amount \(¥\), deposit 1/)).not.toBeInTheDocument();
   }, 30_000);
+
+  it("sends one request however often Place order is clicked while it runs", async () => {
+    let answer: (value: unknown) => void = () => {};
+    post.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const ui = open();
+    await fillOrder(ui);
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(ui.place).toBeDisabled());
+    await ui.user.click(ui.place);
+    expect(post).toHaveBeenCalledOnce();
+    answer({ order: { id: "o-1", po: "PO-2050" } });
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/PO-2050"));
+  });
 
   it("shows a 422 field error under its field and keeps the values", async () => {
     const message = "The delivery date can't be before the order date.";
@@ -137,9 +155,21 @@ describe("NewOrderScreen", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it("keeps Save draft out of the prototype", async () => {
+  it("shows a 422 on the items under the table, and toasts a field the form doesn't show", async () => {
+    post.mockRejectedValue(
+      new ApiError(422, "validation_failed", "Some fields need attention.", { lines: "Choose an item from the list.", currency: "Only CNY." }),
+    );
     const ui = open();
-    await ui.user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(toast.info).toHaveBeenCalledWith("Save draft is not included in the current prototype.", { id: "not-in-prototype" });
+    await fillOrder(ui);
+    await ui.user.click(ui.place);
+
+    expect(await screen.findByText("Choose an item from the list.")).toBeVisible();
+    expect(toast.error).toHaveBeenCalledWith("Only CNY.");
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("has no Save draft stub", () => {
+    open();
+    expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
   });
 });

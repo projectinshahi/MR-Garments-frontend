@@ -1,12 +1,20 @@
 import { addDays, formatISO, parseISO } from "date-fns";
 import { z } from "zod";
 
-import type { ContainerListItem, ContainerOptions, ContainerState, CreateContainerBody } from "@/lib/api/types";
+import type { ContainerDetail, ContainerListItem, ContainerOptions, ContainerState, CreateContainerBody, UpdateContainerBody } from "@/lib/api/types";
 import { formatQty } from "@/lib/formatters";
+import type { Tone } from "@/types/domain";
 
 export const ALL = "all";
 
 export type ContainerStatus = ContainerState;
+
+/** Status pill wording (24), shared by the list and the detail page. */
+export const CONTAINER_STATUS: Record<ContainerStatus, { label: string; tone: Tone }> = {
+  loading: { label: "Loading", tone: "warning" },
+  sea: { label: "On the sea", tone: "info" },
+  arrived: { label: "Arrived, in clearing", tone: "success" },
+};
 
 /** A Containers list row, as shown. */
 export type ContainerRow = {
@@ -14,8 +22,8 @@ export type ContainerRow = {
   number: string;
   agent: string;
   terms: ContainerListItem["terms"];
-  /** As shown: "PO-2037 (part)" marks an order split across containers. */
-  orders: string[];
+  /** `part`: shown as "PO-2037 (part)", an order split across containers. */
+  orders: ContainerListItem["orders"];
   bundles: number;
   /** null: not yet ("–"). */
   loadedOn: string | null;
@@ -32,7 +40,7 @@ export const toContainerRow = (item: ContainerListItem): ContainerRow => ({
   number: item.number,
   agent: item.agent.name,
   terms: item.terms,
-  orders: item.orders.map((o) => (o.part ? `${o.po} (part)` : o.po)),
+  orders: item.orders,
   bundles: item.bundles,
   loadedOn: item.loadedOn,
   sailedOn: item.sailedOn,
@@ -41,8 +49,8 @@ export const toContainerRow = (item: ContainerListItem): ContainerRow => ({
   status: item.status,
 });
 
-/** "active" = every listed container; "finished" matches none (the API has no finished status yet). */
-export type ContainerChip = "active" | "finished" | ContainerStatus;
+/** "active" = every listed container (none is ever finished: clearing isn't built); the others are one status each. */
+export type ContainerChip = "active" | ContainerStatus;
 
 export type ContainerFilters = { query: string; agent: string; terms: string; chip: ContainerChip };
 
@@ -51,14 +59,14 @@ export function filterContainers(rows: ContainerRow[], { query, agent, terms, ch
   const q = query.trim().toLowerCase();
   return rows.filter(
     (r) =>
-      (!q || r.number.toLowerCase().includes(q) || r.orders.some((po) => po.toLowerCase().includes(q))) &&
+      (!q || r.number.toLowerCase().includes(q) || r.orders.some((o) => o.po.toLowerCase().includes(q))) &&
       (agent === ALL || r.agent === agent) &&
       (terms === ALL || r.terms === terms) &&
       (chip === "active" || r.status === chip),
   );
 }
 
-/** Chip labels with their counts: "Active (6)", "On the way (4)", "Loading (1)", "Arrived (1)", "Finished". */
+/** Chip labels with their counts: "Active (6)", "On the way (4)" (at sea), "Loading (1)", "Arrived (1)". */
 export function containerChips(rows: ContainerRow[]): { value: ContainerChip; label: string }[] {
   const count = (status: ContainerStatus) => rows.filter((r) => r.status === status).length;
   return [
@@ -66,7 +74,6 @@ export function containerChips(rows: ContainerRow[]): { value: ContainerChip; la
     { value: "sea", label: `On the way (${count("sea")})` },
     { value: "loading", label: `Loading (${count("loading")})` },
     { value: "arrived", label: `Arrived (${count("arrived")})` },
-    { value: "finished", label: "Finished" },
   ];
 }
 
@@ -84,8 +91,8 @@ export function containerKpis(rows: ContainerRow[], today: string) {
 
 /** The note under the list, naming a split order when one is listed. */
 export function listFootnote(rows: ContainerRow[]) {
-  const split = rows.flatMap((r) => r.orders).find((o) => o.endsWith(" (part)"));
-  return `An order can be split across containers${split ? ` (${split.replace(" (part)", "")} above)` : ""}, and one container can hold many orders.`;
+  const split = rows.flatMap((r) => r.orders).find((o) => o.part);
+  return `An order can be split across containers${split ? ` (${split.po} above)` : ""}, and one container can hold many orders.`;
 }
 
 /** Agent filter options: the agents of the listed containers. */
@@ -187,4 +194,67 @@ export function lineLoads(lines: (Omit<LoadLineValues, "bundles" | "quantity"> &
       const loaded = l.loaded + l.quantity;
       return { orderLineId: l.orderLineId, title: `${l.po} · ${l.item}`, loaded, received: l.received, rest: l.received - loaded, unit: l.unit };
     });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Container detail: status and date changes (CON-5)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** sail: loading -> sea; arrive: sea -> arrived; eta / dates: correct the ETA (and, at sea, the sailing date). */
+export type ContainerAction = "sail" | "arrive" | "eta" | "dates";
+
+export const ACTION_LABEL: Record<ContainerAction, string> = {
+  sail: "Mark as sailed",
+  arrive: "Mark as arrived",
+  eta: "Change ETA",
+  dates: "Change dates",
+};
+
+/** Forward only, and nothing once arrived (approved rules). */
+export const containerActions = (status: ContainerStatus): ContainerAction[] =>
+  status === "loading" ? ["sail", "eta"] : status === "sea" ? ["arrive", "dates"] : [];
+
+/** The date fields each action asks for. */
+export const actionFields = (action: ContainerAction): ("sailedOn" | "eta")[] =>
+  action === "arrive" ? [] : action === "eta" ? ["eta"] : ["sailedOn", "eta"];
+
+// Proposed wording, the same text the API sends (container-detail.routes.ts).
+export const DATE_MESSAGES = {
+  sailedOnNeeded: "Enter the sailing date.",
+  sailedBeforeLoading: "The sailing date can't be before the loading date.",
+  sailedFuture: "The sailing date can't be after today.",
+  etaNeeded: "Enter the ETA.",
+  etaBeforeLoading: "The ETA can't be before the loading date.",
+  etaBeforeSailing: "The ETA can't be before the sailing date.",
+};
+
+export type ContainerDatesValues = { sailedOn: string; eta: string };
+type DatesContext = Pick<ContainerDetail, "loadedOn" | "sailedOn">;
+
+/** The CON-5 date rules for the fields this action shows; the ETA is checked against the new or saved sailing date. */
+export const containerDatesSchema = (action: ContainerAction, container: DatesContext, today: string) =>
+  z.object({ sailedOn: z.string(), eta: z.string() }).superRefine((values, ctx) => {
+    const fields = actionFields(action);
+    const issue = (path: "sailedOn" | "eta", message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    const sailedOn = fields.includes("sailedOn") ? values.sailedOn : (container.sailedOn ?? "");
+    const loadedOn = container.loadedOn ?? "";
+    if (fields.includes("sailedOn")) {
+      if (!sailedOn) issue("sailedOn", DATE_MESSAGES.sailedOnNeeded);
+      else if (sailedOn < loadedOn) issue("sailedOn", DATE_MESSAGES.sailedBeforeLoading);
+      else if (sailedOn > today) issue("sailedOn", DATE_MESSAGES.sailedFuture);
+    }
+    if (fields.includes("eta")) {
+      if (!values.eta) issue("eta", DATE_MESSAGES.etaNeeded);
+      else if (values.eta < loadedOn) issue("eta", DATE_MESSAGES.etaBeforeLoading);
+      else if (values.eta < sailedOn) issue("eta", DATE_MESSAGES.etaBeforeSailing);
+    }
+  });
+
+/** The CON-5 body: the status change, plus only the dates that differ from the saved ones (sail always sends its date). */
+export function toUpdateBody(action: ContainerAction, values: ContainerDatesValues, container: Pick<ContainerDetail, "sailedOn" | "eta">) {
+  const body: UpdateContainerBody = action === "sail" ? { status: "sea" } : action === "arrive" ? { status: "arrived" } : {};
+  const fields = actionFields(action);
+  if (fields.includes("sailedOn") && (action === "sail" || values.sailedOn !== container.sailedOn)) body.sailedOn = values.sailedOn;
+  if (fields.includes("eta") && values.eta !== container.eta) body.eta = values.eta;
+  return body;
 }

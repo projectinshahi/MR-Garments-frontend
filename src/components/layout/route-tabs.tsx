@@ -10,7 +10,8 @@ export type RouteTab = { href: string; label: string; /** Letter or number chip:
 
 /**
  * 46 px tab bar under the header (order detail a–i, calendar a–c, settings 1–7, users 1–3).
- * Each tab is a route; the active tab is the exact pathname match.
+ * Each tab is a route; the active tab is the exact pathname match (a query string in the href, such as kept
+ * filters, is ignored).
  */
 export function RouteTabs({ tabs, label }: { tabs: RouteTab[]; label: string }) {
   return (
@@ -28,7 +29,7 @@ function ActiveTabs({ tabs }: { tabs: RouteTab[] }) {
 
 function Tabs({ tabs, pathname }: { tabs: RouteTab[]; pathname: string | null }) {
   return tabs.map((tab) => {
-    const active = pathname === tab.href;
+    const active = pathname === tab.href.split("?")[0];
     return (
       <Link
         key={tab.href}

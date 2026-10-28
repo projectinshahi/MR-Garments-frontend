@@ -1,96 +1,138 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
-// W1-order-detail-b: order-detail tabs f–i for PO-2028 (references 11–14). Role/label locators: visited routes stay
-// in the DOM hidden by <Activity>, and role queries skip hidden content.
+import { expect, field, kpi, kv, longDate, shortDate, test, today } from "./live-api";
+
+// Order detail tabs c-e (08 Deposits & payments, 09 Receiving, 10 Containers) against ORD-4, signed in as Management.
+// Role/label locators only (hidden <Activity> routes stay in the DOM).
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const tabLink = (page: Page, name: RegExp) => page.getByRole("navigation", { name: "Order sections" }).getByRole("link", { name });
-const card = (page: Page, title: string) => page.locator("section").filter({ has: page.getByRole("heading", { name: title }) });
+const tabs = (page: Page) => page.getByRole("navigation", { name: "Order sections" });
+const rows = (page: Page) => page.getByRole("table").getByRole("row");
 
-test("f Clearing & transport: facts, muted costs and totals", async ({ page }) => {
-  await page.goto("/orders/PO-2028/clearing-transport");
-  await expect(tabLink(page, /Clearing & transport/)).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Container CAIU 2298076")).toBeVisible();
+test("Deposits & payments: KPIs, every payment at its own rate, totals and the INR working", async ({ page, api }) => {
+  const order = await api.createOrder({
+    lines: [{ item: "Polo shirts", quantity: 400, rateCny: 20 }],
+    deposits: [{ amountCny: 2000, rateInr: 12, paidOn: today(-5) }],
+  });
+  const agent = (await api.options()).agents.find((a) => a.name === "Sino Freight")!;
+  await api.pay(order.id, { kind: "Balance", payeeRole: "agent", agentId: agent.id, amountCny: 1500, rateInr: 12.5, mode: "Cash" });
 
-  const clearing = card(page, "Clearing in India");
-  await expect(clearing).toContainText("Contact personMr. Anil Kumar · +91 98470 12345");
-  await expect(clearing).toContainText("Cleared1 Oct");
-  await expect(clearing).toContainText("Port and terminal charges₹14,500");
-  await expect(clearing).toContainText("Total clearing cost₹3,70,500");
+  await page.goto(`/orders/${order.po}`);
+  await tabs(page).getByRole("link", { name: "Deposits & payments" }).click();
+  await expect(page).toHaveURL(`/orders/${order.po}/payments`);
+  await expect(page.getByText("Polo shirts · Foshan Fabrics · Order value ¥8,000")).toBeVisible();
 
-  const transport = card(page, "Transport to warehouse");
-  await expect(transport).toContainText("Loaded (Kochi port yard)1 Oct · Ravi K");
-  await expect(transport).toContainText("Unloaded at warehouse3 Oct · 50 of 50 bundles");
-  await expect(transport).toContainText("Total transport cost₹26,500");
+  await expect(kpi(page, "Order value")).toContainText("¥8,000");
+  await expect(kpi(page, "Paid so far")).toContainText("¥3,500");
+  await expect(kpi(page, "Paid so far")).toContainText("2 payments");
+  await expect(kpi(page, "Balance to pay")).toContainText("¥4,500");
+
+  await expect(rows(page)).toHaveCount(4);
+  await expect(rows(page).nth(1).getByRole("cell")).toHaveText([longDate(today(-5)), "Deposit", "Foshan Fabrics", "¥2,000", "12.00", "₹24,000"]);
+  await expect(rows(page).nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Sino Freight", "¥1,500", "12.50", "₹18,750"]);
+  await expect(rows(page).nth(3).getByRole("cell")).toHaveText(["Total paid", "", "", "¥3,500", "", "₹42,750"]);
+
+  await expect(kv(page, "¥2,000 × 12.00")).toHaveText("₹24,000");
+  await expect(kv(page, "¥1,500 × 12.50")).toHaveText("₹18,750");
+  await expect(kv(page, "Goods cost in INR")).toHaveText("₹42,750");
 });
 
-test("g Warehouse: KPIs, teams table with total, and checks", async ({ page }) => {
-  await page.goto("/orders/PO-2028/warehouse");
-  await expect(page.getByText("Received 3 Oct 2026")).toBeVisible();
-  for (const text of ["2,500 pcs", "50 of 50 bundles", "Main warehouse", "Joseph M", "Warehouse team"]) {
-    await expect(page.getByText(text, { exact: true })).toBeVisible();
-  }
+test("Deposits & payments: no payments yet, and a fully paid order", async ({ page, api }) => {
+  const unpaid = await api.createOrder({ lines: [{ item: "Polo shirts", quantity: 10, rateCny: 100 }] });
+  await page.goto(`/orders/${unpaid.po}/payments`);
+  await expect(page.getByText("No payments recorded yet.")).toBeVisible();
+  await expect(kpi(page, "Paid so far")).toContainText("0 payments");
+  await expect(kpi(page, "Balance to pay")).toContainText("¥1,000");
 
-  const table = page.getByRole("table");
-  await expect(table.getByRole("row")).toHaveCount(5);
-  await expect(table.getByRole("row", { name: /Retail team/ })).toContainText("40%");
-  await expect(table.getByRole("row", { name: /Online team/ })).toContainText("₹2,75,400");
-  await expect(table.getByRole("row", { name: /Total/ })).toContainText("₹13,77,000");
-  await expect(table.getByRole("row", { name: /Total/ })).toContainText("100%");
-
-  await expect(page.getByText("✓ 50 bundles loaded = 50 bundles received")).toBeVisible();
-  await expect(page.getByText("✓ 2,500 of 2,500 pcs given to teams. Nothing left unassigned.")).toBeVisible();
+  await api.pay(unpaid.id, { amountCny: 1000, rateInr: 12 });
+  await page.reload();
+  await expect(kpi(page, "Paid so far")).toContainText("1 payment");
+  await expect(kpi(page, "Balance to pay")).toContainText("¥0");
+  await expect(kpi(page, "Balance to pay")).toContainText("Fully paid");
 });
 
-test("h Cost: breakdown, where the money goes and per piece", async ({ page }) => {
-  await page.goto("/orders/PO-2028/cost");
-  await expect(page.getByText("Landed cost ₹13,77,000")).toBeVisible();
+test("Receiving: empty, then each receipt with its totals, remark and history", async ({ page, api }) => {
+  const order = await api.createOrder({
+    lines: [
+      { item: "Denim jeans", quantity: 100, rateCny: 10 },
+      { item: "Kids t-shirts", quantity: 50, rateCny: 4 },
+    ],
+  });
+  await page.goto(`/orders/${order.po}`);
+  await tabs(page).getByRole("link", { name: "Receiving" }).click();
+  await expect(page).toHaveURL(`/orders/${order.po}/receiving`);
+  await expect(page.getByText("Denim jeans · Foshan Fabrics · Not received in China yet")).toBeVisible();
+  await expect(page.getByText("No receipts recorded yet.")).toBeVisible();
 
-  const table = page.getByRole("table");
-  await expect(table.getByRole("row")).toHaveCount(11);
-  await expect(table.getByRole("row", { name: /¥70,000 deposit at 12.00/ })).toContainText("₹336.00");
-  await expect(table.getByRole("row", { name: /Sea freight/ })).toContainText("₹0.00");
-  await expect(table.getByRole("row", { name: /Landed cost/ })).toContainText("2,500 pcs₹13,77,000₹550.80");
+  // A short first receipt: the remark shows.
+  await api.receive(order.po, { "Denim jeans": 60, "Kids t-shirts": 50 }, { receivedOn: today(-2), bundles: 3, deliveryNote: "DN-1", shortRemark: "40 jeans to follow" });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Receipt in China" })).toBeVisible();
+  await expect(kpi(page, "Ordered")).toContainText("100 pcs");
+  await expect(kpi(page, "Received in China")).toContainText("60 pcs");
+  await expect(kpi(page, "Received in China")).toContainText("3 bundles");
+  await expect(kpi(page, "Short")).toContainText("40 pcs");
+  await expect(field(page, "Received on")).toHaveValue(longDate(today(-2)));
+  await expect(field(page, "Delivery note")).toHaveValue("DN-1");
+  await expect(page.getByText("40 jeans to follow")).toBeVisible();
+  await expect(rows(page).nth(1).getByRole("cell")).toHaveText(["Denim jeans", "100 pcs", "60 pcs", "40"]);
+  await expect(rows(page).nth(2).getByRole("cell")).toHaveText(["Kids t-shirts", "50 pcs", "50 pcs", "0"]);
 
-  await expect(page.getByRole("img", { name: "Goods 71%, Duty, taxes and clearing 27%, Transport in India 2%" })).toBeVisible();
-  await expect(card(page, "Where the money goes")).toContainText("Duty, taxes and clearing27%₹3,70,500");
+  // The second receipt completes the order; the latest one is shown, both are in the history.
+  await api.receive(order.po, { "Denim jeans": 40 }, { bundles: 2, deliveryNote: "DN-2", shortRemark: "" });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Latest receipt in China" })).toBeVisible();
+  await expect(kpi(page, "Received in China")).toContainText("100 pcs");
+  await expect(kpi(page, "Received in China")).toContainText("5 bundles");
+  await expect(kpi(page, "Short")).toContainText("0 pcs");
+  await expect(field(page, "Received on")).toHaveValue(longDate(today()));
+  await expect(field(page, "Office")).toHaveValue("Guangzhou office");
+  await expect(field(page, "Received by")).toHaveValue("Suresh Menon");
+  await expect(field(page, "Bundles received")).toHaveValue("2");
+  await expect(field(page, "Delivery note")).toHaveValue("DN-2");
+  await expect(page.getByText("40 jeans to follow")).toHaveCount(0);
+  await expect(rows(page).nth(1).getByRole("cell")).toHaveText(["Denim jeans", "100 pcs", "100 pcs", "0"]);
 
-  const perPiece = card(page, "Per piece");
-  await expect(perPiece).toContainText("₹550.80");
-  await expect(perPiece).toContainText("Goods ₹392.00 + duty and clearing ₹148.20 + transport ₹10.60");
-  await expect(perPiece.getByText("Management only")).toBeVisible();
+  const history = page.getByRole("list").filter({ hasText: "Received 40 pcs Denim jeans" });
+  await expect(history.getByRole("listitem")).toHaveCount(2);
+  await expect(history.getByRole("listitem").first()).toContainText(`${shortDate(today())} · Guangzhou office · Suresh Menon`);
+  await expect(history.getByRole("listitem").nth(1)).toContainText("Received 60 pcs Denim jeans, 50 pcs Kids t-shirts");
+  await expect(history.getByRole("listitem").nth(1)).toContainText(shortDate(today(-2)));
 });
 
-test("i History: twelve events, newest first", async ({ page }) => {
-  await page.goto("/orders/PO-2028/history");
-  await expect(page.getByText("Everything that happened, newest first")).toBeVisible();
+test("Containers: empty, then each container with its route, goods and a link to it", async ({ page, api }) => {
+  const order = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }] });
+  await api.receive(order.po, { "Denim jeans": 100 }, { shortRemark: "" });
+  await page.goto(`/orders/${order.po}`);
+  await tabs(page).getByRole("link", { name: "Containers" }).click();
+  await expect(page).toHaveURL(`/orders/${order.po}/containers`);
+  await expect(page.getByText("Denim jeans · Foshan Fabrics · 0 containers")).toBeVisible();
+  await expect(page.getByText("Not loaded into a container yet.")).toBeVisible();
 
-  const rows = page.getByRole("table").getByRole("row");
-  await expect(rows).toHaveCount(13);
-  await expect(rows.nth(1)).toContainText("3 Oct 2026, 16:10");
-  await expect(rows.nth(1)).toContainText("Received in warehouse");
-  await expect(rows.nth(10)).toContainText("25 Aug 2026 → 28 Aug 2026 · asked by supplier");
-  await expect(rows.nth(12)).toContainText("5 Aug 2026, 10:12");
-  await expect(rows.nth(12)).toContainText("Order created");
-});
+  const first = await api.load([{ po: order.po, item: "Denim jeans", quantity: 60, bundles: 3 }], { loadedOn: today(-1), eta: today(25) });
+  await page.reload();
+  await expect(page.getByText("Denim jeans · Foshan Fabrics · 1 container")).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Container ${first.number}` })).toBeVisible();
+  await expect(page.getByText("Shipping agent: Sino Freight")).toBeVisible();
+  await expect(page.getByText(`Loaded ${shortDate(today(-1))}`)).toBeVisible();
+  await expect(page.getByText(`ETA ${shortDate(today(25))}`)).toBeVisible();
+  await expect(field(page, "Container number")).toHaveValue(first.number);
+  await expect(page.getByRole("heading", { name: "Goods of this order in the container" })).toBeVisible();
+  await expect(kv(page, "Denim jeans")).toHaveText("60 pcs");
+  await expect(kv(page, "Bundles")).toHaveText("3");
 
-test("tabs f–i link to each other", async ({ page }) => {
-  await page.goto("/orders/PO-2028/clearing-transport");
-  await tabLink(page, /Warehouse/).click();
-  await expect(page).toHaveURL("/orders/PO-2028/warehouse");
-  await expect(page.getByRole("heading", { name: "Given to teams" })).toBeVisible();
-  await tabLink(page, /Cost/).click();
-  await expect(page.getByRole("heading", { name: "Cost breakdown" })).toBeVisible();
-  await tabLink(page, /History/).click();
-  await expect(page.getByRole("columnheader", { name: "What happened" })).toBeVisible();
-});
+  // Sailed: the route shows it.
+  await api.updateContainer(first.id, { status: "sea", sailedOn: today() });
+  const second = await api.load([{ po: order.po, item: "Denim jeans", quantity: 40, bundles: 2 }], { agent: "Dragon Cargo", terms: "CNF" });
+  await page.reload();
+  await expect(page.getByText("Denim jeans · Foshan Fabrics · 2 containers")).toBeVisible();
+  await expect(page.getByText(`Sailed ${shortDate(today())}`)).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Goods of this order in ${second.number}` })).toBeVisible();
+  await expect(page.getByText("Shipping agent: Dragon Cargo")).toBeVisible();
 
-test("tabs f–i never scroll the page horizontally at 360 px", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
-  for (const tab of ["clearing-transport", "warehouse", "cost", "history"]) {
-    await page.goto(`/orders/PO-2028/${tab}`);
-    await expect(page.getByRole("heading", { level: 1, name: "PO-2028" })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth), tab).toBeLessThanOrEqual(360);
-  }
+  // The container number opens the container page.
+  await page.getByRole("link", { name: first.number }).click();
+  await expect(page).toHaveURL(`/containers/${first.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: first.number })).toBeVisible();
 });

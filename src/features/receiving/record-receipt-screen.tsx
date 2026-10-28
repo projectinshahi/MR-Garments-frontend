@@ -9,7 +9,6 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
-import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Timeline } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
-import { handleApiError, notifySuccess } from "@/lib/feedback";
+import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatCNY, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +28,7 @@ import {
   lineShort,
   paymentEffect,
   receiptSchema,
+  remarkRequired,
   toReceiptBody,
   type ReceiptFormValues,
 } from "./receiving-logic";
@@ -41,8 +41,8 @@ const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foregro
 const cellClass = "px-1.5 py-0";
 const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
 
-/** REC-3's 422 fields, in screen order. */
-const API_FIELDS = ["receivedOn", "locationId", "bundles", "lines"] as const;
+/** REC-3 422 fields shown on this form, in screen order. Any other field's message is toasted. */
+const FORM_FIELDS = ["orderId", "receivedOn", "locationId", "bundles", "deliveryNote", "lines", "shortRemark"] as const;
 /** Proposed wording: no SUCCESS message fits a receipt yet. */
 const RECEIPT_SAVED = "Receipt saved";
 
@@ -82,15 +82,20 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
   const effect = paymentEffect({ orderValue: order?.orderValueCny ?? 0, depositsPaid: order?.depositsPaidCny ?? 0 }, lines);
   const deliveries = deliveryEvents(data.receipts, orderId);
   const linesError = errors.lines?.message ?? errors.lines?.root?.message;
+  const remarkNeeded = remarkRequired(order, typed);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
       await apiClient.post<{ receipt: { id: string } }>("/receipts", toReceiptBody(values));
     } catch (error) {
+      // A 409 without fields (order_not_receivable) is toasted with its own message by handleApiError.
       const fields = handleApiError(error) ?? {};
-      API_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
+      FORM_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
         setError(key, { type: "server", message: fields[key] }, { shouldFocus: index === 0 }),
       );
+      Object.entries(fields)
+        .filter(([key]) => !(FORM_FIELDS as readonly string[]).includes(key))
+        .forEach(([, message]) => notifyError(message));
       return;
     }
     notifySuccess(RECEIPT_SAVED);
@@ -180,24 +185,12 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   <Input size="sm" id="bundles-now" required inputMode="numeric" aria-invalid={!!errors.bundles} {...register("bundles")} />
                   <FieldError errors={[errors.bundles]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.deliveryNote}>
                   <FieldLabel htmlFor="delivery-note" className={labelClass}>
                     Supplier delivery note no.
                   </FieldLabel>
-                  <Input size="sm" id="delivery-note" autoComplete="off" {...register("deliveryNote")} />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="goods-photo" className={labelClass}>
-                    Photo of goods
-                  </FieldLabel>
-                  <button
-                    id="goods-photo"
-                    type="button"
-                    onClick={() => notInPrototype("Attach photo")}
-                    className="flex h-[42px] w-full items-center rounded-lg border border-input bg-input-background px-3.5 text-[15px] text-placeholder outline-none focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-ring/25"
-                  >
-                    Attach photo
-                  </button>
+                  <Input size="sm" id="delivery-note" autoComplete="off" aria-invalid={!!errors.deliveryNote} {...register("deliveryNote")} />
+                  <FieldError errors={[errors.deliveryNote]} />
                 </Field>
               </FieldGroup>
             </SectionCard>
@@ -243,23 +236,22 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
               </Table>
               {linesError ? <FieldError className="mt-2">{linesError}</FieldError> : null}
 
-              <Field className={cn(fieldClass, "mt-[14px]")}>
+              <Field className={cn(fieldClass, "mt-[14px]")} data-invalid={!!errors.shortRemark}>
+                {/* Required, as REC-3 requires it, only while a line is still short after this receipt. */}
                 <FieldLabel htmlFor="short-remark" className={labelClass}>
-                  Short remark <RequiredMark />
+                  Short remark {remarkNeeded ? <RequiredMark /> : null}
                 </FieldLabel>
-                <Textarea id="short-remark" className="min-h-[74px] resize-none" {...register("shortRemark")} />
+                <Textarea
+                  id="short-remark"
+                  className="min-h-[74px] resize-none"
+                  aria-required={remarkNeeded}
+                  aria-invalid={!!errors.shortRemark}
+                  {...register("shortRemark")}
+                />
+                <FieldError errors={[errors.shortRemark]} />
               </Field>
 
               <FormFooter className="mt-4 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-[150px] min-w-0 text-[15px]"
-                  onClick={() => notInPrototype("Save draft")}
-                >
-                  Save draft
-                </Button>
                 <Button type="submit" size="lg" className="w-[190px] min-w-0 text-[15px]" disabled={isSubmitting}>
                   Save receipt
                 </Button>

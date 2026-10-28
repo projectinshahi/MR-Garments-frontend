@@ -7,7 +7,11 @@ import { getReceivingList, getRecordReceipt } from "./queries";
 
 const apiGet = vi.fn();
 vi.mock("@/lib/api/server", () => ({ apiGet: (path: string) => apiGet(path) }));
-vi.mock("@/lib/session", () => ({ getMe: async () => ({ name: "Chen Yu" }) }));
+const getMe = vi.fn();
+vi.mock("@/lib/session", () => ({ getMe: () => getMe() }));
+const manager = { name: "Chen Yu", shell: "management", permissions: { receiving: "Enter", ordersView: "View" } };
+/** China staff with receiving View only and no Orders access. */
+const viewer = { name: "Li Na", shell: "staff", permissions: { receiving: "View", ordersView: "None" } };
 
 const row: ReceiptListItem = {
   id: "r1",
@@ -33,7 +37,10 @@ const answer = (routes: Record<string, unknown>) =>
     return value;
   });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  getMe.mockResolvedValue(manager);
+});
 
 describe("getReceivingList", () => {
   it("maps REC-1 rows and takes the filter options from them", async () => {
@@ -43,6 +50,13 @@ describe("getReceivingList", () => {
     expect(data.offices).toEqual(["Guangzhou office", "Yiwu office"]);
     expect(data.suppliers).toEqual(["Foshan Fabrics", "Shenzhen Apparel"]);
     expect(data.kpis.waitingToBeReceived).toBe(0);
+    expect(data).toMatchObject({ canRecord: true, linkPos: true });
+  });
+
+  it("hides Record receipt and PO links from a viewer without Enter or Orders access", async () => {
+    getMe.mockResolvedValue(viewer);
+    answer({ "/receipts": [row], "/receipts/options": new ApiError(403, "forbidden", "No") });
+    expect(await getReceivingList()).toMatchObject({ canRecord: false, linkPos: false });
   });
 
   it("shows an unknown waiting count to a viewer without REC-2 access", async () => {
@@ -65,7 +79,15 @@ describe("getRecordReceipt", () => {
     answer({ "/receipts": [row], "/receipts/options": options });
     const data = await getRecordReceipt();
     expect(data).toMatchObject({ options, receipts: [row], receivedBy: "Chen Yu" });
-    expect(data.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(data?.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("is null, without calling the API, below receiving Enter", async () => {
+    getMe.mockResolvedValue(viewer);
+    expect(await getRecordReceipt()).toBeNull();
+    getMe.mockResolvedValue(null);
+    expect(await getRecordReceipt()).toBeNull();
+    expect(apiGet).not.toHaveBeenCalled();
   });
 
   it("rejects when REC-2 fails", async () => {

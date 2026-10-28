@@ -59,6 +59,13 @@ describe("calendar derivations", () => {
     expect(isoDay(weeks[4][6])).toBe("2026-11-01");
   });
 
+  it("builds six weeks when the month starts on a Sunday and four when it fills Monday to Sunday exactly", () => {
+    const march = monthWeeks("2026-03-01");
+    expect([march.length, isoDay(march[0][0]), isoDay(march[5][6])]).toEqual([6, "2026-02-23", "2026-04-05"]);
+    const february = monthWeeks("2027-02-01");
+    expect([february.length, isoDay(february[0][0]), isoDay(february[3][6])]).toEqual([4, "2027-02-01", "2027-02-28"]);
+  });
+
   it("uses the week of today, Monday to Sunday", () => {
     expect(weekDays(TODAY).map(isoDay)).toEqual([
       "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04",

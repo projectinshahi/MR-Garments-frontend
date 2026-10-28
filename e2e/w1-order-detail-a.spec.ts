@@ -1,102 +1,173 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
-// W1-order-detail-a: order detail tabs a–e for PO-2028 (references 06–10). Role/label locators only: visited
-// routes stay in the DOM hidden by <Activity>, and role queries skip hidden content.
+import { ANITA, expect, freshSignIn, kv, longDate, shortDate, test, today } from "./live-api";
+import { LOADING_STAFF_STATE, PROCUREMENT_STATE } from "./sessions";
+
+// Order detail (06, 07) against ORD-4: the frame (breadcrumb, tabs per role), Overview and Items, and the
+// "Not found" page for unknown POs and the removed tabs. Role/label locators only.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const card = (page: Page, title: string) =>
-  page.locator("section").filter({ has: page.getByRole("heading", { level: 2, name: title, exact: true }) });
+const tabs = (page: Page) => page.getByRole("navigation", { name: "Order sections" });
+const ALL_TABS = ["Overview", "Items", "Deposits & payments", "Receiving", "Containers"];
 
-test("overview: header facts, journey, money, teams and activity", async ({ page }) => {
-  await page.goto("/orders/PO-2028");
-  await expect(page.getByRole("heading", { level: 1, name: "PO-2028" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Order sections" }).getByRole("link", { name: /Overview/ })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+async function expectTabs(page: Page, names: string[]) {
+  for (const name of ALL_TABS) await expect(tabs(page).getByRole("link", { name, exact: true })).toHaveCount(names.includes(name) ? 1 : 0);
+}
+
+const expectNotFound = async (page: Page) => {
+  await expect(page.getByText("Not found", { exact: true })).toBeVisible();
+  await expect(page.getByText("This record doesn't exist, or its link is wrong.")).toBeVisible();
+};
+
+test("Overview: header, tabs, facts, journey and money", async ({ page, api }) => {
+  const order = await api.createOrder({
+    supplier: "Guangzhou Textile Co.",
+    lines: [
+      { item: "Denim jeans", quantity: 300, rateCny: 15 },
+      { item: "Cotton fabric", quantity: 1200, rateCny: 8.5 },
+    ],
+    deliveryDate: today(30),
+    deposits: [{ amountCny: 3000, rateInr: 12.1 }],
+  });
+
+  await page.goto(`/orders/${order.po}`);
+  await expect(page.getByRole("heading", { level: 1, name: order.po })).toBeVisible();
+  await expectTabs(page, ALL_TABS);
+  await expect(tabs(page).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+
   await expect(page.getByRole("heading", { level: 2, name: "Denim jeans" })).toBeVisible();
+  await expect(page.getByText("On track", { exact: true })).toBeVisible();
   await expect(page.getByText("Guangzhou Textile Co. · Contact: Mr. Zhao Lin")).toBeVisible();
-  await expect(page.getByText("₹550.80 per piece")).toBeVisible();
-  await expect(page.getByText("2,500 pcs · 50 bundles")).toBeVisible();
+  await expect(kv(page, "Order date")).toHaveText(longDate(today()));
+  await expect(kv(page, "Delivery date")).toHaveText(longDate(today(30)));
+  await expect(kv(page, "Quantity")).toHaveText("300 pcs");
 
-  const journey = card(page, "Journey of this order").getByRole("listitem");
-  await expect(journey).toHaveCount(6);
-  await expect(journey.last()).toContainText("6. India warehouse");
-  await expect(journey.last()).toContainText("Received by Joseph M");
+  // Journey: stage 1 reached on the order date, nothing later yet.
+  const journey = page.getByRole("list").filter({ hasText: "1. Order and deposit" });
+  await expect(journey.getByRole("listitem")).toHaveCount(6);
+  await expect(journey.getByRole("listitem").first()).toContainText(shortDate(today()));
+  await expect(journey.getByRole("listitem").nth(1)).toHaveText("2. Receiving in China");
 
-  await expect(card(page, "Money")).toContainText("Landed cost₹13,77,000");
-  await expect(card(page, "Given to teams")).toContainText("Total2,500 pcs");
-  await expect(card(page, "Latest activity").getByRole("listitem").first()).toContainText("3 Oct · Joseph M · 50 bundles");
+  await expect(kv(page, "Goods, paid ¥3,000")).toHaveText("₹36,300");
+
+  // The breadcrumb goes back to Orders.
+  await page.getByRole("banner").getByRole("link", { name: "Orders", exact: true }).click();
+  await expect(page).toHaveURL("/orders");
 });
 
-test("items: table with totals, quantity by size, order terms and notes", async ({ page }) => {
-  await page.goto("/orders/PO-2028/items");
-  await expect(page.getByText("· Order date 5 Aug 2026")).toBeVisible();
-  const table = page.getByRole("table");
-  await expect(table.getByRole("row", { name: /Denim jeans/ })).toContainText("¥32.00");
-  await expect(table.getByRole("row", { name: /Total/ })).toContainText("¥80,000");
-  await expect(page.getByRole("meter", { name: "Size 32" })).toHaveAttribute("aria-valuenow", "800");
-  await expect(page.getByText("300 + 600 + 800 + 500 + 300 = 2,500 pcs · 50 pcs in each bundle")).toBeVisible();
-  await expect(card(page, "Order terms")).toContainText("CNF");
-  await expect(card(page, "Order terms")).toContainText("¥ Chinese yuan");
-  await expect(card(page, "Notes")).toContainText("Supplier to send the packing list with photos.");
+test("Overview of a late order and a received order shows their status and journey", async ({ page, api }) => {
+  const order = await api.createOrder({ orderDate: today(-15), deliveryDate: today(-2), lines: [{ item: "Track pants", quantity: 80, rateCny: 20 }] });
+  await page.goto(`/orders/${order.po}`);
+  await expect(page.getByText("Late 2 days", { exact: true })).toBeVisible();
+
+  await api.receive(order.po, { "Track pants": 50 });
+  await page.reload();
+  const journey = page.getByRole("list").filter({ hasText: "1. Order and deposit" });
+  await expect(journey.getByRole("listitem").nth(1)).toContainText(shortDate(today()));
+  await expect(journey.getByRole("listitem").nth(1)).toContainText("Guangzhou office");
 });
 
-test("deposits & payments: KPIs, payments at their own rate and the INR working", async ({ page }) => {
-  await page.goto("/orders/PO-2028/payments");
-  await expect(page.getByText("· Order value ¥80,000")).toBeVisible();
-  await expect(page.getByText("2,500 pcs × ¥32")).toBeVisible();
-  await expect(page.getByText("Fully paid")).toBeVisible();
+test("Items: every line with its rate and total, and the order terms", async ({ page, api }) => {
+  const order = await api.createOrder({
+    supplier: "Guangzhou Textile Co.",
+    lines: [
+      { item: "Denim jeans", quantity: 300, rateCny: 15 },
+      { item: "Cotton fabric", quantity: 1200, rateCny: 8.5 },
+    ],
+  });
+  await page.goto(`/orders/${order.po}`);
+  await tabs(page).getByRole("link", { name: "Items" }).click();
+  await expect(page).toHaveURL(`/orders/${order.po}/items`);
+  await expect(tabs(page).getByRole("link", { name: "Items" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText(`Denim jeans · Guangzhou Textile Co. · Order date ${longDate(today())}`)).toBeVisible();
 
   const rows = page.getByRole("table").getByRole("row");
   await expect(rows).toHaveCount(4);
-  await expect(rows.filter({ hasText: "Deposit" })).toContainText("₹8,40,000");
-  await expect(rows.filter({ hasText: "Balance" })).toContainText("14.00");
-  await expect(rows.filter({ hasText: "Total paid" })).toContainText("₹9,80,000");
+  await expect(rows.nth(1).getByRole("cell")).toHaveText(["Denim jeans", "300 pcs", "¥15.00 / pcs", "¥4,500"]);
+  await expect(rows.nth(2).getByRole("cell")).toHaveText(["Cotton fabric", "1,200 m", "¥8.50 / m", "¥10,200"]);
+  // Mixed units: no quantity total.
+  await expect(rows.nth(3).getByRole("cell")).toHaveText(["Total", "", "", "¥14,700"]);
 
-  await expect(card(page, "How the INR figure is found")).toContainText("¥10,000 × 14.00₹1,40,000");
-  await expect(card(page, "How the INR figure is found")).toContainText("Goods cost in INR₹9,80,000");
-});
-
-test("receiving: read-only receipt, short pill, photos and history", async ({ page }) => {
-  await page.goto("/orders/PO-2028/receiving");
-  await expect(page.getByText("· Received in China 26 Aug 2026")).toBeVisible();
-  await expect(page.getByText("Nothing missing")).toBeVisible();
-  await expect(page.getByLabel("Received on")).toHaveValue("26 Aug 2026");
-  await expect(page.getByLabel("Received by")).toHaveValue("Wang Fang");
-  await expect(page.getByLabel("Pieces received")).toHaveValue("2,500");
-  await expect(page.getByLabel("Short pieces")).toHaveJSProperty("readOnly", true);
-  await expect(page.getByRole("table").getByRole("row", { name: /Denim jeans/ })).toContainText("2,500");
-  await expect(page.getByRole("img", { name: "Photo: Packing list.jpg" })).toBeVisible();
-  await expect(card(page, "Receiving history").getByRole("listitem")).toHaveText([
-    /Received, no shortage.*26 Aug 11:05 · Wang Fang/,
-    /Supplier said goods are ready.*24 Aug · noted by Procurement/,
-  ]);
-});
-
-test("containers: route, numbers and this order's share", async ({ page }) => {
-  await page.goto("/orders/PO-2028/containers");
-  await expect(page.getByText("· 1 container")).toBeVisible();
-  const container = card(page, "Container CAIU 2298076");
-  await expect(container).toContainText("Shipping agent: Sino Freight");
-  await expect(container.getByRole("listitem")).toHaveText([/Guangzhou \(Nansha\)Loaded 9 Sep/, /On the seaSailed 12 Sep/, /Kochi portArrived 28 Sep/]);
-  await expect(page.getByLabel("Seal number")).toHaveValue("SL-830417");
-  await expect(page.getByLabel("Bill of lading")).toHaveValue("SFL-2208-114");
-  await expect(card(page, "Goods of this order in the container")).toContainText("Share of this order in container100%");
-});
-
-test("tabs a–e navigate between the order sections", async ({ page }) => {
-  await page.goto("/orders/PO-2028");
-  const tabs = page.getByRole("navigation", { name: "Order sections" });
-  for (const [label, path, heading] of [
-    ["Items", "/items", "Items ordered"],
-    ["Deposits & payments", "/payments", "Deposits and payments"],
-    ["Receiving", "/receiving", "Receipt in China"],
-    ["Containers", "/containers", "Container CAIU 2298076"],
-  ] as const) {
-    await tabs.getByRole("link", { name: label }).click();
-    await expect(page).toHaveURL(`/orders/PO-2028${path}`);
-    await expect(page.getByRole("heading", { level: 2, name: heading })).toBeVisible();
+  for (const [label, value] of [
+    ["Supplier", "Guangzhou Textile Co."],
+    ["Contact", "Mr. Zhao Lin"],
+    ["Phone", "+86 138 0013 2244"],
+    ["City", "Guangzhou"],
+    ["Order date", longDate(today())],
+    ["Delivery date", longDate(today(30))],
+    ["Currency", "¥ Chinese yuan"],
+  ]) {
+    await expect(kv(page, label!)).toHaveText(value!);
   }
+
+  // Back to Overview through its tab.
+  await tabs(page).getByRole("link", { name: "Overview" }).click();
+  await expect(page).toHaveURL(`/orders/${order.po}`);
+});
+
+test("Items of a one-unit order totals the quantity", async ({ page, api }) => {
+  const order = await api.createOrder({
+    lines: [
+      { item: "Denim jeans", quantity: 100, rateCny: 10 },
+      { item: "Polo shirts", quantity: 50, rateCny: 6 },
+    ],
+  });
+  await page.goto(`/orders/${order.po}/items`);
+  await expect(page.getByRole("table").getByRole("row").last().getByRole("cell")).toHaveText(["Total", "150 pcs", "", "¥1,300"]);
+});
+
+test("an unknown or malformed PO and the removed tabs show Not found", async ({ page, api }) => {
+  await page.goto("/orders/PO-999999");
+  await expectNotFound(page);
+  await expect(page.getByRole("heading", { level: 1, name: "PO-999999" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Go to Orders" }).click();
+  await expect(page).toHaveURL("/orders");
+
+  await page.goto("/orders/not-a-po");
+  await expectNotFound(page);
+
+  const order = await api.createOrder();
+  for (const removed of ["clearing-transport", "warehouse", "cost", "history"]) {
+    await page.goto(`/orders/${order.po}/${removed}`);
+    await expectNotFound(page);
+  }
+});
+
+test.describe("Procurement (receiving View, containers None)", () => {
+  test.use({ storageState: PROCUREMENT_STATE });
+
+  test("has no Containers tab, and its URL is not found", async ({ page, api }) => {
+    const order = await api.createOrder();
+    await page.goto(`/orders/${order.po}`);
+    await expectTabs(page, ["Overview", "Items", "Deposits & payments", "Receiving"]);
+    await page.goto(`/orders/${order.po}/containers`);
+    await expectNotFound(page);
+  });
+});
+
+test.describe("Accounts (payments Enter, no receiving or containers)", () => {
+  test.use({ storageState: freshSignIn(ANITA) });
+
+  test("has no Receiving or Containers tab, and their URLs are not found", async ({ page, api }) => {
+    const order = await api.createOrder();
+    await page.goto(`/orders/${order.po}`);
+    await expectTabs(page, ["Overview", "Items", "Deposits & payments"]);
+    await tabs(page).getByRole("link", { name: "Deposits & payments" }).click();
+    await expect(page).toHaveURL(`/orders/${order.po}/payments`);
+    for (const hidden of ["receiving", "containers"]) {
+      await page.goto(`/orders/${order.po}/${hidden}`);
+      await expectNotFound(page);
+    }
+  });
+});
+
+test.describe("China staff (no orders access)", () => {
+  test.use({ storageState: LOADING_STAFF_STATE });
+
+  test("an order page goes to the staff home", async ({ page, api }) => {
+    const order = await api.createOrder();
+    await page.goto(`/orders/${order.po}`);
+    await expect(page).toHaveURL("/home");
+  });
 });

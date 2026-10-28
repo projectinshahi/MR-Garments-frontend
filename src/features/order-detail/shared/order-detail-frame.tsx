@@ -1,51 +1,51 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
+import { LoadingState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
-import { OrderDetailActions } from "@/features/order-detail/shared/order-detail-actions";
-import { getOrderDetailHeader } from "@/features/order-detail/shared/queries";
+import { getOrderDetail, type OrderView } from "@/features/order-detail/data/queries";
 
-const TABS: { segment: string; label: string; chip: string }[] = [
+// Clearing & transport, Warehouse, Cost and History are hidden: nothing records those stages or an order history yet.
+// Payments, Receiving and Containers show only when ORD-4 gives the section (the user may view it).
+const TABS: { segment: string; label: string; chip: string; section?: "payments" | "receipts" | "containers" }[] = [
   { segment: "", label: "Overview", chip: "a" },
   { segment: "/items", label: "Items", chip: "b" },
-  { segment: "/payments", label: "Deposits & payments", chip: "c" },
-  { segment: "/receiving", label: "Receiving", chip: "d" },
-  { segment: "/containers", label: "Containers", chip: "e" },
-  { segment: "/clearing-transport", label: "Clearing & transport", chip: "f" },
-  { segment: "/warehouse", label: "Warehouse", chip: "g" },
-  { segment: "/cost", label: "Cost", chip: "h" },
-  { segment: "/history", label: "History", chip: "i" },
+  { segment: "/payments", label: "Deposits & payments", chip: "c", section: "payments" },
+  { segment: "/receiving", label: "Receiving", chip: "d", section: "receipts" },
+  { segment: "/containers", label: "Containers", chip: "e", section: "containers" },
 ];
 
-/** Header ("Orders / PO-2028", Print order, Edit order) and tabs a–i shared by the order-detail tabs. */
-export async function OrderDetailFrame({ po, children }: { po: string; children: React.ReactNode }) {
-  const header = await getOrderDetailHeader(po);
-  if (!header) notFound();
-  const tabs: RouteTab[] = TABS.map((tab) => ({ href: `/orders/${po}${tab.segment}`, label: tab.label, chip: tab.chip }));
+/** Header ("Orders / PO-2028") and the tabs this user may open, shared by the order-detail tabs. */
+export async function OrderDetailFrame({ params, children }: { params: Promise<{ po: string }>; children: React.ReactNode }) {
+  const { po } = await params;
+  const order = await getOrderDetail(po);
+  if (!order) notFound();
+  const tabs: RouteTab[] = TABS.filter((tab) => !tab.section || order[tab.section] !== null).map((tab) => ({
+    href: `/orders/${order.po}${tab.segment}`,
+    label: tab.label,
+    chip: tab.chip,
+  }));
 
   return (
     <>
-      <PageHeader title={po} parent={{ label: "Orders", href: "/orders" }} actions={<OrderDetailActions />} />
+      <PageHeader title={order.po} parent={{ label: "Orders", href: "/orders" }} />
       <RouteTabs tabs={tabs} label="Order sections" />
-      {children}
+      {/* Switching tabs keeps the header and shows this while the tab loads. */}
+      <Suspense fallback={<LoadingState />}>{children}</Suspense>
     </>
   );
 }
 
-/**
- * The strip above each tab's content: "Denim jeans · Guangzhou Textile Co. · ⟨fact⟩" with the status pill.
- * Tabs b–i render it with their own fact ("Order date 5 Aug 2026", "1 container", …).
- */
-export async function OrderContextStrip({ po, fact }: { po: string; fact: string }) {
-  const header = await getOrderDetailHeader(po);
-  if (!header) notFound();
+/** The strip above each tab's content: "Denim jeans · Guangzhou Textile Co. · ⟨fact⟩" with the status pill. */
+export function OrderContextStrip({ order, fact }: { order: OrderView; fact: string }) {
   return (
     <div className="flex min-h-12 items-center justify-between gap-4 rounded-xl border bg-card px-5 py-3">
       <p className="text-[15px] text-muted-foreground">
-        <span className="text-[17px] font-bold text-foreground">{header.item}</span> · {header.supplier} · {fact}
+        <span className="text-[17px] font-bold text-foreground">{order.item}</span> · {order.supplier.name} · {fact}
       </p>
-      <StatusPill tone={header.status.tone}>{header.status.label}</StatusPill>
+      <StatusPill tone={order.status.tone}>{order.status.label}</StatusPill>
     </div>
   );
 }

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
+import type { RouteTab } from "@/components/layout/route-tabs";
 import { TodayPill } from "@/components/shared/cards";
-import { PrototypeSelect } from "@/features/calendar/controls";
+import { CalendarTabs, ParamSelect } from "@/features/calendar/controls";
 import { getCalendar } from "@/features/calendar/data/queries";
 import { supplierOptions } from "@/features/calendar/deliveries";
 
 export const metadata: Metadata = { title: "Delivery Calendar" };
 
-// D6: every calendar view shows the Month, Week and List tabs, although the Month reference (18) has none.
+// D6: every calendar view shows the Month, Week and List tabs, although the Month reference (18) has none. The tabs
+// and the Supplier select keep the URL filters (?supplier=, ?range=); see features/calendar/params.ts.
 const TABS: RouteTab[] = [
   { href: "/calendar", label: "Month", chip: "a" },
   { href: "/calendar/week", label: "Week", chip: "b" },
@@ -24,12 +25,12 @@ export default async function CalendarLayout({ children }: LayoutProps<"/calenda
         title="Delivery Calendar"
         actions={
           <>
-            <PrototypeSelect label="Supplier" options={supplierOptions(deliveries)} action="Filter by supplier" className="h-[38px]" />
+            <ParamSelect param="supplier" label="Supplier" options={supplierOptions(deliveries)} className="h-[38px]" />
             <TodayPill size="sm" today={today} />
           </>
         }
       />
-      <RouteTabs tabs={TABS} label="Calendar views" />
+      <CalendarTabs tabs={TABS} />
       {children}
     </>
   );

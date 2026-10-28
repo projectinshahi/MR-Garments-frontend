@@ -1,17 +1,18 @@
 import { PageContainer } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
 import { KeyValueList, type KeyValueItem } from "@/components/shared/key-value-list";
+import type { OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { formatINR, formatShortDate } from "@/lib/formatters";
 
 import type { ClearingTransport, CostLine } from "./data/queries";
 
 /** Tab f (11_3.1.f_Clearing_&_transport.jpeg): clearing in India and transport to the warehouse, each with its costs. */
-export function ClearingTransportScreen({ po, data }: { po: string; data: ClearingTransport }) {
+export function ClearingTransportScreen({ order, data }: { order: OrderView; data: ClearingTransport }) {
   const { clearing, transport } = data;
   return (
     <PageContainer>
-      <OrderContextStrip po={po} fact={`Container ${data.container}`} />
+      <OrderContextStrip order={order} fact={`Container ${data.container}`} />
       <div className="grid grid-cols-1 gap-(--page-gap) lg:grid-cols-2">
         <CostCard
           title="Clearing in India"

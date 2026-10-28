@@ -1,99 +1,221 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
-// W1-calendar: Delivery Calendar Month / Week / List (18_6.a_Month, 19_6.b_Week, 20_6.c_List).
-// Role/label locators only: visited routes stay in the DOM hidden by <Activity>.
+import { addDays, ANITA, expect, freshSignIn, monthTitle, shortDate, test, today } from "./live-api";
+import { PROCUREMENT_STATE, STAFF_STATE } from "./sessions";
+
+// Delivery calendar (18 Month, 19 Week, 20 List) against CAL-1. The month and week tests use a random far-future year
+// that no other spec books deliveries in, so their empty periods are truthful. No spec books a late Yiwu Trims Ltd.
+// delivery, so that supplier with the Late chip is truthfully empty. Role/label locators only (hidden <Activity> routes stay in the DOM).
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const toast = (page: Page, action: string) => page.getByText(`${action} is not included in the current prototype.`);
+const YEAR = 2040 + Math.floor(Math.random() * 50);
+const views = (page: Page) => page.getByRole("navigation", { name: "Calendar views" });
+const listRows = (page: Page) => page.getByRole("table").getByRole("row");
 
-async function expectTab(page: Page, label: string) {
-  await expect(page.getByRole("heading", { level: 1, name: "Delivery Calendar" })).toBeVisible();
-  const tabs = page.getByRole("navigation", { name: "Calendar views" });
-  await expect(tabs.getByRole("link")).toHaveText(["aMonth", "bWeek", "cList"]);
-  await expect(tabs.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+async function chooseSupplier(page: Page, current: string, option: string) {
+  await page.getByRole("button", { name: `Supplier: ${current}` }).click();
+  await page.getByRole("menuitemradio", { name: option, exact: true }).click();
 }
 
-test("month view shows October 2026 with PO chips and the side cards", async ({ page }) => {
+/** Monday of the week holding `iso`. */
+const mondayOf = (iso: string) => addDays(iso, -((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7));
+const weekTitle = (monday: string) => `${shortDate(monday)} – ${shortDate(addDays(monday, 6))} ${addDays(monday, 6).slice(0, 4)}`;
+
+test("Month: deliveries on their day, ‹ › and Today, the supplier filter, empty months and PO links", async ({ page, api }) => {
+  const march = `${YEAR}-03-10`;
+  const foshan = await api.createOrder({ supplier: "Foshan Fabrics", deliveryDate: march });
+  const yiwu = await api.createOrder({ supplier: "Yiwu Trims Ltd.", deliveryDate: march });
+  const april = await api.createOrder({ supplier: "Foshan Fabrics", deliveryDate: `${YEAR}-04-20` });
+
+  await page.goto(`/calendar?month=${YEAR}-03`);
+  await expect(page.getByRole("heading", { level: 1, name: "Delivery Calendar" })).toBeVisible();
+  await expect(views(page).getByRole("link", { name: "Month" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { level: 2, name: `March ${YEAR}` })).toBeVisible();
+  const grid = page.getByRole("table", { name: `March ${YEAR}` });
+  const day = grid.getByRole("cell").filter({ has: page.getByRole("link", { name: foshan.po }) });
+  await expect(day.getByRole("link")).toHaveCount(2);
+  await expect(day.getByRole("link", { name: yiwu.po })).toBeVisible();
+  await expect(day).toContainText("2 deliveries");
+  await expect(grid.getByRole("link", { name: april.po })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Next month" }).click();
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-04`);
+  await expect(page.getByRole("table", { name: `April ${YEAR}` }).getByRole("link", { name: april.po })).toBeVisible();
+
+  await page.getByRole("link", { name: "Previous month" }).click();
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-03`);
+  await expect(page.getByRole("heading", { level: 2, name: `March ${YEAR}` })).toBeVisible();
+  await page.getByRole("link", { name: "Previous month" }).click();
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-02`);
+  await expect(page.getByText("No deliveries this month.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Today", exact: true }).click();
+  await expect(page).toHaveURL("/calendar");
+  await expect(page.getByRole("heading", { level: 2, name: monthTitle(today()) })).toBeVisible();
+
+  // Supplier filter (kept in the URL with the month).
+  await page.goto(`/calendar?month=${YEAR}-03`);
+  await chooseSupplier(page, "All suppliers", "Yiwu Trims Ltd.");
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-03&supplier=Yiwu+Trims+Ltd.`);
+  await expect(page.getByRole("table", { name: `March ${YEAR}` }).getByRole("link")).toHaveText([yiwu.po]);
+  await page.getByRole("link", { name: "Next month" }).click();
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-04&supplier=Yiwu+Trims+Ltd.`);
+  await expect(page.getByText("No deliveries from Yiwu Trims Ltd. this month.")).toBeVisible();
+  await chooseSupplier(page, "Yiwu Trims Ltd.", "All suppliers");
+  await expect(page).toHaveURL(`/calendar?month=${YEAR}-04`);
+
+  // A far-future month nobody delivers in.
+  await page.goto(`/calendar?month=${YEAR + 1}-12`);
+  await expect(page.getByText("No deliveries this month.")).toBeVisible();
+
+  // The PO opens the order.
+  await page.goto(`/calendar?month=${YEAR}-03`);
+  await page.getByRole("table", { name: `March ${YEAR}` }).getByRole("link", { name: yiwu.po }).click();
+  await expect(page).toHaveURL(`/orders/${yiwu.po}`);
+});
+
+test("Week: delivery cards, ‹ › and Today, an empty week, and the late banner", async ({ page, api }) => {
+  const due = `${YEAR}-06-17`;
+  const order = await api.createOrder({ supplier: "Yiwu Trims Ltd.", lines: [{ item: "Kids t-shirts", quantity: 600, rateCny: 3 }], deliveryDate: due });
+  const monday = mondayOf(due);
+
+  await page.goto(`/calendar/week?week=${due}`);
+  await expect(views(page).getByRole("link", { name: "Week" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { level: 2, name: weekTitle(monday) })).toBeVisible();
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("link", { name: order.po }) });
+  for (const text of ["Yiwu Trims Ltd.", "Kids t-shirts · 600 pcs", "On track"]) await expect(card).toContainText(text);
+
+  await page.getByRole("link", { name: "Next week" }).click();
+  await expect(page).toHaveURL(`/calendar/week?week=${addDays(monday, 7)}`);
+  await expect(page.getByRole("heading", { level: 2, name: weekTitle(addDays(monday, 7)) })).toBeVisible();
+  await expect(page.getByText("No deliveries this week.")).toBeVisible();
+  await expect(page.getByText("No deliveries", { exact: true }).filter({ visible: true })).toHaveCount(7);
+
+  await page.getByRole("link", { name: "Previous week" }).click();
+  await expect(page).toHaveURL(`/calendar/week?week=${monday}`);
+  await expect(page.getByRole("link", { name: order.po })).toBeVisible();
+
+  await page.getByRole("link", { name: "Today", exact: true }).click();
+  await expect(page).toHaveURL("/calendar/week");
+  await expect(page.getByRole("heading", { level: 2, name: weekTitle(mondayOf(today())) })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /· Today/ })).toBeVisible();
+
+  // A delivery due before this week shows in the late banner (Week) and the late card (Month).
+  const late = await api.createOrder({ orderDate: today(-30), deliveryDate: today(-10) });
+  await page.reload();
+  await expect(page.getByText("Late from before this week:")).toBeVisible();
+  await expect(page.getByText(`${late.po} Foshan Fabrics (due ${shortDate(today(-10))}, 10 days late)`)).toBeVisible();
   await page.goto("/calendar");
-  await expectTab(page, "Month");
-  await expect(page.getByText("Today, 30 Sep 2026")).toBeVisible();
-
-  const grid = page.getByRole("table", { name: "October 2026" });
-  await expect(grid.getByRole("columnheader")).toHaveText(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
-  await expect(grid.getByRole("cell")).toHaveCount(35);
-  await expect(grid.getByRole("button", { name: /^PO-/ })).toHaveCount(14);
-  await expect(grid.getByRole("cell").nth(3)).toContainText("1 Oct2 deliveriesPO-2047PO-2053");
-  await expect(grid.getByRole("cell").nth(34)).toHaveText("1 Nov");
-
-  const chart = page.getByRole("figure", { name: "Deliveries per day, next 7 days" });
-  await expect(chart).toBeVisible();
-  // All seven day labels, at the side card's 11 px size (two used to be dropped as overlapping).
-  for (const day of ["Thu 1", "Fri 2", "Sat 3", "Sun 4", "Mon 5", "Tue 6", "Wed 7"]) {
-    await expect(chart.getByText(day, { exact: true })).toBeVisible();
-  }
-  await expect(page.getByRole("list", { name: "Late deliveries" }).getByRole("listitem")).toHaveText([
-    /PO-2041Guangzhou Textile Co\. · due 26 Sep4 days/,
-    /PO-2038Yiwu Trims Ltd\. · due 27 Sep3 days/,
-    /PO-2044Shenzhen Apparel · due 29 Sep1 day/,
-  ]);
-  await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Previous month" }).click();
-  await expect(toast(page, "Previous month")).toBeVisible();
-  await grid.getByRole("button", { name: "PO-2047" }).click();
-  await expect(toast(page, "Order PO-2047")).toBeVisible();
+  const lateCard = page.getByRole("list", { name: "Late deliveries" }).getByRole("listitem").filter({ has: page.getByRole("link", { name: late.po }) });
+  await expect(lateCard).toContainText(`Foshan Fabrics · due ${shortDate(today(-10))}`);
+  await expect(lateCard).toContainText("10 days");
 });
 
-test("week view shows the late banner, today's column and the delivery cards", async ({ page }) => {
-  await page.goto("/calendar/week");
-  await expectTab(page, "Week");
-  await expect(page.getByText("PO-2041 Guangzhou Textile Co. (due 26 Sep, 4 days late) · PO-2038")).toHaveText(
-    "Late from before this week: PO-2041 Guangzhou Textile Co. (due 26 Sep, 4 days late) · PO-2038 Yiwu Trims Ltd. (due 27 Sep, 3 days late)",
-  );
+test("List: date range, status chips, supplier filter carried across views, and PO links", async ({ page, api }) => {
+  const late = await api.createOrder({ orderDate: today(-20), deliveryDate: today(-4), lines: [{ item: "Men's shorts", quantity: 120, rateCny: 9 }] });
+  const soon = await api.createOrder({ deliveryDate: today(3) });
+  const month = await api.createOrder({ deliveryDate: today(20) });
+  const far = await api.createOrder({ supplier: "Yiwu Trims Ltd.", deliveryDate: `${YEAR}-09-09` });
 
-  const week = page.getByRole("table", { name: "28 Sep – 4 Oct 2026" });
-  await expect(week.getByRole("columnheader")).toHaveText([
-    "Mon 28 Sep", "Tue 29 Sep", "Wed 30 Sep · Today", "Thu 1 Oct", "Fri 2 Oct", "Sat 3 Oct", "Sun 4 Oct",
-  ]);
-  await expect(week.getByRole("cell").filter({ hasText: "No deliveries" })).toHaveCount(3);
-  const thursday = week.getByRole("cell").nth(3);
-  await expect(thursday.getByRole("listitem")).toHaveText([
-    "PO-2047Guangzhou Textile Co.Ladies leggings · 2,000 pcsDue in 1 day",
-    "PO-2053Yiwu Trims Ltd.Labels and tags · 15,000 pcsDue in 1 day",
-  ]);
-
-  await page.getByRole("button", { name: "Next week" }).click();
-  await expect(toast(page, "Next week")).toBeVisible();
-});
-
-test("list view filters its 16 deliveries with the status chips", async ({ page }) => {
   await page.goto("/calendar/list");
-  await expectTab(page, "List");
+  await expect(views(page).getByRole("link", { name: "List" })).toHaveAttribute("aria-current", "page");
+  const row = (po: string) => listRows(page).filter({ hasText: po });
+  await expect(row(late.po).getByRole("cell")).toHaveText([shortDate(today(-4)), late.po, "Foshan Fabrics", "Men's shorts", "120 pcs", "4 days late"]);
+  await expect(row(soon.po)).toContainText("Due in 3 days");
+  await expect(row(month.po)).toContainText("On track");
+  await expect(row(far.po)).toContainText(shortDate(`${YEAR}-09-09`));
 
-  const table = page.getByRole("table");
-  await expect(table.getByRole("row")).toHaveCount(17);
-  await expect(table.getByRole("row", { name: /PO-2038/ })).toContainText("30,000 sets");
-  await expect(table.getByRole("row", { name: /PO-2050/ })).toContainText("On track");
+  // Date range (in the URL).
+  await page.getByRole("button", { name: "Date range: All dates" }).click();
+  await page.getByRole("menuitemradio", { name: "Next 7 days" }).click();
+  await expect(page).toHaveURL("/calendar/list?range=next-7");
+  await expect(row(soon.po)).toBeVisible();
+  for (const po of [late.po, month.po, far.po]) await expect(row(po)).toHaveCount(0);
+  await page.getByRole("button", { name: "Date range: Next 7 days" }).click();
+  await page.getByRole("menuitemradio", { name: "Next 30 days" }).click();
+  await expect(page).toHaveURL("/calendar/list?range=next-30");
+  await expect(row(month.po)).toBeVisible();
+  await expect(row(far.po)).toHaveCount(0);
+  await page.getByRole("button", { name: "Date range: Next 30 days" }).click();
+  await page.getByRole("menuitemradio", { name: "All dates" }).click();
+  await expect(page).toHaveURL("/calendar/list");
 
+  // Status chips, with counts that match the rows.
   const chips = page.getByRole("group", { name: "Delivery status" });
-  await expect(chips.getByRole("button")).toHaveText(["All (16)", "Late (3)", "Due within 2 days (3)", "On track (10)"]);
-  await chips.getByRole("button", { name: "Late (3)" }).click();
-  await expect(table.getByRole("row")).toHaveCount(4);
-  await expect(table.getByRole("row", { name: /PO-2044/ })).toContainText("1 day late");
-  await chips.getByRole("button", { name: "Due within 2 days (3)" }).click();
-  await expect(table.getByRole("row")).toHaveCount(4);
-  await chips.getByRole("button", { name: "On track (10)" }).click();
-  await expect(table.getByRole("row")).toHaveCount(11);
-  await chips.getByRole("button", { name: "All (16)" }).click();
-  await expect(table.getByRole("row")).toHaveCount(17);
+  for (const [label, member, other] of [
+    ["Late", late, soon],
+    ["Due within 7 days", soon, late],
+    ["On track", month, soon],
+  ] as const) {
+    const chip = chips.getByRole("button", { name: new RegExp(`^${label} \\(\\d+\\)$`) });
+    const count = Number((await chip.textContent())!.match(/\((\d+)\)/)![1]);
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(listRows(page)).toHaveCount(count + 1);
+    await expect(row(member.po)).toBeVisible();
+    await expect(row(other.po)).toHaveCount(0);
+  }
+  await chips.getByRole("button", { name: /^All \(\d+\)$/ }).click();
+
+  // The header supplier filter applies here too, and the view tabs carry it.
+  await chooseSupplier(page, "All suppliers", "Yiwu Trims Ltd.");
+  await expect(page).toHaveURL("/calendar/list?supplier=Yiwu+Trims+Ltd.");
+  await expect(row(far.po)).toBeVisible();
+  await expect(row(late.po)).toHaveCount(0);
+  // No spec books a late Yiwu Trims delivery.
+  await chips.getByRole("button", { name: /^Late \(0\)$/ }).click();
+  await expect(page.getByText("No deliveries match these filters.")).toBeVisible();
+  await views(page).getByRole("link", { name: "Week" }).click();
+  await expect(page).toHaveURL("/calendar/week?supplier=Yiwu+Trims+Ltd.");
+  await expect(page.getByRole("button", { name: "Supplier: Yiwu Trims Ltd." })).toBeVisible();
+  // Yiwu Trims deliveries are booked 30+ days out or in far-future years, so none falls in this week.
+  await expect(page.getByText("No deliveries from Yiwu Trims Ltd. this week.")).toBeVisible();
+
+  // The PO opens the order.
+  await page.goto("/calendar/list");
+  await row(soon.po).getByRole("link", { name: soon.po }).click();
+  await expect(page).toHaveURL(`/orders/${soon.po}`);
 });
 
-test("supplier and date-range filters are not in the prototype (D5)", async ({ page }) => {
+test("an order received and loaded into a container leaves the calendar", async ({ page, api }) => {
+  const order = await api.createOrder({ deliveryDate: today(5) });
   await page.goto("/calendar/list");
-  await page.getByRole("button", { name: "Supplier: All suppliers" }).first().click();
-  await page.getByRole("menuitemradio", { name: "Foshan Fabrics" }).click();
-  await expect(toast(page, "Filter by supplier")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Supplier: All suppliers" }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Date range: Next 30 days" })).toBeVisible();
+  await expect(listRows(page).filter({ hasText: order.po })).toBeVisible();
+
+  await api.receive(order.po, { "Denim jeans": 100 }, { shortRemark: "" });
+  await page.reload();
+  await expect(listRows(page).filter({ hasText: order.po })).toContainText("Due in 5 days"); // stage 2 still listed
+
+  await api.load([{ po: order.po, item: "Denim jeans", quantity: 100 }]);
+  await page.reload();
+  await expect(listRows(page).filter({ hasText: order.po })).toHaveCount(0);
+});
+
+test.describe("Procurement (calendar Full)", () => {
+  test.use({ storageState: PROCUREMENT_STATE });
+
+  test("opens the calendar with PO links", async ({ page, api }) => {
+    const order = await api.createOrder({ deliveryDate: today(6) });
+    await page.goto("/calendar/list");
+    await expect(listRows(page).filter({ hasText: order.po }).getByRole("link", { name: order.po })).toHaveAttribute("href", `/orders/${order.po}`);
+  });
+});
+
+test.describe("Accounts (no calendar access)", () => {
+  test.use({ storageState: freshSignIn(ANITA) });
+
+  test("the calendar goes to the dashboard", async ({ page }) => {
+    await page.goto("/calendar");
+    await expect(page).toHaveURL("/");
+  });
+});
+
+test.describe("China staff (no calendar access)", () => {
+  test.use({ storageState: STAFF_STATE });
+
+  test("the calendar goes to the staff home", async ({ page }) => {
+    await page.goto("/calendar/list");
+    await expect(page).toHaveURL("/home");
+  });
 });

@@ -3,11 +3,17 @@ import { describe, expect, it } from "vitest";
 import type { ContainerListItem } from "@/lib/api/types";
 
 import {
+  ACTION_LABEL,
+  actionFields,
   ALL,
   agentNames,
+  CONTAINER_STATUS,
+  containerActions,
   containerChips,
+  containerDatesSchema,
   containerKpis,
   contents,
+  DATE_MESSAGES,
   filterContainers,
   lineLoads,
   listFootnote,
@@ -16,6 +22,8 @@ import {
   toContainerBody,
   toContainerRow,
   toLoadValues,
+  toUpdateBody,
+  type ContainerAction,
   type ContainerRow,
 } from "./containers-logic";
 
@@ -43,13 +51,16 @@ const rows: ContainerRow[] = [
 ].map(toContainerRow);
 
 describe("toContainerRow", () => {
-  it("maps CON-1 and marks split orders (part)", () => {
+  it("maps CON-1 and keeps which orders are split (part)", () => {
     expect(rows[1]).toEqual({
       id: "c2",
       number: "MSKU 4471203",
       agent: "Sino Freight",
       terms: "FOB",
-      orders: ["PO-2027", "PO-2037 (part)"],
+      orders: [
+        { po: "PO-2027", part: false },
+        { po: "PO-2037", part: true },
+      ],
       bundles: 23,
       loadedOn: null,
       sailedOn: null,
@@ -66,16 +77,25 @@ describe("filterContainers", () => {
 
   it("filters by status chip, agent, terms and search", () => {
     expect(filterContainers(rows, all)).toHaveLength(5);
-    expect(filterContainers(rows, { ...all, chip: "finished" })).toEqual([]);
     expect(filterContainers(rows, { ...all, chip: "sea" })).toHaveLength(3);
+    expect(numbers(filterContainers(rows, { ...all, chip: "loading" }))).toEqual(["FCIU 5527310"]);
+    expect(numbers(filterContainers(rows, { ...all, chip: "arrived" }))).toEqual(["CAIU 2298076"]);
     expect(numbers(filterContainers(rows, { ...all, agent: "Dragon Cargo" }))).toEqual(["CAIU 3305871"]);
     expect(filterContainers(rows, { ...all, terms: "CNF" })).toHaveLength(2);
     expect(numbers(filterContainers(rows, { ...all, query: "po-2037" }))).toEqual(["MSKU 4471203", "TGHU 8820156"]);
     expect(numbers(filterContainers(rows, { ...all, query: " caiu " }))).toEqual(["CAIU 3305871", "CAIU 2298076"]);
   });
 
-  it("labels the chips with counts and lists the agents once", () => {
-    expect(containerChips(rows).map((c) => c.label)).toEqual(["Active (5)", "On the way (3)", "Loading (1)", "Arrived (1)", "Finished"]);
+  it("has one chip for all and one per real status, with counts, and lists the agents once", () => {
+    expect(containerChips(rows)).toEqual([
+      { value: "active", label: "Active (5)" },
+      { value: "sea", label: "On the way (3)" },
+      { value: "loading", label: "Loading (1)" },
+      { value: "arrived", label: "Arrived (1)" },
+    ]);
+    // Every chip but "active" is a real CON-1 status, and every status has a chip and a pill.
+    const statuses = containerChips(rows).flatMap((c) => (c.value === "active" ? [] : [c.value]));
+    expect(statuses.sort()).toEqual(Object.keys(CONTAINER_STATUS).sort());
     expect(agentNames(rows)).toEqual(["Dragon Cargo", "Sino Freight"]);
   });
 });
@@ -158,5 +178,53 @@ describe("load container form", () => {
     ]);
     expect(parseCount("1,160 pcs")).toBe(1160);
     expect(parseCount("")).toBe(0);
+  });
+});
+
+describe("container status actions", () => {
+  const container = { loadedOn: "2026-10-20", sailedOn: null, eta: "2026-11-10" };
+  const today = "2026-10-27";
+  const issues = (action: ContainerAction, values: { sailedOn: string; eta: string }, saved: { sailedOn: string | null } = container) =>
+    containerDatesSchema(action, { ...container, ...saved }, today)
+      .safeParse(values)
+      .error?.issues.map((i) => [i.path.join("."), i.message]) ?? [];
+
+  it("offers only the forward moves and date corrections valid for each status", () => {
+    const labels = (status: "loading" | "sea" | "arrived") => containerActions(status).map((a) => ACTION_LABEL[a]);
+    expect(labels("loading")).toEqual(["Mark as sailed", "Change ETA"]);
+    expect(labels("sea")).toEqual(["Mark as arrived", "Change dates"]);
+    expect(labels("arrived")).toEqual([]);
+    expect([actionFields("sail"), actionFields("arrive"), actionFields("eta"), actionFields("dates")]).toEqual([
+      ["sailedOn", "eta"],
+      [],
+      ["eta"],
+      ["sailedOn", "eta"],
+    ]);
+  });
+
+  it("checks the sailing date: given, not before loading, not after today", () => {
+    expect(issues("sail", { sailedOn: "2026-10-27", eta: "2026-11-10" })).toEqual([]);
+    expect(issues("sail", { sailedOn: "", eta: "2026-11-10" })).toEqual([["sailedOn", DATE_MESSAGES.sailedOnNeeded]]);
+    expect(issues("sail", { sailedOn: "2026-10-19", eta: "2026-11-10" })).toEqual([["sailedOn", DATE_MESSAGES.sailedBeforeLoading]]);
+    expect(issues("dates", { sailedOn: "2026-10-28", eta: "2026-11-10" })).toEqual([["sailedOn", DATE_MESSAGES.sailedFuture]]);
+  });
+
+  it("checks the ETA against loading and the new or saved sailing date", () => {
+    expect(issues("eta", { sailedOn: "", eta: "" })).toEqual([["eta", DATE_MESSAGES.etaNeeded]]);
+    expect(issues("eta", { sailedOn: "", eta: "2026-10-19" })).toEqual([["eta", DATE_MESSAGES.etaBeforeLoading]]);
+    expect(issues("sail", { sailedOn: "2026-10-25", eta: "2026-10-24" })).toEqual([["eta", DATE_MESSAGES.etaBeforeSailing]]);
+    // "Change ETA" doesn't show the sailing date, so the saved one (a planned departure) still counts.
+    expect(issues("eta", { sailedOn: "", eta: "2026-10-30" }, { sailedOn: "2026-11-01" })).toEqual([["eta", DATE_MESSAGES.etaBeforeSailing]]);
+    expect(issues("arrive", { sailedOn: "", eta: "" })).toEqual([]);
+  });
+
+  it("builds the CON-5 body: the status change and only the changed dates", () => {
+    const saved = { sailedOn: "2026-10-26", eta: "2026-11-10" };
+    expect(toUpdateBody("sail", saved, saved)).toEqual({ status: "sea", sailedOn: "2026-10-26" });
+    expect(toUpdateBody("sail", { ...saved, eta: "2026-11-12" }, saved)).toEqual({ status: "sea", sailedOn: "2026-10-26", eta: "2026-11-12" });
+    expect(toUpdateBody("arrive", { sailedOn: "x", eta: "y" }, saved)).toEqual({ status: "arrived" });
+    expect(toUpdateBody("eta", { sailedOn: "2026-10-01", eta: "2026-11-12" }, saved)).toEqual({ eta: "2026-11-12" });
+    expect(toUpdateBody("dates", { ...saved, sailedOn: "2026-10-25" }, saved)).toEqual({ sailedOn: "2026-10-25" });
+    expect(toUpdateBody("dates", saved, saved)).toEqual({});
   });
 });

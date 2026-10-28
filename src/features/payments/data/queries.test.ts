@@ -6,7 +6,9 @@ import type { PaymentsResponse } from "@/lib/api/types";
 import { getPayments, type Payment, toPaymentsData } from "./queries";
 
 const apiGet = vi.fn();
+const getMe = vi.fn();
 vi.mock("@/lib/api/server", () => ({ apiGet: (...args: unknown[]) => apiGet(...args) }));
+vi.mock("@/lib/session", () => ({ getMe: () => getMe() }));
 vi.mock("@/lib/today", () => ({ todayInIndia: () => "2026-11-10" }));
 
 type Order = PaymentsResponse["orders"][number];
@@ -48,13 +50,20 @@ const paid = (id: string, po: string): Payment => ({
 const today = "2026-11-10";
 
 describe("toPaymentsData", () => {
-  it("sums paid INR and counts orders with a balance as open", () => {
+  it("sums paid INR and counts the orders it comes from, paid off or not", () => {
     const { kpis } = toPaymentsData(
-      { orders: [order("PO-3001"), order("PO-3002", { paidInr: 2_000, balanceCny: 0 })], payments: [] },
+      {
+        orders: [
+          order("PO-3001"),
+          order("PO-3002", { paidInr: 2_000, balanceCny: 0 }),
+          order("PO-3003", { paidCny: 0, paidInr: 0, balanceCny: 10_000 }),
+        ],
+        payments: [],
+      },
       today,
     );
     expect(kpis.paidSoFarInr).toBe(50_000);
-    expect(kpis.openOrders).toBe(1);
+    expect(kpis.paidOrders).toBe(2);
   });
 
   it("counts due payments from today to +7 and +30 days, in CNY, naming the earliest", () => {
@@ -90,6 +99,7 @@ describe("toPaymentsData", () => {
       today,
     );
     expect(orders[0]).toEqual({
+      orderId: "o-PO-3001",
       po: "PO-3001",
       supplier: "Ningbo Knits",
       orderValue: 10_000,
@@ -111,8 +121,14 @@ describe("toPaymentsData", () => {
 });
 
 describe("getPayments", () => {
+  const AGENTS = [{ id: "a1", name: "Sino Freight" }];
+  const me = (payments: string, ordersView: string) => ({ shell: "management", permissions: { payments, ordersView } });
+  const answer = (options: () => Promise<unknown>) =>
+    apiGet.mockImplementation((path: string) => (path === "/orders/options" ? options() : Promise.resolve({ orders: [], payments: [] })));
+
   beforeEach(() => {
     apiGet.mockReset();
+    getMe.mockReset().mockResolvedValue(null);
   });
 
   it("reads PAY-1 and derives with today in India", async () => {
@@ -122,6 +138,30 @@ describe("getPayments", () => {
     expect(data.orders.map((o) => [o.po, o.nextDueTone])).toEqual([["PO-3001", "warning"]]);
     expect(data.kpis.dueNext7.count).toBe(1);
     expect(data.defaultPo).toBe("PO-3001");
+  });
+
+  it("offers recording, with ORD-2's agents, to payments Enter or better, and links POs for Orders viewers", async () => {
+    getMe.mockResolvedValue(me("Enter", "View"));
+    answer(() => Promise.resolve({ agents: AGENTS }));
+    const data = await getPayments();
+    expect(apiGet).toHaveBeenCalledWith("/orders/options");
+    expect(data.agents).toEqual(AGENTS);
+    expect(data.linkPo).toBe(true);
+  });
+
+  it("doesn't offer recording to viewers, nor read ORD-2 for them", async () => {
+    getMe.mockResolvedValue(me("View", "None"));
+    answer(() => Promise.reject(new Error("ORD-2 must not be read")));
+    const data = await getPayments();
+    expect(apiGet).not.toHaveBeenCalledWith("/orders/options");
+    expect(data.agents).toBeNull();
+    expect(data.linkPo).toBe(false);
+  });
+
+  it("still offers recording, with no agents, when ORD-2 fails", async () => {
+    getMe.mockResolvedValue(me("Full", "None"));
+    answer(() => Promise.reject(new ApiError(403, "forbidden", "no")));
+    expect((await getPayments()).agents).toEqual([]);
   });
 
   it("rejects when the API fails (no fixture fallback)", async () => {

@@ -4,6 +4,7 @@ import type { OrderPaymentRow } from "./data/queries";
 import { filterOrders } from "./filter-orders";
 
 const row = (po: string, supplier: string): OrderPaymentRow => ({
+  orderId: `o-${po}`,
   po,
   supplier,
   orderValue: 0,

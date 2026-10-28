@@ -1,14 +1,8 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { CostScreen } from "@/features/order-detail/cost/cost-screen";
-import { getOrderCost } from "@/features/order-detail/cost/data/queries";
-
-export const metadata: Metadata = { title: "Cost" };
-
+// Hidden tab: nothing records clearing, transport, warehouse, cost or an order history yet, so the frame doesn't
+// list it and its URL is not found. Reading params first keeps notFound() at request time, out of the build.
 export default async function CostPage({ params }: PageProps<"/orders/[po]/cost">) {
-  const { po } = await params;
-  const data = await getOrderCost(po);
-  if (!data) notFound();
-  return <CostScreen po={po} data={data} />;
+  await params;
+  notFound();
 }

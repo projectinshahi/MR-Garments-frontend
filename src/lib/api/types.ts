@@ -258,3 +258,86 @@ export type CreateContainerBody = {
   eta: string;
   lines: { orderLineId: string; bundles: number; quantity: number }[];
 };
+
+// Five-tab completion (contracts: "Five-tab completion"): order detail, recording a payment, container detail and
+// status. No new tables; order stages still change only through REC-3 and CON-3.
+
+export type PaymentKind = "Deposit" | "Balance";
+
+/**
+ * ORD-4 GET /api/v1/orders/:po. The ORD-1 figures for one order, its lines, and its records. A section is null when
+ * the signed-in user can't view it (payments, receiving, containers access). Records are oldest first.
+ */
+export type OrderDetail = Omit<OrderListItem, "supplier"> & {
+  supplier: OrderOptions["suppliers"][number];
+  balanceCny: number;
+  lines: {
+    id: string;
+    position: number;
+    item: Named;
+    unit: Unit;
+    quantity: number;
+    rateCny: number;
+    valueCny: number;
+    received: number;
+    loaded: number;
+  }[];
+  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po">[] | null;
+  receipts:
+    | {
+        id: string;
+        receivedOn: string;
+        office: string;
+        bundles: number;
+        deliveryNote: string;
+        shortRemark: string;
+        receivedBy: string;
+        lines: { orderLineId: string; item: string; unit: Unit; quantity: number }[];
+      }[]
+    | null;
+  containers:
+    | {
+        id: string;
+        number: string;
+        status: ContainerState;
+        terms: ContainerTerms;
+        agent: Named;
+        loadedOn: string | null;
+        sailedOn: string | null;
+        eta: string;
+        /** Only this order's lines in the container. */
+        lines: { orderLineId: string; item: string; unit: Unit; bundles: number; quantity: number }[];
+      }[]
+    | null;
+};
+
+/**
+ * PAY-2 POST /api/v1/payments body: a payment already made (saved as status "paid"). The server sets the payee name
+ * from the order's supplier or the chosen agent. Answers 201 `{ payment: { id } }`. Records only: nothing moves money.
+ */
+export type CreatePaymentBody = {
+  orderId: string;
+  kind: PaymentKind;
+  payeeRole: PayeeRole;
+  /** An active shipping agent when payeeRole is "agent"; null for the supplier. */
+  agentId: string | null;
+  amountCny: number;
+  paidOn: string;
+  rateInr: number;
+  mode: string;
+};
+export type CreatePaymentResponse = { payment: { id: string } };
+
+/** CON-4 GET /api/v1/containers/:id */
+export type ContainerDetail = ContainerListItem & {
+  portOfLoading: string;
+  portOfArrival: string;
+  lines: { orderLineId: string; orderId: string; po: string; item: string; unit: Unit; bundles: number; quantity: number }[];
+};
+
+/**
+ * CON-5 PATCH /api/v1/containers/:id (at least one key). Forward only: loading -> sea (needs a sailing date) ->
+ * arrived; the sailing date and ETA can be corrected until the container arrives.
+ */
+export type UpdateContainerBody = { status?: "sea" | "arrived"; sailedOn?: string; eta?: string };
+export type UpdateContainerResponse = { container: { id: string; status: ContainerState; sailedOn: string | null; eta: string } };

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppSidebar, MobileNav, type ShellUser, SidebarFallback } from "@/components/layout/app-sidebar";
+import { SampleDataNotice } from "@/components/layout/sample-data-notice";
 import { navFor, SESSION_ENDED_URL, userDetail } from "@/config/navigation";
 import { getMe } from "@/lib/session";
 
@@ -16,7 +17,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Suspense fallback={<SidebarFallback />}>
         <ShellNavigation />
       </Suspense>
-      <div className="flex min-h-svh flex-col md:pl-(--sidebar-width)">{children}</div>
+      <div className="flex min-h-svh flex-col md:pl-(--sidebar-width)">
+        {/* Reads the pathname, which dynamic routes such as /orders/[po] only know at request time. */}
+        <Suspense fallback={null}>
+          <SampleDataNotice />
+        </Suspense>
+        {children}
+      </div>
     </div>
   );
 }
