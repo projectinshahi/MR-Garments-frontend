@@ -30,7 +30,7 @@ const dialogOf = (page: Page) => page.getByRole("dialog", { name: "Add supplier"
 async function openAddSupplier(page: Page) {
   await page.goto("/settings/suppliers");
   await page.getByRole("link", { name: "+ Add supplier" }).click();
-  await expect(page).toHaveURL(/\?dialog=add-supplier$/);
+  await expect(page).toHaveURL(/\?dialog=add$/);
   const dialog = dialogOf(page);
   await expect(dialog).toBeVisible();
   return dialog;
@@ -50,7 +50,7 @@ test("AT-S1: Suppliers lists the 5 seeded suppliers as 40, with 0 open orders", 
   await page.goto("/settings/suppliers");
   await expect(rows(page)).toHaveCount(SUPPLIERS.length + 1);
   for (const [index, supplier] of SUPPLIERS.entries()) {
-    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", "0", "Active", "Edit"]);
+    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", /^\d+$/, "Active", "Edit"]);
   }
 });
 
@@ -100,7 +100,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   await fillSupplier(dialog, NINGBO.name);
   await dialog.getByRole("button", { name: "Save supplier" }).click();
 
-  // K7: the dialog closes, ?dialog=add-supplier leaves the address, the toast shows, the list reloads (Active chip).
+  // K7: the dialog closes, ?dialog=add leaves the address, the toast shows, the list reloads (Active chip).
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await expect(page.getByText("Supplier added", { exact: true })).toBeVisible();
@@ -131,10 +131,10 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(dialog.getByLabel("Contact person")).toHaveValue(NINGBO.contactPerson);
   await expect(dialog.getByLabel("Notes")).toHaveValue(NINGBO.notes);
   await expect(save).toBeEnabled();
-  await expect(page).toHaveURL(/\?dialog=add-supplier$/);
+  await expect(page).toHaveURL(/\?dialog=add$/);
 
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  // Cancel removes ?dialog=add-supplier with a soft navigation; reload only once it has, or the dialog reopens.
+  // Cancel removes ?dialog=add with a soft navigation; reload only once it has, or the dialog reopens.
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await page.reload();
@@ -142,37 +142,40 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(page.getByRole("table").getByRole("row", { name: /ningbo denim works/i })).toHaveCount(1);
 });
 
-test("AT-S6: Edit on a supplier shows the unchanged prototype message", async ({ page }) => {
+// Wave 3 (docs/wave3-contracts.md section 4): Edit opens the tab's edit dialog at ?dialog=edit&id=<id>.
+test("AT-S6: Edit on a supplier links to its edit dialog", async ({ page }) => {
   await page.goto("/settings/suppliers");
-  await page.getByRole("button", { name: "Edit Guangzhou Textile Co." }).click();
-  await expect(page.getByText("Edit Guangzhou Textile Co. is not included in the current prototype.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Guangzhou Textile Co." })).toHaveAttribute(
+    "href",
+    /^\/settings\/suppliers\?dialog=edit&id=[0-9a-f-]{36}$/,
+  );
 });
 
-// B6: values that differ from 41-46 come from later batches (0, ₹0, "–", empty orders) or from real users (Staff).
-// Staff is matched loosely, because other specs may add or deactivate users at these offices.
-const READ_ONLY: { path: string; action: string; rows: (string | RegExp)[][] }[] = [
+// B6: values that differ from 41-46 come from real data: users (Staff) and, since wave 3, the counts, team stock and
+// the orders using an item. These are matched loosely, because other specs add users, orders, containers and stock.
+const LISTS:{ path: string; action: string; rows: (string | RegExp)[][] }[] = [
   {
     path: "/settings/shipping-agents",
     action: "Add shipping agent",
     rows: [
-      ["Sino Freight", "Ms. Zhang Min", "+86 20 8123 4567", "Guangzhou", "0"],
-      ["Dragon Cargo", "Mr. Huang Bo", "+86 755 8899 1200", "Shenzhen", "0"],
+      ["Sino Freight", "Ms. Zhang Min", "+86 20 8123 4567", "Guangzhou", /^\d+$/],
+      ["Dragon Cargo", "Mr. Huang Bo", "+86 755 8899 1200", "Shenzhen", /^\d+$/],
     ],
   },
   {
     path: "/settings/clearing-agents",
     action: "Add clearing agent",
     rows: [
-      ["Kochi Clearing Services", "Mr. Anil Kumar", "+91 98470 12345", "Kochi", "0"],
-      ["Southern Port Agents", "Mr. Rajesh Nair", "+91 98950 44210", "Kochi", "0"],
+      ["Kochi Clearing Services", "Mr. Anil Kumar", "+91 98470 12345", "Kochi", /^\d+$/],
+      ["Southern Port Agents", "Mr. Rajesh Nair", "+91 98950 44210", "Kochi", /^\d+$/],
     ],
   },
   {
     path: "/settings/transport-companies",
     action: "Add transport company",
     rows: [
-      ["Kerala Roadways", "Mr. Biju Thomas", "+91 94470 30011", "0"],
-      ["Malabar Carriers", "Mr. Salim P", "+91 98460 77120", "0"],
+      ["Kerala Roadways", "Mr. Biju Thomas", "+91 94470 30011", /^\d+$/],
+      ["Malabar Carriers", "Mr. Salim P", "+91 98460 77120", /^\d+$/],
     ],
   },
   {
@@ -188,39 +191,37 @@ const READ_ONLY: { path: string; action: string; rows: (string | RegExp)[][] }[]
     path: "/settings/teams",
     action: "Add team",
     rows: [
-      ["Retail team", "0", "₹0", "–"],
-      ["Wholesale team", "0", "₹0", "–"],
-      ["Online team", "0", "₹0", "–"],
+      ["Retail team", /^\d+$/, /^₹/, /^(–|₹.*)$/],
+      ["Wholesale team", /^\d+$/, /^₹/, /^(–|₹.*)$/],
+      ["Online team", /^\d+$/, /^₹/, /^(–|₹.*)$/],
     ],
   },
   {
     path: "/settings/items",
     action: "Add item",
     rows: [
-      ["Denim jeans", "Pieces", "50", ""],
-      ["Track pants", "Pieces", "50", ""],
-      ["Kids t-shirts", "Pieces", "50", ""],
-      ["Ladies kurtis", "Pieces", "50", ""],
-      ["Polo shirts", "Pieces", "50", ""],
-      ["Men's shorts", "Pieces", "50", ""],
-      ["Men's jackets", "Pieces", "50", ""],
-      ["Cotton fabric", "Metres", "Roll", ""],
+      ["Denim jeans", "Pieces", "50", /.*/],
+      ["Track pants", "Pieces", "50", /.*/],
+      ["Kids t-shirts", "Pieces", "50", /.*/],
+      ["Ladies kurtis", "Pieces", "50", /.*/],
+      ["Polo shirts", "Pieces", "50", /.*/],
+      ["Men's shorts", "Pieces", "50", /.*/],
+      ["Men's jackets", "Pieces", "50", /.*/],
+      ["Cotton fabric", "Metres", "Roll", /.*/],
     ],
   },
 ];
 
-test("AT-S7: Settings tabs 2-7 are read-only lists with the B6 values and unchanged messages", async ({ page }) => {
-  for (const tab of READ_ONLY) {
+test("AT-S7: Settings tabs 2-7 list the B6 values and link Add and Edit to the tab's dialogs", async ({ page }) => {
+  for (const tab of LISTS) {
     await page.goto(tab.path);
     await expect(rows(page)).toHaveCount(tab.rows.length + 1);
     for (const [index, cells] of tab.rows.entries()) {
       await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...cells, "Active", "Edit"]);
     }
 
-    await page.getByRole("button", { name: `+ ${tab.action}` }).click();
-    await expect(page.getByText(`${tab.action} is not included in the current prototype.`)).toBeVisible();
+    await expect(page.getByRole("link", { name: `+ ${tab.action}` })).toHaveAttribute("href", `${tab.path}?dialog=add`);
     const first = String(tab.rows[0]![0]);
-    await page.getByRole("button", { name: `Edit ${first}` }).click();
-    await expect(page.getByText(`Edit ${first} is not included in the current prototype.`)).toBeVisible();
+    await expect(page.getByRole("link", { name: `Edit ${first}` })).toHaveAttribute("href", new RegExp(`^${tab.path}[?]dialog=edit&id=[0-9a-f-]{36}$`));
   }
 });

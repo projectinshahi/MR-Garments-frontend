@@ -1,20 +1,18 @@
-import { listSuppliers, listTeams } from "@/lib/data/master";
+import { type SearchParams, toParams } from "@/features/calendar/params";
+import { idQuery, isId } from "@/features/reports/data/filters";
+import type { LandedCostResponse } from "@/lib/api/reports-types";
+import { apiGet } from "@/lib/api/server";
 
-import * as fixtures from "./fixtures";
-
-export type { CostPartKey, GoodsPayment, OrderBreakdown, OrderCostRow } from "./fixtures";
+// Landed Cost (31) reads GET /landed-cost, filtered by the page URL's ?supplier=<id> and ?team=<id>. The call reads
+// the session cookie, so the page renders inside the (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
 export type LandedCostData = Awaited<ReturnType<typeof getLandedCost>>;
+export type { LandedCostRow } from "@/lib/api/reports-types";
 
-/** Landed Cost: orders, PO-2028's breakdown and goods payments, plus the header filter options. */
-export async function getLandedCost() {
-  const [suppliers, teams] = await Promise.all([listSuppliers(), listTeams()]);
-  return structuredClone({
-    orders: fixtures.orders,
-    estimateReason: fixtures.estimateReason,
-    breakdown: fixtures.breakdown,
-    goodsPayments: fixtures.goodsPayments,
-    suppliers: suppliers.map((s) => s.name),
-    teams: teams.map((t) => t.name),
-  });
+/** Also returns the team the API filtered by (the same ?team= rule), so "By team" shows only that team's stock. */
+export async function getLandedCost(search: SearchParams) {
+  const params = toParams(search);
+  const team = params.get("team");
+  const data = await apiGet<LandedCostResponse>(`/landed-cost${idQuery(params, { supplier: "supplierId", team: "teamId" })}`);
+  return { ...data, teamId: isId(team) ? team : null };
 }

@@ -6,17 +6,17 @@ import { useState } from "react";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { Callout, CardNote, SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
-import { notInPrototype } from "@/components/shared/prototype";
 import { Timeline } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatDate, formatINR, formatNumber, formatQty } from "@/lib/formatters";
+import { formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import { clearingTotal } from "./clearing-logic";
+import { CHARGES, CLEARING_FIELDS, clearingSteps, clearingTotal, clearingValues, toClearingBody, type ClearingValues } from "./clearing-logic";
 import type { ClearingFormData } from "./data/queries";
+import { amountOf, cleanAmount, formatExactINR, showAmount, useStageSave } from "./stage-form";
 
 // Measured from 25_9_Clearing_(India)_-_Stage_4_form.jpeg: 12.5 px bold labels 5 px above 14 px fields, 16 px between
 // the cards, 12 px table headers. Cards use titleGap="none" and place their content where the reference has it.
@@ -25,12 +25,27 @@ const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "h-[33px] px-1.5 py-0 text-sm";
 
-const digits = (value: string) => value.replace(/\D/g, "");
+/** Proposed wording: no SUCCESS message fits a clearing yet. */
+const SAVED = { draft: "Clearing draft saved", complete: "Container cleared and handed to transport" };
 
 /** One duty line: label (with an optional muted sub-label) and a right-aligned amount in INR. */
-function AmountRow({ id, label, sub, value, onChange }: { id: string; label: string; sub?: string; value: string; onChange: (value: string) => void }) {
+function AmountRow({
+  id,
+  label,
+  sub,
+  value,
+  error,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  sub?: string;
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div className="flex h-[50px] items-center justify-between gap-4 border-b border-border-subtle px-1.5 last:border-b-0">
+    <div className="flex min-h-[50px] items-center justify-between gap-4 border-b border-border-subtle px-1.5 last:border-b-0">
       <div className="flex flex-col">
         <label htmlFor={id} className="text-sm leading-4">
           {label}
@@ -42,29 +57,56 @@ function AmountRow({ id, label, sub, value, onChange }: { id: string; label: str
         ) : null}
       </div>
       {/* The reference sets the field 2.5 px above the row's center. */}
-      <Input
-        id={id}
-        aria-describedby={sub ? `${id}-sub` : undefined}
-        inputMode="numeric"
-        value={value ? formatNumber(Number(value)) : ""}
-        onChange={(event) => onChange(digits(event.target.value))}
-        className="mb-[5px] h-[34px] w-[188px] px-2.5 text-right text-sm font-bold text-label"
-      />
+      <div className="mb-[5px] flex w-[188px] flex-col">
+        <Input
+          id={id}
+          aria-describedby={sub ? `${id}-sub` : undefined}
+          aria-invalid={!!error}
+          inputMode="decimal"
+          value={showAmount(value)}
+          onChange={(event) => onChange(cleanAmount(event.target.value))}
+          className="h-[34px] px-2.5 text-right text-sm font-bold text-label"
+        />
+        <FieldError className="text-right">{error}</FieldError>
+      </div>
     </div>
   );
 }
 
-/** Clearing (India), Stage 4 form (25_9_Clearing_(India)_-_Stage_4_form.jpeg), for one container. */
+/**
+ * Clearing (India), Stage 4 form (25_9_Clearing_(India)_-_Stage_4_form.jpeg), for one container: CLR-2, saved with
+ * CLR-3. Read-only once cleared, before the container arrives, and for users without clearing Enter.
+ */
 export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
-  // Mock mutation: client state only, resets on reload
-  const [goodsValue, setGoodsValue] = useState(String(data.goodsValue));
-  const [amounts, setAmounts] = useState(() => data.charges.map((charge) => String(charge.amount)));
-  const total = clearingTotal(amounts.map((amount) => ({ amount: Number(amount) || 0 })));
+  const { form, today, canEnter } = data;
+  const { container, clearing } = form;
+  const [values, setValues] = useState(() => clearingValues(form, today));
+  const { errors, saving, save } = useStageSave(`/clearings/${container.id}`, CLEARING_FIELDS, SAVED, "/clearing");
+  const set = (key: keyof ClearingValues) => (value: string) => setValues((current) => ({ ...current, [key]: value }));
+  const bind = (key: keyof ClearingValues) => ({
+    value: values[key],
+    "aria-invalid": !!errors[key],
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => set(key)(event.target.value),
+  });
+  const agent = form.agents.find((a) => a.id === values.clearingAgentId);
+  const total = clearingTotal(CHARGES.map(({ key }) => ({ amount: amountOf(values[key]) })));
+  const closed = clearing?.status === "cleared";
+  const notice = container.status !== "arrived" ? "This container hasn't arrived at the port yet." : closed ? "This record is complete and can't be changed." : null;
+  const readOnly = !canEnter || !!notice;
+  const dateField = (id: string, key: keyof ClearingValues, label: string, required = false) => (
+    <Field className={fieldClass} data-invalid={!!errors[key]}>
+      <FieldLabel htmlFor={id} className={labelClass}>
+        {label} {required ? <RequiredMark /> : null}
+      </FieldLabel>
+      <Input id={id} type="date" max={today} required={required} size="sm" className={cn(!values[key] && "border-dashed")} {...bind(key)} />
+      <FieldError>{errors[key]}</FieldError>
+    </Field>
+  );
 
   return (
     <>
       <PageHeader
-        title={`Container ${data.container}`}
+        title={`Container ${container.number}`}
         parent={{ label: "Clearing (India)", href: "/clearing" }}
         actions={
           <Button asChild variant="outline">
@@ -75,143 +117,118 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
       <PageContainer>
         <div className="grid items-start gap-x-(--page-gap) gap-y-4 lg:grid-cols-[minmax(0,1fr)_400px]">
           <form
+            noValidate
             className="flex min-w-0 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              notInPrototype("Mark cleared, hand to transport");
+              // Enter in a field submits: that saves a draft. The final action, which can't be undone, needs its own click.
+              void save(toClearingBody(values), false);
             }}
           >
-            <SectionCard title="Clearing details" titleGap="none" bottomGap="form">
-              <FieldGroup className="mt-3 grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="container-number" className={labelClass}>
-                    Container number
-                  </FieldLabel>
-                  <Input id="container-number" defaultValue={data.container} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="arrived-at-port" className={labelClass}>
-                    Arrived at port
-                  </FieldLabel>
-                  <Input id="arrived-at-port" defaultValue={formatDate(data.arrivedAtPort)} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="clearing-agent" className={labelClass}>
-                    Clearing agent <RequiredMark />
-                  </FieldLabel>
-                  <NativeSelect size="sm" id="clearing-agent" required defaultValue={data.agent}>
-                    {data.agents.map((agent) => (
-                      <option key={agent}>{agent}</option>
-                    ))}
-                  </NativeSelect>
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="handed-to-agent" className={labelClass}>
-                    Handed to agent on
-                  </FieldLabel>
-                  <Input id="handed-to-agent" defaultValue={formatDate(data.handedToAgentOn)} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="agent-contact" className={labelClass}>
-                    Agent contact person
-                  </FieldLabel>
-                  <Input id="agent-contact" defaultValue={data.contactPerson} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="agent-phone" className={labelClass}>
-                    Agent phone
-                  </FieldLabel>
-                  <Input id="agent-phone" type="tel" defaultValue={data.phone} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="bill-of-entry" className={labelClass}>
-                    Bill of entry no.
-                  </FieldLabel>
-                  <Input id="bill-of-entry" defaultValue={data.billOfEntry} size="sm" />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="duty-paid-on" className={labelClass}>
-                    Duty paid on
-                  </FieldLabel>
-                  <Input
-                    id="duty-paid-on"
-                    placeholder="Select date"
-                    defaultValue={data.dutyPaidOn ? formatDate(data.dutyPaidOn) : ""}
-                    size="sm"
-                    className={cn(!data.dutyPaidOn && "border-dashed")}
-                  />
-                </Field>
-                <Field className={fieldClass}>
-                  <FieldLabel htmlFor="cleared-on" className={labelClass}>
-                    Cleared on
-                  </FieldLabel>
-                  <Input
-                    id="cleared-on"
-                    placeholder="Select date"
-                    defaultValue={data.clearedOn ? formatDate(data.clearedOn) : ""}
-                    size="sm"
-                    className={cn(!data.clearedOn && "border-dashed")}
-                  />
-                </Field>
-              </FieldGroup>
-            </SectionCard>
+            {/* A disabled fieldset makes every field read-only at once. */}
+            <fieldset disabled={readOnly} className="contents">
+              <SectionCard title="Clearing details" titleGap="none" bottomGap="form">
+                <FieldGroup className="mt-3 grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
+                  <Field className={fieldClass}>
+                    <FieldLabel htmlFor="container-number" className={labelClass}>
+                      Container number
+                    </FieldLabel>
+                    <Input id="container-number" readOnly value={container.number} size="sm" />
+                  </Field>
+                  {dateField("arrived-at-port", "arrivedOn", "Arrived at port", true)}
+                  <Field className={fieldClass} data-invalid={!!errors.clearingAgentId}>
+                    <FieldLabel htmlFor="clearing-agent" className={labelClass}>
+                      Clearing agent <RequiredMark />
+                    </FieldLabel>
+                    <NativeSelect size="sm" id="clearing-agent" required {...bind("clearingAgentId")}>
+                      {form.agents.length ? null : <option value="" />}
+                      {form.agents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <FieldError>{errors.clearingAgentId}</FieldError>
+                  </Field>
+                  {dateField("handed-to-agent", "handedOn", "Handed to agent on")}
+                  {/* From the clearing agent master: change them in Settings. */}
+                  <Field className={fieldClass}>
+                    <FieldLabel htmlFor="agent-contact" className={labelClass}>
+                      Agent contact person
+                    </FieldLabel>
+                    <Input id="agent-contact" readOnly value={agent?.contactPerson ?? ""} size="sm" />
+                  </Field>
+                  <Field className={fieldClass}>
+                    <FieldLabel htmlFor="agent-phone" className={labelClass}>
+                      Agent phone
+                    </FieldLabel>
+                    <Input id="agent-phone" type="tel" readOnly value={agent?.phone ?? ""} size="sm" />
+                  </Field>
+                  <Field className={fieldClass} data-invalid={!!errors.billOfEntry}>
+                    <FieldLabel htmlFor="bill-of-entry" className={labelClass}>
+                      Bill of entry no.
+                    </FieldLabel>
+                    <Input id="bill-of-entry" autoComplete="off" size="sm" {...bind("billOfEntry")} />
+                    <FieldError>{errors.billOfEntry}</FieldError>
+                  </Field>
+                  {dateField("duty-paid-on", "dutyPaidOn", "Duty paid on")}
+                  {dateField("cleared-on", "clearedOn", "Cleared on")}
+                </FieldGroup>
+              </SectionCard>
 
-            <SectionCard
-              title="Duty calculation from the agent"
-              aside={<CardNote size="sm">Amounts in INR</CardNote>}
-              titleGap="none"
-              className="pb-[18px]"
-            >
-              <div className="mt-3">
-                <AmountRow id="goods-value" label="Value of goods for duty" sub="As shown in the agent's papers" value={goodsValue} onChange={setGoodsValue} />
-                {data.charges.map((charge, i) => (
+              <SectionCard
+                title="Duty calculation from the agent"
+                aside={<CardNote size="sm">Amounts in INR</CardNote>}
+                titleGap="none"
+                className="pb-[18px]"
+              >
+                <div className="mt-3">
                   <AmountRow
-                    key={charge.id}
-                    id={charge.id}
-                    label={charge.label}
-                    value={amounts[i]}
-                    onChange={(value) => setAmounts((current) => current.map((v, j) => (j === i ? value : v)))}
+                    id="goods-value"
+                    label="Value of goods for duty"
+                    sub="As shown in the agent's papers"
+                    value={values.goodsValueInr}
+                    error={errors.goodsValueInr}
+                    onChange={set("goodsValueInr")}
                   />
-                ))}
-              </div>
-              <div className="mt-[5px] flex h-[49px] items-center justify-between gap-4 border-t-2 border-navy px-2">
-                <p className="flex flex-wrap items-baseline gap-x-[7px]">
-                  <span className="text-base font-bold">Total clearing cost</span>
-                  <span className="text-[12.5px] text-muted-foreground">(duty, taxes and charges)</span>
-                </p>
-                <output htmlFor={data.charges.map((charge) => charge.id).join(" ")} className="text-[19.5px] font-bold">
-                  {formatINR(total)}
-                </output>
-              </div>
-              <FormFooter className="mt-1 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-[149px] min-w-0 border-input text-[15px] text-label"
-                  onClick={() => notInPrototype("Save draft")}
-                >
-                  Save draft
-                </Button>
-                <Button type="submit" size="lg" className="w-[300px] min-w-0 text-[15px]">
-                  Mark cleared, hand to transport
-                </Button>
-              </FormFooter>
-            </SectionCard>
+                  {CHARGES.map((charge) => (
+                    <AmountRow key={charge.id} id={charge.id} label={charge.label} value={values[charge.key]} error={errors[charge.key]} onChange={set(charge.key)} />
+                  ))}
+                </div>
+                <div className="mt-[5px] flex h-[49px] items-center justify-between gap-4 border-t-2 border-navy px-2">
+                  <p className="flex flex-wrap items-baseline gap-x-[7px]">
+                    <span className="text-base font-bold">Total clearing cost</span>
+                    <span className="text-[12.5px] text-muted-foreground">(duty, taxes and charges)</span>
+                  </p>
+                  <output htmlFor={CHARGES.map((charge) => charge.id).join(" ")} className="text-[19.5px] font-bold">
+                    {formatExactINR(total)}
+                  </output>
+                </div>
+                {readOnly ? (
+                  notice ? <p className="mt-1 text-right text-sm leading-5 text-muted-foreground">{notice}</p> : null
+                ) : (
+                  <FormFooter className="mt-1 gap-3">
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="lg"
+                      className="w-[149px] min-w-0 border-input text-[15px] text-label"
+                      disabled={saving}
+                    >
+                      Save draft
+                    </Button>
+                    <Button type="button" size="lg" className="w-[300px] min-w-0 text-[15px]" disabled={saving} onClick={() => void save(toClearingBody(values), true)}>
+                      Mark cleared, hand to transport
+                    </Button>
+                  </FormFooter>
+                )}
+              </SectionCard>
+            </fieldset>
           </form>
 
           <div className="flex flex-col gap-4">
             <SectionCard title="Clearing progress" titleGap="none" className="pb-4">
-              <Timeline
-                size="xs"
-                className="mt-[11px]"
-                items={data.progress.map((step) => ({
-                  title: step.title,
-                  marker: step.marker,
-                  number: step.number,
-                  detail: step.detail,
-                }))}
-              />
+              <Timeline size="xs" className="mt-[11px]" items={clearingSteps(form)} />
             </SectionCard>
 
             <SectionCard title="Goods in this container" titleGap="none" className="pb-4">
@@ -225,8 +242,8 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.goods.map((line) => (
-                    <TableRow key={line.po} className="hover:bg-transparent">
+                  {form.goods.map((line) => (
+                    <TableRow key={line.orderLineId} className="hover:bg-transparent">
                       <TableCell className={cn(cellClass, "font-bold")}>{line.po}</TableCell>
                       <TableCell className={cellClass}>{line.item}</TableCell>
                       <TableCell className={cn(cellClass, "text-right")}>{formatNumber(line.bundles)}</TableCell>
@@ -236,14 +253,14 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                 </TableBody>
               </Table>
               <p className="mt-[7px] text-[13px] leading-[18px] text-muted-foreground">
-                Terms: {data.terms} · Supplier: {data.supplier}
+                Terms: {container.terms} · {form.suppliers.length > 1 ? "Suppliers" : "Supplier"}: {form.suppliers.join(", ") || "–"}
               </p>
             </SectionCard>
 
             {/* A bordered info panel: 13.5 px label, 32 px total, 13 px note. */}
             <Callout size="sm" className="rounded-xl border border-info/15 px-5 pt-[15px] pb-[18px]">
               <p>Adds to landed cost</p>
-              <p className="mt-[3px] text-[32px] leading-[38px] font-bold text-foreground">{formatINR(total)}</p>
+              <p className="mt-[3px] text-[32px] leading-[38px] font-bold text-foreground">{formatExactINR(total)}</p>
               <p className="mt-[5px] text-[13px] leading-[19.5px]">Staff enter these figures from the agent&apos;s papers. The agent does not log in.</p>
             </Callout>
           </div>

@@ -1,8 +1,9 @@
-import { differenceInCalendarDays, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 
-import type { MonthCost, ReceivedLine, SupplierPayment } from "./data/queries";
+// Derived values for the reports: the containers timeline geometry (13.4; the axis runs from `start` at 0 % to `end`
+// at 100 %, exclusive) and month labels.
 
-// Derived values for the reports. Each reproduces its reference exactly (see report-logic.test.ts).
+const iso = (date: Date) => format(date, "yyyy-MM-dd");
 
 /** Position of `date` on a timeline axis, in percent: `start` is 0 %, `end` is 100 %. */
 export function axisPercent(date: string, start: string, end: string) {
@@ -10,47 +11,19 @@ export function axisPercent(date: string, start: string, end: string) {
   return (differenceInCalendarDays(parseISO(date), from) * 100) / differenceInCalendarDays(parseISO(end), from);
 }
 
-/** Left edge and width (percent) of a bar from `from` to `to` on the axis. */
+/** Left edge and width (percent) of a bar from `from` to `to`, cut to the axis. */
 export function barSpan(from: string, to: string, axis: { start: string; end: string }) {
-  const left = axisPercent(from, axis.start, axis.end);
-  return { left, width: axisPercent(to, axis.start, axis.end) - left };
+  const at = (date: string) => Math.min(100, Math.max(0, axisPercent(date, axis.start, axis.end)));
+  const left = at(from);
+  return { left, width: at(to) - left };
 }
 
-/** Quantity not received (13.3 "Short"). */
-export const shortQty = (line: Pick<ReceivedLine, "ordered" | "received">) => Math.max(0, line.ordered - line.received);
-
-/** 13.3 KPIs: orders checked, orders with a shortage, ¥ value taken off, orders received in full. */
-export function summarizeReceived(lines: ReceivedLine[]) {
-  const short = lines.filter((line) => shortQty(line) > 0);
-  return {
-    checked: lines.length,
-    shortPos: short.map((line) => line.po),
-    shortValue: short.reduce((sum, line) => sum + (line.shortValue ?? 0), 0),
-    full: lines.length - short.length,
-  };
+/** The axis for a report window (`from`-`to` inclusive): ticks every 10 days from the start, and the last day. */
+export function timelineAxis(from: string, to: string) {
+  const days = differenceInCalendarDays(parseISO(to), parseISO(from)) + 1;
+  const ticks = Array.from({ length: Math.ceil((days - 5) / 10) }, (_, index) => iso(addDays(parseISO(from), index * 10)));
+  return { start: from, end: iso(addDays(parseISO(to), 1)), ticks: [...ticks, to] };
 }
 
-/** 13.5 balance per supplier (¥). */
-export const balance = (row: Pick<SupplierPayment, "orderValue" | "paid">) => row.orderValue - row.paid;
-
-/** 13.5 totals row and KPIs. */
-export function supplierTotals(rows: SupplierPayment[]) {
-  const sum = (pick: (row: SupplierPayment) => number) => rows.reduce((total, row) => total + pick(row), 0);
-  return {
-    orders: sum((row) => row.orders.length),
-    orderValue: sum((row) => row.orderValue),
-    paid: sum((row) => row.paid),
-    paidInr: sum((row) => row.paidInr),
-    balance: sum(balance),
-  };
-}
-
-/** ₹ per piece, or null when nothing was received. */
-export const perPiece = (landedCost: number, pieces: number) => (pieces > 0 ? landedCost / pieces : null);
-
-/** 13.6 totals row and KPIs, plus the biggest month's cost. */
-export function monthTotals(months: MonthCost[]) {
-  const pieces = months.reduce((sum, m) => sum + m.pieces, 0);
-  const landedCost = months.reduce((sum, m) => sum + m.landedCost, 0);
-  return { pieces, landedCost, perPiece: perPiece(landedCost, pieces), biggest: Math.max(...months.map((m) => m.landedCost)) };
-}
+/** "Sep 2026" for 2026-09. */
+export const monthLabel = (month: string) => format(parseISO(`${month}-01`), "MMM yyyy");

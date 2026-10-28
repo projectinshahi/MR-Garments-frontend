@@ -5,7 +5,7 @@ import { ContainersTimelineScreen } from "@/features/reports/report-screens";
 
 export const metadata: Metadata = { title: "Containers timeline" };
 
-export default async function ContainersTimelinePage() {
-  const data = await getContainersTimelineReport();
-  return <ContainersTimelineScreen data={data} />;
+export default async function ContainersTimelinePage({ searchParams }: PageProps<"/reports/containers-timeline">) {
+  const page = await getContainersTimelineReport(await searchParams);
+  return <ContainersTimelineScreen page={page} />;
 }

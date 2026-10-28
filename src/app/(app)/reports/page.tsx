@@ -5,7 +5,7 @@ import { ReportsHub } from "@/features/reports/reports-hub";
 
 export const metadata: Metadata = { title: "Reports" };
 
-export default async function ReportsPage() {
-  const data = await getReportsHub();
+export default async function ReportsPage({ searchParams }: PageProps<"/reports">) {
+  const data = await getReportsHub(await searchParams);
   return <ReportsHub data={data} />;
 }

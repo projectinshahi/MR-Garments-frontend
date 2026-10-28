@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ShippingAgentRow } from "@/lib/api/types";
 import { shippingAgents as sampleAgents } from "@/mocks/data/master";
 
-import { ShippingAgentsScreen } from "./settings-screens";
+import { ShippingAgentsScreen } from "./shipping-agents-screen";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/shipping-agents",
@@ -29,6 +29,14 @@ describe("Settings list (40-46)", () => {
     render(<ShippingAgentsScreen rows={[apiRow()]} />);
     expect(screen.getByText("API Test Freight")).toBeInTheDocument();
     for (const sample of sampleAgents) expect(screen.queryByText(sample.name)).not.toBeInTheDocument();
+  });
+
+  it("links Edit to the row's edit dialog on the tab's own path", () => {
+    render(<ShippingAgentsScreen rows={[apiRow()]} />);
+    expect(screen.getByRole("link", { name: "Edit API Test Freight" })).toHaveAttribute(
+      "href",
+      "/settings/shipping-agents?dialog=edit&id=ship-api-1",
+    );
   });
 
   it("says there are none yet when the API returns no records", () => {
