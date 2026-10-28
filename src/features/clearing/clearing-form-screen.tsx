@@ -121,7 +121,8 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
             className="flex min-w-0 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              void save(toClearingBody(values), true);
+              // Enter in a field submits: that saves a draft. The final action, which can't be undone, needs its own click.
+              void save(toClearingBody(values), false);
             }}
           >
             {/* A disabled fieldset makes every field read-only at once. */}
@@ -208,16 +209,15 @@ export function ClearingFormScreen({ data }: { data: ClearingFormData }) {
                 ) : (
                   <FormFooter className="mt-1 gap-3">
                     <Button
-                      type="button"
+                      type="submit"
                       variant="outline"
                       size="lg"
                       className="w-[149px] min-w-0 border-input text-[15px] text-label"
                       disabled={saving}
-                      onClick={() => void save(toClearingBody(values), false)}
                     >
                       Save draft
                     </Button>
-                    <Button type="submit" size="lg" className="w-[300px] min-w-0 text-[15px]" disabled={saving}>
+                    <Button type="button" size="lg" className="w-[300px] min-w-0 text-[15px]" disabled={saving} onClick={() => void save(toClearingBody(values), true)}>
                       Mark cleared, hand to transport
                     </Button>
                   </FormFooter>

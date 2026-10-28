@@ -80,7 +80,8 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
             className="flex min-w-0 flex-col gap-(--page-gap)"
             onSubmit={(event) => {
               event.preventDefault();
-              void save(toTripBody(values), true);
+              // Enter in a field submits: that saves a draft. The final action, which can't be undone, needs its own click.
+              void save(toTripBody(values), false);
             }}
           >
             {/* A disabled fieldset makes every field read-only at once. */}
@@ -150,16 +151,15 @@ export function TransportFormScreen({ data }: { data: TransportFormData }) {
                 ) : (
                   <FormFooter className="mt-4 gap-3">
                     <Button
-                      type="button"
+                      type="submit"
                       variant="outline"
                       size="lg"
                       className="w-[149px] min-w-0 text-[15px] text-label"
                       disabled={saving}
-                      onClick={() => void save(toTripBody(values), false)}
                     >
                       Save draft
                     </Button>
-                    <Button type="submit" size="lg" className="px-9 text-[15px]" disabled={saving}>
+                    <Button type="button" size="lg" className="px-9 text-[15px]" disabled={saving} onClick={() => void save(toTripBody(values), true)}>
                       Save and mark unloaded
                     </Button>
                   </FormFooter>

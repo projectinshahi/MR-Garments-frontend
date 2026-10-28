@@ -7,7 +7,7 @@ import type { FilterOption } from "@/components/shared/filters";
 // ?team=), turned into the API's query (from, to, supplierId, teamId). Missing or malformed values are left out, so a
 // hand-edited URL shows the unfiltered page instead of an error.
 
-const isId = (value: string | null): value is string => z.uuid().safeParse(value).success;
+export const isId = (value: string | null): value is string => z.uuid().safeParse(value).success;
 const isMonth = (value: string | null): value is string => !!value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 const asQuery = (query: URLSearchParams) => (query.size ? `?${query}` : "");
 

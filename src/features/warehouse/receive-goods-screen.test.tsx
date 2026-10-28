@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -89,12 +89,30 @@ describe("ReceiveGoodsScreen", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("pressing Enter in a field saves a draft, never the final action", async () => {
+    put.mockResolvedValue({ receipt: { id: "r1", status: "draft" } });
+    const user = userEvent.setup();
+    view();
+    await user.type(screen.getByLabelText(/Received by/), "{Enter}");
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith("/warehouse-receipts/t1", expect.objectContaining({ complete: false }));
+  });
+
   it("shows the cost panels only when the API sends the cost", () => {
     view({ cost, receipt: { id: "r1", locationId: "w1", receivedOn: "2026-10-04", receivedBy: "Joseph M", bundlesReceived: 4, status: "draft", lines: [{ orderLineId: "l1", teamId: "retail", quantity: 100 }] } });
     expect(screen.getByText("Cost so far")).toBeInTheDocument();
     expect(screen.getByText("Estimate")).toBeInTheDocument();
     expect(screen.getByText("₹517.00")).toBeInTheDocument();
     expect(screen.getByText("Cost by team")).toBeInTheDocument();
+  });
+
+  it("on a CNF container shows the sea freight its orders carry from a FOB container, not the CNF note", () => {
+    view({ cost });
+    expect(screen.getByText("In supplier price (CNF)")).toBeInTheDocument();
+    cleanup();
+    view({ cost: { ...cost, seaFreightInr: 5000, totalInr: 56700 } });
+    expect(screen.queryByText("In supplier price (CNF)")).not.toBeInTheDocument();
+    expect(screen.getByText("₹5,000")).toBeInTheDocument();
   });
 
   it("is read-only once in stock, before unloading, and without warehouse Enter", () => {

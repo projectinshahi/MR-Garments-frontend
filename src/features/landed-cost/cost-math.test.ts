@@ -68,6 +68,21 @@ describe("landed cost math (31_12_Landed_Cost.jpeg)", () => {
     ]);
   });
 
+  it("keeps the stock of a team deactivated since, after the active teams", () => {
+    // The team options list active teams only; "Export team" was deactivated after it received goods.
+    const teams = [{ id: "t1", name: "Retail team" }];
+    const rows = [row({ teams: [{ teamId: "t9", team: "Export team", pieces: 20, costInr: 8000 }, { teamId: "t1", team: "Retail team", pieces: 10, costInr: 4000 }] })];
+    expect(costByTeam(rows, teams).map(({ team, pieces }) => [team, pieces])).toEqual([
+      ["Retail team", 10],
+      ["Export team", 20],
+    ]);
+  });
+
+  it("shows only the filtered team, whose orders are the only complete ones", () => {
+    const rows = [row({ teams: [{ teamId: "t1", team: "Retail team", pieces: 10, costInr: 4000 }, { teamId: "t2", team: "Wholesale team", pieces: 5, costInr: 2000 }] })];
+    expect(costByTeam(rows, [], "t1").map(({ team }) => team)).toEqual(["Retail team"]);
+  });
+
   it("lists POs as the KPI sub-lines show them", () => {
     expect(listPos([])).toBe("");
     expect(listPos(["PO-2028"])).toBe("PO-2028");

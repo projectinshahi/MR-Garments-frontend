@@ -30,14 +30,25 @@ export function breakdownParts(row: LandedCostRow): CostPart[] {
 
 export type TeamCost = { teamId: string; team: string; pieces: number; costInr: number; perPieceInr: number | null };
 
-/** "By team": each team's stocked pieces and their landed cost (pieces x the order's per piece), in team order. */
-export function costByTeam(rows: LandedCostRow[], teams: LandedCostData["teams"]): TeamCost[] {
-  return teams.flatMap(({ id, name }) => {
-    const splits = rows.flatMap((row) => row.teams.filter((split) => split.teamId === id));
-    const pieces = sum(splits, (split) => split.pieces);
-    const costInr = sum(splits, (split) => split.costInr);
-    return pieces > 0 ? [{ teamId: id, team: name, pieces, costInr, perPieceInr: costInr / pieces }] : [];
-  });
+/**
+ * "By team": each team's stocked pieces and their landed cost (pieces x the order's per piece), in team order. Built
+ * from the orders' splits, so a team deactivated since keeps its stock (wave 3 section 4); it sorts after the active ones.
+ * With the page's Team filter (`teamId`) the orders are only those that team received, so only that team is complete.
+ */
+export function costByTeam(rows: LandedCostRow[], teams: LandedCostData["teams"], teamId: string | null = null): TeamCost[] {
+  const rank = new Map(teams.map(({ id }, index) => [id, index]));
+  const byTeam = new Map<string, LandedCostRow["teams"]>();
+  for (const split of rows.flatMap((row) => row.teams)) {
+    if (!teamId || split.teamId === teamId) byTeam.set(split.teamId, [...(byTeam.get(split.teamId) ?? []), split]);
+  }
+  return [...byTeam.values()]
+    .map((splits) => {
+      const pieces = sum(splits, (split) => split.pieces);
+      const costInr = sum(splits, (split) => split.costInr);
+      return { teamId: splits[0]!.teamId, team: splits[0]!.team, pieces, costInr, perPieceInr: pieces > 0 ? costInr / pieces : null };
+    })
+    .filter((team) => team.pieces > 0)
+    .sort((a, b) => (rank.get(a.teamId) ?? teams.length) - (rank.get(b.teamId) ?? teams.length));
 }
 
 /** "PO-2028", "PO-2028 and PO-2019", "PO-1, PO-2 and PO-3", "PO-1, PO-2 and 3 more". */

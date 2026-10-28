@@ -69,6 +69,15 @@ describe("TransportFormScreen", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("pressing Enter in a field saves a draft, never the final action", async () => {
+    put.mockResolvedValue({ trip: { id: "t1", status: "on_road" } });
+    const user = userEvent.setup();
+    view();
+    await user.type(screen.getByLabelText("Received by"), "{Enter}");
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith("/transports/c1", expect.objectContaining({ complete: false }));
+  });
+
   it("asks for a short remark when fewer bundles arrive, then marks unloaded and goes to the list", async () => {
     put.mockResolvedValue({ trip: { id: "t1", status: "unloaded" } });
     const user = userEvent.setup();

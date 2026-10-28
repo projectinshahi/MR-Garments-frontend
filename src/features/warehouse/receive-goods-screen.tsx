@@ -83,7 +83,8 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
             className="flex min-w-0 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              void save(toReceiptBody(values), true);
+              // Enter in a field submits: that saves a draft. The final action, which can't be undone, needs its own click.
+              void save(toReceiptBody(values), false);
             }}
           >
             {/* A disabled fieldset makes every field read-only at once. */}
@@ -217,16 +218,15 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                 ) : (
                   <FormFooter className="mt-4 gap-3">
                     <Button
-                      type="button"
+                      type="submit"
                       variant="outline"
                       size="lg"
                       className="w-[150px] min-w-0 text-[15px] text-label"
                       disabled={saving}
-                      onClick={() => void save(toReceiptBody(values), false)}
                     >
                       Save draft
                     </Button>
-                    <Button type="submit" size="lg" className="w-[250px] min-w-0 text-[15px]" disabled={saving}>
+                    <Button type="button" size="lg" className="w-[250px] min-w-0 text-[15px]" disabled={saving} onClick={() => void save(toReceiptBody(values), true)}>
                       Save and add to stock
                     </Button>
                   </FormFooter>
@@ -250,7 +250,13 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                       { label: "Goods (paid to supplier)", value: formatExactINR(cost.goodsInr) },
                       {
                         label: "Sea freight",
-                        value: trip.terms === "CNF" ? <span className="text-muted-foreground">In supplier price (CNF)</span> : formatExactINR(cost.seaFreightInr),
+                        // An order that also travels in a FOB container has sea freight even when this container is CNF: show it.
+                        value:
+                          trip.terms === "CNF" && cost.seaFreightInr === 0 ? (
+                            <span className="text-muted-foreground">In supplier price (CNF)</span>
+                          ) : (
+                            formatExactINR(cost.seaFreightInr)
+                          ),
                       },
                       { label: "Duty, taxes and clearing", value: cost.clearingInr === null ? "–" : formatExactINR(cost.clearingInr) },
                       { label: "Transport", value: cost.transportInr === null ? "–" : formatExactINR(cost.transportInr) },

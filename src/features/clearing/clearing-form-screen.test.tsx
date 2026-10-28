@@ -106,6 +106,15 @@ describe("ClearingFormScreen", () => {
     expect(success).toHaveBeenLastCalledWith("Container cleared and handed to transport");
   });
 
+  it("pressing Enter in a field saves a draft, never the final action", async () => {
+    put.mockResolvedValue({ clearing: { id: "k1", status: "in_clearing" } });
+    const user = userEvent.setup();
+    view();
+    await user.type(screen.getByRole("textbox", { name: "Port and terminal charges" }), "{Enter}");
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith("/clearings/c1", expect.objectContaining({ complete: false }));
+  });
+
   it("shows 422 messages under their fields, and a 409 as a toast with a refresh", async () => {
     const user = userEvent.setup();
     view();

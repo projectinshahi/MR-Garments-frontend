@@ -105,7 +105,7 @@ const PART_COLORS: Record<CostPartKey, StackedSegment["color"]> = { goods: "char
  * Landed cost by order or by team, and the selected order's breakdown and goods payments. A row click selects the
  * order (the first row until then). Per-item cost is not supported yet (section 6.2), so "By item" stays a notice (D5).
  */
-export function LandedCostBody({ orders, teams }: Pick<LandedCostData, "orders" | "teams">) {
+export function LandedCostBody({ orders, teams, teamId }: Pick<LandedCostData, "orders" | "teams" | "teamId">) {
   const [view, setView] = useState("order");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = orders.find((row) => row.orderId === selectedId) ?? orders[0];
@@ -134,7 +134,7 @@ export function LandedCostBody({ orders, teams }: Pick<LandedCostData, "orders" 
         {byTeam ? (
           <DataTable
             columns={teamColumns}
-            data={costByTeam(orders, teams)}
+            data={costByTeam(orders, teams, teamId)}
             getRowId={(row) => row.teamId}
             density="tall"
             className="mt-0.5"

@@ -49,7 +49,7 @@ export function LandedCostScreen({ data }: { data: LandedCostData }) {
             sub={kpis.estimatePos.length ? `${listPos(kpis.estimatePos)}${waiting}` : "every order is final"}
           />
         </KpiRow>
-        <LandedCostBody orders={data.orders} teams={data.teams} />
+        <LandedCostBody orders={data.orders} teams={data.teams} teamId={data.teamId} />
       </PageContainer>
     </>
   );
