@@ -5,6 +5,8 @@
 //   node scripts/visual-diff.mjs --url http://localhost:3001/orders --ref "<absolute path to .jpeg>" --out .visual/orders
 //   optional: --region x,y,w,h   (CSS px at 1440 × 900, e.g. 240,0,1200,900 to skip the sidebar)
 //             --wait 500         (extra ms after fonts load)
+//             --storage-state playwright/.auth/management.json   (a saved sign-in from the browser tests, B4;
+//                                staff.json for the staff shell). Without it, app pages redirect to /login.
 //
 // Writes <out>/ours.png and <out>/compare.png (reference | ours | diff) and prints the mean channel difference
 // (0–255) and the share of pixels differing by more than 40. Ignore the annotation labels (D3) when reading it.
@@ -17,7 +19,9 @@ const args = Object.fromEntries(
   process.argv.slice(2).reduce((pairs, arg, i, all) => (arg.startsWith("--") ? [...pairs, [arg.slice(2), all[i + 1]]] : pairs), []),
 );
 if (!args.url || !args.ref || !args.out) {
-  console.error("Usage: node scripts/visual-diff.mjs --url <url> --ref <reference image> --out <dir> [--region x,y,w,h] [--wait ms]");
+  console.error(
+    "Usage: node scripts/visual-diff.mjs --url <url> --ref <reference image> --out <dir> [--region x,y,w,h] [--wait ms] [--storage-state <file>]",
+  );
   process.exit(1);
 }
 
@@ -27,7 +31,7 @@ const [rx, ry, rw, rh] = (args.region ?? "0,0,1440,900").split(",").map(Number);
 
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, storageState: args["storage-state"] });
   await page.goto(args.url, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(Number(args.wait ?? 500));

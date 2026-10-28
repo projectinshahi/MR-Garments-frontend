@@ -1,7 +1,9 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm, useWatch } from "react-hook-form";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
@@ -11,15 +13,25 @@ import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Timeline } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCNY, formatDate, formatNumber, formatQty } from "@/lib/formatters";
+import { apiClient } from "@/lib/api/client";
+import { handleApiError, notifySuccess } from "@/lib/feedback";
+import { formatCNY, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { RecordReceiptData } from "./data/queries";
-import { lineShort, paymentEffect } from "./receiving-logic";
+import {
+  deliveryEvents,
+  emptyLines,
+  lineShort,
+  paymentEffect,
+  receiptSchema,
+  toReceiptBody,
+  type ReceiptFormValues,
+} from "./receiving-logic";
 
 // Measured from 21_7_Receiving_(China)_-_Stage_2_form.jpeg: 12.5 px bold labels 5 px above the field, 12 px table
 // headers. Cards use titleGap="none" and place their content where the reference has it.
@@ -29,12 +41,64 @@ const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foregro
 const cellClass = "px-1.5 py-0";
 const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
 
-/** Record receipt, Stage 2 (21_7_Receiving_(China)_-_Stage_2_form.jpeg), prefilled for PO-2035. */
+/** REC-3's 422 fields, in screen order. */
+const API_FIELDS = ["receivedOn", "locationId", "bundles", "lines"] as const;
+/** Proposed wording: no SUCCESS message fits a receipt yet. */
+const RECEIPT_SAVED = "Receipt saved";
+
+/**
+ * Record receipt, Stage 2 (21_7_Receiving_(China)_-_Stage_2_form.jpeg). The order is chosen in the PO callout (the
+ * reference has no picker); lines, payment and deliveries follow it. Saves through REC-3, then goes to the list.
+ */
 export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
-  // Mock mutation: client state only, resets on reload
-  const [receivedNow, setReceivedNow] = useState(() => data.lines.map((line) => String(line.receivedNow)));
-  const lines = data.lines.map((line, i) => ({ ...line, receivedNow: Number(receivedNow[i]) || 0 }));
-  const effect = paymentEffect(data.payment, lines);
+  const { options, today } = data;
+  const router = useRouter();
+  const firstOrder = options.orders[0]?.orderId ?? "";
+  const defaults: ReceiptFormValues = {
+    orderId: firstOrder,
+    receivedOn: today,
+    locationId: options.offices[0]?.id ?? "",
+    bundles: "",
+    deliveryNote: "",
+    shortRemark: "",
+    lines: emptyLines(options, firstOrder),
+  };
+  const { register, control, handleSubmit, setValue, setError, reset, formState } = useForm<ReceiptFormValues>({
+    resolver: zodResolver(receiptSchema(options, today)),
+    defaultValues: defaults,
+  });
+  const { errors, isSubmitting } = formState;
+  const orderId = useWatch({ control, name: "orderId" });
+  const typed = useWatch({ control, name: "lines" });
+  const order = options.orders.find((o) => o.orderId === orderId);
+  const lines = (order?.lines ?? []).map((line, i) => ({
+    item: line.item,
+    unit: line.unit,
+    ordered: line.ordered,
+    receivedEarlier: line.receivedEarlier,
+    receivedNow: Number(typed[i]?.quantity) || 0,
+    unitPrice: line.unitPriceCny,
+  }));
+  const effect = paymentEffect({ orderValue: order?.orderValueCny ?? 0, depositsPaid: order?.depositsPaidCny ?? 0 }, lines);
+  const deliveries = deliveryEvents(data.receipts, orderId);
+  const linesError = errors.lines?.message ?? errors.lines?.root?.message;
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      await apiClient.post<{ receipt: { id: string } }>("/receipts", toReceiptBody(values));
+    } catch (error) {
+      const fields = handleApiError(error) ?? {};
+      API_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
+        setError(key, { type: "server", message: fields[key] }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
+    notifySuccess(RECEIPT_SAVED);
+    // The page stays mounted (Activity): start the next visit from an empty form.
+    reset(defaults);
+    router.push("/receiving");
+    router.refresh();
+  });
 
   return (
     <>
@@ -49,59 +113,78 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
       />
       <PageContainer>
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1fr)_400px]">
-          <form
-            className="flex min-w-0 flex-col gap-(--page-gap)"
-            onSubmit={(event) => {
-              event.preventDefault();
-              notInPrototype("Save receipt");
-            }}
-          >
+          <form noValidate className="flex min-w-0 flex-col gap-(--page-gap)" onSubmit={onSubmit}>
             <SectionCard aria-label="Receipt details">
               <div className="flex min-h-[42px] flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[10px] bg-callout-info px-3.5 py-1.5">
                 <p className="flex flex-wrap items-center gap-x-2 text-sm">
-                  <span className="text-[15px] font-bold">{data.po}</span>
-                  <span aria-hidden>·</span>
-                  <span>{data.item}</span>
-                  <span aria-hidden>·</span>
-                  <span>{data.supplier}</span>
+                  {/* The order picker: drawn as the bold PO, a native select so it stays keyboard-friendly. */}
+                  <select
+                    aria-label="Order"
+                    aria-invalid={!!errors.orderId}
+                    className="-ml-1 cursor-pointer rounded-md bg-transparent px-1 text-[15px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/25"
+                    {...register("orderId", { onChange: (event) => setValue("lines", emptyLines(options, event.target.value)) })}
+                  >
+                    {options.orders.length ? null : <option value="">No orders to receive</option>}
+                    {options.orders.map((o) => (
+                      <option key={o.orderId} value={o.orderId}>
+                        {o.po}
+                      </option>
+                    ))}
+                  </select>
+                  {order ? (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span>{order.lines[0]?.item}</span>
+                      <span aria-hidden>·</span>
+                      <span>{order.supplier}</span>
+                    </>
+                  ) : null}
                 </p>
-                <StatusPill tone={data.status.tone}>{data.status.label}</StatusPill>
+                {order?.lines.some((l) => l.receivedEarlier > 0) ? <StatusPill tone="warning">Partly received</StatusPill> : null}
               </div>
+              <FieldError className="mt-1" errors={[errors.orderId]} />
 
               <FieldGroup className="mt-[15px] grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.receivedOn}>
                   <FieldLabel htmlFor="received-on" className={labelClass}>
                     Received on <RequiredMark />
                   </FieldLabel>
-                  <Input size="sm" id="received-on" required defaultValue={formatDate(data.receivedOn)} />
+                  <Input size="sm" id="received-on" type="date" max={today} required aria-invalid={!!errors.receivedOn} {...register("receivedOn")} />
+                  <FieldError errors={[errors.receivedOn]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.locationId}>
                   <FieldLabel htmlFor="received-office" className={labelClass}>
                     Received at office <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect size="sm" id="received-office" required defaultValue={data.office}>
-                    {data.offices.map((office) => (
-                      <option key={office}>{office}</option>
+                  <NativeSelect size="sm" id="received-office" required aria-invalid={!!errors.locationId} {...register("locationId")}>
+                    {options.offices.length ? null : <option value="" />}
+                    {options.offices.map((office) => (
+                      <option key={office.id} value={office.id}>
+                        {office.name}
+                      </option>
                     ))}
                   </NativeSelect>
+                  <FieldError errors={[errors.locationId]} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="received-by" className={labelClass}>
                     Received by <RequiredMark />
                   </FieldLabel>
-                  <Input size="sm" id="received-by" required defaultValue={data.receivedBy} />
+                  {/* The signed-in user; the API records it. */}
+                  <Input size="sm" id="received-by" readOnly value={data.receivedBy} className="read-only:bg-input-background" />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.bundles}>
                   <FieldLabel htmlFor="bundles-now" className={labelClass}>
                     Bundles received now <RequiredMark />
                   </FieldLabel>
-                  <Input size="sm" id="bundles-now" required inputMode="numeric" defaultValue={String(data.bundles)} />
+                  <Input size="sm" id="bundles-now" required inputMode="numeric" aria-invalid={!!errors.bundles} {...register("bundles")} />
+                  <FieldError errors={[errors.bundles]} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="delivery-note" className={labelClass}>
                     Supplier delivery note no.
                   </FieldLabel>
-                  <Input size="sm" id="delivery-note" defaultValue={data.deliveryNote} />
+                  <Input size="sm" id="delivery-note" autoComplete="off" {...register("deliveryNote")} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="goods-photo" className={labelClass}>
@@ -133,8 +216,9 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                 <TableBody>
                   {lines.map((line, i) => {
                     const short = lineShort(line);
+                    const error = errors.lines?.[i]?.quantity;
                     return (
-                      <TableRow key={line.item} className="h-[60px] border-border-subtle hover:bg-transparent">
+                      <TableRow key={`${orderId}-${i}`} className="h-[60px] border-border-subtle hover:bg-transparent">
                         <TableCell className={cn(cellClass, "font-bold")}>{line.item}</TableCell>
                         <TableCell className={cn(cellClass, "text-right")}>{formatQty(line.ordered, line.unit)}</TableCell>
                         <TableCell className={cn(cellClass, "text-right")}>{formatQty(line.receivedEarlier, line.unit)}</TableCell>
@@ -143,13 +227,11 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                           <Input
                             aria-label={`Received now, ${line.item}`}
                             inputMode="numeric"
-                            value={receivedNow[i]}
-                            onChange={(event) => {
-                              const value = event.target.value.replace(/\D/g, "");
-                              setReceivedNow((current) => current.map((v, j) => (j === i ? value : v)));
-                            }}
+                            aria-invalid={!!error}
+                            {...register(`lines.${i}.quantity`)}
                             className="h-[38px] w-[130px] pr-3 text-right text-sm font-bold text-label"
                           />
+                          <FieldError className="pb-1 text-left" errors={[error]} />
                         </TableCell>
                         <TableCell className={cn(cellClass, "text-right", short > 0 && "font-bold text-danger")}>
                           {short > 0 ? formatQty(short, line.unit) : formatNumber(short)}
@@ -159,12 +241,13 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   })}
                 </TableBody>
               </Table>
+              {linesError ? <FieldError className="mt-2">{linesError}</FieldError> : null}
 
               <Field className={cn(fieldClass, "mt-[14px]")}>
                 <FieldLabel htmlFor="short-remark" className={labelClass}>
                   Short remark <RequiredMark />
                 </FieldLabel>
-                <Textarea id="short-remark" required defaultValue={data.shortRemark} className="min-h-[74px] resize-none" />
+                <Textarea id="short-remark" className="min-h-[74px] resize-none" {...register("shortRemark")} />
               </Field>
 
               <FormFooter className="mt-4 gap-3">
@@ -177,7 +260,7 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                 >
                   Save draft
                 </Button>
-                <Button type="submit" size="lg" className="w-[190px] min-w-0 text-[15px]">
+                <Button type="submit" size="lg" className="w-[190px] min-w-0 text-[15px]" disabled={isSubmitting}>
                   Save receipt
                 </Button>
               </FormFooter>
@@ -186,33 +269,41 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
 
           <div className="flex flex-col gap-(--page-gap)">
             <SectionCard title="Effect on payment" titleGap="none">
-              <KeyValueList size="sm"
+              <KeyValueList
+                size="sm"
                 className="mt-[10px]"
                 items={[
-                  { label: "Order value", value: spacedCNY(data.payment.orderValue) },
-                  { label: "Deposits paid", value: spacedCNY(data.payment.depositsPaid) },
+                  { label: "Order value", value: spacedCNY(order?.orderValueCny ?? 0) },
+                  { label: "Deposits paid", value: spacedCNY(order?.depositsPaidCny ?? 0) },
                   { label: "Balance before this receipt", value: spacedCNY(effect.balanceBefore) },
-                  ...effect.deductions.map((d) => ({
-                    label: `Short: ${formatQty(d.short, d.unit)} × ${formatCNY(d.unitPrice)}`,
-                    value: <span className="font-bold text-danger">− {spacedCNY(d.amount)}</span>,
-                  })),
+                  ...effect.deductions
+                    .filter((d) => d.short > 0)
+                    .map((d) => ({
+                      label: `Short: ${formatQty(d.short, d.unit)} × ${formatCNY(d.unitPrice)}`,
+                      value: <span className="font-bold text-danger">− {spacedCNY(d.amount)}</span>,
+                    })),
                 ]}
                 total={{ label: "Balance to pay now", value: spacedCNY(effect.balanceNow) }}
               />
             </SectionCard>
-            <SectionCard title={`Deliveries for ${data.po}`} titleGap="none">
-              <Timeline size="sm"
-                className="mt-2.5"
-                items={data.deliveries.map((event) => ({
-                  title: event.title,
-                  marker: event.marker,
-                  detail: event.lines.map((line) => (
-                    <span key={line} className="block">
-                      {line}
-                    </span>
-                  )),
-                }))}
-              />
+            <SectionCard title={order ? `Deliveries for ${order.po}` : "Deliveries"} titleGap="none">
+              {deliveries.length ? (
+                <Timeline
+                  size="sm"
+                  className="mt-2.5"
+                  items={deliveries.map((event) => ({
+                    title: event.title,
+                    marker: event.marker,
+                    detail: event.lines.map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    )),
+                  }))}
+                />
+              ) : (
+                <p className="mt-2.5 text-[12.5px] text-muted-foreground">No deliveries yet.</p>
+              )}
             </SectionCard>
           </div>
         </div>

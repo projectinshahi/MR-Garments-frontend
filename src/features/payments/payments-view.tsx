@@ -7,12 +7,12 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardNote, SectionCard } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
 import { SearchInput } from "@/components/shared/filters";
-import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatINR, formatNumber, formatShortDate } from "@/lib/formatters";
 
-import type { OrderPaymentRow } from "./data/queries";
+import type { OrderPaymentRow, Payment } from "./data/queries";
 import { filterOrders } from "./filter-orders";
+import { PaymentDetailCard } from "./payment-detail";
 import { PrototypeButton } from "./prototype-button";
 
 // 10 px cell padding and column widths as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
@@ -76,15 +76,17 @@ const columns: ColumnDef<OrderPaymentRow>[] = [
 
 type PaymentsViewProps = {
   orders: OrderPaymentRow[];
-  /** The order whose detail panel is shown (only PO-2041 is designed). */
-  selectedPo: string;
+  payments: Payment[];
+  /** The order selected on load; a row click selects another. */
+  defaultPo: string | null;
   kpis: React.ReactNode;
-  detail: React.ReactNode;
 };
 
-/** Header search filters the "Payments by order" table; the KPI row and detail card come in as server-rendered slots. */
-export function PaymentsView({ orders, selectedPo, kpis, detail }: PaymentsViewProps) {
+/** Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server slot. */
+export function PaymentsView({ orders, payments, defaultPo, kpis }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
+  const [selectedPo, setSelectedPo] = useState(defaultPo);
+  const selected = orders.find((order) => order.po === selectedPo);
 
   return (
     <>
@@ -123,15 +125,15 @@ export function PaymentsView({ orders, selectedPo, kpis, detail }: PaymentsViewP
               getRowId={(row) => row.po}
               density="tall"
               variant="plain"
-              selectedRowId={selectedPo}
-              onRowClick={(row) => {
-                if (row.po !== selectedPo) notInPrototype(`Payment detail for ${row.po}`);
-              }}
-              emptyState="No orders match your search."
+              selectedRowId={selectedPo ?? undefined}
+              onRowClick={(row) => setSelectedPo(row.po)}
+              emptyState={orders.length ? "No orders match your search." : "No orders yet."}
               className="mt-2.5"
             />
           </SectionCard>
-          {detail}
+          {selected ? (
+            <PaymentDetailCard order={selected} payments={payments.filter((p) => p.po === selected.po)} />
+          ) : null}
         </div>
       </PageContainer>
     </>

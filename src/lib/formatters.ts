@@ -56,5 +56,6 @@ export function formatRelativeDateTime(value: string | Date) {
 }
 
 /** "Today, 30 Sep 2026" (dashboard, calendar) or "Wed, 30 Sep 2026" (staff home) */
-export const formatToday = (style: "today" | "weekday" = "today") =>
-  format(parseISO(MOCK_TODAY), style === "today" ? "'Today', d MMM yyyy" : "EEE, d MMM yyyy");
+/** Mock screens are snapshots on MOCK_TODAY; live screens pass the real date (todayInIndia). */
+export const formatToday = (style: "today" | "weekday" = "today", today = MOCK_TODAY) =>
+  format(parseISO(today), style === "today" ? "'Today', d MMM yyyy" : "EEE, d MMM yyyy");

@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-// W3-staff-home: entry-only China staff home (39_14_Staff_home.jpeg). Role/label locators only (hidden <Activity> routes).
+import { STAFF_STATE } from "./sessions";
 
-test.use({ viewport: { width: 1440, height: 900 } });
+// W3-staff-home: entry-only China staff home (39_14_Staff_home.jpeg). Role/label locators only (hidden <Activity> routes).
+// Batch 1: signed in as Chen Yu, the staff member on the reference.
+
+test.use({ viewport: { width: 1440, height: 900 }, storageState: STAFF_STATE });
 
 test("staff home shows the banner, waiting orders, recent receipts and the account's access", async ({ page }) => {
   await page.goto("/home");

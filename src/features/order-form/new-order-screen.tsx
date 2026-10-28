@@ -1,7 +1,9 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
@@ -9,13 +11,17 @@ import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { notInPrototype } from "@/components/shared/prototype";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatCNY, formatDate, formatINR, formatNumber, formatRate } from "@/lib/formatters";
+import { apiClient } from "@/lib/api/client";
+import type { CreateOrderResponse } from "@/lib/api/types";
+import { handleApiError, notifySuccess } from "@/lib/feedback";
+import { formatCNY, formatINR, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import type { Deposit, NewOrderData } from "./data/queries";
+import type { NewOrderData } from "./data/queries";
+import { emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
 import { depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
 
 // Measured from 15_4_New_order.jpeg: 12.5 px bold labels 5 px above 42 px fields with 14 px text, 12 px table
@@ -28,21 +34,55 @@ const lineInput = "h-[38px] px-2.5 text-sm";
 // "+ Add item" / "+ Add deposit": 13.5 px bold text links on a 10 px line, flush with the card edge.
 // Block-level (flex w-fit) so the card's line-height strut does not add height under them.
 const addLinkClass = "mt-[13px] flex h-auto w-fit border-0 p-0 text-[13.5px] leading-[10px]";
+const factLabel = "text-[12.5px] leading-[17px] text-muted-foreground";
+const factInput = "h-[34px] px-2 text-sm";
 const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
+const messages = (...errors: ({ message?: string } | undefined)[]) => errors.filter((error) => error?.message);
 
-type LineDraft = { item: string; rate: string; quantity: string; unit: string };
+/** New order, Stage 1: order and deposit (15_4_New_order.jpeg). Places the order with ORD-3. */
+export function NewOrderScreen({ data: { options, today } }: { data: NewOrderData }) {
+  const router = useRouter();
+  const { register, control, handleSubmit, setError, formState } = useForm<NewOrderValues>({
+    resolver: zodResolver(newOrderSchema),
+    defaultValues: { supplierId: "", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] },
+  });
+  const lineRows = useFieldArray({ control, name: "lines" });
+  const depositRows = useFieldArray({ control, name: "deposits" });
+  const { errors } = formState;
 
-/** New order, Stage 1: order and deposit (15_4_New_order.jpeg), prefilled for PO-2050. */
-export function NewOrderScreen({ data }: { data: NewOrderData }) {
-  // Mock mutation: client state only, resets on reload
-  const [lines, setLines] = useState<LineDraft[]>(() =>
-    data.lines.map((line) => ({ item: line.item, rate: formatRate(line.rate), quantity: formatNumber(line.quantity), unit: line.unit })),
-  );
-  const numeric = lines.map((line) => ({ rate: parseNumber(line.rate), quantity: parseNumber(line.quantity) }));
-  const totals = orderTotals(numeric, data.deposits);
+  const [supplierId, lines, deposits] = useWatch({ control, name: ["supplierId", "lines", "deposits"] });
+  const supplier = options.suppliers.find((s) => s.id === supplierId);
+  const unitOf = (itemId: string) => options.items.find((item) => item.id === itemId)?.unit ?? "";
+  const numericLines = lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) }));
+  const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: parseNumber(d.rateInr) }));
+  const totals = orderTotals(numericLines, numericDeposits);
 
-  const setLine = (index: number, patch: Partial<LineDraft>) =>
-    setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  async function place(order: NewOrderValues) {
+    let created: CreateOrderResponse;
+    try {
+      created = await apiClient.post<CreateOrderResponse>("/orders", toCreateOrderBody(order, options));
+    } catch (error) {
+      // 422: each message under its field, the first focused. Other failures toast (handleApiError).
+      Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) =>
+        setError(field as FieldPath<NewOrderValues>, { message }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
+    notifySuccess(`Order ${created.order.po} placed`);
+    router.push("/orders");
+    router.refresh();
+  }
+
+  const lineErrors = lineRows.fields.flatMap((_, i) => {
+    const e = errors.lines?.[i];
+    return messages(e?.itemId, e?.rateCny, e?.quantity).map((error) => ({ message: `Line ${i + 1}: ${error?.message}` }));
+  });
+  const depositErrors = depositRows.fields.flatMap((_, i) => {
+    const e = errors.deposits?.[i];
+    return messages(e?.payee, e?.amountCny, e?.paidOn, e?.rateInr, e?.mode).map((error) => ({
+      message: `Deposit ${i + 1}: ${error?.message}`,
+    }));
+  });
 
   return (
     <>
@@ -56,13 +96,7 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
         }
       />
       <PageContainer>
-        <form
-          className="grid items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1fr)_410px]"
-          onSubmit={(event) => {
-            event.preventDefault();
-            notInPrototype("Place order");
-          }}
-        >
+        <form noValidate className="grid items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1fr)_410px]" onSubmit={handleSubmit(place)}>
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <SectionCard title="Order details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-[11px] grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
@@ -70,55 +104,63 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                   <FieldLabel htmlFor="po-number" className={labelClass}>
                     Purchase order no.
                   </FieldLabel>
-                  <Input id="po-number" defaultValue={data.po} size="sm" />
+                  {/* Assigned by the server when the order is placed. */}
+                  <Input id="po-number" readOnly value={options.nextPo} size="sm" />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.orderDate}>
                   <FieldLabel htmlFor="order-date" className={labelClass}>
                     Order date
                   </FieldLabel>
-                  <Input id="order-date" defaultValue={formatDate(data.orderDate)} size="sm" />
+                  <Input id="order-date" type="date" aria-invalid={!!errors.orderDate} size="sm" {...register("orderDate")} />
+                  <FieldError errors={[errors.orderDate]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.deliveryDate}>
                   <FieldLabel htmlFor="delivery-date" className={labelClass}>
                     Delivery date <RequiredMark />
                   </FieldLabel>
-                  <Input id="delivery-date" required defaultValue={formatDate(data.deliveryDate)} size="sm" />
+                  <Input id="delivery-date" type="date" required aria-invalid={!!errors.deliveryDate} size="sm" {...register("deliveryDate")} />
+                  <FieldError errors={[errors.deliveryDate]} />
                 </Field>
-                <Field className={cn(fieldClass, "sm:col-span-2")}>
+                <Field className={cn(fieldClass, "sm:col-span-2")} data-invalid={!!errors.supplierId}>
                   <FieldLabel htmlFor="supplier" className={labelClass}>
                     Supplier <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect size="sm" id="supplier" required defaultValue={data.supplier}>
-                    {data.suppliers.map((supplier) => (
-                      <option key={supplier}>{supplier}</option>
+                  <NativeSelect size="sm" id="supplier" required aria-invalid={!!errors.supplierId} {...register("supplierId")}>
+                    <option value="">Select supplier</option>
+                    {options.suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
                     ))}
                   </NativeSelect>
+                  <FieldError errors={[errors.supplierId]} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="currency" className={labelClass}>
                     Currency
                   </FieldLabel>
-                  <NativeSelect size="sm" id="currency" defaultValue={data.currency}>
-                    <option>{data.currency}</option>
+                  {/* CNY only (Q8). */}
+                  <NativeSelect size="sm" id="currency">
+                    <option>CNY (¥)</option>
                   </NativeSelect>
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="contact-person" className={labelClass}>
                     Contact person
                   </FieldLabel>
-                  <Input id="contact-person" defaultValue={data.contactPerson} size="sm" />
+                  <Input id="contact-person" readOnly value={supplier?.contactPerson ?? ""} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="phone" className={labelClass}>
                     Phone
                   </FieldLabel>
-                  <Input id="phone" type="tel" defaultValue={data.phone} size="sm" />
+                  <Input id="phone" type="tel" readOnly value={supplier?.phone ?? ""} size="sm" />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="city" className={labelClass}>
                     City
                   </FieldLabel>
-                  <Input id="city" defaultValue={data.city} size="sm" />
+                  <Input id="city" readOnly value={supplier?.city ?? ""} size="sm" />
                 </Field>
               </FieldGroup>
             </SectionCard>
@@ -134,46 +176,62 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lines.map((line, i) => {
+                  {lineRows.fields.map((field, i) => {
                     const n = i + 1;
-                    const filled = line.rate !== "" && line.quantity !== "";
+                    const line = lines[i];
+                    const unit = unitOf(line?.itemId ?? "");
+                    const filled = !!line?.rateCny && !!line.quantity;
+                    const e = errors.lines?.[i];
                     return (
-                      <TableRow key={i} className="border-border-subtle hover:bg-transparent">
+                      <TableRow key={field.id} className="border-border-subtle hover:bg-transparent">
                         <TableCell className={cellClass}>
-                          <Input
+                          <NativeSelect
+                            size="sm"
                             aria-label={`Item, line ${n}`}
-                            value={line.item}
-                            onChange={(event) => setLine(i, { item: event.target.value })}
-                            className={lineInput}
-                          />
+                            aria-invalid={!!e?.itemId}
+                            className="[&>select]:h-[38px] [&>select]:pl-2.5"
+                            {...register(`lines.${i}.itemId`)}
+                          >
+                            <option value="">Select item</option>
+                            {options.items.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </NativeSelect>
                         </TableCell>
                         <TableCell className={cellClass}>
                           <Input
                             aria-label={`Rate (¥), line ${n}`}
+                            aria-invalid={!!e?.rateCny}
                             inputMode="decimal"
-                            value={line.rate}
-                            onChange={(event) => setLine(i, { rate: event.target.value })}
                             className={cn(lineInput, "text-right")}
+                            {...register(`lines.${i}.rateCny`)}
                           />
                         </TableCell>
                         <TableCell className={cellClass}>
                           {/* The unit sits inside the quantity box ("2,400 m"), as in the reference. */}
-                          <div className="flex h-[38px] items-center rounded-lg border border-input bg-input-background px-2.5 text-sm transition-colors focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25">
+                          <div
+                            className={cn(
+                              "flex h-[38px] items-center rounded-lg border border-input bg-input-background px-2.5 text-sm transition-colors focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25",
+                              e?.quantity && "border-destructive",
+                            )}
+                          >
                             <input
                               aria-label={`Quantity, line ${n}`}
-                              inputMode="decimal"
-                              value={line.quantity}
-                              onChange={(event) => setLine(i, { quantity: event.target.value })}
+                              aria-invalid={!!e?.quantity}
+                              inputMode="numeric"
                               className="h-full w-full min-w-0 bg-transparent text-right text-foreground outline-none"
+                              {...register(`lines.${i}.quantity`)}
                             />
-                            {line.unit ? <span className="pl-1">{line.unit}</span> : null}
+                            {unit ? <span className="pl-1">{unit}</span> : null}
                           </div>
                         </TableCell>
                         <TableCell className={cellClass}>
                           <Input
                             aria-label={`Amount (¥), line ${n}`}
                             readOnly
-                            value={filled ? formatNumber(lineAmount(numeric[i]), 2) : ""}
+                            value={filled ? formatNumber(lineAmount(numericLines[i]!), 2) : ""}
                             className={cn(lineInput, "text-right read-only:bg-input-background")}
                           />
                         </TableCell>
@@ -182,13 +240,9 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                   })}
                 </TableBody>
               </Table>
+              <FieldError className="mt-2" errors={messages(errors.lines, errors.lines?.root, ...lineErrors)} />
 
-              <Button
-                type="button"
-                variant="link"
-                className={addLinkClass}
-                onClick={() => setLines((current) => [...current, { item: "", rate: "", quantity: "", unit: "" }])}
-              >
+              <Button type="button" variant="link" className={addLinkClass} onClick={() => lineRows.append(emptyLine())}>
                 + Add item
               </Button>
 
@@ -203,17 +257,63 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
 
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <SectionCard title="Deposits paid against this order" titleGap="none">
-              <div className="mt-3 flex flex-col gap-2.5">
-                {data.deposits.map((deposit) => (
-                  <DepositCard key={deposit.payee} deposit={deposit} />
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="link"
-                className={addLinkClass}
-                onClick={() => notInPrototype("Add deposit")}
-              >
+              {depositRows.fields.length > 0 ? (
+                <div className="mt-3 flex flex-col gap-2.5">
+                  {depositRows.fields.map((field, i) => {
+                    const n = i + 1;
+                    const e = errors.deposits?.[i];
+                    const amountINR = depositINR(numericDeposits[i] ?? { amount: 0, rate: 0 });
+                    return (
+                      <article key={field.id} className="rounded-[10px] border bg-input-background px-3.5 pt-2.5 pb-[11px]">
+                        <div className="flex items-center justify-between gap-3 text-sm leading-5 font-bold">
+                          <NativeSelect
+                            size="sm"
+                            aria-label={`Paid to, deposit ${n}`}
+                            aria-invalid={!!e?.payee}
+                            className="[&>select]:h-[34px] [&>select]:font-bold"
+                            {...register(`deposits.${i}.payee`)}
+                          >
+                            <option value={SUPPLIER_PAYEE}>{supplier ? `${supplier.name} (supplier)` : "Supplier"}</option>
+                            {options.agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.name} (agent)
+                              </option>
+                            ))}
+                          </NativeSelect>
+                          <Input
+                            aria-label={`Amount (¥), deposit ${n}`}
+                            aria-invalid={!!e?.amountCny}
+                            inputMode="decimal"
+                            placeholder="¥"
+                            className={cn(factInput, "w-[110px] shrink-0 text-right font-bold")}
+                            {...register(`deposits.${i}.amountCny`)}
+                          />
+                        </div>
+                        <div className="mt-[5px] grid grid-cols-[1.3fr_1fr_1fr] gap-x-2">
+                          <label className="flex min-w-0 flex-col">
+                            <span className={factLabel}>Paid on</span>
+                            <Input type="date" aria-invalid={!!e?.paidOn} className={factInput} {...register(`deposits.${i}.paidOn`)} />
+                          </label>
+                          <label className="flex min-w-0 flex-col">
+                            <span className={factLabel}>Rate to INR</span>
+                            <Input inputMode="decimal" aria-invalid={!!e?.rateInr} className={factInput} {...register(`deposits.${i}.rateInr`)} />
+                          </label>
+                          <label className="flex min-w-0 flex-col">
+                            <span className={factLabel}>Mode</span>
+                            <Input aria-invalid={!!e?.mode} className={factInput} {...register(`deposits.${i}.mode`)} />
+                          </label>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
+                          <span className="text-[13px] leading-5 text-muted-foreground">Amount in INR</span>
+                          <span className="text-[15px] leading-5 font-bold">{formatINR(amountINR)}</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <FieldError className="mt-2" errors={messages(errors.deposits, errors.deposits?.root, ...depositErrors)} />
+              <Button type="button" variant="link" className={addLinkClass} onClick={() => depositRows.append(emptyDeposit(today))}>
                 + Add deposit
               </Button>
             </SectionCard>
@@ -242,7 +342,8 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
                 >
                   Save draft
                 </Button>
-                <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]">
+                {/* Disabled while the request runs (no spinner is designed). */}
+                <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]" disabled={formState.isSubmitting}>
                   Place order
                 </Button>
               </FormFooter>
@@ -251,35 +352,5 @@ export function NewOrderScreen({ data }: { data: NewOrderData }) {
         </form>
       </PageContainer>
     </>
-  );
-}
-
-function DepositCard({ deposit }: { deposit: Deposit }) {
-  const facts = [
-    { label: "Paid on", value: formatDate(deposit.paidOn) },
-    { label: "Rate to INR", value: formatRate(deposit.rate) },
-    { label: "Mode", value: deposit.mode },
-  ];
-  return (
-    <article className="rounded-[10px] border bg-input-background px-3.5 pt-2.5 pb-[11px]">
-      <div className="flex items-baseline justify-between gap-4 text-sm leading-5 font-bold">
-        <h3>
-          {deposit.payee} ({deposit.payeeRole})
-        </h3>
-        <p>{spacedCNY(deposit.amount)}</p>
-      </div>
-      <dl className="mt-[5px] grid grid-cols-3 gap-x-2">
-        {facts.map((fact) => (
-          <div key={fact.label}>
-            <dt className="text-[12.5px] leading-[17px] text-muted-foreground">{fact.label}</dt>
-            <dd className="text-sm leading-[18px] font-bold">{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-2 flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
-        <span className="text-[13px] leading-5 text-muted-foreground">Amount in INR</span>
-        <span className="text-[15px] leading-5 font-bold">{formatINR(depositINR(deposit))}</span>
-      </div>
-    </article>
   );
 }

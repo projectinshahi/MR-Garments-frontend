@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
+import { SignOutButton } from "@/components/layout/sign-out";
 import { SectionCard } from "@/components/shared/cards";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/formatters";
@@ -14,7 +15,7 @@ import { cardClass, outlineButtonClass, rowDetailClass, rowTitleClass } from "./
 
 /**
  * My profile (51_17.2_My_profile.jpeg): details and password on the left, notification switches and Sign out in a
- * 400 px right column. Change password and Sign out are links (build plan §3); there is no auth logic.
+ * 400 px right column. Change password is a link; Sign out ends the session (AUTH-2, Batch 1).
  */
 export function ProfileScreen({ data }: { data: ProfileData }) {
   return (
@@ -40,9 +41,7 @@ export function ProfileScreen({ data }: { data: ProfileData }) {
 
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <NotificationSettings preferences={data.notifications} />
-            <Button asChild variant="outline" className={cn("h-11 w-full", outlineButtonClass)}>
-              <Link href="/login">Sign out</Link>
-            </Button>
+            <SignOutButton className={cn("h-11 w-full", outlineButtonClass)} />
           </div>
         </div>
       </PageContainer>

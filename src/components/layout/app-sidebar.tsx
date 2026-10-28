@@ -13,12 +13,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { isActivePath, MANAGEMENT_NAV, STAFF_NAV, USER_MENU, type NavSection } from "@/config/navigation";
+import { SignOutMenuItem } from "@/components/layout/sign-out";
+import { isActivePath, type NavSection, USER_MENU } from "@/config/navigation";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { CurrentUser } from "@/types/domain";
+/** The signed-in user as the shell shows it (B2, B3): built by AppShell from ME-1. */
+export type ShellUser = { name: string; initials: string; detail: string; sections: NavSection[] };
 
-type SidebarProps = { user: CurrentUser };
+type SidebarProps = { user: ShellUser };
 
 /** Fixed 240 px desktop sidebar (references 4–53). Hidden below md, where MobileNav opens the same content. */
 export function AppSidebar({ user }: SidebarProps) {
@@ -49,8 +51,24 @@ export function MobileNav({ user }: SidebarProps) {
   );
 }
 
+/** Shown while the signed-in user loads: the empty sidebar and mobile bar, so the layout doesn't shift. */
+export function SidebarFallback() {
+  return (
+    <>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-(--sidebar-width) bg-linear-to-b from-sidebar-from to-sidebar-to md:block">
+        <div className="px-6 pt-[26px] pb-[26px]">
+          <Brand />
+        </div>
+      </aside>
+      <div className="sticky top-0 z-30 flex h-14 items-center bg-sidebar-from px-4 pl-14 md:hidden">
+        <Brand compact />
+      </div>
+    </>
+  );
+}
+
 function SidebarContent({ user }: SidebarProps) {
-  const sections = user.variant === "staff" ? STAFF_NAV : MANAGEMENT_NAV;
+  const { sections } = user;
   return (
     <div className="flex h-full flex-col bg-linear-to-b from-sidebar-from to-sidebar-to text-sidebar-foreground">
       <div className="px-6 pt-[26px] pb-[26px]">
@@ -144,6 +162,7 @@ function UserMenu({ user }: SidebarProps) {
               <Link href={item.href}>{item.title}</Link>
             </DropdownMenuItem>
           ))}
+          <SignOutMenuItem />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

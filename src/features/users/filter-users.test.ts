@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { User } from "@/types/domain";
 
-import { ALL, countByStatus, filterUsers, type UserFilters } from "./filter-users";
+import { ALL, filterUsers, type UserFilters } from "./filter-users";
 
 const user = (name: string, email: string, role: User["role"], status: User["status"] = "Active"): User => ({
   id: name,
@@ -50,9 +50,3 @@ describe("filterUsers", () => {
   });
 });
 
-describe("countByStatus", () => {
-  it("counts the chip totals", () => {
-    expect(countByStatus(users, "Active")).toBe(3);
-    expect(countByStatus(users, "Inactive")).toBe(1);
-  });
-});

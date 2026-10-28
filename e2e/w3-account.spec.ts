@@ -64,7 +64,8 @@ test("my profile shows the details, password date and switches, and keeps edits 
 
   await expect(page.getByText("Last changed 12 Aug 2026", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Change password" })).toHaveAttribute("href", "/change-password");
-  await expect(page.getByRole("link", { name: "Sign out" })).toHaveAttribute("href", "/login");
+  // Batch 1 (AUTH-2): Sign out is a button that ends the session (shell.spec.ts covers the sign-out itself).
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 
   const settings = page.getByRole("list", { name: "Notification settings" });
   for (const name of ["Delivery reminders", "Late deliveries", "Payments due"]) {
