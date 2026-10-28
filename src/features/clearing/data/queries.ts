@@ -1,32 +1,31 @@
-import { listClearingAgents } from "@/lib/data/master";
+import { hasAccess } from "@/config/navigation";
+import { ApiError } from "@/lib/api/errors";
+import { apiGet } from "@/lib/api/server";
+import type { ClearingForm, ClearingList } from "@/lib/api/stages-types";
+import { getMe } from "@/lib/session";
+import { todayInIndia } from "@/lib/today";
 
-import * as fixtures from "./fixtures";
-
-export type { ClearingForm, ClearingRow, ClearingState } from "./fixtures";
+// Clearing (India) reads CLR-1 and CLR-2 (backend docs/wave3-contracts.md section 8). These calls read the session
+// cookie, so the pages render inside the (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
 export type ClearingListData = Awaited<ReturnType<typeof getClearingList>>;
 export type ClearingFormData = NonNullable<Awaited<ReturnType<typeof getClearingForm>>>;
 
-/** Route segment for a container: "CAIU 2298076" → "CAIU-2298076". */
-export const containerSlug = (container: string) => container.replace(/ /g, "-");
-
-const agentNames = async () => (await listClearingAgents()).map((agent) => agent.name);
-
-/** Clearing (India) list: KPIs, containers and the agent filter options. Async and copied so a real API can replace it. */
+/** Clearing list (26): CLR-1 and whether the signed-in user may record clearings (clearing >= Enter). */
 export async function getClearingList() {
-  const agents = await agentNames();
-  return structuredClone({ kpis: fixtures.clearingKpis, rows: fixtures.clearings, agents });
+  const [list, me] = await Promise.all([apiGet<ClearingList>("/clearings"), getMe()]);
+  return { ...list, today: todayInIndia(), canEnter: !!me && hasAccess(me, "clearing", "Enter") };
 }
 
-/** Containers that have a designed clearing form (only CAIU 2298076). */
-export async function listClearingFormSlugs() {
-  return fixtures.clearingForms.map((form) => containerSlug(form.container));
-}
-
-/** Clearing form for one container, or null when it is unknown. */
-export async function getClearingForm(slug: string) {
-  const form = fixtures.clearingForms.find((f) => containerSlug(f.container) === slug);
+/** Clearing form (25) for one container: CLR-2, or null for an unknown id (the page calls notFound()). */
+export async function getClearingForm(containerId: string) {
+  const [form, me] = await Promise.all([
+    apiGet<ClearingForm>(`/clearings/${encodeURIComponent(containerId)}`).catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }),
+    getMe(),
+  ]);
   if (!form) return null;
-  const agents = await agentNames();
-  return structuredClone({ ...form, agents });
+  return { form, today: todayInIndia(), canEnter: !!me && hasAccess(me, "clearing", "Enter") };
 }
