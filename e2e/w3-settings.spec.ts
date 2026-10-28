@@ -67,15 +67,15 @@ test("undesigned actions show the prototype notice", async ({ page }) => {
   await page.getByRole("button", { name: "+ Add shipping agent" }).click();
   await expect(page.getByText("Add shipping agent is not included in the current prototype.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit Dragon Cargo" }).click();
-  await expect(page.getByText("Edit Dragon Cargo is not included in the current prototype.")).toBeVisible();
+  // Edit opens the tab's edit dialog (wave 3), on the tab's own path.
+  await expect(page.getByRole("link", { name: "Edit Dragon Cargo" })).toHaveAttribute("href", /^\/settings\/shipping-agents\?dialog=edit&id=[0-9a-f-]{36}$/);
 });
 
 // The dialog opens empty by user decision (2026-10-26), unlike 53's prefilled Ningbo values.
 test("the Add supplier dialog opens empty, closes and validates", async ({ page }) => {
   await page.goto("/settings/suppliers");
   await page.getByRole("link", { name: "+ Add supplier" }).click();
-  await expect(page).toHaveURL(/\?dialog=add-supplier$/);
+  await expect(page).toHaveURL(/\?dialog=add$/);
   const dialog = page.getByRole("dialog", { name: "Add supplier" });
   await expect(dialog).toBeVisible();
   for (const label of ["Supplier name", "City", "Contact person", "Phone / WeChat", "Address", "Notes"]) {
@@ -88,7 +88,7 @@ test("the Add supplier dialog opens empty, closes and validates", async ({ page 
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
 
-  await page.goto("/settings/suppliers?dialog=add-supplier");
+  await page.goto("/settings/suppliers?dialog=add");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();

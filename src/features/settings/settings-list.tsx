@@ -1,6 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
@@ -9,8 +10,10 @@ import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, SearchInput } from "@/components/shared/filters";
 import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Button } from "@/components/ui/button";
 import type { RecordStatus } from "@/types/domain";
 
+import { editHref } from "./settings-dialog";
 import { filterRecords, type StatusFilter } from "./settings-logic";
 
 export const SETTINGS_TABS: RouteTab[] = [
@@ -29,9 +32,26 @@ const STATUS_OPTIONS = [
   { value: "All", label: "All" },
 ];
 
+// Shared by the seven tab screens.
+export const bold = { className: "font-bold" };
+export const right = { align: "right" } as const;
+// Header primary action: 34 px tall, 15 px side padding inside the border in every Settings reference.
+export const actionClass = "px-[15px]";
+
+/** A header add action whose dialog isn't built yet (D5). */
+export function PrototypeAction({ label }: { label: string }) {
+  return (
+    <Button type="button" size="header" className={actionClass} onClick={() => notInPrototype(label)}>
+      + {label}
+    </Button>
+  );
+}
+
+export const contactSearch = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
+
 type SettingsRecord = { id: string; name: string; status: RecordStatus };
 
-function trailingColumns<T extends SettingsRecord>(): ColumnDef<T>[] {
+function trailingColumns<T extends SettingsRecord>(path: string): ColumnDef<T>[] {
   return [
     {
       id: "status",
@@ -44,14 +64,14 @@ function trailingColumns<T extends SettingsRecord>(): ColumnDef<T>[] {
       id: "edit",
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => (
-        <button
-          type="button"
+        <Link
+          href={editHref(path, row.original.id)}
+          scroll={false}
           aria-label={`Edit ${row.original.name}`}
-          onClick={() => notInPrototype(`Edit ${row.original.name}`)}
-          className="rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-block rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           Edit
-        </button>
+        </Link>
       ),
     },
   ];
@@ -62,6 +82,7 @@ function trailingColumns<T extends SettingsRecord>(): ColumnDef<T>[] {
  * table (status pill and Edit appended) and the tab's footnote.
  */
 export function SettingsList<T extends SettingsRecord>({
+  path,
   rows,
   columns,
   searchText,
@@ -69,6 +90,8 @@ export function SettingsList<T extends SettingsRecord>({
   footnote,
   noun,
 }: {
+  /** The tab's own path; Edit opens ?dialog=edit&id=<id> on it. */
+  path: string;
   rows: T[];
   /** The tab's own columns; Status and Edit are appended. */
   columns: ColumnDef<T>[];
@@ -81,7 +104,7 @@ export function SettingsList<T extends SettingsRecord>({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("Active");
-  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>()], [columns]);
+  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>(path)], [columns, path]);
   const visible = filterRecords(rows, { query, status }, searchText);
 
   return (

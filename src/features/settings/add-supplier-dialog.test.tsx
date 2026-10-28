@@ -12,8 +12,9 @@ import { supplierDraft } from "./data/fixtures";
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/settings/suppliers",
   useRouter: () => router,
-  useSearchParams: () => new URLSearchParams("dialog=add-supplier"),
+  useSearchParams: () => new URLSearchParams("dialog=add"),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn() } }));

@@ -86,6 +86,54 @@ export type ItemRow = {
   status: RecordStatus;
 };
 
+// Settings create and edit (backend docs/wave3-contracts.md section 4). POST answers 201 and PATCH 200 with the full
+// list row; PATCH needs at least one key, and `status: "Inactive"` is how a record is deactivated (there is no delete).
+// Text fields are trimmed; only the name is required on create.
+type Editable<T> = Partial<T> & { status?: RecordStatus };
+type ContactBody = { name: string; contactPerson?: string; phone?: string };
+
+/** MD-2 POST /api/v1/suppliers. The currency is always CNY. */
+export type CreateSupplierBody = ContactBody & { city?: string; address?: string; notes?: string; currency?: "CNY" };
+/** PATCH /api/v1/suppliers/:id */
+export type UpdateSupplierBody = Editable<Omit<CreateSupplierBody, "currency">>;
+export type SupplierResponse = { supplier: SupplierRow };
+
+/** POST /api/v1/shipping-agents */
+export type CreateShippingAgentBody = ContactBody & { officeCity?: string };
+/** PATCH /api/v1/shipping-agents/:id */
+export type UpdateShippingAgentBody = Editable<CreateShippingAgentBody>;
+export type ShippingAgentResponse = { shippingAgent: ShippingAgentRow };
+
+/** POST /api/v1/clearing-agents */
+export type CreateClearingAgentBody = ContactBody & { port?: string };
+/** PATCH /api/v1/clearing-agents/:id */
+export type UpdateClearingAgentBody = Editable<CreateClearingAgentBody>;
+export type ClearingAgentResponse = { clearingAgent: ClearingAgentRow };
+
+/** POST /api/v1/transport-companies */
+export type CreateTransportCompanyBody = ContactBody;
+/** PATCH /api/v1/transport-companies/:id */
+export type UpdateTransportCompanyBody = Editable<CreateTransportCompanyBody>;
+export type TransportCompanyResponse = { transportCompany: TransportCompanyRow };
+
+/** POST /api/v1/locations. The server sets `country` from the type (China office: China, otherwise India). */
+export type CreateLocationBody = { name: string; type: OfficeType; address?: string };
+/** PATCH /api/v1/locations/:id. The type can't change after creation. */
+export type UpdateLocationBody = Editable<Omit<CreateLocationBody, "type">>;
+export type LocationResponse = { location: LocationRow };
+
+/** POST /api/v1/teams */
+export type CreateTeamBody = { name: string };
+/** PATCH /api/v1/teams/:id */
+export type UpdateTeamBody = Editable<CreateTeamBody>;
+export type TeamResponse = { team: TeamRow };
+
+/** POST /api/v1/items. Exactly one of `perBundle` (whole number 1-100000) and `bundleLabel` is set, the other null. */
+export type CreateItemBody = { name: string; countedIn: ItemRow["countedIn"]; perBundle: number | null; bundleLabel: string | null };
+/** PATCH /api/v1/items/:id. `countedIn` can't change once the item is on an order (409 `item_in_use`). */
+export type UpdateItemBody = Editable<CreateItemBody>;
+export type ItemResponse = { item: ItemRow };
+
 /** The one error body every endpoint returns (U36). */
 export type ApiErrorBody = { error: { code: string; message: string; fields?: Record<string, string> } };
 

@@ -30,7 +30,7 @@ const dialogOf = (page: Page) => page.getByRole("dialog", { name: "Add supplier"
 async function openAddSupplier(page: Page) {
   await page.goto("/settings/suppliers");
   await page.getByRole("link", { name: "+ Add supplier" }).click();
-  await expect(page).toHaveURL(/\?dialog=add-supplier$/);
+  await expect(page).toHaveURL(/\?dialog=add$/);
   const dialog = dialogOf(page);
   await expect(dialog).toBeVisible();
   return dialog;
@@ -100,7 +100,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   await fillSupplier(dialog, NINGBO.name);
   await dialog.getByRole("button", { name: "Save supplier" }).click();
 
-  // K7: the dialog closes, ?dialog=add-supplier leaves the address, the toast shows, the list reloads (Active chip).
+  // K7: the dialog closes, ?dialog=add leaves the address, the toast shows, the list reloads (Active chip).
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await expect(page.getByText("Supplier added", { exact: true })).toBeVisible();
@@ -131,10 +131,10 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(dialog.getByLabel("Contact person")).toHaveValue(NINGBO.contactPerson);
   await expect(dialog.getByLabel("Notes")).toHaveValue(NINGBO.notes);
   await expect(save).toBeEnabled();
-  await expect(page).toHaveURL(/\?dialog=add-supplier$/);
+  await expect(page).toHaveURL(/\?dialog=add$/);
 
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  // Cancel removes ?dialog=add-supplier with a soft navigation; reload only once it has, or the dialog reopens.
+  // Cancel removes ?dialog=add with a soft navigation; reload only once it has, or the dialog reopens.
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await page.reload();
@@ -142,10 +142,13 @@ test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async
   await expect(page.getByRole("table").getByRole("row", { name: /ningbo denim works/i })).toHaveCount(1);
 });
 
-test("AT-S6: Edit on a supplier shows the unchanged prototype message", async ({ page }) => {
+// Wave 3 (docs/wave3-contracts.md section 4): Edit opens the tab's edit dialog at ?dialog=edit&id=<id>.
+test("AT-S6: Edit on a supplier links to its edit dialog", async ({ page }) => {
   await page.goto("/settings/suppliers");
-  await page.getByRole("button", { name: "Edit Guangzhou Textile Co." }).click();
-  await expect(page.getByText("Edit Guangzhou Textile Co. is not included in the current prototype.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Guangzhou Textile Co." })).toHaveAttribute(
+    "href",
+    /^\/settings\/suppliers\?dialog=edit&id=[0-9a-f-]{36}$/,
+  );
 });
 
 // B6: values that differ from 41-46 come from later batches (0, ₹0, "–", empty orders) or from real users (Staff).
@@ -220,7 +223,6 @@ test("AT-S7: Settings tabs 2-7 are read-only lists with the B6 values and unchan
     await page.getByRole("button", { name: `+ ${tab.action}` }).click();
     await expect(page.getByText(`${tab.action} is not included in the current prototype.`)).toBeVisible();
     const first = String(tab.rows[0]![0]);
-    await page.getByRole("button", { name: `Edit ${first}` }).click();
-    await expect(page.getByText(`Edit ${first} is not included in the current prototype.`)).toBeVisible();
+    await expect(page.getByRole("link", { name: `Edit ${first}` })).toHaveAttribute("href", new RegExp(`^${tab.path}[?]dialog=edit&id=[0-9a-f-]{36}$`));
   }
 });
