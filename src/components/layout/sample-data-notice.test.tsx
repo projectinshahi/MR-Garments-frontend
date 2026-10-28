@@ -6,23 +6,10 @@ import { isSampleDataPath, SAMPLE_DATA_LABEL, SampleDataNotice } from "./sample-
 const nav = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
-// Every page whose queries read fixtures (verified 2026-10-27), and every page that reads the API.
+// Every page whose queries read fixtures (verified 2026-10-28), and every page that reads the API.
+const ID = "7d9a8a7e-0000-4000-8000-000000000000";
 const SAMPLE = [
   "/",
-  "/reports",
-  "/reports/order-status",
-  "/reports/ordered-vs-received",
-  "/reports/payments-per-supplier",
-  "/reports/landed-cost-by-month",
-  "/reports/containers-timeline",
-  "/reports/deliveries-per-day",
-  "/landed-cost",
-  "/clearing",
-  "/clearing/MSKU4829103",
-  "/transport",
-  "/transport/MSKU4829103",
-  "/warehouse",
-  "/warehouse/receive",
   "/notifications",
   "/profile",
   "/home",
@@ -33,7 +20,21 @@ const LIVE = [
   "/orders/new",
   "/orders/PO-2050",
   ...["items", "payments", "receiving", "containers"].map((tab) => `/orders/PO-2050/${tab}`),
-  "/containers/7d9a8a7e-0000-4000-8000-000000000000",
+  `/containers/${ID}`,
+  "/clearing",
+  `/clearing/${ID}`,
+  "/transport",
+  `/transport/${ID}`,
+  "/warehouse",
+  `/warehouse/receive/${ID}`,
+  "/landed-cost",
+  "/reports",
+  "/reports/order-status",
+  "/reports/ordered-vs-received",
+  "/reports/payments-per-supplier",
+  "/reports/landed-cost-by-month",
+  "/reports/containers-timeline",
+  "/reports/deliveries-per-day",
   "/payments",
   "/calendar",
   "/calendar/week",
@@ -66,7 +67,7 @@ describe("Sample Data — Not Live notice", () => {
   });
 
   it("shows the label as a note on a sample-data screen", () => {
-    nav.pathname = "/reports";
+    nav.pathname = "/notifications";
     render(<SampleDataNotice />);
     expect(screen.getByRole("note")).toHaveTextContent(SAMPLE_DATA_LABEL);
     expect(SAMPLE_DATA_LABEL).toBe("Sample Data — Not Live");

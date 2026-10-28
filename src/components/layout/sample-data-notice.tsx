@@ -6,15 +6,10 @@ import { cn } from "@/lib/utils";
 
 export const SAMPLE_DATA_LABEL = "Sample Data — Not Live";
 
-// Screens that still show sample (fixture) data, so nobody takes their figures for real records. Verified 2026-10-27:
+// Screens that still show sample (fixture) data, so nobody takes their figures for real records. Verified 2026-10-28:
 // each route's queries read fixtures, not the API. Remove a route here when its screen goes live.
 const SAMPLE_DATA_ROUTES = [
   /^\/$/, // Dashboard
-  /^\/reports(\/|$)/,
-  /^\/landed-cost(\/|$)/,
-  /^\/clearing(\/|$)/,
-  /^\/transport(\/|$)/,
-  /^\/warehouse(\/|$)/,
   /^\/notifications(\/|$)/,
   /^\/profile(\/|$)/,
   /^\/home(\/|$)/, // Staff home
