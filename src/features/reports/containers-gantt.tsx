@@ -1,10 +1,10 @@
 import { LegendSwatch } from "@/components/shared/progress";
-import { MOCK_TODAY } from "@/lib/constants";
+import type { ContainerState } from "@/lib/api/types";
 import { formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import type { ContainersTimelineReport, ContainerState } from "./data/queries";
-import { axisPercent, barSpan } from "./report-logic";
+import type { ContainersTimelineReport } from "./data/queries";
+import { axisPercent, barSpan, timelineAxis } from "./report-logic";
 
 const STATE = {
   sea: { bar: "bg-chart-1", swatch: "chart-1", legend: "On the sea", note: (date: string) => `ETA ${date}` },
@@ -18,10 +18,11 @@ const LEGEND: ContainerState[] = ["sea", "loading", "arrived"];
 // card below about 760 px instead of squeezing the bars.
 const ROW = "grid grid-cols-[150px_minmax(0,1fr)]";
 
-/** Gantt of container sea time: bars from loading to arrival, with the red today line at MOCK_TODAY. */
-export function ContainersGantt({ axis, containers }: Pick<ContainersTimelineReport, "axis" | "containers">) {
+/** Gantt of container sea time over the report window: bars from loading to arrival, the red line at today. */
+export function ContainersGantt({ data, today }: { data: ContainersTimelineReport; today: string }) {
+  const axis = timelineAxis(data.from, data.to);
   const at = (date: string) => `${axisPercent(date, axis.start, axis.end)}%`;
-  const today = formatShortDate(MOCK_TODAY);
+  const showToday = today >= axis.start && today < axis.end;
 
   return (
     <div className="overflow-x-auto">
@@ -43,20 +44,20 @@ export function ContainersGantt({ axis, containers }: Pick<ContainersTimelineRep
 
         <div className="relative mt-[11px]">
           <ul>
-            {containers.map((c) => {
-              const span = barSpan(c.loaded, c.arrival, axis);
-              const note = STATE[c.state].note(formatShortDate(c.arrival));
+            {data.containers.map((c) => {
+              const span = barSpan(c.loadedOn, c.arrival, axis);
+              const note = STATE[c.status].note(formatShortDate(c.arrival));
               return (
-                <li key={c.container} className={cn(ROW, "h-[52px] items-center border-b border-border-subtle")}>
+                <li key={c.id} className={cn(ROW, "h-[52px] items-center border-b border-border-subtle")}>
                   <div className="min-w-0">
-                    <p className="text-sm leading-4 font-bold">{c.container}</p>
+                    <p className="text-sm leading-4 font-bold">{c.number}</p>
                     <p className="text-[12.5px] leading-[14px] text-muted-foreground">{note}</p>
                   </div>
                   <div className="relative h-5">
                     <span
                       role="img"
-                      aria-label={`${c.container}: loaded ${formatShortDate(c.loaded)}, ${note}`}
-                      className={cn("absolute inset-y-0 rounded-md", STATE[c.state].bar)}
+                      aria-label={`${c.number}: loaded ${formatShortDate(c.loadedOn)}, ${note}`}
+                      className={cn("absolute inset-y-0 rounded-md", STATE[c.status].bar)}
                       style={{ left: `${span.left}%`, width: `${span.width}%` }}
                     />
                   </div>
@@ -64,9 +65,11 @@ export function ContainersGantt({ axis, containers }: Pick<ContainersTimelineRep
               );
             })}
           </ul>
-          <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 left-[150px]">
-            <span className="absolute inset-y-0 w-0.5 bg-chart-5" style={{ left: at(MOCK_TODAY) }} />
-          </div>
+          {showToday ? (
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 left-[150px]">
+              <span className="absolute inset-y-0 w-0.5 bg-chart-5" style={{ left: at(today) }} />
+            </div>
+          ) : null}
         </div>
 
         <ul aria-label="Legend" className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] leading-[18px] text-muted-foreground">
@@ -76,10 +79,12 @@ export function ContainersGantt({ axis, containers }: Pick<ContainersTimelineRep
               {STATE[state].legend}
             </li>
           ))}
-          <li className="flex items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-[3px] rounded-full bg-chart-5" />
-            Today, {today}
-          </li>
+          {showToday ? (
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden className="h-2.5 w-[3px] rounded-full bg-chart-5" />
+              Today, {formatShortDate(today)}
+            </li>
+          ) : null}
         </ul>
       </div>
     </div>
