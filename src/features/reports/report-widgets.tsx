@@ -6,33 +6,17 @@ import { BarChart } from "@/components/shared/bar-chart";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatCNY, formatINR, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
 
-import type { LateOrder, MonthCost, RecentDownload, ReceivedLine, SupplierPayment } from "./data/queries";
-import { balance, monthTotals, shortQty, supplierTotals } from "./report-logic";
+import type { LandedCostByMonthReport, OrderedVsReceivedReport, OrderStatusReport, PaymentsPerSupplierReport } from "./data/queries";
+import { monthLabel } from "./report-logic";
 
 // Tables and the INR chart of the reports. Client-side because column definitions and value formatters are
 // functions. Column widths place each column where its reference has it; one column per table takes the rest.
 
 const DASH = "–";
+const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 
-/** "Recently downloaded" on the hub (32): 12 px headers low in a 43 px row, 13.5 px cells, 10 px outer padding. */
-export function RecentDownloadsTable({ rows }: { rows: RecentDownload[] }) {
-  const cell = "h-[43px] first:pl-2.5 last:pr-2.5";
-  const columns: ColumnDef<RecentDownload>[] = [
-    { accessorKey: "report", header: "Report", meta: { className: cn(cell, "w-[350px] font-bold") } },
-    { accessorKey: "period", header: "Period", meta: { className: cn(cell, "w-[203px]") } },
-    {
-      accessorKey: "format",
-      header: "Format",
-      meta: { className: cn(cell, "w-[125px]") },
-      cell: ({ row }) => <StatusPill tone="info">{row.original.format}</StatusPill>,
-    },
-    { accessorKey: "by", header: "Downloaded by", meta: { className: cell } },
-    { accessorKey: "when", header: "When", meta: { align: "right", className: cn(cell, "w-[150px]") } },
-  ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.id} density="dense" variant="plain" />;
-}
+type LateOrder = OrderStatusReport["late"][number];
 
 /** "Late orders" (33): bordered table inside the card. */
 export function LateOrdersTable({ rows }: { rows: LateOrder[] }) {
@@ -41,16 +25,18 @@ export function LateOrdersTable({ rows }: { rows: LateOrder[] }) {
     { accessorKey: "supplier", header: "Supplier" },
     { accessorKey: "due", header: "Due", meta: { className: "w-[91px]" }, cell: ({ row }) => formatShortDate(row.original.due) },
     {
-      accessorKey: "lateBy",
+      accessorKey: "lateDays",
       header: "Late by",
       meta: { className: "w-[105px]" },
-      cell: ({ row }) => <StatusPill tone="danger">{row.original.lateBy}</StatusPill>,
+      cell: ({ row }) => <StatusPill tone="danger">{days(row.original.lateDays)}</StatusPill>,
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.po} size="sm" header="tall" />;
+  return <DataTable columns={columns} data={rows} getRowId={(row) => row.orderId} size="sm" header="tall" />;
 }
 
-/** Ordered vs received (35): short is red and bold above zero; payment Reduced or Full. */
+type ReceivedLine = OrderedVsReceivedReport["lines"][number];
+
+/** Ordered vs received (35): short is red and bold above zero; payment Reduced (something short) or Full. */
 export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
   const columns: ColumnDef<ReceivedLine>[] = [
     { accessorKey: "po", header: "PO", meta: { className: "w-[115px] font-bold" } },
@@ -64,49 +50,47 @@ export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
       cell: ({ row }) => formatQty(row.original.received, row.original.unit),
     },
     {
-      id: "short",
+      accessorKey: "short",
       header: "Short",
       meta: { align: "right", className: "w-[98px]" },
-      cell: ({ row }) => {
-        const short = shortQty(row.original);
-        return short > 0 ? <span className="font-bold text-danger">{formatQty(short, row.original.unit)}</span> : "0";
-      },
+      cell: ({ row }) => (row.original.short > 0 ? <span className="font-bold text-danger">{formatQty(row.original.short, row.original.unit)}</span> : "0"),
     },
     {
-      accessorKey: "shortValue",
+      accessorKey: "shortValueCny",
       header: "Value of short",
       meta: { align: "right", className: "w-[152px]" },
-      cell: ({ row }) => (row.original.shortValue === null ? DASH : formatCNY(row.original.shortValue)),
+      cell: ({ row }) => (row.original.shortValueCny === null ? DASH : formatCNY(row.original.shortValueCny)),
     },
     {
-      accessorKey: "payment",
+      id: "payment",
       header: "Payment",
       meta: { className: "w-[134px]" },
-      cell: ({ row }) => <StatusPill tone={row.original.payment === "Reduced" ? "danger" : "success"}>{row.original.payment}</StatusPill>,
+      cell: ({ row }) => (row.original.short > 0 ? <StatusPill tone="danger">Reduced</StatusPill> : <StatusPill tone="success">Full</StatusPill>),
     },
   ];
-  return <DataTable columns={columns} data={lines} getRowId={(row) => row.po} size="sm" header="tall" />;
+  return <DataTable columns={columns} data={lines} getRowId={(row) => row.orderLineId} size="sm" header="tall" />;
 }
 
+type SupplierRow = PaymentsPerSupplierReport["suppliers"][number];
+
 /** Payments per supplier (37), with the totals row. */
-export function SupplierPaymentsTable({ rows }: { rows: SupplierPayment[] }) {
-  const totals = supplierTotals(rows);
-  const columns: ColumnDef<SupplierPayment>[] = [
+export function SupplierPaymentsTable({ rows, totals }: Pick<PaymentsPerSupplierReport, "totals"> & { rows: SupplierRow[] }) {
+  const columns: ColumnDef<SupplierRow>[] = [
     { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[287px] font-bold" }, footer: "Total" },
-    { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${totals.orders} open orders` },
+    { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${totals.orders} open order${totals.orders === 1 ? "" : "s"}` },
     {
-      accessorKey: "orderValue",
+      accessorKey: "orderValueCny",
       header: "Order value",
       meta: { align: "right", className: "w-[146px]" },
-      cell: ({ row }) => formatCNY(row.original.orderValue),
-      footer: formatCNY(totals.orderValue),
+      cell: ({ row }) => formatCNY(row.original.orderValueCny),
+      footer: formatCNY(totals.orderValueCny),
     },
     {
-      accessorKey: "paid",
+      accessorKey: "paidCny",
       header: "Paid",
       meta: { align: "right", className: "w-[146px]" },
-      cell: ({ row }) => formatCNY(row.original.paid),
-      footer: formatCNY(totals.paid),
+      cell: ({ row }) => formatCNY(row.original.paidCny),
+      footer: formatCNY(totals.paidCny),
     },
     {
       accessorKey: "paidInr",
@@ -116,26 +100,26 @@ export function SupplierPaymentsTable({ rows }: { rows: SupplierPayment[] }) {
       footer: formatINR(totals.paidInr),
     },
     {
-      id: "balance",
+      accessorKey: "balanceCny",
       header: "Balance",
       meta: { align: "right", className: "w-[145px]" },
-      cell: ({ row }) => formatCNY(balance(row.original)),
-      footer: formatCNY(totals.balance),
+      cell: ({ row }) => formatCNY(row.original.balanceCny),
+      footer: formatCNY(totals.balanceCny),
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplier} density="snug" size="sm" header="tall" />;
+  return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplierId} density="snug" size="sm" header="tall" />;
 }
 
+type MonthCost = LandedCostByMonthReport["months"][number];
 const perPieceLabel = (value: number | null) => (value === null ? DASH : formatINR(value, 2));
 
 /** "By month" (38), with the totals row. */
-export function MonthTable({ months }: { months: MonthCost[] }) {
-  const totals = monthTotals(months);
+export function MonthTable({ months, totals }: Pick<LandedCostByMonthReport, "months" | "totals">) {
   const columns: ColumnDef<MonthCost>[] = [
     {
       accessorKey: "month",
       header: "Month",
-      cell: ({ row }) => (row.original.soFar ? `${row.original.month} (so far)` : row.original.month),
+      cell: ({ row }) => `${monthLabel(row.original.month)}${row.original.soFar ? " (so far)" : ""}`,
       footer: "Total",
     },
     {
@@ -146,18 +130,18 @@ export function MonthTable({ months }: { months: MonthCost[] }) {
       footer: formatNumber(totals.pieces),
     },
     {
-      accessorKey: "landedCost",
+      accessorKey: "landedCostInr",
       header: "Landed cost",
       meta: { align: "right", className: "w-[135px]" },
-      cell: ({ row }) => (row.original.landedCost > 0 ? formatINR(row.original.landedCost) : DASH),
-      footer: formatINR(totals.landedCost),
+      cell: ({ row }) => (row.original.landedCostInr > 0 ? formatINR(row.original.landedCostInr) : DASH),
+      footer: formatINR(totals.landedCostInr),
     },
     {
-      id: "perPiece",
+      accessorKey: "perPieceInr",
       header: "Per piece",
       meta: { align: "right", className: "w-[110px]" },
-      cell: ({ row }) => perPieceLabel(row.original.perPiece),
-      footer: perPieceLabel(totals.perPiece),
+      cell: ({ row }) => perPieceLabel(row.original.perPieceInr),
+      footer: perPieceLabel(totals.perPieceInr),
     },
   ];
   return <DataTable columns={columns} data={months} getRowId={(row) => row.month} density="snug" size="sm" header="tall" />;
@@ -168,7 +152,7 @@ export function LandedCostChart({ months, className }: { months: MonthCost[]; cl
   return (
     <BarChart
       label="Landed cost by month"
-      data={months.map((m) => ({ label: m.month, value: m.landedCost }))}
+      data={months.map((m) => ({ label: monthLabel(m.month), value: m.landedCostInr }))}
       formatValue={(value) => formatINR(value)}
       className={className}
     />

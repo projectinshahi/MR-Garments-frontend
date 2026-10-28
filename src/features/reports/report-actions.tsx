@@ -1,18 +1,27 @@
 "use client";
 
-import { FilterSelect, type FilterOption } from "@/components/shared/filters";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+
+import { FilterSelect } from "@/components/shared/filters";
 import { notInPrototype } from "@/components/shared/prototype";
 import { Button } from "@/components/ui/button";
+import { hrefWith, optionParam } from "@/features/calendar/params";
 
-/** A button from the reference whose action has no design (D5): exports. */
+import { type CsvFile, downloadCsv } from "./csv";
+
+/** A button from the reference whose action has no design (D5): Excel and PDF exports (no library is installed). */
 export function PrototypeButton({ action, ...props }: React.ComponentProps<typeof Button> & { action: string }) {
   return <Button type="button" onClick={() => notInPrototype(action)} {...props} />;
 }
 
-/** Header actions on every report (33–38). */
-export function ExportActions() {
+/** Header actions on every report (33–38): CSV of the report's data, then the reference's Excel and PDF buttons. */
+export function ExportActions({ csv }: { csv: CsvFile }) {
   return (
     <>
+      <Button type="button" variant="outline" onClick={() => downloadCsv(csv)}>
+        Export CSV
+      </Button>
       <PrototypeButton action="Export Excel" variant="outline">
         Export Excel
       </PrototypeButton>
@@ -23,35 +32,29 @@ export function ExportActions() {
   );
 }
 
-const ALL_SUPPLIERS = "all";
+type UrlSelectProps = Omit<React.ComponentProps<typeof FilterSelect>, "value" | "onValueChange"> & { param: string };
 
 /**
- * Hub header filters (32): the period lists only the designed period; choosing a supplier is not designed (D5),
- * so the selection stays on "All suppliers".
+ * A filter dropdown kept in the URL (`?<param>=`, "all" removes it; the other parameters stay), so the server page
+ * reloads its data with the filter. Calendar's ParamSelect, with every FilterSelect option (the hub's inline label).
  */
-export function HubFilters({ periods, suppliers }: { periods: FilterOption[]; suppliers: string[] }) {
-  const supplierOptions = [{ value: ALL_SUPPLIERS, label: "All suppliers" }, ...suppliers.map((name) => ({ value: name, label: name }))];
+export function UrlSelect({ param, ...select }: UrlSelectProps) {
   return (
-    <>
-      <FilterSelect
-        size="sm"
-        showLabel
-        label="Period"
-        value={periods[0].value}
-        options={periods}
-        onValueChange={() => undefined}
-        className="h-[37px]"
-      />
-      <FilterSelect
-        size="sm"
-        label="Supplier"
-        value={ALL_SUPPLIERS}
-        options={supplierOptions}
-        onValueChange={(value) => {
-          if (value !== ALL_SUPPLIERS) notInPrototype("Filter by supplier");
-        }}
-        className="h-[37px]"
-      />
-    </>
+    <Suspense fallback={<FilterSelect {...select} value="all" onValueChange={() => {}} />}>
+      <BoundSelect param={param} {...select} />
+    </Suspense>
+  );
+}
+
+function BoundSelect({ param, ...select }: UrlSelectProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  return (
+    <FilterSelect
+      {...select}
+      value={optionParam(params, param, select.options)}
+      onValueChange={(value) => router.push(hrefWith(pathname, params, param, value === "all" ? null : value))}
+    />
   );
 }
