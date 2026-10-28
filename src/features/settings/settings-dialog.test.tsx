@@ -2,7 +2,7 @@ import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ConfirmDialog, editHref, useSettingsDialog } from "./settings-dialog";
+import { ConfirmDialog, editHref, SettingsDialog, useSettingsDialog } from "./settings-dialog";
 
 const nav = vi.hoisted(() => ({ pathname: "/settings/teams", query: "", router: { replace: vi.fn(), refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
@@ -42,6 +42,21 @@ describe("useSettingsDialog", () => {
     result.current.saved("Team added");
     expect(nav.router.replace).toHaveBeenCalledWith("/settings/teams", { scroll: false });
     expect(nav.router.refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe("SettingsDialog", () => {
+  // jsdom has no exit animation, so only the open side of "keeps what was open while it fades out" is testable.
+  it("shows the latest title and form while open", () => {
+    const dialog = (title: string, field: string) => (
+      <SettingsDialog open onClose={() => {}} title={title} description="Details">
+        <input aria-label={field} />
+      </SettingsDialog>
+    );
+    const { rerender } = render(dialog("Add team", "Name"));
+    rerender(dialog("Edit team", "Team name"));
+    expect(screen.getByRole("dialog", { name: "Edit team" })).toBeVisible();
+    expect(screen.getByLabelText("Team name")).toBeVisible();
   });
 });
 

@@ -8,9 +8,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, SearchInput } from "@/components/shared/filters";
-import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
-import { Button } from "@/components/ui/button";
 import type { RecordStatus } from "@/types/domain";
 
 import { editHref } from "./settings-dialog";
@@ -37,15 +35,6 @@ export const bold = { className: "font-bold" };
 export const right = { align: "right" } as const;
 // Header primary action: 34 px tall, 15 px side padding inside the border in every Settings reference.
 export const actionClass = "px-[15px]";
-
-/** A header add action whose dialog isn't built yet (D5). */
-export function PrototypeAction({ label }: { label: string }) {
-  return (
-    <Button type="button" size="header" className={actionClass} onClick={() => notInPrototype(label)}>
-      + {label}
-    </Button>
-  );
-}
 
 export const contactSearch = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 

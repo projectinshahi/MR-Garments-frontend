@@ -49,7 +49,9 @@ export function useSettingsDialog(path: string) {
 
 /**
  * The dialog frame: title, description and the form as children. The reference opens with no field focused, so the
- * dialog itself takes focus. Content unmounts on close, so a form inside opens from its defaults every time.
+ * dialog itself takes focus. Content unmounts on close, so a form inside opens from its defaults every time. While it
+ * fades out it keeps what was open: the URL has already lost ?dialog=edit, so an edit dialog's caller now passes the
+ * add title and an empty form.
  */
 export function SettingsDialog({
   open,
@@ -64,6 +66,10 @@ export function SettingsDialog({
   description: string;
   children: React.ReactNode;
 }) {
+  const [shown, setShown] = useState({ title, description, children });
+  if (open && (shown.title !== title || shown.description !== description || shown.children !== children)) {
+    setShown({ title, description, children });
+  }
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent
@@ -74,10 +80,10 @@ export function SettingsDialog({
         }}
       >
         <DialogHeader className="gap-[7px]">
-          <DialogTitle className="text-[21px] leading-[19px]">{title}</DialogTitle>
-          <DialogDescription className="text-sm leading-5">{description}</DialogDescription>
+          <DialogTitle className="text-[21px] leading-[19px]">{shown.title}</DialogTitle>
+          <DialogDescription className="text-sm leading-5">{shown.description}</DialogDescription>
         </DialogHeader>
-        {children}
+        {shown.children}
       </DialogContent>
     </Dialog>
   );

@@ -27,15 +27,15 @@ test("the settings redirect and tab links reach all seven tabs", async ({ page }
     await tabs.getByRole("link", { name: tab.name }).click();
     await expect(page).toHaveURL(new RegExp(`${tab.path}$`));
     await expect(tabs.getByRole("link", { name: tab.name })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole(tab.name === "Suppliers" ? "link" : "button", { name: tab.action })).toBeVisible();
+    await expect(page.getByRole("link", { name: tab.action })).toBeVisible();
     const table = page.getByRole("table");
     if (tab.rows !== null) await expect(table.getByRole("row")).toHaveCount(tab.rows + 1);
     await expect(table.getByRole("row", { name: new RegExp(tab.record) })).toContainText("Active");
   }
 
-  // Teams hold no stock yet: pieces 0, cost ₹0 and the average "–" (B6, B6.2).
+  // Team stock comes from stocked warehouse receipts (wave 3, 6.3); the average is "–" while a team holds nothing.
   await tabs.getByRole("link", { name: "Teams" }).click();
-  await expect(page.getByRole("row", { name: /Retail team/ }).getByRole("cell")).toHaveText(["Retail team", "0", "₹0", "–", "Active", "Edit"]);
+  await expect(page.getByRole("row", { name: /Retail team/ }).getByRole("cell")).toHaveText(["Retail team", /^\d+$/, /^₹/, /^(–|₹.*)$/, "Active", "Edit"]);
 });
 
 test("search and status chips filter the table on the client", async ({ page }) => {
@@ -62,12 +62,10 @@ test("search and status chips filter the table on the client", async ({ page }) 
   await expect(table.getByRole("row")).toHaveCount(active);
 });
 
-test("undesigned actions show the prototype notice", async ({ page }) => {
+// Wave 3: Add and Edit open the tab's own dialogs, on the tab's own path.
+test("Add and Edit link to the tab's dialogs", async ({ page }) => {
   await page.goto("/settings/shipping-agents");
-  await page.getByRole("button", { name: "+ Add shipping agent" }).click();
-  await expect(page.getByText("Add shipping agent is not included in the current prototype.")).toBeVisible();
-
-  // Edit opens the tab's edit dialog (wave 3), on the tab's own path.
+  await expect(page.getByRole("link", { name: "+ Add shipping agent" })).toHaveAttribute("href", "/settings/shipping-agents?dialog=add");
   await expect(page.getByRole("link", { name: "Edit Dragon Cargo" })).toHaveAttribute("href", /^\/settings\/shipping-agents\?dialog=edit&id=[0-9a-f-]{36}$/);
 });
 
@@ -100,4 +98,30 @@ test("the Add supplier dialog opens empty, closes and validates", async ({ page 
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
+});
+
+// The sidebar and the 1-7 tabs stay active with dialog parameters, and a tab kept mounted (hidden) by <Activity>
+// never opens its own dialog for another tab's ?dialog=add (useSettingsDialog checks the path).
+test("active state survives dialog parameters; a hidden tab keeps its dialog closed", async ({ page }) => {
+  const sidebar = page.getByRole("navigation", { name: "Main" });
+  const tabs = page.getByRole("navigation", { name: "Settings sections" });
+  const supplierDialog = page.getByRole("dialog", { name: "Add supplier" });
+
+  await page.goto("/settings/teams?dialog=add");
+  await expect(sidebar.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByRole("link", { name: "Teams" })).toHaveAttribute("aria-current", "page");
+
+  // Suppliers mounts, then a soft back navigation hides it with the URL at /settings/teams?dialog=add.
+  await tabs.getByRole("link", { name: "Suppliers" }).click();
+  await expect(page).toHaveURL(/\/settings\/suppliers$/);
+  await expect(page.getByRole("link", { name: "+ Add supplier" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings\/teams\?dialog=add$/);
+  await expect(tabs.getByRole("link", { name: "Teams" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "+ Add team" })).toBeVisible();
+  await expect(supplierDialog).toHaveCount(0);
+
+  await page.goto("/settings/suppliers?dialog=add");
+  await expect(supplierDialog).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
 });
