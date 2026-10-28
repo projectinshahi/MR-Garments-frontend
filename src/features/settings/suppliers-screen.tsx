@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { SupplierRow } from "@/lib/api/types";
 
-import { ADD_SUPPLIER_HREF, AddSupplierDialog } from "./add-supplier-dialog";
+import { ADD_SUPPLIER_HREF, SupplierDialog } from "./add-supplier-dialog";
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
 import type { SupplierDraft } from "./settings-logic";
 
@@ -22,7 +22,7 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "openOrders", header: "Open orders", meta: right },
 ];
 
-/** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add. */
+/** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */
 export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
   return (
     <>
@@ -42,7 +42,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         }
       />
       <Suspense fallback={null}>
-        <AddSupplierDialog draft={draft} />
+        <SupplierDialog draft={draft} suppliers={suppliers} />
       </Suspense>
     </>
   );
