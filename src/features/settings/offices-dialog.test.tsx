@@ -9,12 +9,13 @@ import type { LocationRow } from "@/lib/api/types";
 
 import { OfficeDialog } from "./offices-dialog";
 
-const nav = vi.hoisted(() => ({ query: "dialog=add", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/offices",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -61,7 +62,7 @@ describe("Add office or warehouse", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/locations", { name: "Yiwu office", type: "China office", address: "12 Futian Road" });
     expect(toast.success).toHaveBeenCalledWith("Office or warehouse added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/offices", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/offices");
   });
 
   it("asks for the name and the type without calling the API", async () => {
@@ -88,7 +89,7 @@ describe("Add office or warehouse", () => {
     expect(field("Name")).toHaveFocus();
     expect(field("Type")).toHaveValue("Warehouse");
     expect(save).toBeEnabled();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });
 

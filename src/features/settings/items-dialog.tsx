@@ -91,10 +91,11 @@ function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => v
   // A save that deactivates the item, waiting for the confirmation.
   const [deactivating, setDeactivating] = useState<ItemValues | null>(null);
 
-  async function send(values: ItemValues) {
+  async function send({ status, ...item }: ItemValues) {
     try {
-      if (row) await apiClient.patch<ItemResponse>(`/items/${row.id}`, values);
-      else await apiClient.post<ItemResponse>("/items", values);
+      // New items start Active: the API's create body has no status.
+      if (row) await apiClient.patch<ItemResponse>(`/items/${row.id}`, { ...item, status });
+      else await apiClient.post<ItemResponse>("/items", item);
     } catch (error) {
       setApiErrors(error, setError);
       return;

@@ -9,12 +9,13 @@ import type { ClearingAgentRow } from "@/lib/api/types";
 
 import { ClearingAgentDialogs } from "./clearing-agents-dialog";
 
-const nav = vi.hoisted(() => ({ query: "", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/clearing-agents",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -65,7 +66,7 @@ describe("Add clearing agent", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/clearing-agents", COCHIN);
     expect(toast.success).toHaveBeenCalledWith("Clearing agent added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/clearing-agents", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/clearing-agents");
   });
 
   it("shows the name message without calling the API when the name is empty", async () => {
@@ -90,7 +91,7 @@ describe("Add clearing agent", () => {
     expect(field("Port")).toHaveValue("Kochi");
     expect(save()).toBeEnabled();
     expect(toast.success).not.toHaveBeenCalled();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("disables Save while the request runs", async () => {
@@ -160,7 +161,7 @@ describe("Edit clearing agent", () => {
     expect(await screen.findByText(TAKEN)).toBeVisible();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /^Deactivate/ })).not.toBeInTheDocument());
     expect(screen.getByRole("dialog", { name: "Edit clearing agent" })).toBeVisible();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("reactivates an inactive agent without asking", async () => {

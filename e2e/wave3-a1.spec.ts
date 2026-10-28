@@ -63,6 +63,9 @@ for (const tab of TABS) {
     await expect(edit.getByLabel("Status")).toHaveValue("Inactive");
     await save(edit);
     await confirm.getByRole("button", { name: "Deactivate" }).click();
+    // The open confirmation already hides the edit dialog and the list from the accessibility tree, so wait for the
+    // save itself: the URL drops ?dialog= only after it succeeds.
+    await expect(page).toHaveURL(new RegExp(`${tab.path}$`));
     await expect(edit).toBeHidden();
     // The Active chip is selected, so the row leaves the list; it stays under Inactive after a reload.
     await expect(row(renamed)).toHaveCount(0);

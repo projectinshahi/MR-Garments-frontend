@@ -4,12 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmDialog, editHref, SettingsDialog, useSettingsDialog } from "./settings-dialog";
 
-const nav = vi.hoisted(() => ({ pathname: "/settings/teams", query: "", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ pathname: "/settings/teams", query: "", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 beforeEach(() => {
@@ -40,7 +41,7 @@ describe("useSettingsDialog", () => {
     nav.query = "dialog=add";
     const { result } = renderHook(() => useSettingsDialog("/settings/teams"));
     result.current.saved("Team added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/teams", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
     expect(nav.router.refresh).toHaveBeenCalledOnce();
   });
 });

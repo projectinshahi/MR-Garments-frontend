@@ -92,7 +92,8 @@ test("landed cost and every report show the new order's real figures, filters na
     expect(download.suggestedFilename()).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
     const csv = await readFile(await download.path(), "utf8");
     expect(csv).toContain("Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)");
-    expect(csv).toContain(`Hangzhou Knits,${po}`);
+    // Other specs' orders share the cell, and a cell with commas is quoted ("PO-2142, PO-2128").
+    expect(csv).toMatch(new RegExp(`^Hangzhou Knits,"?[^\\n]*\\b${po}\\b`, "m"));
 
     await page.goto(`/reports/payments-per-supplier?supplier=${id("Yiwu Trims Ltd.")}`);
     await expect(rowOf(page, po)).toHaveCount(0);
@@ -118,6 +119,7 @@ test("landed cost and every report show the new order's real figures, filters na
     await page.getByRole("link", { name: "Open report: Order status" }).click();
     await expect(heading(page, "Order status")).toBeVisible();
     await expect(page.getByText(`${month} · Hangzhou Knits`)).toBeVisible(); // the header pill
-    await expect(page.getByRole("meter", { name: "1. Order and deposit" })).toHaveAttribute("aria-valuenow", /^[1-9]/);
+    // The order was received and loaded above, so it now counts at stage 3.
+    await expect(page.getByRole("meter", { name: "3. Container loading" })).toHaveAttribute("aria-valuenow", /^[1-9]/);
   });
 });

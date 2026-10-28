@@ -10,13 +10,14 @@ import type { SupplierRow } from "@/lib/api/types";
 import { SupplierDialog } from "./add-supplier-dialog";
 import { supplierDraft } from "./data/fixtures";
 
-const nav = vi.hoisted(() => ({ query: "dialog=add", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 const router = nav.router;
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/suppliers",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -73,8 +74,8 @@ describe("Add supplier", () => {
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/suppliers", NINGBO);
     expect(toast.success).toHaveBeenCalledWith("Supplier added");
-    expect(router.replace).toHaveBeenCalledWith("/settings/suppliers", { scroll: false });
-    expect(router.replace.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
+    expect(replaceState.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
   });
 
   it("disables Save while the request runs (E14)", async () => {
@@ -102,7 +103,7 @@ describe("Add supplier", () => {
     expect(field("City")).toHaveValue("Ningbo");
     expect(save).toBeEnabled();
     expect(toast.success).not.toHaveBeenCalled();
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("shows M21 without calling the API when the name is empty (E1)", async () => {
@@ -124,7 +125,7 @@ describe("Add supplier", () => {
     expect(screen.getByRole("dialog", { name: "Add supplier" })).toBeVisible();
     expect(field("Supplier name")).toHaveValue("Ningbo Denim Works");
     expect(save).toBeEnabled();
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });
 
@@ -170,7 +171,7 @@ describe("Edit supplier", () => {
     });
     expect(post).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Supplier saved");
-    expect(router.replace).toHaveBeenCalledWith("/settings/suppliers", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
   });
 
   it("asks before deactivating; Cancel keeps the dialog and saves nothing", async () => {
@@ -224,6 +225,6 @@ describe("Edit supplier", () => {
     expect(field("Supplier name")).toHaveValue("Wenzhou Buttons");
     expect(field("Supplier name")).toHaveAttribute("aria-invalid", "true");
     expect(toast.success).not.toHaveBeenCalled();
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });

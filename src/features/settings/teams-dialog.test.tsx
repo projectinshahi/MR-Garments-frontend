@@ -9,12 +9,13 @@ import type { TeamRow } from "@/lib/api/types";
 
 import { TeamDialog } from "./teams-dialog";
 
-const nav = vi.hoisted(() => ({ query: "dialog=add", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/teams",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -49,7 +50,7 @@ describe("Add team", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/teams", { name: "Export team" });
     expect(toast.success).toHaveBeenCalledWith("Team added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/teams", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
   });
 
   it("asks for the name without calling the API", async () => {

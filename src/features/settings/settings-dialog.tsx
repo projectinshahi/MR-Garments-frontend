@@ -33,7 +33,9 @@ export function useSettingsDialog(path: string) {
   const router = useRouter();
   const dialog = here ? params.get("dialog") : null;
   const id = dialog === "edit" ? params.get("id") : null;
-  const close = () => router.replace(path, { scroll: false });
+  // Only the URL changes, so replace it in place: Next keeps useSearchParams in sync with no server round trip, and the
+  // dialog closes at once (router.replace waited for the page's server render while the dialog stayed up).
+  const close = () => window.history.replaceState(null, "", path);
   return {
     open: dialog === "add" ? ("add" as const) : id ? ("edit" as const) : null,
     /** The row being edited, while `open` is "edit". */

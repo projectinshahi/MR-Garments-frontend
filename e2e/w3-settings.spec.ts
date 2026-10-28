@@ -103,25 +103,21 @@ test("the Add supplier dialog opens empty, closes and validates", async ({ page 
 // The sidebar and the 1-7 tabs stay active with dialog parameters, and a tab kept mounted (hidden) by <Activity>
 // never opens its own dialog for another tab's ?dialog=add (useSettingsDialog checks the path).
 test("active state survives dialog parameters; a hidden tab keeps its dialog closed", async ({ page }) => {
-  const sidebar = page.getByRole("navigation", { name: "Main" });
-  const tabs = page.getByRole("navigation", { name: "Settings sections" });
-  const supplierDialog = page.getByRole("dialog", { name: "Add supplier" });
+  // An open dialog hides the page from the accessibility tree, and <Activity> keeps visited tabs in the DOM with
+  // display: none, so the active links are read with includeHidden on what is on screen.
+  const hidden = { includeHidden: true, exact: true };
+  const sidebar = page.getByRole("navigation", { name: "Main", ...hidden });
+  const tabs = page.getByRole("navigation", { name: "Settings sections", ...hidden }).filter({ visible: true });
 
-  await page.goto("/settings/teams?dialog=add");
-  await expect(sidebar.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
-  await expect(tabs.getByRole("link", { name: "Teams" })).toHaveAttribute("aria-current", "page");
-
-  // Suppliers mounts, then a soft back navigation hides it with the URL at /settings/teams?dialog=add.
-  await tabs.getByRole("link", { name: "Suppliers" }).click();
-  await expect(page).toHaveURL(/\/settings\/suppliers$/);
-  await expect(page.getByRole("link", { name: "+ Add supplier" })).toBeVisible();
-  await page.goBack();
+  // Suppliers mounts first, then stays mounted (hidden) while Teams opens its own add dialog.
+  await page.goto("/settings/suppliers");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Teams" }).click();
+  await expect(page).toHaveURL(/\/settings\/teams$/);
+  await page.getByRole("link", { name: "+ Add team" }).click();
   await expect(page).toHaveURL(/\/settings\/teams\?dialog=add$/);
-  await expect(tabs.getByRole("link", { name: "Teams" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("link", { name: "+ Add team" })).toBeVisible();
-  await expect(supplierDialog).toHaveCount(0);
-
-  await page.goto("/settings/suppliers?dialog=add");
-  await expect(supplierDialog).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("dialog", { name: "Add team" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Add supplier" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "Settings", ...hidden })).toHaveAttribute("aria-current", "page");
+  // With includeHidden the tab's aria-hidden chip joins its name ("6 Teams"), so this match isn't exact.
+  await expect(tabs.getByRole("link", { name: "Teams", includeHidden: true })).toHaveAttribute("aria-current", "page");
 });

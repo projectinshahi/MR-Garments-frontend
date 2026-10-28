@@ -96,6 +96,9 @@ for (const tab of TABS) {
     await expect(edit).toBeVisible();
     await edit.getByRole("button", { name: `Save ${tab.noun}` }).click();
     await confirm.getByRole("button", { name: "Deactivate" }).click();
+    // The open confirmation already hides the edit dialog and the list from the accessibility tree, so wait for the
+    // save itself: the URL drops ?dialog= only after it succeeds.
+    await expect(page).toHaveURL(new RegExp(`${tab.path}$`));
     await expect(edit).toBeHidden();
     await expect(rowOf(page)).toHaveCount(0);
 

@@ -9,12 +9,13 @@ import type { TransportCompanyRow } from "@/lib/api/types";
 
 import { TransportCompanyDialogs } from "./transport-companies-dialog";
 
-const nav = vi.hoisted(() => ({ query: "", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/transport-companies",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -58,7 +59,7 @@ describe("Add transport company", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/transport-companies", PERIYAR);
     expect(toast.success).toHaveBeenCalledWith("Transport company added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/transport-companies", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/transport-companies");
   });
 
   it("shows the name message without calling the API when the name is empty", async () => {
@@ -77,7 +78,7 @@ describe("Add transport company", () => {
     expect(field("Transport company name")).toHaveValue("KERALA ROADWAYS");
     expect(field("Transport company name")).toHaveFocus();
     expect(save()).toBeEnabled();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("disables Save while the request runs", async () => {

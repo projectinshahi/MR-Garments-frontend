@@ -9,12 +9,13 @@ import type { ItemRow } from "@/lib/api/types";
 
 import { ItemDialog, itemSchema, MESSAGES } from "./items-dialog";
 
-const nav = vi.hoisted(() => ({ query: "dialog=add", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/items",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -62,9 +63,10 @@ describe("Add item", () => {
     await user.click(save());
 
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
-    expect(post).toHaveBeenCalledWith("/items", { name: "Ladies blazers", countedIn: "Pieces", perBundle: 25, bundleLabel: null, status: "Active" });
+    // No status: the API's create body refuses one (new items start Active).
+    expect(post).toHaveBeenCalledWith("/items", { name: "Ladies blazers", countedIn: "Pieces", perBundle: 25, bundleLabel: null });
     expect(toast.success).toHaveBeenCalledWith("Item added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/items", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/items");
   });
 
   it("posts a bundle label instead, the pieces per bundle null", async () => {
@@ -115,7 +117,7 @@ describe("Add item", () => {
     expect(field("Item name")).toHaveValue("denim JEANS");
     expect(field("Item name")).toHaveFocus();
     expect(toast.success).not.toHaveBeenCalled();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
 
     post.mockRejectedValue(new ApiError(422, "validation_failed", "Some fields need attention.", { perBundle: MESSAGES.bundle }));
     await user.clear(field("Item name"));

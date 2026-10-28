@@ -9,12 +9,13 @@ import type { ShippingAgentRow } from "@/lib/api/types";
 
 import { ShippingAgentDialog } from "./shipping-agents-dialog";
 
-const nav = vi.hoisted(() => ({ query: "dialog=add", router: { replace: vi.fn(), refresh: vi.fn() } }));
+const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/shipping-agents",
   useRouter: () => nav.router,
   useSearchParams: () => new URLSearchParams(nav.query),
 }));
+const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
 
@@ -64,7 +65,7 @@ describe("Add shipping agent", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/shipping-agents", OCEAN);
     expect(toast.success).toHaveBeenCalledWith("Shipping agent added");
-    expect(nav.router.replace).toHaveBeenCalledWith("/settings/shipping-agents", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/shipping-agents");
   });
 
   it("disables Save while the request runs", async () => {
@@ -97,7 +98,7 @@ describe("Add shipping agent", () => {
     expect(field("Shipping agent name")).toHaveFocus();
     expect(field("Office city")).toHaveValue("Guangzhou");
     expect(save).toBeEnabled();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("toasts and keeps the dialog when the request fails", async () => {
@@ -108,7 +109,7 @@ describe("Add shipping agent", () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Something went wrong.", { description: "Please try again." }));
     expect(screen.getByRole("dialog", { name: "Add shipping agent" })).toBeVisible();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });
 
