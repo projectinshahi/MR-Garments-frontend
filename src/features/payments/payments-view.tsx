@@ -8,12 +8,14 @@ import { CardNote, SectionCard } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
 import { SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Button } from "@/components/ui/button";
+import type { OrderOptions } from "@/lib/api/types";
 import { formatINR, formatNumber, formatShortDate } from "@/lib/formatters";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { filterOrders } from "./filter-orders";
 import { PaymentDetailCard } from "./payment-detail";
-import { PrototypeButton } from "./prototype-button";
+import { RecordPaymentDialog } from "./record-payment-dialog";
 
 // 10 px cell padding and column widths as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
 const PAD = "px-2.5 first:pl-2.5 last:pr-2.5";
@@ -80,13 +82,21 @@ type PaymentsViewProps = {
   /** The order selected on load; a row click selects another. */
   defaultPo: string | null;
   kpis: React.ReactNode;
+  /** Shipping agents to offer as payees, or null when the user can't record payments (no buttons). */
+  agents: OrderOptions["agents"] | null;
+  /** POs link to their order page (canOpen(me, "/orders")). */
+  linkPo: boolean;
 };
 
-/** Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server slot. */
-export function PaymentsView({ orders, payments, defaultPo, kpis }: PaymentsViewProps) {
+/**
+ * Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server
+ * slot. The selected order's card shows only while its row does, and comes back when the search clears.
+ */
+export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedPo, setSelectedPo] = useState(defaultPo);
-  const selected = orders.find((order) => order.po === selectedPo);
+  const visible = filterOrders(orders, query);
+  const selected = visible.find((order) => order.po === selectedPo);
 
   return (
     <>
@@ -104,9 +114,13 @@ export function PaymentsView({ orders, payments, defaultPo, kpis }: PaymentsView
                 className="w-[170px] lg:w-[250px]"
               />
             </form>
-            <PrototypeButton action="Record payment" size="header">
-              + Record payment
-            </PrototypeButton>
+            {agents ? (
+              <RecordPaymentDialog orders={orders} agents={agents}>
+                <Button type="button" size="header">
+                  + Record payment
+                </Button>
+              </RecordPaymentDialog>
+            ) : null}
           </>
         }
       />
@@ -121,7 +135,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis }: PaymentsView
           >
             <DataTable
               columns={columns}
-              data={filterOrders(orders, query)}
+              data={visible}
               getRowId={(row) => row.po}
               density="tall"
               variant="plain"
@@ -132,7 +146,13 @@ export function PaymentsView({ orders, payments, defaultPo, kpis }: PaymentsView
             />
           </SectionCard>
           {selected ? (
-            <PaymentDetailCard order={selected} payments={payments.filter((p) => p.po === selected.po)} />
+            <PaymentDetailCard
+              order={selected}
+              // PAY-1 lists payments newest first; the card numbers them oldest first (1. Deposit, 2. Balance), as in 16.
+              payments={payments.filter((p) => p.po === selected.po).toReversed()}
+              agents={agents}
+              linkPo={linkPo}
+            />
           ) : null}
         </div>
       </PageContainer>

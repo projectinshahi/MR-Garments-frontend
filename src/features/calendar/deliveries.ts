@@ -22,7 +22,7 @@ export type Delivery = {
   statusLabel: string;
 };
 
-const MONDAY = { weekStartsOn: 1 } as const;
+export const MONDAY = { weekStartsOn: 1 } as const;
 const DUE_SOON_DAYS = 7;
 
 export const isoDay = (date: Date) => format(date, "yyyy-MM-dd");
@@ -47,9 +47,9 @@ export function monthWeeks(month: string) {
   return Array.from({ length: days.length / 7 }, (_, i) => days.slice(i * 7, i * 7 + 7));
 }
 
-/** The week of `today`, Monday to Sunday: 28 Sep – 4 Oct 2026 for 30 Sep. */
-export function weekDays(today: string) {
-  const start = startOfWeek(parseISO(today), MONDAY);
+/** The week holding `day`, Monday to Sunday: 28 Sep – 4 Oct 2026 for 30 Sep. */
+export function weekDays(day: string) {
+  const start = startOfWeek(parseISO(day), MONDAY);
   return eachDayOfInterval({ start, end: addDays(start, 6) });
 }
 

@@ -1,14 +1,8 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getOrderHistory } from "@/features/order-detail/history/data/queries";
-import { HistoryScreen } from "@/features/order-detail/history/history-screen";
-
-export const metadata: Metadata = { title: "History" };
-
+// Hidden tab: nothing records clearing, transport, warehouse, cost or an order history yet, so the frame doesn't
+// list it and its URL is not found. Reading params first keeps notFound() at request time, out of the build.
 export default async function HistoryPage({ params }: PageProps<"/orders/[po]/history">) {
-  const { po } = await params;
-  const events = await getOrderHistory(po);
-  if (!events) notFound();
-  return <HistoryScreen po={po} events={events} />;
+  await params;
+  notFound();
 }

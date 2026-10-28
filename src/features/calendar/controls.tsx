@@ -1,57 +1,48 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+
+import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
 import { FilterSelect, type FilterOption } from "@/components/shared/filters";
-import { notInPrototype } from "@/components/shared/prototype";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
-// D5 leaves for the calendar: none of these actions has a reference design.
+import { filterQuery, hrefWith, optionParam } from "./params";
 
-/** A filter dropdown fixed on its first option; picking another one shows the prototype toast. */
-export function PrototypeSelect({
-  label,
-  options,
-  action,
-  className,
-}: {
-  label: string;
-  options: FilterOption[];
-  action: string;
-  className?: string;
-}) {
-  const first = options[0].value;
+type ParamSelectProps = { param: string; label: string; options: FilterOption[]; size?: "default" | "sm"; className?: string };
+
+/** A filter dropdown kept in the URL (`?<param>=`, "all" removes it). The other parameters stay. */
+export function ParamSelect({ param, ...select }: ParamSelectProps) {
+  return (
+    <Suspense fallback={<FilterSelect {...select} value="all" onValueChange={() => {}} />}>
+      <BoundSelect param={param} {...select} />
+    </Suspense>
+  );
+}
+
+function BoundSelect({ param, options, ...select }: ParamSelectProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   return (
     <FilterSelect
-      label={label}
-      value={first}
+      {...select}
       options={options}
-      size="sm"
-      className={className}
-      onValueChange={(value) => {
-        if (value !== first) notInPrototype(action);
-      }}
+      value={optionParam(params, param, options)}
+      onValueChange={(value) => router.push(hrefWith(pathname, params, param, value === "all" ? null : value))}
     />
   );
 }
 
-/** ‹ › month and week navigation. */
-export function NavButton({ label, direction }: { label: string; direction: "previous" | "next" }) {
+/** The Month, Week and List tabs, carrying the supplier and date-range filters to the other views. */
+export function CalendarTabs({ tabs }: { tabs: RouteTab[] }) {
   return (
-    <Button variant="outline" aria-label={label} className="size-[30px] p-0 text-base font-normal" onClick={() => notInPrototype(label)}>
-      <span aria-hidden>{direction === "previous" ? "‹" : "›"}</span>
-    </Button>
+    <Suspense fallback={<RouteTabs tabs={tabs} label="Calendar views" />}>
+      <FilteredTabs tabs={tabs} />
+    </Suspense>
   );
 }
 
-/** A PO number. Opening its order from the calendar has no reference design, so it shows the toast. */
-export function PoButton({ po, className }: { po: string; className?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => notInPrototype(`Order ${po}`)}
-      className={cn("block text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", className)}
-    >
-      {po}
-    </button>
-  );
+function FilteredTabs({ tabs }: { tabs: RouteTab[] }) {
+  const query = filterQuery(useSearchParams());
+  return <RouteTabs label="Calendar views" tabs={query ? tabs.map((tab) => ({ ...tab, href: `${tab.href}?${query}` })) : tabs} />;
 }

@@ -1,5 +1,6 @@
 import { PageContainer } from "@/components/layout/page-header";
 import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
+import type { OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { formatDate, formatNumber, formatQty } from "@/lib/formatters";
 
@@ -7,11 +8,11 @@ import type { WarehouseReceipt } from "./data/queries";
 import { TeamsTable } from "./teams-table";
 
 /** Tab g (12_3.1.g_Warehouse.jpeg): what arrived, who received it, and how the pieces were given to teams. */
-export function WarehouseScreen({ po, data }: { po: string; data: WarehouseReceipt }) {
+export function WarehouseScreen({ order, data }: { order: OrderView; data: WarehouseReceipt }) {
   const given = data.teams.reduce((total, team) => total + team.pieces, 0);
   return (
     <PageContainer>
-      <OrderContextStrip po={po} fact={`Received ${formatDate(data.receivedOn)}`} />
+      <OrderContextStrip order={order} fact={`Received ${formatDate(data.receivedOn)}`} />
       <KpiRow gap="sm">
         <KpiCard
           size="xs"

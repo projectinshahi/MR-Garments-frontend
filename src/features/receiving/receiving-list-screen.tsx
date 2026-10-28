@@ -2,12 +2,13 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filters";
+import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
@@ -16,18 +17,18 @@ import type { Tone } from "@/types/domain";
 import type { ReceiptRow, ReceiptState, ReceivingListData } from "./data/queries";
 import { ALL, filterReceipts, type ReceiptFilters } from "./receiving-logic";
 
-const STATE_TONE: Record<ReceiptState, Tone> = { short: "danger", partly: "warning", complete: "success" };
+const STATE_TONE: Record<ReceiptState, Tone> = { partly: "warning", complete: "success" };
 
 const CHIPS = [
   { value: ALL, label: "All" },
   { value: "partly", label: "Partly received" },
-  { value: "short", label: "Short" },
   { value: "complete", label: "Complete" },
 ];
 
-const columns: ColumnDef<ReceiptRow>[] = [
+/** `linkPos`: the PO opens the order (canOpen /orders); otherwise plain text. */
+const columnsFor = (linkPos: boolean): ColumnDef<ReceiptRow>[] => [
   { accessorKey: "receivedOn", header: "Received on", cell: ({ row }) => formatShortDate(row.original.receivedOn) },
-  { accessorKey: "po", header: "PO", meta: { className: "font-bold" } },
+  { accessorKey: "po", header: "PO", meta: { className: "font-bold" }, cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
   { accessorKey: "supplier", header: "Supplier" },
   { accessorKey: "item", header: "Item" },
   { accessorKey: "ordered", header: "Ordered", cell: ({ row }) => formatQty(row.original.ordered, row.original.unit) },
@@ -54,6 +55,7 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
   const [filters, setFilters] = useState<ReceiptFilters>({ query: "", office: ALL, supplier: ALL, state: ALL });
   const set = (patch: Partial<ReceiptFilters>) => setFilters((current) => ({ ...current, ...patch }));
   const rows = filterReceipts(data.receipts, filters);
+  const columns = useMemo(() => columnsFor(data.linkPos), [data.linkPos]);
 
   return (
     <>
@@ -69,9 +71,11 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
             />
-            <Button asChild size="header">
-              <Link href="/receiving/new">+ Record receipt</Link>
-            </Button>
+            {data.canRecord ? (
+              <Button asChild size="header">
+                <Link href="/receiving/new">+ Record receipt</Link>
+              </Button>
+            ) : null}
           </>
         }
       />

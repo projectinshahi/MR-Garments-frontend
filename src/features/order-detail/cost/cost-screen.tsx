@@ -3,6 +3,7 @@ import { SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { LegendSwatch, StackedBar, type StackedSegment } from "@/components/shared/progress";
 import { StatusPill } from "@/components/shared/status-pill";
+import type { OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { formatINR } from "@/lib/formatters";
 
@@ -17,12 +18,12 @@ const GROUP_UI: Record<CostGroup, { label: string; color: StackedSegment["color"
 };
 
 /** Tab h (13_3.1.h_Cost.jpeg): the landed-cost breakdown, where the money goes, and the cost per piece. */
-export function CostScreen({ po, data }: { po: string; data: OrderCost }) {
+export function CostScreen({ order, data }: { order: OrderView; data: OrderCost }) {
   const { total, perPiece, groups } = summarizeCost(data);
   const [goods, duty, transport] = groups;
   return (
     <PageContainer>
-      <OrderContextStrip po={po} fact={`Landed cost ${formatINR(total)}`} />
+      <OrderContextStrip order={order} fact={`Landed cost ${formatINR(total)}`} />
       <div className="grid grid-cols-1 items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <SectionCard title="Cost breakdown" bottomGap="tight">
           <CostTable lines={data.lines} pieces={data.pieces} total={total} />

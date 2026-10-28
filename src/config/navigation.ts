@@ -87,6 +87,13 @@ const canView = (access: Access | undefined) => access === "View" || access === 
 
 export const isPublicPath = (pathname: string) => PUBLIC_PATHS.some((path) => matches(pathname, path));
 
+const ACCESS_ORDER: Access[] = ["None", "View", "Enter", "Full"];
+
+/** Whether the user has at least `minimum` access, so pages can hide actions the API would refuse with 403. */
+export function hasAccess(me: Pick<Me, "permissions">, capability: Capability, minimum: Access) {
+  return ACCESS_ORDER.indexOf(me.permissions[capability] ?? "None") >= ACCESS_ORDER.indexOf(minimum);
+}
+
 /** Whether this user may open the page (B3.3). Pages the rules don't name are refused. */
 export function canOpen(me: Pick<Me, "shell" | "permissions">, pathname: string) {
   if (isPublicPath(pathname) || SIGNED_IN_PATHS.some((path) => matches(pathname, path))) return true;

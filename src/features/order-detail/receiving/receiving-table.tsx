@@ -4,24 +4,25 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatNumber } from "@/lib/formatters";
+import type { OrderView } from "@/features/order-detail/data/queries";
+import { formatNumber, formatQty } from "@/lib/formatters";
 
-import type { ReceivingRow } from "./data/queries";
+type Line = OrderView["lines"][number];
+const short = (line: Line) => line.quantity - line.received;
 
-const columns: ColumnDef<ReceivingRow>[] = [
-  { accessorKey: "item", header: "Item" },
-  { accessorKey: "ordered", header: "Ordered", cell: ({ row }) => formatNumber(row.original.ordered), meta: { align: "right" } },
-  { accessorKey: "received", header: "Received", cell: ({ row }) => formatNumber(row.original.received), meta: { align: "right" } },
+// Every receipt so far, per order line (lines can be counted in different units).
+const columns: ColumnDef<Line>[] = [
+  { id: "item", header: "Item", cell: ({ row }) => row.original.item.name },
+  { id: "ordered", header: "Ordered", cell: ({ row }) => formatQty(row.original.quantity, row.original.unit), meta: { align: "right" } },
+  { id: "received", header: "Received", cell: ({ row }) => formatQty(row.original.received, row.original.unit), meta: { align: "right" } },
   {
-    accessorKey: "short",
+    id: "short",
     header: "Short",
-    cell: ({ row }) => (
-      <StatusPill tone={row.original.short > 0 ? "danger" : "success"}>{formatNumber(row.original.short)}</StatusPill>
-    ),
+    cell: ({ row }) => <StatusPill tone={short(row.original) > 0 ? "danger" : "success"}>{formatNumber(short(row.original))}</StatusPill>,
     meta: { align: "right" },
   },
 ];
 
-export function ReceivingTable({ rows, className }: { rows: ReceivingRow[]; className?: string }) {
-  return <DataTable columns={columns} data={rows} getRowId={(r) => r.item} density="snug" size="sm" className={className} />;
+export function ReceivingTable({ lines, className }: { lines: Line[]; className?: string }) {
+  return <DataTable columns={columns} data={lines} getRowId={(line) => line.id} density="snug" size="sm" className={className} />;
 }

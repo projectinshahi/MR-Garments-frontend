@@ -1,18 +1,19 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips } from "@/components/shared/filters";
+import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatQty, formatShortDate } from "@/lib/formatters";
 import type { Tone } from "@/types/domain";
 
-import { PoButton, PrototypeSelect } from "./controls";
-import type { CalendarData, Delivery, DeliveryStatus } from "./data/queries";
-import { supplierOptions } from "./deliveries";
+import { ParamSelect } from "./controls";
+import type { Delivery, DeliveryStatus } from "./data/queries";
+import { RANGE_OPTIONS } from "./params";
 
 const STATUS_TONE: Record<DeliveryStatus, Tone> = { late: "danger", "due-soon": "warning", "on-track": "success" };
 
@@ -23,9 +24,9 @@ const STATUS_FILTERS: { value: DeliveryStatus; label: string }[] = [
 ];
 
 // Widths put each column where 20_6.c_List.jpeg has it; Status takes the rest.
-const columns: ColumnDef<Delivery>[] = [
+const columnsFor = (linkOrders: boolean): ColumnDef<Delivery>[] => [
   { accessorKey: "due", header: "Due date", meta: { className: "w-[128px]" }, cell: ({ row }) => formatShortDate(row.original.due) },
-  { accessorKey: "po", header: "PO", meta: { className: "w-[138px]" }, cell: ({ row }) => <PoButton po={row.original.po} className="font-bold" /> },
+  { accessorKey: "po", header: "PO", meta: { className: "w-[138px]" }, cell: ({ row }) => <PoLink po={row.original.po} linked={linkOrders} /> },
   { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[279px]" } },
   { accessorKey: "item", header: "Item", meta: { className: "w-[216px]" } },
   {
@@ -41,9 +42,13 @@ const columns: ColumnDef<Delivery>[] = [
   },
 ];
 
-/** c List (20_6.c_List.jpeg): every delivery in due order, filtered client-side by the status chips. */
-export function ListView({ deliveries }: CalendarData) {
+/**
+ * c List (20_6.c_List.jpeg): the deliveries in due order, already filtered by the page on `?supplier=` and `?range=`
+ * (`filtered` says whether either is set), then client-side by the status chips.
+ */
+export function ListView({ deliveries, filtered, linkOrders }: { deliveries: Delivery[]; filtered: boolean; linkOrders: boolean }) {
   const [status, setStatus] = useState("all");
+  const columns = useMemo(() => columnsFor(linkOrders), [linkOrders]);
   const rows = status === "all" ? deliveries : deliveries.filter((d) => d.status === status);
   const options = [
     { value: "all", label: `All (${deliveries.length})` },
@@ -53,13 +58,17 @@ export function ListView({ deliveries }: CalendarData) {
   return (
     <PageContainer>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-3">
-          <PrototypeSelect label="Supplier" options={supplierOptions(deliveries)} action="Filter by supplier" />
-          <PrototypeSelect label="Date range" options={[{ value: "next-30", label: "Next 30 days" }]} action="Change date range" />
-        </div>
+        <ParamSelect param="range" label="Date range" options={RANGE_OPTIONS} size="sm" />
         <FilterChips label="Delivery status" options={options} value={status} onValueChange={setStatus} size="sm" />
       </div>
-      <DataTable columns={columns} data={rows} getRowId={(d) => d.po} density="short" size="sm" emptyState="No deliveries." />
+      <DataTable
+        columns={columns}
+        data={rows}
+        getRowId={(d) => d.po}
+        density="short"
+        size="sm"
+        emptyState={filtered || status !== "all" ? "No deliveries match these filters." : "No deliveries."}
+      />
     </PageContainer>
   );
 }

@@ -1,15 +1,27 @@
 import { Callout, CardNote, SectionCard } from "@/components/shared/cards";
+import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Button } from "@/components/ui/button";
+import type { OrderOptions } from "@/lib/api/types";
 import { formatCNY, formatDate, formatINR, formatRate, formatShortDate } from "@/lib/formatters";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
-import { PrototypeButton } from "./prototype-button";
+import { RecordPaymentDialog } from "./record-payment-dialog";
 
 const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
 const date = (value: string | null) => (value ? formatDate(value) : "–");
 
+type PaymentDetailCardProps = {
+  order: OrderPaymentRow;
+  payments: Payment[];
+  /** Shipping agents to offer as payees, or null when the user can't record payments (no button). */
+  agents: OrderOptions["agents"] | null;
+  /** The PO links to its order page (canOpen(me, "/orders")). */
+  linkPo: boolean;
+};
+
 /** Right card: the selected order's payments, each paid one at its own rate, and the totals. Records only. */
-export function PaymentDetailCard({ order, payments }: { order: OrderPaymentRow; payments: Payment[] }) {
+export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDetailCardProps) {
   const { po, supplier } = order;
   const totalCny = payments.reduce((sum, p) => sum + p.amountCny, 0);
   // A due payment has no rate yet (PAY-1 gives one only once paid), so the INR total covers paid payments only.
@@ -18,7 +30,11 @@ export function PaymentDetailCard({ order, payments }: { order: OrderPaymentRow;
 
   return (
     <SectionCard
-      title={`${po} payments`}
+      title={
+        <>
+          <PoLink po={po} linked={linkPo} /> payments
+        </>
+      }
       aside={<CardNote size="sm">{supplier}</CardNote>}
       titleGap="none"
       className="pt-3.5 pb-[18px]"
@@ -52,9 +68,13 @@ export function PaymentDetailCard({ order, payments }: { order: OrderPaymentRow;
         </>
       )}
 
-      <PrototypeButton action={`Record payment for ${po}`} className="mt-3.5 h-11 w-full rounded-[10px] text-[15px]">
-        + Record payment for {po}
-      </PrototypeButton>
+      {agents ? (
+        <RecordPaymentDialog orders={[order]} fixed agents={agents}>
+          <Button type="button" className="mt-3.5 h-11 w-full rounded-[10px] text-[15px]">
+            + Record payment for {po}
+          </Button>
+        </RecordPaymentDialog>
+      ) : null}
     </SectionCard>
   );
 }

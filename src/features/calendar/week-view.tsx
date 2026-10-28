@@ -2,17 +2,23 @@ import { format } from "date-fns";
 
 import { PageContainer } from "@/components/layout/page-header";
 import { Callout, SectionCard } from "@/components/shared/cards";
+import { PoLink } from "@/components/shared/po-link";
 import { formatQty, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import { CalendarToolbar, STATUS_BG, STATUS_TEXT, WEEK_SWATCHES } from "./calendar-toolbar";
-import { PoButton } from "./controls";
 import type { CalendarData } from "./data/queries";
 import { dueOn, isoDay, weekDays } from "./deliveries";
+import { filterDeliveries, readFilters, weekLinks, weekParam } from "./params";
 
-/** b Week (19_6.b_Week.jpeg): late banner and seven day columns of delivery cards. */
-export function WeekView({ today, deliveries }: CalendarData) {
-  const days = weekDays(today);
+/**
+ * b Week (19_6.b_Week.jpeg): late banner and seven day columns of delivery cards. `?week=YYYY-MM-DD` picks the week
+ * (Monday first) and `?supplier=` filters every part of the view.
+ */
+export function WeekView({ today, deliveries: all, linkOrders, params }: CalendarData & { params: URLSearchParams }) {
+  const days = weekDays(weekParam(params, today));
+  const { supplier } = readFilters(params, all);
+  const deliveries = filterDeliveries(all, today, supplier);
   const title = `${format(days[0], "d MMM")} – ${format(days[6], "d MMM yyyy")}`;
   const lateBefore = deliveries.filter((d) => d.status === "late" && d.due < isoDay(days[0]));
 
@@ -26,7 +32,15 @@ export function WeekView({ today, deliveries }: CalendarData) {
       ) : null}
 
       <SectionCard className="p-0">
-        <CalendarToolbar title={title} unit="week" swatches={WEEK_SWATCHES} className="min-h-[57px] border-b px-[18px] py-2" />
+        <CalendarToolbar
+          title={title}
+          unit="week"
+          swatches={WEEK_SWATCHES}
+          links={weekLinks(params, isoDay(days[0]))}
+          supplier={supplier}
+          empty={!days.some((day) => dueOn(deliveries, day).length)}
+          className="min-h-[57px] border-b px-[18px] py-2"
+        />
         <div className="overflow-x-auto">
           <div role="table" aria-label={title} className="grid min-w-[980px] grid-cols-7">
             <div role="row" className="contents">
@@ -59,7 +73,7 @@ export function WeekView({ today, deliveries }: CalendarData) {
                       <ul className="flex flex-col gap-2.5">
                         {items.map((d) => (
                           <li key={d.po} className={cn("rounded-[10px] px-2.5 py-[9px]", STATUS_BG[d.status])}>
-                            <PoButton po={d.po} className={cn("text-sm leading-5 font-bold", STATUS_TEXT[d.status])} />
+                            <PoLink po={d.po} linked={linkOrders} className={cn("block w-fit text-sm leading-5", STATUS_TEXT[d.status])} />
                             <p className="text-[12.5px] leading-[14px]">{d.supplier}</p>
                             <p className="mt-px text-[12.5px] leading-[14px]">
                               {d.item} · {formatQty(d.quantity, d.unit)}

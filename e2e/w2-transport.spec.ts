@@ -78,6 +78,7 @@ test("the KL 07 CD 4821 row opens the transport form, which keeps typed values",
 test("an unknown container has no transport form", async ({ page }) => {
   // Partial prerendering streams the shell first, so the HTTP status stays 200; assert the not-found UI instead.
   await page.goto("/transport/MEDU-4470912");
-  await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+  // The (app) not-found page added with the live five tabs.
+  await expect(page.getByText("Not found", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: /Container/ })).toHaveCount(0);
 });

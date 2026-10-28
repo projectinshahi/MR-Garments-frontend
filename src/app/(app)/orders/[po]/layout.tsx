@@ -1,12 +1,13 @@
+import { Suspense } from "react";
+
+import { LoadingState } from "@/components/shared/states";
 import { OrderDetailFrame } from "@/features/order-detail/shared/order-detail-frame";
-import { listOrderDetailPOs } from "@/features/order-detail/shared/queries";
 
-// Orchestrator-owned frame for tabs a–i. Tab pages are owned by W1-order-detail-a and W1-order-detail-b.
-export async function generateStaticParams() {
-  return (await listOrderDetailPOs()).map((po) => ({ po }));
-}
-
-export default async function OrderDetailLayout({ children, params }: LayoutProps<"/orders/[po]">) {
-  const { po } = await params;
-  return <OrderDetailFrame po={po}>{children}</OrderDetailFrame>;
+// Any PO, known only at request time (ORD-4): params stay behind Suspense, so the build prerenders just the shell.
+export default function OrderDetailLayout({ children, params }: LayoutProps<"/orders/[po]">) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <OrderDetailFrame params={params}>{children}</OrderDetailFrame>
+    </Suspense>
+  );
 }

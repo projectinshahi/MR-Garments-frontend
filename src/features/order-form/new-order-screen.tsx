@@ -9,14 +9,13 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
-import { notInPrototype } from "@/components/shared/prototype";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
-import { handleApiError, notifySuccess } from "@/lib/feedback";
+import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatCNY, formatINR, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -42,9 +41,10 @@ const messages = (...errors: ({ message?: string } | undefined)[]) => errors.fil
 /** New order, Stage 1: order and deposit (15_4_New_order.jpeg). Places the order with ORD-3. */
 export function NewOrderScreen({ data: { options, today } }: { data: NewOrderData }) {
   const router = useRouter();
-  const { register, control, handleSubmit, setError, formState } = useForm<NewOrderValues>({
+  const defaultValues: NewOrderValues = { supplierId: "", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] };
+  const { register, control, handleSubmit, setError, reset, formState } = useForm<NewOrderValues>({
     resolver: zodResolver(newOrderSchema),
-    defaultValues: { supplierId: "", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] },
+    defaultValues,
   });
   const lineRows = useFieldArray({ control, name: "lines" });
   const depositRows = useFieldArray({ control, name: "deposits" });
@@ -62,14 +62,18 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     try {
       created = await apiClient.post<CreateOrderResponse>("/orders", toCreateOrderBody(order, options));
     } catch (error) {
-      // 422: each message under its field, the first focused. Other failures toast (handleApiError).
-      Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) =>
-        setError(field as FieldPath<NewOrderValues>, { message }, { shouldFocus: index === 0 }),
-      );
+      // 422: each message under its field, the first focused; a field this form doesn't show is toasted, never
+      // dropped. Other failures toast (handleApiError).
+      Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) => {
+        if (Object.hasOwn(defaultValues, field)) setError(field as FieldPath<NewOrderValues>, { message }, { shouldFocus: index === 0 });
+        else notifyError(message);
+      });
       return;
     }
+    // The route stays mounted (Activity): empty the form so a later visit starts fresh.
+    reset();
     notifySuccess(`Order ${created.order.po} placed`);
-    router.push("/orders");
+    router.push(`/orders/${created.order.po}`);
     router.refresh();
   }
 
@@ -333,16 +337,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                 ]}
               />
               <FormFooter className="mt-3.5 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="min-w-0 flex-1 border-input text-[15px] text-label"
-                  onClick={() => notInPrototype("Save draft")}
-                >
-                  Save draft
-                </Button>
-                {/* Disabled while the request runs (no spinner is designed). */}
+                {/* Disabled while the request runs (no spinner is designed), so one click places one order. */}
                 <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]" disabled={formState.isSubmitting}>
                   Place order
                 </Button>

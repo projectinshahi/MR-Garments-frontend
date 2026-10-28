@@ -1,12 +1,13 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/components/shared/filters";
+import { PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
-import { notInPrototype } from "@/components/shared/prototype";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
@@ -22,15 +23,12 @@ const STAGE_OPTIONS: FilterOption[] = [
   ...STAGES.map((name, index) => ({ value: String(index + 1), label: `${index + 1}. ${name}` })),
 ];
 
-const focusRing = "rounded-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-
-// Live orders have no designed detail view. No handler: the click bubbles to the row (notInPrototype). The button
-// makes the row keyboard-reachable.
+// The row opens the order too; the link keeps it keyboard-reachable. Stopping its click avoids a second navigation.
 function PoCell({ order }: { order: OrderRow }) {
   return (
-    <button type="button" className={focusRing}>
-      {order.po}
-    </button>
+    <span onClick={(event) => event.stopPropagation()}>
+      <PoLink po={order.po} linked />
+    </span>
   );
 }
 
@@ -69,6 +67,7 @@ const columns: ColumnDef<OrderRow>[] = [
 
 /** Filter row and the orders table. Every order is loaded; filters and pages run on the client. */
 export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState(ALL);
   const [supplier, setSupplier] = useState(ALL);
@@ -124,7 +123,7 @@ export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
         density="tall"
         size="sm"
         header="tall"
-        onRowClick={(order) => notInPrototype(`Order detail for ${order.po}`)}
+        onRowClick={(order) => router.push(`/orders/${order.po}`)}
         emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
         pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
       />

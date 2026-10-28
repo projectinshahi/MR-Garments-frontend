@@ -14,6 +14,8 @@ const post = vi.fn();
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: (...args: unknown[]) => post(...args) } }));
 const success = vi.fn();
 vi.mock("@/lib/feedback", async (original) => ({ ...(await original<typeof import("@/lib/feedback")>()), notifySuccess: (m: string) => success(m) }));
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: { error: (m: string) => toastError(m) } }));
 
 const options: ReceiptOptions = {
   offices: [
@@ -129,9 +131,78 @@ describe("RecordReceiptScreen", () => {
     post.mockRejectedValue(new ApiError(422, "validation_failed", "Some fields need attention.", { bundles: "Enter the bundles." }));
     render(<RecordReceiptScreen data={data} />);
     await fillPo2035(user, "460");
+    await user.type(screen.getByRole("textbox", { name: /Short remark/ }), "40 to follow.");
     await user.click(screen.getByRole("button", { name: "Save receipt" }));
     expect(await screen.findByText("Enter the bundles.")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Bundles received now" })).toHaveFocus();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("marks the short remark required only while a line is still short", async () => {
+    const user = userEvent.setup();
+    render(<RecordReceiptScreen data={data} />);
+    const remark = screen.getByRole("textbox", { name: /Short remark/ });
+    expect(remark).toHaveAttribute("aria-required", "true");
+    expect(screen.getByText(/Short remark/)).toHaveTextContent("Short remark *");
+    await fillPo2035(user, "500");
+    expect(remark).toHaveAttribute("aria-required", "false");
+    expect(screen.getByText(/Short remark/)).not.toHaveTextContent("*");
+  });
+
+  it("blocks a short receipt without a remark in the browser", async () => {
+    const user = userEvent.setup();
+    render(<RecordReceiptScreen data={data} />);
+    await fillPo2035(user, "460");
+    await user.type(screen.getByRole("textbox", { name: /Short remark/ }), "   ");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    expect(await screen.findByText("Add a remark about the short items.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Short remark/ })).toHaveFocus();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("saves a complete receipt with no remark", async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ receipt: { id: "r9" } });
+    render(<RecordReceiptScreen data={data} />);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/receiving"));
+    expect(post.mock.calls[0]![1]).toMatchObject({ shortRemark: "" });
+  });
+
+  it("shows every API field message: orderId and shortRemark under their fields, unknown ones as toasts", async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(
+      new ApiError(422, "validation_failed", "Some fields need attention.", {
+        orderId: "Choose an order from the list.",
+        shortRemark: "Add a remark about the short items.",
+        form: "Something about the whole receipt.",
+      }),
+    );
+    render(<RecordReceiptScreen data={data} />);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    expect(await screen.findByText("Choose an order from the list.")).toBeInTheDocument();
+    expect(screen.getByText("Add a remark about the short items.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Order" })).toHaveFocus();
+    expect(toastError).toHaveBeenCalledWith("Something about the whole receipt.");
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("shows the 409 order_not_receivable message", async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(new ApiError(409, "order_not_receivable", "This order is past receiving and can't take more receipts."));
+    render(<RecordReceiptScreen data={data} />);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("This order is past receiving and can't take more receipts."));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("has no photo or draft stubs", () => {
+    render(<RecordReceiptScreen data={data} />);
+    expect(screen.queryByRole("button", { name: "Attach photo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
   });
 });

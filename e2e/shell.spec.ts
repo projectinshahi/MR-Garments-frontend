@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { test as liveTest } from "./live-api";
 import { SIGNED_OUT, STAFF_STATE } from "./sessions";
 
 // Orchestrator-owned checks for the shared shell (Phase 2). Role/label locators: with cacheComponents,
@@ -16,18 +17,19 @@ test("management shell: header, active nav, ADMIN always visible (D6)", async ({
   await expect(nav.getByRole("link", { name: "Users" })).toBeVisible();
 });
 
-test("order detail frame: breadcrumb, tabs, prototype toast (D5)", async ({ page }) => {
-  await page.goto("/orders/PO-2028/cost");
-  await expect(page.getByRole("heading", { level: 1, name: "PO-2028" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Order sections" }).getByRole("link", { name: /Cost/ })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "Print order" }).click();
-  await expect(page.getByText("Print order is not included in the current prototype.")).toBeVisible();
+// The order is live (ORD-4) and the Print/Edit order buttons are gone, so the frame check opens a new order's Items tab.
+liveTest("order detail frame: breadcrumb and tabs", async ({ page, api }) => {
+  const { po } = await api.createOrder();
+  await page.goto(`/orders/${po}/items`);
+  await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("link", { name: "Orders", exact: true })).toHaveAttribute("href", "/orders");
+  await expect(page.getByRole("navigation", { name: "Order sections" }).getByRole("link", { name: "Items" })).toHaveAttribute("aria-current", "page");
 });
 
 test("unknown PO has no detail page", async ({ page }) => {
   // Partial prerendering streams the shell first, so the HTTP status stays 200; assert the not-found UI instead.
   await page.goto("/orders/PO-9999");
-  await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+  await expect(page.getByText("Not found", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "PO-9999" })).toHaveCount(0);
 });
 

@@ -116,8 +116,14 @@ export function deliveryEvents(items: ReceiptListItem[], orderId: string) {
 // Record receipt form. Quantities stay strings while typed; an empty "Received now" counts as 0.
 // Proposed wording (not yet in MESSAGES): the messages below.
 const WHOLE = "Enter a whole number.";
+/** REC-3's own message for field `shortRemark`. */
+export const SHORT_REMARK = "Add a remark about the short items.";
 
-/** Client checks mirroring REC-3: whole numbers >= 0, at least one line > 0, no over-receipt, not after today. */
+/** REC-3 rule: a short remark is required while any line of the order is still short after this receipt. */
+export const remarkRequired = (order: ReceiptOptions["orders"][number] | undefined, lines: { orderLineId: string; quantity: string }[]) =>
+  !!order?.lines.some((l) => l.receivedEarlier + (Number(lines.find((v) => v.orderLineId === l.orderLineId)?.quantity) || 0) < l.ordered);
+
+/** Client checks mirroring REC-3: whole numbers >= 0, at least one line > 0, no over-receipt, not after today, remark when short. */
 export function receiptSchema(options: ReceiptOptions, today: string) {
   return z
     .object({
@@ -143,6 +149,9 @@ export function receiptSchema(options: ReceiptOptions, today: string) {
       });
       if (values.lines.every((line) => !Number(line.quantity))) {
         ctx.addIssue({ code: "custom", path: ["lines"], message: "Enter what was received for at least one item." });
+      }
+      if (!values.shortRemark.trim() && remarkRequired(order, values.lines)) {
+        ctx.addIssue({ code: "custom", path: ["shortRemark"], message: SHORT_REMARK });
       }
     });
 }
