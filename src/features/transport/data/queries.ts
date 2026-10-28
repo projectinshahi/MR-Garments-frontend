@@ -1,42 +1,31 @@
-import { listTransportCompanies } from "@/lib/data/master";
+import { hasAccess } from "@/config/navigation";
+import { ApiError } from "@/lib/api/errors";
+import { apiGet } from "@/lib/api/server";
+import type { TransportForm, TransportList } from "@/lib/api/stages-types";
+import { getMe } from "@/lib/session";
+import { todayInIndia } from "@/lib/today";
 
-import { containerSlug } from "../transport-logic";
-import * as fixtures from "./fixtures";
-
-export type { TransportForm, TransportRow, TransportState } from "./fixtures";
+// Transport reads TRN-1 and TRN-2 (backend docs/wave3-contracts.md section 8). These calls read the session cookie,
+// so the pages render inside the (app) loading.tsx Suspense boundary; failures throw to error.tsx.
 
 export type TransportListData = Awaited<ReturnType<typeof getTransportList>>;
-export type TransportListRow = TransportListData["rows"][number];
 export type TransportFormData = NonNullable<Awaited<ReturnType<typeof getTransportForm>>>;
 
-const formSlugs = () => fixtures.transportForms.map((form) => containerSlug(form.container));
-
-/**
- * Transport list: vehicles (with a link where a form is designed), the company filter options, and the target of
- * "+ Record transport" (the only designed form).
- */
+/** Transport list (28): TRN-1 and whether the signed-in user may record trips (transport >= Enter). */
 export async function getTransportList() {
-  const companies = await listTransportCompanies();
-  const slugs = formSlugs();
-  return structuredClone({
-    rows: fixtures.transports.map((row) => {
-      const slug = containerSlug(row.container);
-      return { ...row, formHref: slugs.includes(slug) ? `/transport/${slug}` : undefined };
+  const [list, me] = await Promise.all([apiGet<TransportList>("/transports"), getMe()]);
+  return { ...list, canEnter: !!me && hasAccess(me, "transport", "Enter") };
+}
+
+/** Transport form (27) for one container: TRN-2, or null for an unknown id (the page calls notFound()). */
+export async function getTransportForm(containerId: string) {
+  const [form, me] = await Promise.all([
+    apiGet<TransportForm>(`/transports/${encodeURIComponent(containerId)}`).catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
     }),
-    companies: companies.map((c) => c.name),
-    recordHref: `/transport/${slugs[0]}`,
-  });
-}
-
-/** Route parameters for the designed transport forms ("CAIU-2298076"). */
-export async function listTransportFormSlugs() {
-  return formSlugs();
-}
-
-/** Transport form for one container, by its route slug; undefined for an unknown container. */
-export async function getTransportForm(slug: string) {
-  const form = fixtures.transportForms.find((f) => containerSlug(f.container) === slug);
-  if (!form) return undefined;
-  const companies = await listTransportCompanies();
-  return structuredClone({ ...form, companies: companies.map((c) => c.name) });
+    getMe(),
+  ]);
+  if (!form) return null;
+  return { form, today: todayInIndia(), canEnter: !!me && hasAccess(me, "transport", "Enter") };
 }
