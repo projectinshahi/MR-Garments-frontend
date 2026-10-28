@@ -1,12 +1,17 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
+import { Suspense } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { TeamRow } from "@/lib/api/types";
 import { formatINR, formatNumber } from "@/lib/formatters";
 
-import { bold, PrototypeAction, right, SettingsList } from "./settings-list";
+import { addHref } from "./settings-dialog";
+import { actionClass, bold, right, SettingsList } from "./settings-list";
 import { averagePerPieceText } from "./settings-logic";
+import { TeamDialog, TEAMS_PATH } from "./teams-dialog";
 
 const teamColumns: ColumnDef<TeamRow>[] = [
   { accessorKey: "name", header: "Team", meta: bold },
@@ -25,17 +30,28 @@ const teamColumns: ColumnDef<TeamRow>[] = [
   },
 ];
 
-/** 45_15.6_Teams.jpeg */
+/** 45_15.6_Teams.jpeg, plus the add and edit dialogs (?dialog=add, ?dialog=edit&id=). */
 export function TeamsScreen({ rows }: { rows: TeamRow[] }) {
   return (
-    <SettingsList
-      path="/settings/teams"
-      rows={rows}
-      columns={teamColumns}
-      searchText={(row) => [row.name]}
-      noun="teams"
-      footnote="Goods are split between these teams when they are received in the warehouse. Team names here are examples."
-      action={<PrototypeAction label="Add team" />}
-    />
+    <>
+      <SettingsList
+        path={TEAMS_PATH}
+        rows={rows}
+        columns={teamColumns}
+        searchText={(row) => [row.name]}
+        noun="teams"
+        footnote="Goods are split between these teams when they are received in the warehouse. Team names here are examples."
+        action={
+          <Button asChild size="header" className={actionClass}>
+            <Link href={addHref(TEAMS_PATH)} scroll={false}>
+              + Add team
+            </Link>
+          </Button>
+        }
+      />
+      <Suspense fallback={null}>
+        <TeamDialog rows={rows} />
+      </Suspense>
+    </>
   );
 }
