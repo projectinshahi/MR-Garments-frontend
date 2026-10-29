@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 export const labelClass = "text-sm leading-4 font-bold text-label";
 export const inputClass = "h-12";
 export const submitClass = "h-[50px] w-full pb-0.5";
-export const linkClass = "font-bold text-primary hover:underline underline-offset-4";
 
 /** Card title (the page's only h1) and its muted sub-line. */
 export function AuthHeading({ title, description }: { title: string; description: string }) {

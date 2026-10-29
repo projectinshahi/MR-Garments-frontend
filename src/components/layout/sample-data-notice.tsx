@@ -10,7 +10,6 @@ export const SAMPLE_DATA_LABEL = "Sample Data — Not Live";
 // each route's queries read fixtures, not the API. Remove a route here when its screen goes live.
 const SAMPLE_DATA_ROUTES = [
   /^\/home(\/|$)/, // Staff home
-  /^\/forgot-password(\/|$)/, // Sends nothing yet, and the email is prefilled with a sample address
 ];
 
 export const isSampleDataPath = (pathname: string) => SAMPLE_DATA_ROUTES.some((route) => route.test(pathname));

@@ -4,9 +4,10 @@ import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import type { RolesResponse } from "@/lib/api/types";
 
-import { getUsersList, type UsersListResponse } from "./queries";
+import { getEditUser, getUsersList, type UsersListResponse } from "./queries";
 
 vi.mock("@/lib/api/server", () => ({ apiGet: vi.fn() }));
+vi.mock("@/lib/session", () => ({ getMe: async () => ({ id: "u-me" }) }));
 const get = vi.mocked(apiGet);
 
 const list: UsersListResponse = {
@@ -35,5 +36,15 @@ describe("Users list (47) reads USR-1 and ROL-1", () => {
       return roles;
     });
     await expect(getUsersList()).rejects.toBe(failure);
+  });
+});
+
+describe("Add or edit user (48)", () => {
+  beforeEach(() => get.mockReset());
+
+  it("marks the signed-in user's own account, whose password can't be set there (password policy)", async () => {
+    get.mockImplementation(async (path) => (path === "/roles" ? roles : { user: { id: path === "/users/u-me" ? "u-me" : "u-other" }, options: {} }));
+    expect((await getEditUser("u-me")).isSelf).toBe(true);
+    expect((await getEditUser("u-other")).isSelf).toBe(false);
   });
 });

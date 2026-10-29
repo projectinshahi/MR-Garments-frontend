@@ -3,7 +3,8 @@ import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SESSION_COOKIE, SESSION_ENDED_URL } from "@/config/navigation";
+import { canOpen, isPublicPath, SESSION_COOKIE, SESSION_ENDED_URL } from "@/config/navigation";
+import type { Me } from "@/lib/api/types";
 
 import { config, proxy } from "./proxy";
 
@@ -19,6 +20,27 @@ describe("proxy matcher", () => {
 });
 
 const ended = () => new NextRequest("http://localhost:3000/orders", { headers: { cookie: `${SESSION_COOKIE}=dead` } });
+
+describe("the removed password pages (password policy)", () => {
+  const management = { shell: "management", permissions: { admin: "Full", dashboard: "Full" } } as unknown as Me;
+  const removed = ["/change-password", "/forgot-password", "/set-password"];
+
+  it("are neither public nor open to a signed-in user; /login and /profile still are", () => {
+    for (const path of removed) {
+      expect(isPublicPath(path), path).toBe(false);
+      expect(canOpen(management, path), path).toBe(false);
+    }
+    expect(isPublicPath("/login")).toBe(true);
+    expect(canOpen(management, "/profile")).toBe(true);
+  });
+
+  it("send a signed-out visitor to sign in", async () => {
+    for (const path of removed) {
+      const response = await proxy(new NextRequest(`http://localhost:3000${path}?token=x`));
+      expect(response.headers.get("location"), path).toBe("http://localhost:3000/login");
+    }
+  });
+});
 
 describe("proxy with an ended session (ME-1 answers 401)", () => {
   afterEach(() => vi.unstubAllGlobals());
