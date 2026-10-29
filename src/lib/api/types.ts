@@ -418,3 +418,28 @@ export type UnreadCountResponse = { unread: number };
 export type NotificationResponse = { notification: Notification };
 /** NTF-4 POST /api/v1/notifications/read-all */
 export type ReadAllResponse = { updated: number };
+
+// ---------------------------------------------------------------------------------------------------------------
+// My profile (docs/profile-contract.md, PRF-1 and PRF-2): always the caller's own account, taken from the session.
+// No user id in the path, query or body.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type Profile = {
+  name: string;
+  /** Read-only here: the sign-in identity (Management changes it in Users). */
+  email: string;
+  /** "" when not set. */
+  phone: string;
+  role: Role;
+  office: { id: string; name: string } | null;
+  /** One of `options.languages` (today only "English"). */
+  language: string;
+  /** ISO 8601 timestamp; null when no password was ever set. */
+  passwordChangedAt: string | null;
+};
+
+/** PRF-1 GET /api/v1/profile */
+export type ProfileResponse = { profile: Profile; options: { languages: string[] } };
+/** PRF-2 PATCH /api/v1/profile: at least one of these keys and no other (400 otherwise). */
+export type UpdateProfileBody = Partial<Pick<Profile, "name" | "phone" | "language">>;
+export type UpdateProfileResponse = { profile: Profile };

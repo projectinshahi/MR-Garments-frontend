@@ -6,6 +6,6 @@ import { ProfileScreen } from "@/features/profile/profile-screen";
 export const metadata: Metadata = { title: "My profile" };
 
 export default async function ProfilePage() {
-  const data = await getProfile();
-  return <ProfileScreen data={data} />;
+  const { profile, options } = await getProfile();
+  return <ProfileScreen profile={profile} languages={options.languages} />;
 }

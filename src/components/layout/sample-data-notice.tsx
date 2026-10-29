@@ -9,7 +9,6 @@ export const SAMPLE_DATA_LABEL = "Sample Data — Not Live";
 // Screens that still show sample (fixture) data, so nobody takes their figures for real records. Verified 2026-10-28:
 // each route's queries read fixtures, not the API. Remove a route here when its screen goes live.
 const SAMPLE_DATA_ROUTES = [
-  /^\/profile(\/|$)/,
   /^\/home(\/|$)/, // Staff home
   /^\/forgot-password(\/|$)/, // Sends nothing yet, and the email is prefilled with a sample address
 ];
