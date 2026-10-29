@@ -73,4 +73,12 @@ describe("notificationTarget", () => {
     expect(notificationTarget(accounts, null)).toBeNull();
     expect(notificationTarget(null, "/orders/PO-2050")).toBeNull();
   });
+
+  it("refuses dot segments and backslashes, which could pass as an allowed page and land on another", () => {
+    expect(notificationTarget(accounts, "/notifications/../containers/c1")).toBeNull();
+    expect(notificationTarget(accounts, "/orders/./PO-2050")).toBeNull();
+    expect(notificationTarget(accounts, "/notifications/..")).toBeNull();
+    expect(notificationTarget(accounts, "/\\evil.example")).toBeNull();
+    expect(notificationTarget(accounts, "/orders/PO-2050?next=/../x")).toBe("/orders/PO-2050?next=/../x");
+  });
 });

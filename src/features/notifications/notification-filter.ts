@@ -45,8 +45,13 @@ export function filterNotifications(items: Notification[], filter: NotificationF
   return items.filter((item) => kindStyle(item.kind).filter === filter);
 }
 
-/** The page a notification opens: an app path ("/…", not "//host") the viewer may open, else null. */
+/**
+ * The page a notification opens: an app path ("/…", not "//host") the viewer may open, else null. Dot segments and
+ * backslashes are refused, so "/notifications/../users" can't pass the check as /notifications and land elsewhere.
+ */
 export function notificationTarget(viewer: Viewer | null, href: string | null) {
   if (!viewer || !href?.startsWith("/") || href.startsWith("//")) return null;
-  return canOpen(viewer, href.split(/[?#]/)[0]!) ? href : null;
+  const path = href.split(/[?#]/)[0]!;
+  if (/\\|(^|\/)\.\.?(\/|$)/.test(path)) return null;
+  return canOpen(viewer, path) ? href : null;
 }
