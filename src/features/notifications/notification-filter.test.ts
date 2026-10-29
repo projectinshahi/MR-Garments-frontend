@@ -1,65 +1,76 @@
 import { describe, expect, it } from "vitest";
 
-import { getNotifications } from "./data/queries";
-import { filterNotifications, isNotificationFilter, notificationFilterOptions } from "./notification-filter";
+import type { Me, Notification } from "@/lib/api/types";
 
-describe("notification filter chips", () => {
-  it("labels the chips as in the reference, with the unread count", async () => {
-    const { items } = await getNotifications();
-    expect(notificationFilterOptions(items).map((o) => o.label)).toEqual([
-      "All",
-      "Unread (3)",
-      "Late deliveries",
-      "Payments",
-      "Containers",
-    ]);
+import { filterNotifications, isNotificationFilter, kindStyle, notificationFilterOptions, notificationTarget } from "./notification-filter";
+
+const note = (id: string, kind: string, read = false): Notification => ({
+  id,
+  kind,
+  title: id,
+  details: [],
+  href: null,
+  createdAt: "2026-10-29T03:30:00Z",
+  read,
+});
+const items = [
+  note("short", "short-receipt"),
+  note("paid", "payment-recorded", true),
+  note("loaded", "container-loaded"),
+  note("sailed", "container-sailed", true),
+  note("arrived", "container-arrived"),
+  note("future", "duty-calculated"),
+];
+
+describe("notification kinds", () => {
+  it("map to the reference dot colours: red for a short receipt, blue for payments and containers", () => {
+    expect(kindStyle("short-receipt").dot).toBe("bg-chart-5");
+    for (const kind of ["payment-recorded", "container-loaded", "container-sailed", "container-arrived"]) {
+      expect(kindStyle(kind).dot).toBe("bg-chart-1");
+    }
   });
 
-  it("counts unread from the data", async () => {
-    const { items } = await getNotifications();
-    const oneRead = items.map((item, i) => (i === 0 ? { ...item, unread: false } : item));
-    expect(notificationFilterOptions(oneRead)[1].label).toBe("Unread (2)");
-  });
-
-  it("accepts only chip values", () => {
-    expect(isNotificationFilter("unread")).toBe(true);
-    expect(isNotificationFilter("short-receipt")).toBe(false);
+  it("show an unknown kind with a neutral dot, under All only", () => {
+    expect(kindStyle("duty-calculated")).toEqual({ dot: "bg-muted-foreground/50" });
+    expect(filterNotifications(items, "all").map((n) => n.id)).toContain("future");
   });
 });
 
-describe("filterNotifications", () => {
-  it("keeps all seven rows, newest first, for All", async () => {
-    const { items } = await getNotifications();
-    const all = filterNotifications(items, "all");
-    expect(all).toHaveLength(7);
-    expect(all[0].title).toBe("PO-2044 delivery is 1 day late");
-    expect(all[6].title).toBe("PO-2041 delivery is 4 days late");
+describe("filter chips", () => {
+  it("are labelled as in the reference, with the unread count from the API", () => {
+    expect(notificationFilterOptions(4).map((o) => o.label)).toEqual(["All", "Unread (4)", "Late deliveries", "Payments", "Containers"]);
   });
 
-  it("filters unread rows and each category", async () => {
-    const { items } = await getNotifications();
-    const titles = (filter: Parameters<typeof filterNotifications>[1]) => filterNotifications(items, filter).map((n) => n.title);
-
-    expect(titles("unread")).toEqual([
-      "PO-2044 delivery is 1 day late",
-      "PO-2047 and PO-2053 are due tomorrow (1 Oct)",
-      "Payment due in 5 days: PO-2041",
-    ]);
-    expect(titles("late-delivery")).toEqual(["PO-2044 delivery is 1 day late", "PO-2041 delivery is 4 days late"]);
-    expect(titles("payment")).toEqual(["Payment due in 5 days: PO-2041"]);
-    expect(titles("container")).toEqual(["Container MSKU 4471203 arrives on 2 Oct", "Duty calculated for CAIU 2298076"]);
+  it("accept only chip values", () => {
+    expect(isNotificationFilter("unread")).toBe(true);
+    expect(isNotificationFilter("short-receipt")).toBe(false);
   });
 
-  it("reproduces the detail lines with the shared formatters", async () => {
-    const { items } = await getNotifications();
-    expect(items.map((n) => n.details.join(" · "))).toEqual([
-      "Shenzhen Apparel · was due 29 Sep · Men’s shirts 1,800 pcs",
-      "Guangzhou Textile Co. · Yiwu Trims Ltd.",
-      "Guangzhou Textile Co. · ¥50,000 · about ₹15,00,000",
-      "Sino Freight · FOB · 60 bundles",
-      "Payment reduced by ¥2,400 · remark by Chen Yu",
-      "Total clearing cost ₹3,70,500",
-      "Guangzhou Textile Co. · was due 26 Sep",
-    ]);
+  it("filter unread rows and each category, keeping the order", () => {
+    const ids = (filter: Parameters<typeof filterNotifications>[1]) => filterNotifications(items, filter).map((n) => n.id);
+    expect(ids("all")).toHaveLength(6);
+    expect(ids("unread")).toEqual(["short", "loaded", "arrived", "future"]);
+    expect(ids("payment")).toEqual(["paid"]);
+    expect(ids("container")).toEqual(["loaded", "sailed", "arrived"]);
+    expect(ids("late-delivery")).toEqual([]);
+  });
+});
+
+describe("notificationTarget", () => {
+  const accounts = { shell: "management", permissions: { payments: "Enter", ordersView: "View", containers: "None" } } as Pick<Me, "shell" | "permissions">;
+
+  it("opens app paths the viewer may open, query included", () => {
+    expect(notificationTarget(accounts, "/orders/PO-2050")).toBe("/orders/PO-2050");
+    expect(notificationTarget(accounts, "/payments?po=PO-2050")).toBe("/payments?po=PO-2050");
+    expect(notificationTarget(accounts, "/notifications")).toBe("/notifications");
+  });
+
+  it("refuses pages the role can't open, other sites, missing links and an unknown viewer", () => {
+    expect(notificationTarget(accounts, "/containers/c1")).toBeNull();
+    expect(notificationTarget(accounts, "//evil.example/orders")).toBeNull();
+    expect(notificationTarget(accounts, "https://evil.example/orders")).toBeNull();
+    expect(notificationTarget(accounts, "orders/PO-2050")).toBeNull();
+    expect(notificationTarget(accounts, null)).toBeNull();
+    expect(notificationTarget(null, "/orders/PO-2050")).toBeNull();
   });
 });

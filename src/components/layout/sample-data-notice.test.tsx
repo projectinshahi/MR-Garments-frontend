@@ -9,13 +9,13 @@ vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 // Every page whose queries read fixtures (verified 2026-10-28), and every page that reads the API.
 const ID = "7d9a8a7e-0000-4000-8000-000000000000";
 const SAMPLE = [
-  "/notifications",
   "/profile",
   "/home",
   "/forgot-password",
 ];
 const LIVE = [
   "/",
+  "/notifications",
   "/orders",
   "/orders/new",
   "/orders/PO-2050",
@@ -67,7 +67,7 @@ describe("Sample Data — Not Live notice", () => {
   });
 
   it("shows the label as a note on a sample-data screen", () => {
-    nav.pathname = "/notifications";
+    nav.pathname = "/profile";
     render(<SampleDataNotice />);
     expect(screen.getByRole("note")).toHaveTextContent(SAMPLE_DATA_LABEL);
     expect(SAMPLE_DATA_LABEL).toBe("Sample Data — Not Live");

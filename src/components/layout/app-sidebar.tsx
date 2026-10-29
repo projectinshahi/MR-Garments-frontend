@@ -16,10 +16,12 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { useNavigate, useReportPending } from "@/components/layout/navigation-progress";
 import { SignOutMenuItem } from "@/components/layout/sign-out";
 import { isActivePath, type NavSection, USER_MENU } from "@/config/navigation";
+import { NotificationBell } from "@/features/notifications/notification-bell";
+import type { Me } from "@/lib/api/types";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 /** The signed-in user as the shell shows it (B2, B3): built by AppShell from ME-1. */
-export type ShellUser = { name: string; initials: string; detail: string; sections: NavSection[] };
+export type ShellUser = { name: string; initials: string; detail: string; sections: NavSection[]; viewer: Pick<Me, "shell" | "permissions"> };
 
 type SidebarProps = { user: ShellUser };
 
@@ -27,7 +29,7 @@ type SidebarProps = { user: ShellUser };
 export function AppSidebar({ user }: SidebarProps) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-(--sidebar-width) md:block">
-      <SidebarContent user={user} />
+      <SidebarContent user={user} bell />
     </aside>
   );
 }
@@ -59,6 +61,7 @@ export function MobileNav({ user }: SidebarProps) {
         </SheetContent>
       </Sheet>
       <Brand compact />
+      <NotificationBell viewer={user.viewer} className="ml-auto" />
     </div>
   );
 }
@@ -82,7 +85,8 @@ export function SidebarFallback() {
 /** `navigate`: takes over the nav links' navigation (the mobile sheet); without it they navigate themselves. */
 type Navigate = (href: string) => void;
 
-function SidebarContent({ user, navigate }: SidebarProps & { navigate?: Navigate }) {
+/** `bell`: the desktop sidebar's notification bell; the mobile sheet leaves it out (its top bar has one). */
+function SidebarContent({ user, navigate, bell = false }: SidebarProps & { navigate?: Navigate; bell?: boolean }) {
   const { sections } = user;
   return (
     <div className="flex h-full flex-col bg-linear-to-b from-sidebar-from to-sidebar-to text-sidebar-foreground">
@@ -95,7 +99,7 @@ function SidebarContent({ user, navigate }: SidebarProps & { navigate?: Navigate
           <ActiveNavSections sections={sections} navigate={navigate} />
         </Suspense>
       </nav>
-      <UserMenu user={user} />
+      <UserMenu user={user} bell={bell} />
     </div>
   );
 }
@@ -183,11 +187,11 @@ function NavBullet({ active }: { active: boolean }) {
   );
 }
 
-function UserMenu({ user }: SidebarProps) {
+function UserMenu({ user, bell }: SidebarProps & { bell: boolean }) {
   return (
-    <div className="mx-4 border-t border-sidebar-border px-2 pt-3 pb-[38px]">
+    <div className="mx-4 flex items-center gap-1 border-t border-sidebar-border px-2 pt-3 pb-[38px]">
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+        <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
           <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-sidebar-avatar text-[13px] font-bold text-white">
             {user.initials}
           </span>
@@ -205,6 +209,7 @@ function UserMenu({ user }: SidebarProps) {
           <SignOutMenuItem />
         </DropdownMenuContent>
       </DropdownMenu>
+      {bell ? <NotificationBell viewer={user.viewer} /> : null}
     </div>
   );
 }

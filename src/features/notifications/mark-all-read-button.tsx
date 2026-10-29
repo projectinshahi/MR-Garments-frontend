@@ -1,12 +1,32 @@
 "use client";
 
-import { notInPrototype } from "@/components/shared/prototype";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
-/** Header action. Marking as read has no reference design, so it is not in the prototype (D5). */
+import { Button } from "@/components/ui/button";
+import { handleApiError } from "@/lib/feedback";
+
+import { markAllRead } from "./notifications-client";
+
+/** Header action: NTF-4, then the page and the bell show the new state. */
 export function MarkAllReadButton() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   return (
-    <Button variant="outline" onClick={() => notInPrototype("Mark all as read")}>
+    <Button
+      variant="outline"
+      disabled={pending}
+      onClick={() =>
+        startTransition(async () => {
+          try {
+            await markAllRead();
+            router.refresh();
+          } catch (error) {
+            handleApiError(error);
+          }
+        })
+      }
+    >
       Mark all as read
     </Button>
   );

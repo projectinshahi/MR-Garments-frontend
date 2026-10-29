@@ -389,3 +389,32 @@ export type ContainerDetail = ContainerListItem & {
  */
 export type UpdateContainerBody = { status?: "sea" | "arrived"; sailedOn?: string; eta?: string };
 export type UpdateContainerResponse = { container: { id: string; status: ContainerState; sailedOn: string | null; eta: string } };
+
+// ---------------------------------------------------------------------------------------------------------------
+// Notifications (docs/notifications-contract.md, NTF-1 to NTF-4): only ever the caller's own.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type NotificationKind = "short-receipt" | "payment-recorded" | "container-loaded" | "container-sailed" | "container-arrived";
+
+export type Notification = {
+  id: string;
+  /** The backend may add kinds later; the UI shows an unknown one with a neutral style. */
+  kind: NotificationKind | (string & {});
+  title: string;
+  /** Short muted parts, shown joined with " · " (may be empty). */
+  details: string[];
+  /** An app path the recipient may open, or null. */
+  href: string | null;
+  /** ISO 8601 timestamp. */
+  createdAt: string;
+  read: boolean;
+};
+
+/** NTF-1 GET /api/v1/notifications?limit&cursor: newest first; `unread` counts all of the caller's unread. */
+export type NotificationsPage = { items: Notification[]; nextCursor: string | null; unread: number };
+/** NTF-2 GET /api/v1/notifications/unread-count */
+export type UnreadCountResponse = { unread: number };
+/** NTF-3 POST /api/v1/notifications/:id/read */
+export type NotificationResponse = { notification: Notification };
+/** NTF-4 POST /api/v1/notifications/read-all */
+export type ReadAllResponse = { updated: number };

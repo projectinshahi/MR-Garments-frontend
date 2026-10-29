@@ -37,7 +37,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 async function ShellNavigation() {
   const me = await getMe();
   if (!me) redirect(SESSION_ENDED_URL);
-  const user: ShellUser = { name: me.name, initials: me.initials, detail: userDetail(me), sections: navFor(me) };
+  const user: ShellUser = {
+    name: me.name,
+    initials: me.initials,
+    detail: userDetail(me),
+    sections: navFor(me),
+    viewer: { shell: me.shell, permissions: me.permissions },
+  };
   return (
     <>
       <AppSidebar user={user} />

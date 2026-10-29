@@ -1,49 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-// W3-account: Notifications (50_17.1) and My profile (51_17.2). Role/label locators only (hidden <Activity> routes).
+// W3-account: My profile (51_17.2); Notifications is live (e2e/notifications.spec.ts). Role/label locators only (hidden <Activity> routes).
 
 test.use({ viewport: { width: 1440, height: 900 } });
-
-test("notifications list shows seven rows, three unread, and filters them by chip", async ({ page }) => {
-  await page.goto("/notifications");
-  await expect(page.getByRole("heading", { level: 1, name: "Notifications" })).toBeVisible();
-
-  const list = page.getByRole("list", { name: "Notifications" });
-  const rows = list.getByRole("listitem");
-  await expect(rows).toHaveCount(7);
-  await expect(rows.first()).toContainText("PO-2044 delivery is 1 day late");
-  await expect(rows.first()).toContainText("Shenzhen Apparel · was due 29 Sep · Men’s shirts 1,800 pcs");
-  await expect(rows.first()).toContainText("Today, 09:00");
-  await expect(rows.nth(2)).toContainText("Guangzhou Textile Co. · ¥50,000 · about ₹15,00,000");
-  await expect(rows.last()).toContainText("30 Sep, 09:00");
-  await expect(list.getByText("New", { exact: true })).toHaveCount(3);
-  await expect(page.getByText("Reminders go to procurement and management the day before a delivery is due")).toBeVisible();
-
-  const chips = page.getByRole("group", { name: "Filter notifications" });
-  await expect(chips.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
-
-  await chips.getByRole("button", { name: "Unread (3)" }).click();
-  await expect(rows).toHaveCount(3);
-  await expect(chips.getByRole("button", { name: "Unread (3)" })).toHaveAttribute("aria-pressed", "true");
-
-  await chips.getByRole("button", { name: "Late deliveries" }).click();
-  await expect(rows).toHaveCount(2);
-  await expect(rows.last()).toContainText("PO-2041 delivery is 4 days late");
-
-  await chips.getByRole("button", { name: "Payments" }).click();
-  await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText("Payment due in 5 days: PO-2041");
-
-  await chips.getByRole("button", { name: "Containers" }).click();
-  await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText("Container MSKU 4471203 arrives on 2 Oct");
-
-  await chips.getByRole("button", { name: "All" }).click();
-  await expect(rows).toHaveCount(7);
-
-  await page.getByRole("button", { name: "Mark all as read" }).click();
-  await expect(page.getByText("Mark all as read is not included in the current prototype.")).toBeVisible();
-});
 
 test("my profile shows the details, password date and switches, and keeps edits in client state", async ({ page }) => {
   await page.goto("/profile");

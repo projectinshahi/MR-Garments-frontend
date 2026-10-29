@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MobileNav } from "@/components/layout/app-sidebar";
 import { AuthLayout } from "@/components/layout/auth-layout";
 import { PageHeader } from "@/components/layout/page-header";
+import type { Me } from "@/lib/api/types";
 
 describe("PageHeader breadcrumb", () => {
   it("spaces the parent, the / and the title 4 px apart, as measured in 06, 15, 23, 29 and 33", () => {
@@ -32,7 +33,8 @@ describe("MobileNav", () => {
   it("closes the sheet when a page is picked, so the page isn't left behind the menu", async () => {
     const user = userEvent.setup();
     const sections = [{ items: [{ title: "Landed Cost", href: "/landed-cost" }] }];
-    render(<MobileNav user={{ name: "Suresh Menon", initials: "SM", detail: "Full access", sections }} />);
+    const viewer = { shell: "management" as const, permissions: {} as Me["permissions"] };
+    render(<MobileNav user={{ name: "Suresh Menon", initials: "SM", detail: "Full access", sections, viewer }} />);
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("link", { name: "Landed Cost" }));
     expect(screen.queryByRole("dialog")).toBeNull();

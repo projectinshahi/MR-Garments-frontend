@@ -1,29 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { Bell } from "lucide-react";
+import { useState, useTransition } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { SectionCard } from "@/components/shared/cards";
 import { FilterChips } from "@/components/shared/filters";
-import { StatusPill } from "@/components/shared/status-pill";
-import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/states";
+import { Button } from "@/components/ui/button";
+import { apiClient } from "@/lib/api/client";
+import type { Notification, NotificationsPage } from "@/lib/api/types";
+import { handleApiError } from "@/lib/feedback";
 
-import type { NotificationDot, NotificationItem } from "./data/queries";
+import type { NotificationsData } from "./data/queries";
 import { filterNotifications, isNotificationFilter, notificationFilterOptions, type NotificationFilter } from "./notification-filter";
+import { NotificationList } from "./notification-list";
+import { markRead, useUnreadCount } from "./notifications-client";
 
-// Measured from 50_17.1_Notifications.jpeg: 60.3 px rows split by 1 px dividers (bg-table-head is the measured
-// #f8f9fe unread tint), 18 px side padding, a 9 px dot
-// 13.5 px before the text, 14 px bold titles over 12.5 px muted details, and 12.5 px times on the right.
-const DOT_COLORS: Record<NotificationDot, string> = {
-  red: "bg-chart-5",
-  amber: "bg-chart-2",
-  blue: "bg-chart-1",
-  green: "bg-chart-3",
-};
-
-/** Filter chips and the notification list. Rows are not links: no target is designed. */
-export function NotificationFeed({ items }: { items: NotificationItem[] }) {
+/** Filter chips, the list (NTF-1, newest first) and "Load more". The screen remounts it with each server render. */
+export function NotificationFeed({ data }: { data: NotificationsData }) {
   const [filter, setFilter] = useState<NotificationFilter>("all");
+  const [items, setItems] = useState(data.items);
+  const [cursor, setCursor] = useState(data.nextCursor);
+  const [loadingMore, startLoadingMore] = useTransition();
+  const navigate = useNavigate();
+  // The shared count once known (the bell's), so the chip and the bell always agree.
+  const unread = useUnreadCount() ?? data.unread;
   const visible = filterNotifications(items, filter);
+
+  const replace = (updated: Notification) => setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+
+  const open = (item: Notification, target: string | null) => {
+    if (!item.read) markRead(item.id).then(replace, handleApiError);
+    if (target) navigate(target);
+  };
+
+  const loadMore = () =>
+    startLoadingMore(async () => {
+      try {
+        const page = await apiClient.get<NotificationsPage>(`/notifications?cursor=${encodeURIComponent(cursor ?? "")}`);
+        setItems((current) => [...current, ...page.items]);
+        setCursor(page.nextCursor);
+      } catch (error) {
+        handleApiError(error);
+      }
+    });
 
   return (
     <>
@@ -32,7 +53,7 @@ export function NotificationFeed({ items }: { items: NotificationItem[] }) {
         <FilterChips
           size="sm"
           label="Filter notifications"
-          options={notificationFilterOptions(items)}
+          options={notificationFilterOptions(unread)}
           value={filter}
           onValueChange={(value) => {
             if (isNotificationFilter(value)) setFilter(value);
@@ -41,39 +62,22 @@ export function NotificationFeed({ items }: { items: NotificationItem[] }) {
         />
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col items-center gap-4">
         {/* No overflow clipping: as in the reference, the tinted first row covers the card's rounded top corners. */}
-        <SectionCard className="p-0">
-          {visible.length > 0 ? (
-            <ul aria-label="Notifications" className="divide-y divide-border-subtle">
-              {visible.map((item) => (
-                <li
-                  key={item.id}
-                  className={cn(
-                    // divide-y draws each divider inside the row above it: 60.3 px of row plus the 1 px divider.
-                    "flex min-h-[61.3px] items-center gap-[13.5px] px-[18px] py-2 last:min-h-[60.3px]",
-                    item.unread && "bg-table-head",
-                  )}
-                >
-                  <span aria-hidden className={cn("size-[9px] shrink-0 rounded-full", DOT_COLORS[item.dot])} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-[18px] font-bold">{item.title}</p>
-                    <p className="text-[12.5px] leading-[15px] text-muted-foreground">{item.details.join(" · ")}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1 text-[12.5px] text-muted-foreground">
-                    <span>{item.unread ? `${item.time} ·` : item.time}</span>
-                    {item.unread ? <StatusPill tone="info">New</StatusPill> : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <SectionCard className="w-full p-0">
+          {items.length === 0 ? (
+            <EmptyState title="No notifications yet" icon={<Bell />} />
+          ) : visible.length > 0 ? (
+            <NotificationList items={visible} now={new Date(data.now)} viewer={data.viewer} onOpen={open} />
           ) : (
             <p className="px-[18px] py-5 text-sm text-muted-foreground">No notifications here.</p>
           )}
         </SectionCard>
-        <p className="text-[12.5px] leading-4 text-muted-foreground">
-          Reminders go to procurement and management the day before a delivery is due, and again on the due date.
-        </p>
+        {cursor ? (
+          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more"}
+          </Button>
+        ) : null}
       </div>
     </>
   );
