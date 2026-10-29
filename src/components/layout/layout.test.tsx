@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
+import { MobileNav } from "@/components/layout/app-sidebar";
 import { AuthLayout } from "@/components/layout/auth-layout";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -20,5 +22,18 @@ describe("AuthLayout card", () => {
       </AuthLayout>,
     );
     expect(screen.getByRole("heading", { name: "Sign in" }).parentElement).toHaveClass("max-w-[440px]", "sm:p-10");
+  });
+});
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+
+describe("MobileNav", () => {
+  it("closes the sheet when a page is picked, so the page isn't left behind the menu", async () => {
+    const user = userEvent.setup();
+    const sections = [{ items: [{ title: "Landed Cost", href: "/landed-cost" }] }];
+    render(<MobileNav user={{ name: "Suresh Menon", initials: "SM", detail: "Full access", sections }} />);
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("link", { name: "Landed Cost" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

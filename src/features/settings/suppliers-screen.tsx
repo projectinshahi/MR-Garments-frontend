@@ -35,7 +35,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         footnote="Suppliers appear in the dropdown when a new order is created."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={ADD_SUPPLIER_HREF} scroll={false}>
+            <Link href={ADD_SUPPLIER_HREF} replace scroll={false}>
               + Add supplier
             </Link>
           </Button>

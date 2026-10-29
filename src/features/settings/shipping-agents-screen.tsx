@@ -31,7 +31,7 @@ export function ShippingAgentsScreen({ rows }: { rows: ShippingAgentRow[] }) {
         footnote="The shipping agent looks after the container from China to the Indian port. The agent does not log in."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={ADD_SHIPPING_AGENT_HREF} scroll={false}>
+            <Link href={ADD_SHIPPING_AGENT_HREF} replace scroll={false}>
               + Add shipping agent
             </Link>
           </Button>

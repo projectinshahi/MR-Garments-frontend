@@ -31,7 +31,7 @@ export function ClearingAgentsScreen({ rows }: { rows: ClearingAgentRow[] }) {
         footnote="Clearing agents do not log in. Staff enter their figures from the agent’s papers."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={ADD_CLEARING_AGENT_HREF} scroll={false}>
+            <Link href={ADD_CLEARING_AGENT_HREF} replace scroll={false}>
               + Add clearing agent
             </Link>
           </Button>

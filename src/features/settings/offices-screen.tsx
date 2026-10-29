@@ -32,7 +32,7 @@ export function OfficesScreen({ rows }: { rows: LocationRow[] }) {
         footnote="Offices are used in Receiving (China). Warehouses are used when goods are received in India."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={addHref(OFFICES_PATH)} scroll={false}>
+            <Link href={addHref(OFFICES_PATH)} replace scroll={false}>
               + Add office or warehouse
             </Link>
           </Button>

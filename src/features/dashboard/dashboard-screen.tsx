@@ -60,17 +60,17 @@ export function DashboardScreen({ data }: { data: DashboardData }) {
           <SectionCard
             title="Late and upcoming deliveries"
             titleGap="none"
-            aside={<CardLink size="sm" href="/calendar">Open calendar</CardLink>}
+            aside={data.links.calendar ? <CardLink size="sm" href="/calendar">Open calendar</CardLink> : null}
           >
             <DeliveriesTable rows={data.deliveries} />
           </SectionCard>
-          <SectionCard title="Payments due" titleGap="none" aside={<CardLink size="sm" href="/payments">All payments</CardLink>}>
+          <SectionCard title="Payments due" titleGap="none" aside={data.links.payments ? <CardLink size="sm" href="/payments">All payments</CardLink> : null}>
             <PaymentsDueTable rows={data.paymentsDue} />
           </SectionCard>
           <SectionCard
             title="Containers on the way"
             titleGap="none"
-            aside={<CardLink size="sm" href="/containers">All containers</CardLink>}
+            aside={data.links.containers ? <CardLink size="sm" href="/containers">All containers</CardLink> : null}
           >
             <ContainersTable rows={data.containersOnTheWay} />
           </SectionCard>

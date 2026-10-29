@@ -43,7 +43,7 @@ export function TeamsScreen({ rows }: { rows: TeamRow[] }) {
         footnote="Goods are split between these teams when they are received in the warehouse. Team names here are examples."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={addHref(TEAMS_PATH)} scroll={false}>
+            <Link href={addHref(TEAMS_PATH)} replace scroll={false}>
               + Add team
             </Link>
           </Button>

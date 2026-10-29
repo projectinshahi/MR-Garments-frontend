@@ -31,7 +31,7 @@ export function TransportCompaniesScreen({ rows }: { rows: TransportCompanyRow[]
         footnote="Transport companies do not log in."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={ADD_TRANSPORT_COMPANY_HREF} scroll={false}>
+            <Link href={ADD_TRANSPORT_COMPANY_HREF} replace scroll={false}>
               + Add transport company
             </Link>
           </Button>

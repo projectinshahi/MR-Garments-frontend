@@ -3,7 +3,7 @@
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment, Suspense } from "react";
+import { Fragment, Suspense, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,15 +33,23 @@ export function AppSidebar({ user }: SidebarProps) {
 
 /** Below md only (not designed): a compact bar with a menu button that opens the sidebar in a sheet. */
 export function MobileNav({ user }: SidebarProps) {
+  // The shell stays mounted across navigation, so the sheet closes itself when a link in it is followed.
+  const [open, setOpen] = useState(false);
   return (
     <div className="sticky top-0 z-30 flex h-14 items-center gap-3 bg-sidebar-from px-4 md:hidden">
-      <Sheet>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent" aria-label="Open navigation">
             <Menu />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-(--sidebar-width) border-0 p-0 [&>button]:text-white">
+        <SheetContent
+          side="left"
+          className="w-(--sidebar-width) border-0 p-0 [&>button]:text-white"
+          onClick={(event) => {
+            if (event.target instanceof Element && event.target.closest("a[href]")) setOpen(false);
+          }}
+        >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SidebarContent user={user} />
         </SheetContent>

@@ -44,7 +44,7 @@ export function ItemsScreen({ rows }: { rows: ItemRow[] }) {
         footnote="Items picked here appear on every new order, so names stay the same everywhere."
         action={
           <Button asChild size="header" className={actionClass}>
-            <Link href={addHref(ITEMS_PATH)} scroll={false}>
+            <Link href={addHref(ITEMS_PATH)} replace scroll={false}>
               + Add item
             </Link>
           </Button>

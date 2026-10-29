@@ -17,6 +17,9 @@ export const fieldClass = "gap-[5px]";
 export const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 export const footerButtonClass = "h-[42px] px-[17px]";
 
+// Links to these use `replace`, as `close` does: the dialog is never a history entry of its own, so one Back press
+// leaves the tab (a pushed dialog left a second copy of the tab behind, and Back seemed to do nothing).
+
 /** Opens the tab's add dialog: `?dialog=add` on the tab's own path. */
 export const addHref = (path: string) => `${path}?dialog=add`;
 /** Opens the tab's edit dialog for one row: `?dialog=edit&id=<id>`. */

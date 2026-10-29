@@ -7,7 +7,8 @@ import { LoadingState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { getOrderDetail, type OrderView } from "@/features/order-detail/data/queries";
 
-// Clearing & transport, Warehouse, Cost and History are hidden: nothing records those stages or an order history yet.
+// Clearing & transport, Warehouse, Cost and History are hidden: ORD-4 has no per-order section for them yet (the stage
+// screens record clearing, transport and warehouse per container since wave 3).
 // Payments, Receiving and Containers show only when ORD-4 gives the section (the user may view it).
 const TABS: { segment: string; label: string; chip: string; section?: "payments" | "receipts" | "containers" }[] = [
   { segment: "", label: "Overview", chip: "a" },

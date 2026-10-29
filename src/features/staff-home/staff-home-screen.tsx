@@ -30,9 +30,11 @@ export function StaffHomeScreen({ data }: { data: StaffHomeData }) {
             <p className="mt-[2.5px] text-[14.5px] leading-5 text-sidebar-foreground">{waitingSummary(data.waitingOrders.length)}</p>
           </div>
           {/* The white banner button keeps navy text (39); other outline buttons in the references are slate. */}
-          <Button asChild variant="outline" className="h-[41px] px-[19px] text-[15px] text-foreground">
-            <Link href="/receiving/new">+ Record a receipt</Link>
-          </Button>
+          {data.canRecordReceipt ? (
+            <Button asChild variant="outline" className="h-[41px] px-[19px] text-[15px] text-foreground">
+              <Link href="/receiving/new">+ Record a receipt</Link>
+            </Button>
+          ) : null}
         </section>
 
         <div className="grid items-start gap-x-(--page-gap) gap-y-4 xl:grid-cols-[minmax(0,1fr)_380px]">

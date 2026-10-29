@@ -55,6 +55,7 @@ function trailingColumns<T extends SettingsRecord>(path: string): ColumnDef<T>[]
       cell: ({ row }) => (
         <Link
           href={editHref(path, row.original.id)}
+          replace
           scroll={false}
           aria-label={`Edit ${row.original.name}`}
           className="inline-block rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"

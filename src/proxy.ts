@@ -32,11 +32,9 @@ export async function proxy(request: NextRequest) {
   const me = await currentUser(request);
   // If the API can't be reached, let the page render; it shows the error page (E13).
   if (me === "unreachable") return NextResponse.next();
-  if (me === null) {
-    const response = isPublic ? NextResponse.next() : redirectTo(request, SESSION_ENDED_URL);
-    response.cookies.delete(SESSION_COOKIE);
-    return response;
-  }
+  // The dead cookie is kept (sign-in replaces it, sign-out clears it): clearing it here let a background prefetch use
+  // it up, and the user's next page load then reached a plain /login without M4 saying why.
+  if (me === null) return isPublic ? NextResponse.next() : redirectTo(request, SESSION_ENDED_URL);
   if (pathname === "/login") return redirectTo(request, me.landing);
   if (!canOpen(me, pathname)) return redirectTo(request, me.landing);
   return NextResponse.next();
