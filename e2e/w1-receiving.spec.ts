@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import type { ReceiptListItem } from "../src/lib/api/types";
+import type { LocationResponse, LocationRow, ReceiptListItem } from "../src/lib/api/types";
 import { ANITA, type Api, expect, field, freshSignIn, kpi, kv, settled, shortDate, test, toast, today } from "./live-api";
 import { MANAGEMENT_STATE, PROCUREMENT_STATE, STAFF_STATE } from "./sessions";
 
@@ -207,6 +207,39 @@ test("saving a receipt returns to the list, moves the order to stage 2, and the 
   // Cancel goes back to the list.
   await page.getByRole("link", { name: "Cancel" }).click();
   await expect(page).toHaveURL("/receiving");
+});
+
+// Production: Record receipt opened while no China office was active kept its empty office choice after one was added
+// in Settings; the list showed the office, but Save said "Choose an office."
+test("an office added after the form was first opened is offered, chosen and saved", async ({ page, api }) => {
+  const active = (await api.get<LocationRow[]>("/locations")).filter((l) => l.type === "China office" && l.status === "Active");
+  const name = `Ningbo office ${Date.now()}`;
+  let added = "";
+  try {
+    for (const office of active) expect((await api.patch(`/locations/${office.id}`, { status: "Inactive" })).status()).toBe(200);
+    const order = await api.createOrder({ lines: [{ item: "Polo shirts", quantity: 50, rateCny: 15 }] });
+    await openForm(page, order.po);
+    const office = page.getByRole("combobox", { name: "Received at office" });
+    await expect(office.locator("option")).toHaveText(["No active China office"]);
+
+    const created = await api.post("/locations", { name, type: "China office", address: "" });
+    expect(created.status()).toBe(201);
+    added = ((await created.json()) as LocationResponse).location.id;
+    await page.getByRole("link", { name: "Cancel" }).click();
+    await page.getByRole("link", { name: "+ Record receipt" }).click();
+    await expect(office.locator("option")).toHaveText([name]);
+    await expect(office).toHaveValue(added);
+
+    await page.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: order.po });
+    await page.getByRole("textbox", { name: "Bundles received now" }).fill("1");
+    await receivedNow(page, "Polo shirts").fill("50");
+    await save(page).click();
+    await expect(page).toHaveURL("/receiving");
+    expect((await receiptsOf(api, order.po)).map((r) => r.office)).toEqual([name]);
+  } finally {
+    for (const office of active) await api.patch(`/locations/${office.id}`, { status: "Active" });
+    if (added) await api.patch(`/locations/${added}`, { status: "Inactive" });
+  }
 });
 
 test("double-clicking Save receipt saves one receipt", async ({ page, api }) => {

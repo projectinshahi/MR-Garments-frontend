@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, Suspense, useState } from "react";
 
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useNavigate, useReportPending } from "@/components/layout/navigation-progress";
 import { SignOutMenuItem } from "@/components/layout/sign-out";
 import { isActivePath, type NavSection, USER_MENU } from "@/config/navigation";
 import { APP_NAME } from "@/lib/constants";
@@ -35,6 +36,9 @@ export function AppSidebar({ user }: SidebarProps) {
 export function MobileNav({ user }: SidebarProps) {
   // The shell stays mounted across navigation, so the sheet closes itself when a link in it is followed.
   const [open, setOpen] = useState(false);
+  // The sheet's links unmount as it closes, so this bar, which stays, runs their navigation: the progress bar
+  // follows it until the page is on screen.
+  const navigate = useNavigate();
   return (
     <div className="sticky top-0 z-30 flex h-14 items-center gap-3 bg-sidebar-from px-4 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
@@ -51,7 +55,7 @@ export function MobileNav({ user }: SidebarProps) {
           }}
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <SidebarContent user={user} />
+          <SidebarContent user={user} navigate={navigate} />
         </SheetContent>
       </Sheet>
       <Brand compact />
@@ -75,7 +79,10 @@ export function SidebarFallback() {
   );
 }
 
-function SidebarContent({ user }: SidebarProps) {
+/** `navigate`: takes over the nav links' navigation (the mobile sheet); without it they navigate themselves. */
+type Navigate = (href: string) => void;
+
+function SidebarContent({ user, navigate }: SidebarProps & { navigate?: Navigate }) {
   const { sections } = user;
   return (
     <div className="flex h-full flex-col bg-linear-to-b from-sidebar-from to-sidebar-to text-sidebar-foreground">
@@ -84,8 +91,8 @@ function SidebarContent({ user }: SidebarProps) {
       </div>
       <nav aria-label="Main" className="flex-1 overflow-y-auto">
         {/* usePathname suspends on routes with unknown dynamic params (cacheComponents). */}
-        <Suspense fallback={<NavSections sections={sections} pathname={null} />}>
-          <ActiveNavSections sections={sections} />
+        <Suspense fallback={<NavSections sections={sections} pathname={null} navigate={navigate} />}>
+          <ActiveNavSections sections={sections} navigate={navigate} />
         </Suspense>
       </nav>
       <UserMenu user={user} />
@@ -109,11 +116,11 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function ActiveNavSections({ sections }: { sections: NavSection[] }) {
-  return <NavSections sections={sections} pathname={usePathname()} />;
+function ActiveNavSections({ sections, navigate }: { sections: NavSection[]; navigate?: Navigate }) {
+  return <NavSections sections={sections} pathname={usePathname()} navigate={navigate} />;
 }
 
-function NavSections({ sections, pathname }: { sections: NavSection[]; pathname: string | null }) {
+function NavSections({ sections, pathname, navigate }: { sections: NavSection[]; pathname: string | null; navigate?: Navigate }) {
   return (
     // Label block 34 px + 2 px gaps keeps the reference's 38 px item pitch across section breaks.
     <div className="flex flex-col gap-0.5 px-4">
@@ -131,6 +138,15 @@ function NavSections({ sections, pathname }: { sections: NavSection[]; pathname:
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    // Cancels the link's own navigation, so only `navigate` runs it (no second navigation).
+                    onNavigate={
+                      navigate
+                        ? (event) => {
+                            event.preventDefault();
+                            navigate(item.href);
+                          }
+                        : undefined
+                    }
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       // pb-0.5 lifts the label 1 px to the reference baseline; the 36 px box itself is unchanged.
@@ -138,7 +154,7 @@ function NavSections({ sections, pathname }: { sections: NavSection[]; pathname:
                       active ? "bg-sidebar-accent font-bold text-white" : "hover:bg-sidebar-accent/50",
                     )}
                   >
-                    <span aria-hidden className={cn("size-2 shrink-0 rounded-[2px]", active ? "bg-primary" : "bg-sidebar-bullet")} />
+                    <NavBullet active={active} />
                     {item.title}
                   </Link>
                 </li>
@@ -148,6 +164,22 @@ function NavSections({ sections, pathname }: { sections: NavSection[]; pathname:
         </Fragment>
       ))}
     </div>
+  );
+}
+
+/** The item's square; it lights up while its page loads (after 100 ms, so a fast navigation shows nothing). */
+function NavBullet({ active }: { active: boolean }) {
+  const { pending } = useLinkStatus();
+  useReportPending(pending);
+  return (
+    <span
+      aria-hidden
+      data-pending={pending || undefined}
+      className={cn(
+        "size-2 shrink-0 rounded-[2px] transition-colors delay-100",
+        pending ? "animate-pulse bg-white" : active ? "bg-primary" : "bg-sidebar-bullet",
+      )}
+    />
   );
 }
 

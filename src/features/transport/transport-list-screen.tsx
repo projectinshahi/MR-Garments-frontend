@@ -2,9 +2,9 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardNote, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
@@ -122,7 +122,7 @@ const readyColumns: ColumnDef<Ready>[] = [
  */
 export function TransportListScreen({ data }: { data: TransportListData }) {
   const { kpis, ready, canEnter } = data;
-  const router = useRouter();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<TransportFilters>({ query: "", company: ALL, state: ALL });
   const [period, setPeriod] = useState(PERIODS[0].value);
   const set = (patch: Partial<TransportFilters>) => setFilters((current) => ({ ...current, ...patch }));
@@ -193,7 +193,7 @@ export function TransportListScreen({ data }: { data: TransportListData }) {
           size="sm"
           header="tall"
           density="loose"
-          onRowClick={(row) => router.push(formHref(row.containerId))}
+          onRowClick={(row) => navigate(formHref(row.containerId))}
           emptyState={data.rows.length ? "No vehicles match these filters." : "No vehicles yet."}
         />
 
@@ -206,7 +206,7 @@ export function TransportListScreen({ data }: { data: TransportListData }) {
               variant="plain"
               density="snug"
               className="mt-3"
-              onRowClick={(r) => router.push(formHref(r.containerId))}
+              onRowClick={(r) => navigate(formHref(r.containerId))}
             />
           </SectionCard>
         ) : null}

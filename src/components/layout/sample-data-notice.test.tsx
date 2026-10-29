@@ -9,13 +9,13 @@ vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 // Every page whose queries read fixtures (verified 2026-10-28), and every page that reads the API.
 const ID = "7d9a8a7e-0000-4000-8000-000000000000";
 const SAMPLE = [
-  "/",
   "/notifications",
   "/profile",
   "/home",
   "/forgot-password",
 ];
 const LIVE = [
+  "/",
   "/orders",
   "/orders/new",
   "/orders/PO-2050",

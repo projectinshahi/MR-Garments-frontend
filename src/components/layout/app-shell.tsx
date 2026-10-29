@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppSidebar, MobileNav, type ShellUser, SidebarFallback } from "@/components/layout/app-sidebar";
+import { NavigationProgress } from "@/components/layout/navigation-progress";
 import { SampleDataNotice } from "@/components/layout/sample-data-notice";
+import { LoadingState } from "@/components/shared/states";
 import { navFor, SESSION_ENDED_URL, userDetail } from "@/config/navigation";
 import { getMe } from "@/lib/session";
 
@@ -14,6 +16,7 @@ import { getMe } from "@/lib/session";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-svh">
+      <NavigationProgress />
       <Suspense fallback={<SidebarFallback />}>
         <ShellNavigation />
       </Suspense>
@@ -22,7 +25,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}>
           <SampleDataNotice />
         </Suspense>
-        {children}
+        {/* The page-load spinner. Being in the shared layout, it never shows on a client navigation: the current page
+            stays until the next one is ready (a route loading.tsx showed a spinner for at least ~350 ms each time,
+            React's minimum before a fallback may be replaced). The clicked sidebar link shows the wait instead. */}
+        <Suspense fallback={<LoadingState />}>{children}</Suspense>
       </div>
     </div>
   );

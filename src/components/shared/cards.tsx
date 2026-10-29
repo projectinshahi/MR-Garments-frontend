@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LinkPending } from "@/components/layout/navigation-progress";
 import { formatToday } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -42,12 +43,12 @@ export function SectionCard({
 }
 
 /** Title-row link: 15 px, or 13 px (`size="sm"`) as on the dashboard cards. */
-export function CardLink({ size = "default", className, ...props }: React.ComponentProps<typeof Link> & { size?: "default" | "sm" }) {
+export function CardLink({ size = "default", className, children, ...props }: React.ComponentProps<typeof Link> & { size?: "default" | "sm" }) {
   return (
-    <Link
-      className={cn(size === "sm" ? "text-[13px]" : "text-[15px]", "font-bold text-primary hover:underline", className)}
-      {...props}
-    />
+    <Link className={cn(size === "sm" ? "text-[13px]" : "text-[15px]", "font-bold text-primary hover:underline", className)} {...props}>
+      {children}
+      <LinkPending />
+    </Link>
   );
 }
 

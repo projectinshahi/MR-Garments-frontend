@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse, type ProxyConfig } from "next/server";
 
 import { canOpen, isPublicPath, SESSION_COOKIE, SESSION_ENDED_URL } from "@/config/navigation";
 import type { Me } from "@/lib/api/types";
@@ -40,7 +40,14 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = {
-  // Everything except the API forwarding, Next internals and files with an extension (images, icons).
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+export const config: ProxyConfig = {
+  // Everything except the API forwarding, Next internals and files with an extension (images, icons), and router
+  // prefetches. A prefetch only fetches a page's App Shell (static, no API data: uncached fetches never run in it), yet
+  // each one cost a ME-1 call here, about one per visible link. The click's own request still comes through here.
+  matcher: [
+    {
+      source: "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+      missing: [{ type: "header", key: "next-router-prefetch" }],
+    },
+  ],
 };

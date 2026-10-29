@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LinkPending } from "@/components/layout/navigation-progress";
 import { cn } from "@/lib/utils";
 
 type PageHeaderProps = {
@@ -24,6 +25,7 @@ export function PageHeader({ title, parent, titleAddon, actions }: PageHeaderPro
             <>
               <Link href={parent.href} className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
                 {parent.label}
+                <LinkPending />
               </Link>
               <span aria-hidden className="text-sm text-muted-foreground">
                 /

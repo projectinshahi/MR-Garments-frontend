@@ -2,9 +2,9 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardNote, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
@@ -108,7 +108,7 @@ const readyColumns: ColumnDef<Ready>[] = [
  */
 export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
   const { teams, ready, showCosts, canEnter } = data;
-  const router = useRouter();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<ReceiptFilters>({ query: "", warehouse: data.warehouses[0]?.id ?? ALL, team: ALL });
   const set = (patch: Partial<ReceiptFilters>) => setFilters((current) => ({ ...current, ...patch }));
   const rows = filterReceipts(data.rows, filters);
@@ -197,7 +197,7 @@ export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
               variant="plain"
               density="loose"
               className="mt-3"
-              onRowClick={(r) => router.push(receiveHref(r.transportId))}
+              onRowClick={(r) => navigate(receiveHref(r.transportId))}
             />
           </SectionCard>
         ) : null}

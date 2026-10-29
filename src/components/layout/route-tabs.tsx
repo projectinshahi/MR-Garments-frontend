@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { LinkPending } from "@/components/layout/navigation-progress";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 
@@ -51,6 +53,7 @@ function Tabs({ tabs, pathname }: { tabs: RouteTab[]; pathname: string | null })
         </span>
         {tab.label}
         {active ? <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-primary" /> : null}
+        <LinkPending />
       </Link>
     );
   });

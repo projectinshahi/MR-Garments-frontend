@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LinkPending } from "@/components/layout/navigation-progress";
 import { cn } from "@/lib/utils";
 
 const focusRing = "rounded-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -13,6 +14,7 @@ export function PoLink({ po, linked, className }: { po: string; linked: boolean;
   return (
     <Link href={`/orders/${po}`} className={cn(focusRing, "hover:underline", className)}>
       {po}
+      <LinkPending />
     </Link>
   );
 }

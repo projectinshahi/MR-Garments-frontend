@@ -25,7 +25,8 @@ describe("AuthLayout card", () => {
   });
 });
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+// The navigation itself (once, through the bar's router.push) needs the App Router: e2e/navigation.spec.ts covers it.
+vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ push: vi.fn() }) }));
 
 describe("MobileNav", () => {
   it("closes the sheet when a page is picked, so the page isn't left behind the menu", async () => {

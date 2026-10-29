@@ -30,6 +30,9 @@ export default async function RecordReceiptPage() {
       </>
     );
   }
-  // A saved receipt changes the count, so the form remounts with the fresh REC-2 choices after router.refresh().
-  return <RecordReceiptScreen key={data.receipts.length} data={data} />;
+  // The form takes its defaults once, and this page stays mounted between visits (Activity). Remount it when the REC-2
+  // choices change (a saved receipt, an office or order added elsewhere): otherwise an office added after an empty
+  // first visit shows in the list while the form still holds "" and refuses to save ("Choose an office.").
+  const choices = [data.receipts.length, ...data.options.offices.map((o) => o.id), ...data.options.orders.map((o) => o.orderId)].join();
+  return <RecordReceiptScreen key={choices} data={data} />;
 }

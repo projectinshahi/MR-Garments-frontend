@@ -58,6 +58,33 @@ test("every sidebar item opens its page", async ({ page }) => {
   expect(problems).toEqual([]);
 });
 
+test("sidebar links change pages without reloading the browser, and Back and Forward follow the history", async ({ page }) => {
+  const problems = watch(settled(page));
+  const sidebar = page.getByRole("navigation", { name: "Main" });
+  const heading = (name: string) => page.getByRole("heading", { level: 1, name });
+  await page.goto("/orders");
+  await expect(heading("Orders")).toBeVisible();
+  // A full page load would start a new window object and drop this mark.
+  await page.evaluate(() => Object.assign(window, { sameDocument: true }));
+
+  await sidebar.getByRole("link", { name: "Deposits & Payments", exact: true }).click();
+  await expect(heading("Deposits & Payments")).toBeVisible();
+  await sidebar.getByRole("link", { name: "Containers", exact: true }).click();
+  await expect(heading("Containers")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL("/payments");
+  await expect(heading("Deposits & Payments")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL("/orders");
+  await expect(heading("Orders")).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL("/payments");
+  await expect(heading("Deposits & Payments")).toBeVisible();
+
+  expect(await page.evaluate(() => (window as Window & { sameDocument?: boolean }).sameDocument)).toBe(true);
+  expect(problems).toEqual([]);
+});
+
 test("Settings tabs 1-7 open", async ({ page }) => {
   const problems = watch(settled(page));
   await page.goto("/settings");
@@ -124,6 +151,65 @@ test("the mobile menu opens a page", async ({ page }) => {
   await page.getByRole("dialog").getByRole("link", { name: "Landed Cost", exact: true }).click();
   await expectOpened(page, "/landed-cost");
   expect(problems).toEqual([]);
+});
+
+/**
+ * Holds the page's navigation response (RSC, not prefetches) for `ms`, and counts those requests, so a test can see
+ * the progress bar while the current page stays, and that the click navigated once.
+ */
+async function slowNavigation(page: Page, path: string, ms = 1500) {
+  const requests: string[] = [];
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      const headers = route.request().headers();
+      if (headers.rsc && !headers["next-router-prefetch"]) {
+        requests.push(route.request().url());
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      }
+      await route.fallback();
+    },
+  );
+  return requests;
+}
+
+test("the mobile menu closes at once; a progress bar shows until the page is ready, after one navigation", async ({ page }) => {
+  const problems = watch(settled(page));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/orders");
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  const navigations = await slowNavigation(page, "/payments");
+  const bar = page.getByRole("progressbar", { name: "Loading page" });
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("dialog").getByRole("link", { name: "Deposits & Payments", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(bar).toBeVisible();
+  // The current page stays until the next one is ready.
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+
+  await expect(page.getByRole("heading", { level: 1, name: "Deposits & Payments" })).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  expect(navigations).toHaveLength(1);
+  expect(problems).toEqual([]);
+});
+
+// A container's page has no loading frame of its own (an order's has, so opening one is instant), so the list stays
+// while it loads.
+test("opening a container from its table row shows the progress bar until the container is on screen", async ({ page, api }) => {
+  const { po } = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }] });
+  await api.receive(po, { "Denim jeans": 100 });
+  const container = await api.load([{ po, item: "Denim jeans", quantity: 100 }]);
+  await page.goto("/containers");
+  const navigations = await slowNavigation(page, `/containers/${container.id}`);
+  const bar = page.getByRole("progressbar", { name: "Loading page" });
+  // The agent cell, not the container link: the row's own click handler.
+  await page.getByRole("row").filter({ hasText: container.number }).getByRole("cell").nth(1).click();
+  await expect(bar).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Containers" })).toBeVisible();
+  await expect(page).toHaveURL(`/containers/${container.id}`);
+  await expect(bar).toHaveCount(0);
+  expect(navigations).toHaveLength(1);
 });
 
 test("an address no page matches shows the app's not-found page inside the shell", async ({ page }) => {

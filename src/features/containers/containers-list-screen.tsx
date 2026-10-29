@@ -2,9 +2,9 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
@@ -81,7 +81,7 @@ const columnsFor = (linkPos: boolean): ColumnDef<ContainerRow>[] => [
  */
 export function ContainersListScreen({ data }: { data: ContainersListData }) {
   const { kpis, canEnter, linkPos } = data;
-  const router = useRouter();
+  const navigate = useNavigate();
   const columns = useMemo(() => columnsFor(linkPos), [linkPos]);
   const [filters, setFilters] = useState<ContainerFilters>({ query: "", agent: ALL, terms: ALL, chip: "active" });
   const set = (patch: Partial<ContainerFilters>) => setFilters((current) => ({ ...current, ...patch }));
@@ -141,7 +141,7 @@ export function ContainersListScreen({ data }: { data: ContainersListData }) {
           columns={columns}
           data={rows}
           getRowId={(r) => r.id}
-          onRowClick={(r) => router.push(`/containers/${r.id}`)}
+          onRowClick={(r) => navigate(`/containers/${r.id}`)}
           size="sm"
           header="tall"
           density="relaxed"

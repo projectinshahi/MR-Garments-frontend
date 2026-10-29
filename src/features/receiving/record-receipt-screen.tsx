@@ -162,7 +162,8 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                     Received at office <RequiredMark />
                   </FieldLabel>
                   <NativeSelect size="sm" id="received-office" required aria-invalid={!!errors.locationId} {...register("locationId")}>
-                    {options.offices.length ? null : <option value="" />}
+                    {/* REC-2 offers active China offices only; India offices and warehouses never receive here. */}
+                    {options.offices.length ? null : <option value="">No active China office</option>}
                     {options.offices.map((office) => (
                       <option key={office.id} value={office.id}>
                         {office.name}

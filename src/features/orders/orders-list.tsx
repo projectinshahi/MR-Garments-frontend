@@ -1,9 +1,9 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/components/shared/filters";
 import { PoLink } from "@/components/shared/po-link";
@@ -67,7 +67,7 @@ const columns: ColumnDef<OrderRow>[] = [
 
 /** Filter row and the orders table. Every order is loaded; filters and pages run on the client. */
 export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState(ALL);
   const [supplier, setSupplier] = useState(ALL);
@@ -123,7 +123,7 @@ export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
         density="tall"
         size="sm"
         header="tall"
-        onRowClick={(order) => router.push(`/orders/${order.po}`)}
+        onRowClick={(order) => navigate(`/orders/${order.po}`)}
         emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
         pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
       />

@@ -2,9 +2,9 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
@@ -80,7 +80,7 @@ const columnsFor = (today: string): ColumnDef<ClearingListRow>[] => [
  */
 export function ClearingListScreen({ data }: { data: ClearingListData }) {
   const { kpis, today, canEnter } = data;
-  const router = useRouter();
+  const navigate = useNavigate();
   const columns = useMemo(() => columnsFor(today), [today]);
   const [filters, setFilters] = useState<ClearingFilters>({ query: "", agent: ALL, state: ALL });
   const [period, setPeriod] = useState(PERIODS[0].value);
@@ -161,7 +161,7 @@ export function ClearingListScreen({ data }: { data: ClearingListData }) {
           getRowId={(r) => r.containerId}
           size="sm"
           header="tall"
-          onRowClick={(r) => router.push(formHref(r))}
+          onRowClick={(r) => navigate(formHref(r))}
           emptyState={data.rows.length ? "No containers match these filters." : "No container has arrived yet."}
         />
       </PageContainer>

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -198,6 +198,18 @@ describe("RecordReceiptScreen", () => {
     await user.click(screen.getByRole("button", { name: "Save receipt" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("This order is past receiving and can't take more receipts."));
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("says when there is no active China office and doesn't post without one", async () => {
+    const user = userEvent.setup();
+    render(<RecordReceiptScreen data={{ ...data, options: { ...options, offices: [] } }} />);
+    const office = screen.getByRole("combobox", { name: /Received at office/ });
+    expect(office).toHaveValue("");
+    expect(within(office).getAllByRole("option").map((o) => o.textContent)).toEqual(["No active China office"]);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    expect(await screen.findByText("Choose an office.")).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
   });
 
   it("has no photo or draft stubs", () => {
