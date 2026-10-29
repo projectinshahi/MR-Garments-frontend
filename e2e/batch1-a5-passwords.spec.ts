@@ -73,8 +73,10 @@ test("AUTH-5 change-password and AUTH-4 reset-password answer 403 password_chang
 test("Management sets Joseph's new password: his session ends and only the new password signs in", async ({ page, browser, baseURL }) => {
   const joseph = await signedOutPage(browser, baseURL);
   await page.goto("/users");
-  await page.getByRole("link", { name: "Edit Joseph M" }).click();
-  const id = new URL(page.url()).searchParams.get("id")!;
+  // From the link, not the URL: the list stays on screen (and in the address bar) until the form is ready.
+  const edit = page.getByRole("link", { name: "Edit Joseph M" });
+  const id = new URL((await edit.getAttribute("href"))!, baseURL).searchParams.get("id")!;
+  await edit.click();
   try {
     await signIn(joseph.page, JOSEPH, e2ePassword());
     await expect(joseph.page).not.toHaveURL(/\/login/);
