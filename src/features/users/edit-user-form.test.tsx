@@ -19,7 +19,27 @@ const success = vi.fn();
 vi.mock("@/lib/feedback", async (original) => ({ ...(await original<typeof import("@/lib/feedback")>()), notifySuccess: (m: string) => success(m) }));
 
 const roles = ["Management", "Procurement", "Accounts", "China staff", "India staff", "Warehouse staff"] as const;
-const matrix = { roles: [...roles], capabilities: [], matrix: {} } as unknown as RolesResponse;
+// The stage rows of ROL-1 (49): Management Full, Procurement View on Receiving, each staff role Enter on its own stages.
+const stageRow = (staff: string, extra: object = {}) => ({
+  ...Object.fromEntries(roles.map((role) => [role, role === "Management" ? "Full" : role === staff ? "Enter" : "None"])),
+  ...extra,
+});
+const matrix = {
+  roles: [...roles],
+  capabilities: [],
+  matrix: {
+    receiving: stageRow("China staff", { Procurement: "View" }),
+    containers: stageRow("China staff"),
+    clearing: stageRow("India staff"),
+    transport: stageRow("India staff"),
+    warehouse: stageRow("Warehouse staff"),
+  },
+} as unknown as RolesResponse;
+const STAGES = ["Receiving (China)", "Container loading", "Clearing (India)", "Transport", "Warehouse"];
+const tick = (name: string) => screen.getByRole("checkbox", { name });
+/** The stage ticks the role can hold (enabled), in screen order. */
+const enabledStages = () => STAGES.filter((name) => !tick(name).hasAttribute("disabled"));
+const checkedStages = () => STAGES.filter((name) => tick(name).getAttribute("aria-checked") === "true");
 const options = { roles: [...roles], offices: [{ id: "loc-gz", name: "Guangzhou office" }], languages: ["English"] };
 const wang: UserDetail = {
   id: "u-wang",
@@ -48,26 +68,86 @@ vi.stubGlobal(
 beforeEach(() => vi.clearAllMocks());
 
 describe("EditUserForm", () => {
-  it("shows the API's field error under the stage ticks, focuses it and keeps the values (E1, AT-U4)", async () => {
+  it("shows the API's field error under the stage ticks, focuses it and keeps the values (E1; M18 stays the backstop)", async () => {
     const user = userEvent.setup();
     let fail!: (error: unknown) => void;
     patch.mockReturnValue(new Promise((_, reject) => (fail = reject)));
-    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    render(<EditUserForm user={{ ...wang, stages: [2] }} options={options} matrix={matrix} isSelf={false} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Clearing (India)" }));
+    await user.click(tick("Container loading"));
     const save = screen.getByRole("button", { name: "Save user" });
     await user.click(save);
-    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ stages: [2, 3, 4], officeId: "loc-gz" }));
+    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ stages: [2, 3], officeId: "loc-gz" }));
     expect(patch.mock.calls[0]![1]).not.toHaveProperty("password");
     await waitFor(() => expect(save).toBeDisabled()); // E14
 
-    const m18 = "China staff can't enter data for Clearing (India). Untick it first.";
+    // The browser only offers the role's stages; the API still checks them (for example after a matrix change).
+    const m18 = "China staff can't enter data for Container loading. Untick it first.";
     fail(new ApiError(422, "validation_failed", "Some fields need attention.", { stages: m18 }));
     expect(await screen.findByText(m18)).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Receiving (China)" })).toHaveFocus();
-    expect(screen.getByRole("checkbox", { name: "Clearing (India)" })).toBeChecked();
+    expect(tick("Receiving (China)")).toHaveFocus();
+    expect(tick("Container loading")).toBeChecked();
     expect(save).toBeEnabled();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("offers only the role's own stages: China staff 2-3, India staff 4-5, Warehouse staff 6", () => {
+    const { unmount } = render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    expect(enabledStages()).toEqual(["Receiving (China)", "Container loading"]);
+    expect(tick("Clearing (India)")).toBeDisabled();
+    expect(screen.queryByText(/doesn't use stage access/)).not.toBeInTheDocument();
+    unmount();
+    render(<EditUserForm user={{ ...wang, role: "India staff", stages: [4, 5] }} options={options} matrix={matrix} isSelf={false} />);
+    expect(enabledStages()).toEqual(["Clearing (India)", "Transport"]);
+  });
+
+  it("China staff -> India staff unticks Receiving and Container loading before Save", async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ user: wang });
+    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    expect(checkedStages()).toEqual(["Receiving (China)", "Container loading"]);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "India staff");
+    expect(checkedStages()).toEqual([]);
+    expect(enabledStages()).toEqual(["Clearing (India)", "Transport"]);
+    await user.click(tick("Clearing (India)"));
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/users"));
+    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ role: "India staff", stages: [4] }));
+  });
+
+  it("India staff [4, 5] -> Warehouse staff clears 4 and 5 and offers Warehouse only", async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ user: wang });
+    render(<EditUserForm user={{ ...wang, role: "India staff", stages: [4, 5] }} options={options} matrix={matrix} isSelf={false} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "Warehouse staff");
+    expect(checkedStages()).toEqual([]);
+    expect(enabledStages()).toEqual(["Warehouse"]);
+    await user.click(tick("Warehouse"));
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/users"));
+    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ role: "Warehouse staff", stages: [6] }));
+  });
+
+  it("disables every tick for a role without stage access and says why; moving staff there clears the ticks", async () => {
+    const user = userEvent.setup();
+    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "Procurement");
+    expect(enabledStages()).toEqual([]);
+    expect(checkedStages()).toEqual([]);
+    const hint = screen.getByText("Procurement doesn't use stage access.");
+    for (const name of STAGES) expect(tick(name)).toHaveAttribute("aria-describedby", hint.id);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "Management");
+    expect(screen.getByText("Management doesn't use stage access.")).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "China staff");
+    expect(screen.queryByText(/doesn't use stage access/)).not.toBeInTheDocument();
+    expect(enabledStages()).toEqual(["Receiving (China)", "Container loading"]);
+    expect(checkedStages()).toEqual([]);
+  });
+
+  it("Add user: no ticks until a role is chosen, and no hint either", () => {
+    render(<EditUserForm user={null} options={options} matrix={matrix} isSelf={false} />);
+    expect(enabledStages()).toEqual([]);
+    expect(screen.queryByText(/doesn't use stage access/)).not.toBeInTheDocument();
   });
 
   it("puts M20 under the field that changed (E3, AT-U6)", async () => {

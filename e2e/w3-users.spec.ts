@@ -67,11 +67,14 @@ test("edit user form holds Wang Fang's details", async ({ page }) => {
   await expect(page.getByRole("combobox", { name: "Status" })).toHaveValue("Active");
 
   await expect(page.getByRole("checkbox", { name: "Receiving (China)" })).toBeChecked();
-  await expect(page.getByRole("checkbox", { name: "Container loading" })).toBeChecked();
+  const containers = page.getByRole("checkbox", { name: "Container loading" });
+  await expect(containers).toBeChecked();
+  // China staff can't hold Transport: its tick is disabled (only the role's own stages can be ticked).
   const transport = page.getByRole("checkbox", { name: "Transport" });
   await expect(transport).not.toBeChecked();
-  await transport.click();
-  await expect(transport).toBeChecked();
+  await expect(transport).toBeDisabled();
+  await containers.click();
+  await expect(containers).not.toBeChecked();
 
   const roleCard = page.locator("section").filter({ has: page.getByRole("heading", { name: "What this role can do" }) });
   await expect(roleCard.getByText("China staff can enter receipts and container loading.", { exact: false })).toBeVisible();
@@ -84,7 +87,7 @@ test("edit user form holds Wang Fang's details", async ({ page }) => {
   await page.getByRole("link", { name: "Cancel" }).click();
   await expect(page).toHaveURL("/users");
   await page.getByRole("link", { name: "Edit Wang Fang" }).click();
-  await expect(page.getByRole("checkbox", { name: "Transport" })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Container loading" })).toBeChecked();
 });
 
 test("roles tab shows the read-only permission matrix", async ({ page }) => {

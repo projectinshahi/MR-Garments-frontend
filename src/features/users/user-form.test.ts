@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type { RolesResponse } from "@/lib/api/types";
+
 import type { UserDetail } from "./data/queries";
-import { newUserFormSchema, toFormValues, toggleStage, toPayload, userFormSchema } from "./user-form";
+import { grantableStages, keepGrantable, newUserFormSchema, noStagesHint, toFormValues, toggleStage, toPayload, userFormSchema } from "./user-form";
 
 const wang: UserDetail = {
   id: "u-wang",
@@ -46,6 +48,49 @@ describe("user form mapping", () => {
     expect(toggleStage([3], 2, true)).toEqual([2, 3]);
     expect(toggleStage([2, 3], 3, true)).toEqual([2, 3]);
     expect(toggleStage([2, 3], 3, false)).toEqual([2]);
+  });
+});
+
+// The stage rows of ROL-1 (49): Management Full, Procurement View on Receiving, each staff role Enter on its own stages.
+const ROLES = ["Management", "Procurement", "Accounts", "China staff", "India staff", "Warehouse staff"] as const;
+const stageRow = (staff: string, extra: object = {}) => ({
+  ...Object.fromEntries(ROLES.map((role) => [role, role === "Management" ? "Full" : role === staff ? "Enter" : "None"])),
+  ...extra,
+});
+const rol1 = {
+  roles: [...ROLES],
+  capabilities: [],
+  matrix: {
+    receiving: stageRow("China staff", { Procurement: "View" }),
+    containers: stageRow("China staff"),
+    clearing: stageRow("India staff"),
+    transport: stageRow("India staff"),
+    warehouse: stageRow("Warehouse staff"),
+  },
+} as unknown as RolesResponse;
+
+describe("stage ticks by role (Q7)", () => {
+  it("lets each staff role hold its own stages and every other role none, like the API's grantableStages", () => {
+    expect(Object.fromEntries(ROLES.map((role) => [role, grantableStages(role, rol1)]))).toEqual({
+      Management: [],
+      Procurement: [],
+      Accounts: [],
+      "China staff": [2, 3],
+      "India staff": [4, 5],
+      "Warehouse staff": [6],
+    });
+    expect(grantableStages("", rol1)).toEqual([]);
+  });
+
+  it("keeps only the ticks the new role can hold", () => {
+    expect(keepGrantable([2, 3], "India staff", rol1)).toEqual([]);
+    expect(keepGrantable([4, 5], "Warehouse staff", rol1)).toEqual([]);
+    expect(keepGrantable([2, 3], "China staff", rol1)).toEqual([2, 3]);
+    expect(keepGrantable([2], "Management", rol1)).toEqual([]);
+  });
+
+  it("says why a role has no ticks (M19's first sentence)", () => {
+    expect(noStagesHint("Procurement")).toBe("Procurement doesn't use stage access.");
   });
 });
 
