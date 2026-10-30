@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Activity } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
@@ -116,6 +117,40 @@ describe("EditUserForm", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/users"));
     expect(patch).toHaveBeenLastCalledWith("/users/u-wang", expect.objectContaining({ password: "Ledger2026x" }));
     expect(field).toHaveValue("");
+  });
+
+  it("forgets an unsaved password, masked again, when the page is hidden (Activity) or unmounted", async () => {
+    const user = userEvent.setup();
+    const page = (detail: UserDetail | null, mode: "visible" | "hidden") => (
+      <Activity mode={mode}>
+        <EditUserForm user={detail} options={options} matrix={matrix} isSelf={false} />
+      </Activity>
+    );
+    for (const [detail, label, toggle] of [
+      [wang, "Set a new password", "Show new password"],
+      [null, /^Password/, "Show password"],
+    ] as const) {
+      const { rerender, unmount } = render(page(detail, "visible"));
+      await user.type(screen.getByLabelText(label, { selector: "input" }), "Typed2026x");
+      await user.click(screen.getByRole("button", { name: toggle }));
+      rerender(page(detail, "hidden"));
+      rerender(page(detail, "visible"));
+      const field = screen.getByLabelText(label, { selector: "input" });
+      expect(field).toHaveValue("");
+      expect(field).toHaveAttribute("type", "password");
+      unmount();
+    }
+
+    // Edit user: saving another field later sends no password.
+    patch.mockResolvedValue({ user: wang });
+    const { rerender } = render(page(wang, "visible"));
+    await user.type(screen.getByLabelText("Set a new password"), "Typed2026x");
+    rerender(page(wang, "hidden"));
+    rerender(page(wang, "visible"));
+    await user.click(screen.getByRole("checkbox", { name: "Container loading" }));
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    expect(patch.mock.calls[0]![1]).not.toHaveProperty("password");
   });
 
   it("shows no password field on the signed-in user's own account", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,8 @@ export function AuthNote({ className, ...props }: React.ComponentProps<"p">) {
  */
 export function PasswordInput({ label, className, ...props }: Omit<React.ComponentProps<"input">, "size"> & { label: string }) {
   const [visible, setVisible] = useState(false);
+  // Masked again whenever the page is hidden (Activity) or unmounted.
+  useLayoutEffect(() => () => setVisible(false), []);
   return (
     <div className="relative">
       <Input

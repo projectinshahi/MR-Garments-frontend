@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLayoutEffect } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { PageContainer } from "@/components/layout/page-header";
@@ -51,10 +52,13 @@ const rowClass = "flex items-center border-b border-border-subtle py-[9px] last:
  */
 export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
   const router = useRouter();
-  const { register, control, handleSubmit, reset, setError, formState } = useForm<UserFormValues>({
+  const { register, control, handleSubmit, reset, resetField, setError, formState } = useForm<UserFormValues>({
     resolver: zodResolver(user ? userFormSchema : newUserFormSchema),
     defaultValues: toFormValues(user),
   });
+  // Visited pages stay mounted but hidden (Activity), so an unsaved password would wait here for the next visit and go
+  // out with a later save. This cleanup runs whenever the page is hidden or unmounted.
+  useLayoutEffect(() => () => resetField("password"), [resetField]);
   const { errors, isSubmitting } = formState;
   const card = buildRoleCard(useWatch({ control, name: "role" }), matrix);
   const password = useWatch({ control, name: "password" });
