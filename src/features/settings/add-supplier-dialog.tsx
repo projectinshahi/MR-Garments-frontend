@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreateSupplierBody, SupplierResponse, SupplierRow, UpdateSupplierBody } from "@/lib/api/types";
 import { SUCCESS } from "@/lib/feedback";
+import { CURRENCY_NAME } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { CURRENCIES } from "@/types/domain";
 
 import {
   addHref,
@@ -78,10 +80,11 @@ function SupplierForm({
   // The values waiting for the deactivate confirmation.
   const [confirming, setConfirming] = useState<SupplierValues | null>(null);
 
-  async function save({ status, currency, ...details }: SupplierValues) {
+  async function save({ status, ...details }: SupplierValues) {
     try {
+      // A changed currency applies to the supplier's new orders only: each order keeps its own.
       if (supplier) await apiClient.patch<SupplierResponse>(`/suppliers/${supplier.id}`, { ...details, status } satisfies UpdateSupplierBody);
-      else await apiClient.post<SupplierResponse>("/suppliers", { ...details, currency } satisfies CreateSupplierBody);
+      else await apiClient.post<SupplierResponse>("/suppliers", details satisfies CreateSupplierBody);
     } catch (error) {
       // E1/E2: M21 or M22 under Supplier name, focused, values kept. Other failures toast.
       setConfirming(null);
@@ -128,7 +131,11 @@ function SupplierForm({
               Currency
             </FieldLabel>
             <NativeSelect size="sm" id="supplier-currency" {...register("currency")}>
-              <option value="CNY">¥ Chinese yuan</option>
+              {CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {CURRENCY_NAME[currency]}
+                </option>
+              ))}
             </NativeSelect>
           </Field>
           <Field className={cn(fieldClass, "sm:col-span-3")}>

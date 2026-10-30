@@ -19,8 +19,9 @@ const TODAY = "2026-10-27";
 const options: OrderOptions = {
   nextPo: "PO-2050",
   suppliers: [
-    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China" },
-    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu" },
+    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China", currency: "CNY" },
+    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu", currency: "USD" },
+    { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR" },
   ],
   items: [
     { id: "i-denim", name: "Cotton denim fabric", unit: "m" },
@@ -93,6 +94,7 @@ describe("NewOrderScreen", () => {
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/orders", {
       supplierId: "s-foshan",
+      currency: "CNY",
       orderDate: TODAY,
       deliveryDate: "2026-11-25",
       lines: [
@@ -157,7 +159,7 @@ describe("NewOrderScreen", () => {
 
   it("shows a 422 on the items under the table, and toasts a field the form doesn't show", async () => {
     post.mockRejectedValue(
-      new ApiError(422, "validation_failed", "Some fields need attention.", { lines: "Choose an item from the list.", currency: "Only CNY." }),
+      new ApiError(422, "validation_failed", "Some fields need attention.", { lines: "Choose an item from the list.", stage: "Only CNY." }),
     );
     const ui = open();
     await fillOrder(ui);
@@ -167,6 +169,54 @@ describe("NewOrderScreen", () => {
     expect(toast.error).toHaveBeenCalledWith("Only CNY.");
     expect(router.push).not.toHaveBeenCalled();
   });
+
+  it("takes the supplier's currency, which the user may change: labels and totals follow it", async () => {
+    post.mockResolvedValue({ order: { id: "o-2", po: "PO-2050" } });
+    const ui = open();
+    expect(ui.field("Currency")).toHaveValue("CNY");
+    expect([...(ui.field("Currency") as HTMLSelectElement).options].map((option) => option.text)).toEqual(["CNY (¥)", "USD ($)", "INR (₹)"]);
+    await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
+    expect(ui.field("Currency")).toHaveValue("USD");
+    await ui.user.type(ui.field("Delivery date"), "2026-11-25");
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-buttons");
+    await ui.user.type(screen.getByLabelText("Rate ($), line 1"), "0.35");
+    await ui.user.type(ui.field("Quantity, line 1"), "1000");
+    expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("$ 350.00");
+    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
+    await ui.user.type(screen.getByLabelText("Amount ($), deposit 1"), "100");
+    await ui.user.type(ui.field("Mode"), "Wire");
+    await ui.user.click(ui.place);
+    expect(await screen.findByText("Deposit 1: Enter the rate.")).toBeVisible();
+    await ui.user.type(ui.field("Rate to INR"), "88.5");
+    expect(screen.getAllByText("₹8,850")).toHaveLength(2); // the deposit and "Deposits in INR"
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).toMatchObject({
+      supplierId: "s-yiwu",
+      currency: "USD",
+      deposits: [{ payee: "Yiwu Trims Ltd.", amountCny: 100, rateInr: 88.5, mode: "Wire" }],
+    });
+  }, 30_000);
+
+  it("an INR order asks no deposit rate and sends none", async () => {
+    post.mockResolvedValue({ order: { id: "o-3", po: "PO-2050" } });
+    const ui = open();
+    await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
+    await ui.user.selectOptions(ui.field("Currency"), "INR");
+    await ui.user.type(ui.field("Delivery date"), "2026-11-25");
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-denim");
+    await ui.user.type(ui.field("Rate (₹), line 1"), "250");
+    await ui.user.type(ui.field("Quantity, line 1"), "10");
+    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
+    expect(screen.queryByLabelText("Rate to INR")).not.toBeInTheDocument();
+    await ui.user.type(ui.field("Amount (₹), deposit 1"), "1000");
+    await ui.user.type(ui.field("Mode"), "NEFT");
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    const body = post.mock.calls[0]![1] as { currency: string; deposits: object[] };
+    expect(body.currency).toBe("INR");
+    expect(body.deposits).toEqual([{ payee: "Foshan Fabrics", payeeRole: "supplier", amountCny: 1000, paidOn: TODAY, mode: "NEFT" }]);
+  }, 30_000);
 
   it("has no Save draft stub", () => {
     open();

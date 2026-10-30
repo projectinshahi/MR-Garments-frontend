@@ -16,8 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatCNY, formatINR, formatNumber } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, currencyLabel, formatINR, formatMoney, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { CURRENCIES } from "@/types/domain";
 
 import type { NewOrderData } from "./data/queries";
 import { emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
@@ -35,14 +36,13 @@ const lineInput = "h-[38px] px-2.5 text-sm";
 const addLinkClass = "mt-[13px] flex h-auto w-fit border-0 p-0 text-[13.5px] leading-[10px]";
 const factLabel = "text-[12.5px] leading-[17px] text-muted-foreground";
 const factInput = "h-[34px] px-2 text-sm";
-const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
 const messages = (...errors: ({ message?: string } | undefined)[]) => errors.filter((error) => error?.message);
 
 /** New order, Stage 1: order and deposit (15_4_New_order.jpeg). Places the order with ORD-3. */
 export function NewOrderScreen({ data: { options, today } }: { data: NewOrderData }) {
   const router = useRouter();
-  const defaultValues: NewOrderValues = { supplierId: "", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] };
-  const { register, control, handleSubmit, setError, reset, formState } = useForm<NewOrderValues>({
+  const defaultValues: NewOrderValues = { supplierId: "", currency: "CNY", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] };
+  const { register, control, handleSubmit, setError, setValue, reset, formState } = useForm<NewOrderValues>({
     resolver: zodResolver(newOrderSchema),
     defaultValues,
   });
@@ -50,11 +50,15 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
   const depositRows = useFieldArray({ control, name: "deposits" });
   const { errors } = formState;
 
-  const [supplierId, lines, deposits] = useWatch({ control, name: ["supplierId", "lines", "deposits"] });
+  const [supplierId, currency, lines, deposits] = useWatch({ control, name: ["supplierId", "currency", "lines", "deposits"] });
   const supplier = options.suppliers.find((s) => s.id === supplierId);
+  // Amounts are in the order's currency; an INR order's deposits need no rate (it is 1).
+  const symbol = CURRENCY_SYMBOL[currency];
+  const inr = currency === "INR";
+  const spaced = (value: number) => formatMoney(value, currency, { spaced: true });
   const unitOf = (itemId: string) => options.items.find((item) => item.id === itemId)?.unit ?? "";
   const numericLines = lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) }));
-  const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: parseNumber(d.rateInr) }));
+  const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: inr ? 1 : parseNumber(d.rateInr) }));
   const totals = orderTotals(numericLines, numericDeposits);
 
   async function place(order: NewOrderValues) {
@@ -83,7 +87,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
   });
   const depositErrors = depositRows.fields.flatMap((_, i) => {
     const e = errors.deposits?.[i];
-    return messages(e?.payee, e?.amountCny, e?.paidOn, e?.rateInr, e?.mode).map((error) => ({
+    return messages(e?.payee, e?.amountCny, e?.paidOn, inr ? undefined : e?.rateInr, e?.mode).map((error) => ({
       message: `Deposit ${i + 1}: ${error?.message}`,
     }));
   });
@@ -129,7 +133,19 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   <FieldLabel htmlFor="supplier" className={labelClass}>
                     Supplier <RequiredMark />
                   </FieldLabel>
-                  <NativeSelect size="sm" id="supplier" required aria-invalid={!!errors.supplierId} {...register("supplierId")}>
+                  <NativeSelect
+                    size="sm"
+                    id="supplier"
+                    required
+                    aria-invalid={!!errors.supplierId}
+                    {...register("supplierId", {
+                      // The supplier's currency is the order's default; the user may still change it.
+                      onChange: (event: { target: { value: string } }) => {
+                        const chosen = options.suppliers.find((s) => s.id === event.target.value);
+                        if (chosen) setValue("currency", chosen.currency);
+                      },
+                    })}
+                  >
                     <option value="">Select supplier</option>
                     {options.suppliers.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -139,14 +155,18 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   </NativeSelect>
                   <FieldError errors={[errors.supplierId]} />
                 </Field>
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.currency}>
                   <FieldLabel htmlFor="currency" className={labelClass}>
                     Currency
                   </FieldLabel>
-                  {/* CNY only (Q8). */}
-                  <NativeSelect size="sm" id="currency">
-                    <option>CNY (¥)</option>
+                  <NativeSelect size="sm" id="currency" aria-invalid={!!errors.currency} {...register("currency")}>
+                    {CURRENCIES.map((code) => (
+                      <option key={code} value={code}>
+                        {currencyLabel(code)}
+                      </option>
+                    ))}
                   </NativeSelect>
+                  <FieldError errors={[errors.currency]} />
                 </Field>
                 <Field className={fieldClass}>
                   <FieldLabel htmlFor="contact-person" className={labelClass}>
@@ -174,9 +194,9 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                 <TableHeader>
                   <TableRow className="bg-table-head hover:bg-table-head">
                     <TableHead className={headClass}>Item</TableHead>
-                    <TableHead className={cn(headClass, "w-[107px]")}>Rate (¥)</TableHead>
+                    <TableHead className={cn(headClass, "w-[107px]")}>Rate ({symbol})</TableHead>
                     <TableHead className={cn(headClass, "w-[158px]")}>Quantity</TableHead>
-                    <TableHead className={cn(headClass, "w-[148px] text-right")}>Amount (¥)</TableHead>
+                    <TableHead className={cn(headClass, "w-[148px] text-right")}>Amount ({symbol})</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -206,7 +226,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                         </TableCell>
                         <TableCell className={cellClass}>
                           <Input
-                            aria-label={`Rate (¥), line ${n}`}
+                            aria-label={`Rate (${symbol}), line ${n}`}
                             aria-invalid={!!e?.rateCny}
                             inputMode="decimal"
                             className={cn(lineInput, "text-right")}
@@ -233,7 +253,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                         </TableCell>
                         <TableCell className={cellClass}>
                           <Input
-                            aria-label={`Amount (¥), line ${n}`}
+                            aria-label={`Amount (${symbol}), line ${n}`}
                             readOnly
                             value={filled ? formatNumber(lineAmount(numericLines[i]!), 2) : ""}
                             className={cn(lineInput, "text-right read-only:bg-input-background")}
@@ -253,7 +273,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
               <div className="mt-3 flex items-start justify-end gap-7 border-t pt-[12.5px]">
                 <span className="text-[15px] leading-4">Order total</span>
                 <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
-                  {formatCNY(totals.orderTotal, { decimals: 2, spaced: true })}
+                  {formatMoney(totals.orderTotal, currency, { decimals: 2, spaced: true })}
                 </output>
               </div>
             </SectionCard>
@@ -285,23 +305,25 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                             ))}
                           </NativeSelect>
                           <Input
-                            aria-label={`Amount (¥), deposit ${n}`}
+                            aria-label={`Amount (${symbol}), deposit ${n}`}
                             aria-invalid={!!e?.amountCny}
                             inputMode="decimal"
-                            placeholder="¥"
+                            placeholder={symbol}
                             className={cn(factInput, "w-[110px] shrink-0 text-right font-bold")}
                             {...register(`deposits.${i}.amountCny`)}
                           />
                         </div>
-                        <div className="mt-[5px] grid grid-cols-[1.3fr_1fr_1fr] gap-x-2">
+                        <div className={cn("mt-[5px] grid gap-x-2", inr ? "grid-cols-[1.3fr_2fr]" : "grid-cols-[1.3fr_1fr_1fr]")}>
                           <label className="flex min-w-0 flex-col">
                             <span className={factLabel}>Paid on</span>
                             <Input type="date" aria-invalid={!!e?.paidOn} className={factInput} {...register(`deposits.${i}.paidOn`)} />
                           </label>
-                          <label className="flex min-w-0 flex-col">
-                            <span className={factLabel}>Rate to INR</span>
-                            <Input inputMode="decimal" aria-invalid={!!e?.rateInr} className={factInput} {...register(`deposits.${i}.rateInr`)} />
-                          </label>
+                          {inr ? null : (
+                            <label className="flex min-w-0 flex-col">
+                              <span className={factLabel}>Rate to INR</span>
+                              <Input inputMode="decimal" aria-invalid={!!e?.rateInr} className={factInput} {...register(`deposits.${i}.rateInr`)} />
+                            </label>
+                          )}
                           <label className="flex min-w-0 flex-col">
                             <span className={factLabel}>Mode</span>
                             <Input aria-invalid={!!e?.mode} className={factInput} {...register(`deposits.${i}.mode`)} />
@@ -327,12 +349,12 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                 density="compact"
                 className="mt-2.5 border-b border-border-subtle"
                 items={[
-                  { label: "Order total", value: spacedCNY(totals.orderTotal) },
-                  { label: "Deposits paid", value: spacedCNY(totals.depositsPaid) },
+                  { label: "Order total", value: spaced(totals.orderTotal) },
+                  { label: "Deposits paid", value: spaced(totals.depositsPaid) },
                   { label: "Deposits in INR", value: formatINR(totals.depositsINR) },
                   {
                     label: <span className="text-base leading-5 font-bold">Balance to pay</span>,
-                    value: <span className="text-base leading-5 font-bold">{spacedCNY(totals.balance)}</span>,
+                    value: <span className="text-base leading-5 font-bold">{spaced(totals.balance)}</span>,
                   },
                 ]}
               />

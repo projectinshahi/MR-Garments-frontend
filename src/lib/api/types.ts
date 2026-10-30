@@ -1,6 +1,6 @@
 // API contracts shared with the backend (MR-Garments-Backend docs/contracts.md). Coordinator-owned.
 
-import type { RecordStatus, Role } from "@/types/domain";
+import type { Currency, RecordStatus, Role } from "@/types/domain";
 
 export type Access = "None" | "View" | "Enter" | "Full";
 
@@ -49,7 +49,7 @@ export type RolesResponse = {
 type Contact = { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus };
 
 /** MD-1 GET /api/v1/suppliers */
-export type SupplierRow = Contact & { city: string; address: string; notes: string; currency: "CNY"; openOrders: number };
+export type SupplierRow = Contact & { city: string; address: string; notes: string; currency: Currency; openOrders: number };
 /** MD-4 GET /api/v1/shipping-agents */
 export type ShippingAgentRow = Contact & { officeCity: string; activeContainers: number };
 /** MD-7 GET /api/v1/clearing-agents */
@@ -92,10 +92,10 @@ export type ItemRow = {
 type Editable<T> = Partial<T> & { status?: RecordStatus };
 type ContactBody = { name: string; contactPerson?: string; phone?: string };
 
-/** MD-2 POST /api/v1/suppliers. The currency is always CNY. */
-export type CreateSupplierBody = ContactBody & { city?: string; address?: string; notes?: string; currency?: "CNY" };
-/** PATCH /api/v1/suppliers/:id */
-export type UpdateSupplierBody = Editable<Omit<CreateSupplierBody, "currency">>;
+/** MD-2 POST /api/v1/suppliers. `currency` (CNY when left out) is the default for the supplier's new orders. */
+export type CreateSupplierBody = ContactBody & { city?: string; address?: string; notes?: string; currency?: Currency };
+/** PATCH /api/v1/suppliers/:id. A new currency applies to new orders only. */
+export type UpdateSupplierBody = Editable<CreateSupplierBody>;
 export type SupplierResponse = { supplier: SupplierRow };
 
 /** POST /api/v1/shipping-agents */
@@ -141,7 +141,8 @@ export type { RecordStatus, Role };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Live screens (backend docs/live-screens-contracts.md): Orders, Deposits & Payments, Delivery calendar, Receiving
-// in China, Container loading. Dates YYYY-MM-DD; money CNY; rateInr is INR per CNY; quantities are whole numbers.
+// in China, Container loading. Dates YYYY-MM-DD; money in the order's `currency` (the ...Cny names are kept: "in the
+// order's currency"); rateInr is INR per 1 unit of it (1 for INR orders); quantities are whole numbers.
 // ---------------------------------------------------------------------------------------------------------------
 
 export type Unit = "m" | "pcs";
@@ -156,6 +157,7 @@ export type OrderListItem = {
   deliveryDate: string;
   stage: OrderStage;
   supplier: Named;
+  currency: Currency;
   item: string;
   quantity: number;
   unit: Unit;
@@ -168,7 +170,8 @@ export type OrderListItem = {
 /** ORD-2 GET /api/v1/orders/options */
 export type OrderOptions = {
   nextPo: string;
-  suppliers: (Named & { contactPerson: string; phone: string; city: string })[];
+  /** `currency`: the supplier's, the new order's default. */
+  suppliers: (Named & { contactPerson: string; phone: string; city: string; currency: Currency })[];
   items: (Named & { unit: Unit })[];
   /** Active shipping agents: the other kind of deposit payee. */
   agents: Named[];
@@ -179,10 +182,12 @@ export type PayeeRole = "supplier" | "agent";
 /** ORD-3 POST /api/v1/orders body; answers 201 `{ order: { id, po } }`. */
 export type CreateOrderBody = {
   supplierId: string;
+  currency: Currency;
   orderDate: string;
   deliveryDate: string;
   lines: { itemId: string; quantity: number; rateCny: number }[];
-  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr: number; mode: string }[];
+  /** `rateInr` is left out for an INR order (the server stores 1). */
+  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string }[];
 };
 export type CreateOrderResponse = { order: { id: string; po: string } };
 
@@ -204,6 +209,7 @@ export type PaymentsResponse = {
     orderId: string;
     po: string;
     supplier: string;
+    currency: Currency;
     orderValueCny: number;
     paidCny: number;
     paidInr: number;
@@ -215,6 +221,8 @@ export type PaymentsResponse = {
     id: string;
     orderId: string;
     po: string;
+    /** The order's. */
+    currency: Currency;
     kind: "Deposit" | "Balance";
     payee: string;
     payeeRole: PayeeRole;
@@ -252,6 +260,8 @@ export type ReceiptOptions = {
     orderId: string;
     po: string;
     supplier: string;
+    /** Always given: it is not an amount. */
+    currency: Currency;
     orderValueCny: number | null;
     depositsPaidCny: number | null;
     lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number | null }[];
@@ -317,7 +327,7 @@ export type PaymentKind = "Deposit" | "Balance";
  * the signed-in user can't view it (payments, receiving, containers access). Records are oldest first.
  */
 export type OrderDetail = Omit<OrderListItem, "supplier"> & {
-  supplier: OrderOptions["suppliers"][number];
+  supplier: Omit<OrderOptions["suppliers"][number], "currency">;
   balanceCny: number;
   lines: {
     id: string;
@@ -330,7 +340,8 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
     received: number;
     loaded: number;
   }[];
-  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po">[] | null;
+  /** In the order's `currency`. */
+  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency">[] | null;
   receipts:
     | {
         id: string;
@@ -369,9 +380,11 @@ export type CreatePaymentBody = {
   payeeRole: PayeeRole;
   /** An active shipping agent when payeeRole is "agent"; null for the supplier. */
   agentId: string | null;
+  /** In the order's currency. */
   amountCny: number;
   paidOn: string;
-  rateInr: number;
+  /** Left out for an INR order (the server stores 1). */
+  rateInr?: number;
   mode: string;
 };
 export type CreatePaymentResponse = { payment: { id: string } };

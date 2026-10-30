@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatCNY, formatNumber, formatQty } from "@/lib/formatters";
+import { formatMoney, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { RecordReceiptData } from "./data/queries";
@@ -39,7 +39,6 @@ const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "px-1.5 py-0";
-const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
 
 /** REC-3 422 fields shown on this form, in screen order. Any other field's message is toasted. */
 const FORM_FIELDS = ["orderId", "receivedOn", "locationId", "bundles", "deliveryNote", "lines", "shortRemark"] as const;
@@ -71,6 +70,9 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
   const orderId = useWatch({ control, name: "orderId" });
   const typed = useWatch({ control, name: "lines" });
   const order = options.orders.find((o) => o.orderId === orderId);
+  // The order's amounts are in its currency (yuan before an order is chosen).
+  const currency = order?.currency ?? "CNY";
+  const spaced = (value: number) => formatMoney(value, currency, { spaced: true });
   const lines = (order?.lines ?? []).map((line, i) => ({
     item: line.item,
     unit: line.unit,
@@ -269,17 +271,17 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   size="sm"
                   className="mt-[10px]"
                   items={[
-                    { label: "Order value", value: spacedCNY(order?.orderValueCny ?? 0) },
-                    { label: "Deposits paid", value: spacedCNY(order?.depositsPaidCny ?? 0) },
-                    { label: "Balance before this receipt", value: spacedCNY(effect.balanceBefore) },
+                    { label: "Order value", value: spaced(order?.orderValueCny ?? 0) },
+                    { label: "Deposits paid", value: spaced(order?.depositsPaidCny ?? 0) },
+                    { label: "Balance before this receipt", value: spaced(effect.balanceBefore) },
                     ...effect.deductions
                       .filter((d) => d.short > 0)
                       .map((d) => ({
-                        label: `Short: ${formatQty(d.short, d.unit)} × ${formatCNY(d.unitPrice)}`,
-                        value: <span className="font-bold text-danger">− {spacedCNY(d.amount)}</span>,
+                        label: `Short: ${formatQty(d.short, d.unit)} × ${formatMoney(d.unitPrice, currency)}`,
+                        value: <span className="font-bold text-danger">− {spaced(d.amount)}</span>,
                       })),
                   ]}
-                  total={{ label: "Balance to pay now", value: spacedCNY(effect.balanceNow) }}
+                  total={{ label: "Balance to pay now", value: spaced(effect.balanceNow) }}
                 />
               </SectionCard>
             ) : null}

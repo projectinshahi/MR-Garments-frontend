@@ -4,11 +4,13 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/shared/data-table";
 import type { OrderView } from "@/features/order-detail/data/queries";
-import { formatCNY, formatQty } from "@/lib/formatters";
+import { formatMoney, formatQty } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 
 type Line = OrderView["lines"][number];
 
-function columns(lines: Line[]): ColumnDef<Line>[] {
+/** Rates and line totals are in the order's `currency`. */
+function columns(lines: Line[], currency: Currency): ColumnDef<Line>[] {
   // Quantities add up only when every line is counted in the same unit.
   const units = new Set(lines.map((line) => line.unit));
   const [unit] = units;
@@ -25,19 +27,19 @@ function columns(lines: Line[]): ColumnDef<Line>[] {
     {
       accessorKey: "rateCny",
       header: "Rate",
-      cell: ({ row }) => `${formatCNY(row.original.rateCny, { decimals: 2 })} / ${row.original.unit}`,
+      cell: ({ row }) => `${formatMoney(row.original.rateCny, currency, { decimals: 2 })} / ${row.original.unit}`,
       meta: { align: "right" },
     },
     {
       accessorKey: "valueCny",
       header: "Line total",
-      cell: ({ row }) => formatCNY(row.original.valueCny),
-      footer: () => formatCNY(lines.reduce((sum, line) => sum + line.valueCny, 0)),
+      cell: ({ row }) => formatMoney(row.original.valueCny, currency),
+      footer: () => formatMoney(lines.reduce((sum, line) => sum + line.valueCny, 0), currency),
       meta: { align: "right", className: "font-bold" },
     },
   ];
 }
 
-export function ItemsTable({ lines }: { lines: Line[] }) {
-  return <DataTable columns={columns(lines)} data={lines} getRowId={(line) => line.id} density="snug" size="sm" />;
+export function ItemsTable({ lines, currency }: { lines: Line[]; currency: Currency }) {
+  return <DataTable columns={columns(lines, currency)} data={lines} getRowId={(line) => line.id} density="snug" size="sm" />;
 }

@@ -13,9 +13,10 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreatePaymentResponse, OrderOptions } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatINR } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, formatINR } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import type { Currency } from "@/types/domain";
 
 import {
   emptyPayment,
@@ -33,7 +34,8 @@ const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const footerButtonClass = "h-[42px] px-[17px]";
 
-export type OrderChoice = { orderId: string; po: string; supplier: string };
+/** `currency`: the order's, which the payment is in. */
+export type OrderChoice = { orderId: string; po: string; supplier: string; currency: Currency };
 
 type RecordPaymentDialogProps = {
   /** The orders to choose from (PAY-1). With `fixed`, the one order given is preselected and can't be changed. */
@@ -90,12 +92,17 @@ function RecordPaymentForm({
 }) {
   const [today] = useState(() => todayInIndia());
   const { register, handleSubmit, setError, control, formState } = useForm<RecordPaymentInput, unknown, RecordPaymentValues>({
-    resolver: zodResolver(recordPaymentSchema(today)),
+    // Checked against the chosen order's currency (an INR order has no rate to check).
+    resolver: (values, context, options) =>
+      zodResolver(recordPaymentSchema(today, orders.find((o) => o.orderId === values.orderId)?.currency))(values, context, options),
     defaultValues: emptyPayment(fixed ? orders[0]!.orderId : "", today),
   });
   const { errors } = formState;
   const [orderId, amountCny, rateInr] = useWatch({ control, name: ["orderId", "amountCny", "rateInr"] });
   const order = orders.find((o) => o.orderId === orderId);
+  // Before an order is chosen the labels show yuan, as they always did.
+  const symbol = CURRENCY_SYMBOL[order?.currency ?? "CNY"];
+  const inr = order?.currency === "INR";
 
   async function save(values: RecordPaymentValues) {
     try {
@@ -160,9 +167,9 @@ function RecordPaymentForm({
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.amountCny}>
           <FieldLabel htmlFor="payment-amount" className={labelClass}>
-            Amount (¥) <RequiredMark />
+            Amount ({symbol}) <RequiredMark />
           </FieldLabel>
-          <Input id="payment-amount" required inputMode="decimal" placeholder="¥" size="sm" aria-invalid={!!errors.amountCny} {...register("amountCny")} />
+          <Input id="payment-amount" required inputMode="decimal" placeholder={symbol} size="sm" aria-invalid={!!errors.amountCny} {...register("amountCny")} />
           <FieldError errors={[errors.amountCny]} />
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.paidOn}>
@@ -172,13 +179,15 @@ function RecordPaymentForm({
           <Input id="payment-paid-on" required type="date" max={today} size="sm" aria-invalid={!!errors.paidOn} {...register("paidOn")} />
           <FieldError errors={[errors.paidOn]} />
         </Field>
-        <Field className={fieldClass} data-invalid={!!errors.rateInr}>
-          <FieldLabel htmlFor="payment-rate" className={labelClass}>
-            Rate (₹ per ¥) <RequiredMark />
-          </FieldLabel>
-          <Input id="payment-rate" required inputMode="decimal" size="sm" aria-invalid={!!errors.rateInr} {...register("rateInr")} />
-          <FieldError errors={[errors.rateInr]} />
-        </Field>
+        {inr ? null : (
+          <Field className={fieldClass} data-invalid={!!errors.rateInr}>
+            <FieldLabel htmlFor="payment-rate" className={labelClass}>
+              Rate (₹ per {symbol}) <RequiredMark />
+            </FieldLabel>
+            <Input id="payment-rate" required inputMode="decimal" size="sm" aria-invalid={!!errors.rateInr} {...register("rateInr")} />
+            <FieldError errors={[errors.rateInr]} />
+          </Field>
+        )}
         <Field className={fieldClass} data-invalid={!!errors.mode}>
           <FieldLabel htmlFor="payment-mode" className={labelClass}>
             Mode <RequiredMark />
@@ -190,7 +199,7 @@ function RecordPaymentForm({
       <div className="mt-[14px] flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
         <span className="text-[13px] leading-5 text-muted-foreground">Amount in INR</span>
         <output htmlFor="payment-amount payment-rate" className="text-[15px] leading-5 font-bold">
-          {formatINR(paymentINR(amountCny, rateInr))}
+          {formatINR(paymentINR(amountCny, inr ? "1" : rateInr))}
         </output>
       </div>
       <DialogFooter className="mt-5 pt-4">

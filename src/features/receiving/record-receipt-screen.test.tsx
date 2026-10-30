@@ -27,6 +27,7 @@ const options: ReceiptOptions = {
       orderId: "o35",
       po: "PO-2035",
       supplier: "Shenzhen Apparel",
+      currency: "CNY",
       orderValueCny: 72000,
       depositsPaidCny: 40000,
       lines: [
@@ -38,6 +39,7 @@ const options: ReceiptOptions = {
       orderId: "o40",
       po: "PO-2040",
       supplier: "Foshan Fabrics",
+      currency: "CNY",
       orderValueCny: 5000,
       depositsPaidCny: 1000,
       lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 1000, receivedEarlier: 0, unitPriceCny: 5 }],

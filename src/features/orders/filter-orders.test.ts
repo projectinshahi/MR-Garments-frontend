@@ -10,6 +10,7 @@ const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"
   deliveryDate: "2026-10-30",
   stage,
   supplier,
+  currency: "CNY",
   item,
   quantity: 100,
   unit: "pcs",

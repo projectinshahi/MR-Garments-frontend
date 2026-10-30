@@ -10,7 +10,8 @@ import { SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import type { OrderOptions } from "@/lib/api/types";
-import { formatINR, formatNumber, formatShortDate } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { filterOrders } from "./filter-orders";
@@ -22,7 +23,14 @@ const PAD = "px-2.5 first:pl-2.5 last:pr-2.5";
 // Reference header: 12 px text, 3 px below the centre of the 44 px tall-density header row.
 const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</span>;
 
-const columns: ColumnDef<OrderPaymentRow>[] = [
+/**
+ * `currency`: the one currency every order is in, shown in the headers as in the reference ("Order value (¥)"); null
+ * when orders are in different currencies, and each amount then shows its own symbol.
+ */
+const columns = (currency: Currency | null): ColumnDef<OrderPaymentRow>[] => {
+  const label = (text: string) => head(currency ? `${text} (${CURRENCY_SYMBOL[currency]})` : text);
+  const amount = (value: number, row: OrderPaymentRow) => (currency ? formatNumber(value) : formatMoney(value, row.currency));
+  return [
   {
     accessorKey: "po",
     header: () => head("PO / Supplier"),
@@ -42,15 +50,15 @@ const columns: ColumnDef<OrderPaymentRow>[] = [
   },
   {
     accessorKey: "orderValue",
-    header: () => head("Order value (¥)"),
+    header: () => label("Order value"),
     meta: { align: "right", className: `${PAD} w-[130px]` },
-    cell: ({ row }) => formatNumber(row.original.orderValue),
+    cell: ({ row }) => amount(row.original.orderValue, row.original),
   },
   {
     accessorKey: "paid",
-    header: () => head("Paid (¥)"),
+    header: () => label("Paid"),
     meta: { align: "right", className: `${PAD} w-[70px]` },
-    cell: ({ row }) => formatNumber(row.original.paid),
+    cell: ({ row }) => amount(row.original.paid, row.original),
   },
   {
     accessorKey: "paidInr",
@@ -60,9 +68,9 @@ const columns: ColumnDef<OrderPaymentRow>[] = [
   },
   {
     accessorKey: "balance",
-    header: () => head("Balance (¥)"),
+    header: () => label("Balance"),
     meta: { align: "right", className: `${PAD} w-[92.5px]` },
-    cell: ({ row }) => formatNumber(row.original.balance),
+    cell: ({ row }) => amount(row.original.balance, row.original),
   },
   {
     accessorKey: "nextDue",
@@ -74,7 +82,8 @@ const columns: ColumnDef<OrderPaymentRow>[] = [
       return nextDueTone ? <StatusPill tone={nextDueTone}>{formatShortDate(nextDue)}</StatusPill> : formatShortDate(nextDue);
     },
   },
-];
+  ];
+};
 
 type PaymentsViewProps = {
   orders: OrderPaymentRow[];
@@ -97,6 +106,9 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
   const [selectedPo, setSelectedPo] = useState(defaultPo);
   const visible = filterOrders(orders, query);
   const selected = visible.find((order) => order.po === selectedPo);
+  // Every order's currency, from all orders so the headers don't change while searching. None yet: yuan, as before.
+  const currencies = new Set(orders.map((order) => order.currency));
+  const single = currencies.size > 1 ? null : ([...currencies][0] ?? "CNY");
 
   return (
     <>
@@ -129,12 +141,12 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1.6fr_1fr]">
           <SectionCard
             title="Payments by order"
-            aside={<CardNote size="sm">Amounts in supplier currency (¥) and INR</CardNote>}
+            aside={<CardNote size="sm">{single ? `Amounts in supplier currency (${CURRENCY_SYMBOL[single]}) and INR` : "Amounts in each order's currency and INR"}</CardNote>}
             titleGap="none"
             className="min-w-0 pt-3.5 pb-[18px]"
           >
             <DataTable
-              columns={columns}
+              columns={columns(single)}
               data={visible}
               getRowId={(row) => row.po}
               density="tall"
