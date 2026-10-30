@@ -123,7 +123,12 @@ function OfficeForm({ row, onCancel, onSaved }: { row?: LocationRow; onCancel: (
           </Field>
         ) : null}
       </div>
-      <SettingsDialogFooter onCancel={onCancel} submitLabel="Save office or warehouse" submitting={isSubmitting} />
+      <SettingsDialogFooter
+        onCancel={onCancel}
+        submitLabel="Save office or warehouse"
+        submitting={isSubmitting}
+        remove={row && { path: `/locations/${row.id}`, name: row.name, noun: "office or warehouse" }}
+      />
       <ConfirmDialog
         open={!!confirming}
         title={`Deactivate ${row?.name}?`}

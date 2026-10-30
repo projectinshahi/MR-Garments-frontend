@@ -125,7 +125,12 @@ function ClearingAgentForm({ row, onCancel, onSaved }: { row?: ClearingAgentRow;
           </Field>
         ) : null}
       </div>
-      <SettingsDialogFooter onCancel={onCancel} submitLabel="Save clearing agent" submitting={formState.isSubmitting} />
+      <SettingsDialogFooter
+        onCancel={onCancel}
+        submitLabel="Save clearing agent"
+        submitting={formState.isSubmitting}
+        remove={editing && { path: `/clearing-agents/${editing.id}`, name: editing.name, noun: "clearing agent" }}
+      />
       {editing ? (
         <ConfirmDialog
           open={!!deactivating}

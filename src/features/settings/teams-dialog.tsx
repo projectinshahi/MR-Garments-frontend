@@ -90,7 +90,12 @@ function TeamForm({ row, onCancel, onSaved }: { row?: TeamRow; onCancel: () => v
           </Field>
         ) : null}
       </div>
-      <SettingsDialogFooter onCancel={onCancel} submitLabel="Save team" submitting={isSubmitting} />
+      <SettingsDialogFooter
+        onCancel={onCancel}
+        submitLabel="Save team"
+        submitting={isSubmitting}
+        remove={row && { path: `/teams/${row.id}`, name: row.name, noun: "team" }}
+      />
       <ConfirmDialog
         open={!!confirming}
         title={`Deactivate ${row?.name}?`}

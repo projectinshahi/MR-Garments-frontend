@@ -126,7 +126,12 @@ function ShippingAgentForm({ agent, onCancel, onSaved }: { agent?: ShippingAgent
             </Field>
           )}
         </div>
-        <SettingsDialogFooter onCancel={onCancel} submitLabel="Save shipping agent" submitting={formState.isSubmitting} />
+        <SettingsDialogFooter
+          onCancel={onCancel}
+          submitLabel="Save shipping agent"
+          submitting={formState.isSubmitting}
+          remove={agent && { path: `/shipping-agents/${agent.id}`, name: agent.name, noun: "shipping agent" }}
+        />
       </form>
       <ConfirmDialog
         open={!!confirming}
