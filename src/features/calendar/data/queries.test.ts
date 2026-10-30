@@ -29,10 +29,10 @@ afterEach(() => {
 });
 
 describe("getCalendar", () => {
-  it("maps CAL-1 rows against today in India and links POs for users who can open Orders", async () => {
+  it("maps CAL-1 rows against today in India, without fully received orders, and links POs for users who can open Orders", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-26T20:00:00Z")); // 01:30 on 27 Oct in India
-    vi.mocked(apiGet).mockResolvedValue([item]);
+    vi.mocked(apiGet).mockResolvedValue([item, { ...item, orderId: "o2", po: "PO-2051", received: 5_000 }]);
     vi.mocked(getMe).mockResolvedValue(me("View"));
 
     await expect(getCalendar()).resolves.toEqual({

@@ -8,7 +8,8 @@ import { SIGNED_OUT } from "./sessions";
 //   grant (China staff, Receiving). AT-U6 only tries changes to Suresh that the API refuses.
 // - Every successful change is undone in a `finally` through USR-4, so later specs see the seeded users.
 // - One worker runs the tests in file order. AT-U7 is last: users can't be deleted, so it leaves Test User inactive.
-// - AT-U8 to U10 need the invite link, which only the API console prints (B1.9); they are manual.
+// - Password policy: Add user takes the initial password, and the new user signs in with it (AT-U7). There are no
+//   invite links, so AT-U8 to U10 no longer exist. Setting another user's password: batch1-a5-passwords.spec.ts.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -23,8 +24,11 @@ const SEEDED = ["Suresh Menon", "Priya Nair", "Anita Joseph", "Wang Fang", "Chen
 const LAST_SIGN_IN = /^(–|Today, \d\d:\d\d|Yesterday, \d\d:\d\d|\d{1,2} [A-Z][a-z]{2}( \d{4})?, \d\d:\d\d)$/;
 
 // Form controls by role: hidden <Activity> routes stay in the DOM, and role locators skip them.
+const INITIAL_PASSWORD = "Welcome2026x";
+
 const field = {
   name: (page: Page) => page.getByRole("textbox", { name: "Full name" }),
+  password: (page: Page) => page.getByLabel(/^Password\s*\*?$/).filter({ visible: true }),
   email: (page: Page) => page.getByRole("textbox", { name: "Email" }),
   role: (page: Page) => page.getByRole("combobox", { name: "Role" }),
   status: (page: Page) => page.getByRole("combobox", { name: "Status" }),
@@ -116,15 +120,22 @@ test("AT-U2: search, role filter and the status chips", async ({ page }) => {
   await expect(rows).toHaveCount(9);
 });
 
-test("AT-U12: the role card follows the Role select and the password can't be typed (B5, C5)", async ({ page }) => {
+test("AT-U12: the role card follows the Role select; Add user asks for the initial password (B5, password policy)", async ({ page }) => {
   await page.goto("/users");
   await page.getByRole("link", { name: "+ Add user" }).click();
   await expect(page).toHaveURL("/users/edit");
   await expect(field.name(page)).toHaveValue("");
 
-  const password = page.getByLabel("Password", { exact: true });
-  await expect(password).not.toBeEditable();
-  await expect(password).toHaveAttribute("placeholder", "Set by user at first sign-in");
+  const password = field.password(page);
+  await expect(password).toBeEditable();
+  await expect(password).toHaveValue("");
+  await expect(password).toHaveAttribute("type", "password");
+  const meter = page.getByRole("meter", { name: "Password strength" });
+  await expect(meter).toHaveAttribute("aria-valuenow", "0");
+  await password.fill("Garments2026");
+  await expect(meter).toHaveAttribute("aria-valuenow", "4");
+  await page.getByRole("button", { name: "Show password", exact: true }).click();
+  await expect(password).toHaveAttribute("type", "text");
 
   const card = roleCard(page);
   await field.role(page).selectOption("China staff");
@@ -141,27 +152,33 @@ test("AT-U12: the role card follows the Role select and the password can't be ty
   await expect(page).toHaveURL("/users");
 });
 
-test("AT-U4: a stage outside the role shows M18 under the ticks and saves nothing", async ({ page }) => {
+// Stage ticks follow the role (QA 2026-10-30): ticks the role can't hold are disabled, and changing the role unticks
+// them before Save. The API's M18/M19 stay as the backstop, checked in the backend users.test.ts (AT-U4, AT-U5).
+test("AT-U4: only the role's own stages can be ticked (Wang Fang, China staff)", async ({ page }) => {
   await openEdit(page, "Wang Fang");
-  await field.stage(page, "Clearing (India)").click();
-  await field.save(page).click();
-  await expect(stagesCard(page).getByText("China staff can't enter data for Clearing (India). Untick it first.")).toBeVisible();
-  await expect(page).toHaveURL(/\/users\/edit\?id=/);
-  await expect(field.stage(page, "Clearing (India)")).toBeChecked();
-  await expect(field.save(page)).toBeEnabled();
-
-  await page.reload();
-  await expect(field.stage(page, "Clearing (India)")).not.toBeChecked();
-  await expect(field.stage(page, "Container loading")).toBeChecked();
+  for (const stage of ["Receiving (China)", "Container loading"]) await expect(field.stage(page, stage)).toBeEnabled();
+  for (const stage of ["Clearing (India)", "Transport", "Warehouse"]) {
+    await expect(field.stage(page, stage)).toBeDisabled();
+    await expect(field.stage(page, stage)).not.toBeChecked();
+  }
+  await expect(stagesCard(page).getByText("doesn't use stage access", { exact: false })).toHaveCount(0);
 });
 
-test("AT-U5: changing the role while Receiving is ticked shows M18 (Li Wei, as Chen Yu)", async ({ page }) => {
+test("AT-U5: changing the role unticks the stages the new role can't hold, and nothing is saved until Save (Li Wei)", async ({ page }) => {
   await openEdit(page, "Li Wei");
+  await expect(field.stage(page, "Receiving (China)")).toBeChecked();
   await field.role(page).selectOption("India staff");
-  await field.save(page).click();
-  await expect(stagesCard(page).getByText("India staff can't enter data for Receiving (China). Untick it first.")).toBeVisible();
+  await expect(field.stage(page, "Receiving (China)")).not.toBeChecked();
+  await expect(field.stage(page, "Receiving (China)")).toBeDisabled();
+  await expect(field.stage(page, "Clearing (India)")).toBeEnabled();
+
+  await field.role(page).selectOption("Procurement");
+  await expect(stagesCard(page).getByText("Procurement doesn't use stage access.")).toBeVisible();
+  for (const stage of ["Receiving (China)", "Clearing (India)", "Warehouse"]) await expect(field.stage(page, stage)).toBeDisabled();
+
   await page.reload();
   await expect(field.role(page)).toHaveValue("China staff");
+  await expect(field.stage(page, "Receiving (China)")).toBeChecked();
 });
 
 test("AT-U6: the last Management user can't be demoted or deactivated (M20)", async ({ page }) => {
@@ -234,6 +251,7 @@ test("AT-U11: adding a user with Wang Fang's email shows M15 and keeps the value
   await field.name(page).fill("Second Wang");
   await field.email(page).fill("WANG@mrgarments.com");
   await field.role(page).selectOption("China staff");
+  await field.password(page).fill(INITIAL_PASSWORD);
   await field.save(page).click();
   await expect(page.getByRole("group").filter({ has: field.email(page) }).getByText(M15)).toBeVisible();
   await expect(field.email(page)).toBeFocused();
@@ -243,7 +261,11 @@ test("AT-U11: adding a user with Wang Fang's email shows M15 and keeps the value
   await expect(page).toHaveURL("/users");
 });
 
-test("AT-U7: adding a user lists them as Active (then deactivates them again)", async ({ page, baseURL }) => {
+test("AT-U7: adding a user with an initial password lists them as Active, and they sign in with it (then deactivates them)", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   try {
     await page.goto("/users");
     await page.getByRole("link", { name: "+ Add user" }).click();
@@ -251,6 +273,11 @@ test("AT-U7: adding a user lists them as Active (then deactivates them again)", 
     await field.email(page).fill("test@mrgarments.com");
     await field.role(page).selectOption("China staff");
     await field.stage(page, "Receiving (China)").click();
+    // The API checks the rules (M8) before adding anyone.
+    await field.password(page).fill("welcome2026");
+    await field.save(page).click();
+    await expect(page.getByText("Use at least 8 characters, a number and a capital letter.")).toBeVisible();
+    await field.password(page).fill(INITIAL_PASSWORD);
     await saveAndExpect(page, "User added");
 
     const row = page.getByRole("table").getByRole("row", { name: /Test User/ });
@@ -263,6 +290,17 @@ test("AT-U7: adding a user lists them as Active (then deactivates them again)", 
     await page.getByRole("link", { name: "Edit Test User" }).click();
     await expect(field.stage(page, "Receiving (China)")).toBeChecked();
     await expect(field.stage(page, "Container loading")).not.toBeChecked();
+    await expect(page.getByLabel("Set a new password", { exact: true })).toHaveValue("");
+
+    // No link or email: the new user signs in with the password Management typed.
+    const context = await browser.newContext({ baseURL, storageState: SIGNED_OUT, viewport: { width: 1440, height: 900 } });
+    const testUser = await context.newPage();
+    await testUser.goto("/login");
+    await testUser.getByLabel("Email or username").fill("test@mrgarments.com");
+    await testUser.getByLabel("Password", { exact: true }).fill(INITIAL_PASSWORD);
+    await testUser.getByRole("button", { name: "Sign in" }).click();
+    await expect(testUser).toHaveURL("/home");
+    await context.close();
   } finally {
     // Users can't be deleted: set Test User inactive so the list shows the 8 seeded users as active again.
     const edit = page.getByRole("link", { name: "Edit Test User" });

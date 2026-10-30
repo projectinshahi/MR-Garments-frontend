@@ -14,14 +14,9 @@ export const MESSAGES = {
   signInWrong: "Email or password is incorrect.", // M2
   tooManyAttempts: "Too many attempts. Try again in 15 minutes.", // M3
   sessionEnded: "Your session has ended. Please sign in again.", // M4
-  currentPasswordEmpty: "Enter your current password.", // M5
-  currentPasswordWrong: "Current password is incorrect.", // M6
-  newPasswordEmpty: "Enter a new password.", // M7
+  passwordEmpty: "Enter a password.", // proposed (password policy): Add user's initial password
   passwordRules: "Use at least 8 characters, a number and a capital letter.", // M8
   passwordTooLong: "Use 128 characters or fewer.", // M9
-  confirmEmpty: "Confirm your new password.", // M10
-  confirmMismatch: "New passwords do not match.", // M11
-  linkInvalid: "This link is invalid or has expired. Ask your manager for a new one.", // M12
   fullNameEmpty: "Enter the full name.", // M13
   emailInvalid: "Enter a valid email address.", // M14
   emailTaken: "A user with this email already exists.", // M15
@@ -39,8 +34,6 @@ export const MESSAGES = {
 } as const;
 
 export const SUCCESS = {
-  passwordChanged: "Password changed", // K3
-  passwordSet: "Password set. You can sign in now.", // K4
   userAdded: "User added", // K5
   userSaved: "User saved", // K6
   supplierAdded: "Supplier added", // K7

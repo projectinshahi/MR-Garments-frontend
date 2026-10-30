@@ -1,8 +1,9 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
 import { FilterSelect, type FilterOption } from "@/components/shared/filters";
 
@@ -10,7 +11,10 @@ import { filterQuery, hrefWith, optionParam } from "./params";
 
 type ParamSelectProps = { param: string; label: string; options: FilterOption[]; size?: "default" | "sm"; className?: string };
 
-/** A filter dropdown kept in the URL (`?<param>=`, "all" removes it). The other parameters stay. */
+/**
+ * A filter dropdown kept in the URL (`?<param>=`, "all" removes it). The other parameters stay. It shows the old choice
+ * until the new view is loaded, so the progress bar follows the navigation.
+ */
 export function ParamSelect({ param, ...select }: ParamSelectProps) {
   return (
     <Suspense fallback={<FilterSelect {...select} value="all" onValueChange={() => {}} />}>
@@ -20,7 +24,7 @@ export function ParamSelect({ param, ...select }: ParamSelectProps) {
 }
 
 function BoundSelect({ param, options, ...select }: ParamSelectProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   const params = useSearchParams();
   return (
@@ -28,7 +32,7 @@ function BoundSelect({ param, options, ...select }: ParamSelectProps) {
       {...select}
       options={options}
       value={optionParam(params, param, options)}
-      onValueChange={(value) => router.push(hrefWith(pathname, params, param, value === "all" ? null : value))}
+      onValueChange={(value) => navigate(hrefWith(pathname, params, param, value === "all" ? null : value))}
     />
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -13,7 +12,7 @@ import { ApiError } from "@/lib/api/errors";
 import type { Me } from "@/lib/api/types";
 import { handleApiError, MESSAGES } from "@/lib/feedback";
 
-import { AuthHeading, AuthNote, PasswordInput, inputClass, labelClass, linkClass, submitClass } from "./auth-parts";
+import { AuthHeading, AuthNote, PasswordInput, inputClass, labelClass, submitClass } from "./auth-parts";
 
 /**
  * Sign in (01_1_Login.jpeg), AUTH-1. Success loads the landing page in full so the session-driven shell loads (K1).
@@ -106,15 +105,13 @@ export function LoginScreen() {
             Keep me signed in
           </FieldLabel>
         </Field>
-        <Link href="/forgot-password" className={`text-sm ${linkClass}`}>
-          Forgot password?
-        </Link>
       </div>
       <FieldError className="mt-4">{message}</FieldError>
       <Button type="submit" size="lg" className={`mt-6 ${submitClass}`} disabled={pending}>
         Sign in
       </Button>
-      <AuthNote className="mt-[26px]">Need access? Ask your manager for an account.</AuthNote>
+      {/* Password policy: no self-service reset; Management sets passwords on Add/Edit user. */}
+      <AuthNote className="mt-[26px]">Forgot your password or need an account? Ask a Management user.</AuthNote>
     </form>
   );
 }

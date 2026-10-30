@@ -29,8 +29,16 @@ export const isoDay = (date: Date) => format(date, "yyyy-MM-dd");
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/**
+ * The CAL-1 rows still awaited from the supplier, as the views show them on `today`. An order whose main line is fully
+ * received is no longer awaited, so it leaves the calendar and the dashboard's delivery figures, like a loaded order
+ * (stage 3); a partly received one stays. Every CAL-1 consumer goes through here.
+ */
+export const toDeliveries = (items: DeliveryItem[], today: string) =>
+  items.filter((item) => item.received < item.quantity).map((item) => toDelivery(item, today));
+
 /** A CAL-1 row as the views show it on `today`. */
-export function toDelivery({ po, supplier, item, quantity, unit, due }: DeliveryItem, today: string): Delivery {
+function toDelivery({ po, supplier, item, quantity, unit, due }: DeliveryItem, today: string): Delivery {
   const days = differenceInCalendarDays(parseISO(due), parseISO(today));
   if (days < 0) return { po, supplier, item, quantity, unit, due, status: "late", statusLabel: `${lateBy(due, today)} late` };
   if (days <= DUE_SOON_DAYS)

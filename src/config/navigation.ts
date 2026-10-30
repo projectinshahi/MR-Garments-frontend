@@ -57,11 +57,11 @@ export const SESSION_COOKIE = "mrg.sid";
 /** Where a page or request goes when the session has ended (E6, E7); the sign-in page shows M4. */
 export const SESSION_ENDED_URL = "/login?reason=session-ended";
 
-/** Pages anyone can open, signed in or not. */
-export const PUBLIC_PATHS = ["/login", "/forgot-password", "/set-password"];
+/** Pages anyone can open, signed in or not. There is no self-service password page: Management sets passwords. */
+export const PUBLIC_PATHS = ["/login"];
 
 /** Pages every signed-in user can open. */
-const SIGNED_IN_PATHS = ["/profile", "/notifications", "/change-password"];
+const SIGNED_IN_PATHS = ["/profile", "/notifications"];
 
 /** The capability a page needs (View or better), by route prefix. Longest prefix wins. */
 const ROUTE_CAPABILITY: [string, Capability][] = [

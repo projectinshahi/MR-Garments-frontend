@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LinkPending } from "@/components/layout/navigation-progress";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,8 @@ const NAV = "size-[30px] p-0 text-base font-normal";
 
 /**
  * ‹ title › Today, with the status legend on the right: "October 2026", "28 Sep – 4 Oct 2026". When the period has no
- * delivery (for the chosen supplier), a line under it says so.
+ * delivery (for the chosen supplier), a line under it says so. The current period stays until the next is ready, so
+ * each link reports to the progress bar.
  */
 export function CalendarToolbar({
   title,
@@ -49,13 +51,16 @@ export function CalendarToolbar({
       <div className="flex items-center gap-3">
         <Link href={links.previous} aria-label={`Previous ${unit}`} className={buttonVariants({ variant: "outline", className: NAV })}>
           <span aria-hidden>‹</span>
+          <LinkPending />
         </Link>
         <h2 className="text-[19px] leading-6 font-bold">{title}</h2>
         <Link href={links.next} aria-label={`Next ${unit}`} className={buttonVariants({ variant: "outline", className: NAV })}>
           <span aria-hidden>›</span>
+          <LinkPending />
         </Link>
         <Link href={links.today} className={buttonVariants({ variant: "outline", size: "sm", className: "h-[30px] px-2.5" })}>
           Today
+          <LinkPending />
         </Link>
       </div>
       <ul aria-label="Legend" className="flex flex-wrap items-center gap-x-3.5 text-sm text-muted-foreground">

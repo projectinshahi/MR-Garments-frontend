@@ -2,12 +2,13 @@ import { expect, test } from "@playwright/test";
 
 import { SIGNED_OUT } from "./sessions";
 
-// W3-auth: Sign in (01_1), Forgot password (02_1.1). Role/label locators only (hidden <Activity> routes).
-// Batch 1: these pages are for signed-out users; Change password needs a session (w3-change-password.spec.ts).
+// W3-auth: Sign in (01_1). Role/label locators only (hidden <Activity> routes).
+// Password policy: Forgot password and Change password are gone (batch1-a5-passwords.spec.ts); the sign-in note says
+// to ask a Management user.
 
 test.use({ viewport: { width: 1440, height: 900 }, storageState: SIGNED_OUT });
 
-test("sign in toggles the password, links to forgot password and signs in as Suresh (AT-A2)", async ({ page }) => {
+test("sign in toggles the password, has no forgot password link and signs in as Suresh (AT-A2)", async ({ page }) => {
   const e2ePassword = process.env.E2E_PASSWORD;
   expect(e2ePassword, "Set E2E_PASSWORD in .env.test.local").toBeTruthy();
   await page.goto("/login");
@@ -29,8 +30,8 @@ test("sign in toggles the password, links to forgot password and signs in as Sur
   await keep.click();
   await expect(keep).toBeChecked();
 
-  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password");
-  await expect(page.getByText("Need access? Ask your manager for an account.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveCount(0);
+  await expect(page.getByText("Forgot your password or need an account? Ask a Management user.")).toBeVisible();
 
   await email.fill("suresh@mrgarments.com");
   await password.fill(e2ePassword ?? "");
@@ -41,14 +42,4 @@ test("sign in toggles the password, links to forgot password and signs in as Sur
   const block = page.getByRole("button", { name: /Suresh Menon/ });
   await expect(block).toContainText("SM");
   await expect(block).toContainText("Full access");
-});
-
-test("forgot password is prefilled and its action is not in the prototype", async ({ page }) => {
-  await page.goto("/forgot-password");
-  await expect(page.getByRole("heading", { level: 1, name: "Forgot your password?" })).toBeVisible();
-  await expect(page.getByLabel("Email or username")).toHaveValue("name@mrgarments.com");
-  await expect(page.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
-
-  await page.getByRole("button", { name: "Send reset link" }).click();
-  await expect(page.getByText("Send reset link is not included in the current prototype.")).toBeVisible();
 });

@@ -14,7 +14,8 @@ test("the dashboard shows live figures, and a new order moves them", async ({ pa
     return {
       active: orders.filter((o) => o.stage < 6).length,
       stage1: orders.filter((o) => o.stage === 1).length,
-      late: deliveries.filter((d) => d.due < today()).length,
+      // A fully received order is no longer awaited, so neither the calendar nor the dashboard counts it.
+      late: deliveries.filter((d) => d.due < today() && d.received < d.quantity).length,
     };
   };
   const stage1 = page.getByRole("meter", { name: "1. Order and deposit" });

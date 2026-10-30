@@ -48,6 +48,7 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("Last changed 12 Aug 2026")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /change password/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /change password/i })).not.toBeInTheDocument();
+    expect(screen.getByText("To change it, ask a Management user.")).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.getByText(PROFILE_TEXT.notifications)).toBeInTheDocument();
   });

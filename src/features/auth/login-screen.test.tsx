@@ -39,6 +39,12 @@ async function fillAndSubmit(email = "suresh@mrgarments.com", password = "Secret
 }
 
 describe("LoginScreen (AUTH-1, U36)", () => {
+  it("has no Forgot password link; the note says Management sets passwords (password policy)", () => {
+    render(<LoginScreen />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("Forgot your password or need an account? Ask a Management user.")).toBeInTheDocument();
+  });
+
   it("shows M1 and sends nothing while a field is empty", async () => {
     render(<LoginScreen />);
     await fillAndSubmit("   ", "");

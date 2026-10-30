@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import type { LocationRow, RecordStatus, Role, RolesResponse } from "@/lib/api/types";
+import { getMe } from "@/lib/session";
 
 import { toRoleRows, toUserRow } from "../user-rows";
 
@@ -54,16 +55,21 @@ const notFoundOn404 = (error: unknown): never => {
 /**
  * Add or edit user (48). With an id: USR-2 (404 shows the not-found page). Without one (Add user): an empty form whose
  * choices come from ROL-1 and MD-13's active offices, because USR-2 needs an id. ROL-1 also feeds the role card (B5).
+ * `isSelf` hides "Set a new password" on the signed-in user's own account: USR-4 refuses a self-change (403).
  */
 export async function getEditUser(id: string | undefined) {
   const matrix = apiGet<RolesResponse>("/roles");
   if (!id) {
     const [roles, offices] = await Promise.all([matrix, apiGet<LocationRow[]>("/locations?status=Active")]);
     const options: UserOptions = { roles: roles.roles, offices: offices.map(({ id, name }) => ({ id, name })), languages: LANGUAGES };
-    return { user: null, options, matrix: roles };
+    return { user: null, options, matrix: roles, isSelf: false };
   }
-  const [detail, roles] = await Promise.all([apiGet<UserDetailResponse>(`/users/${encodeURIComponent(id)}`).catch(notFoundOn404), matrix]);
-  return { ...detail, matrix: roles };
+  const [detail, roles, me] = await Promise.all([
+    apiGet<UserDetailResponse>(`/users/${encodeURIComponent(id)}`).catch(notFoundOn404),
+    matrix,
+    getMe(),
+  ]);
+  return { ...detail, matrix: roles, isSelf: detail.user.id === me?.id };
 }
 
 /** Roles (49): the ROL-1 matrix. */
