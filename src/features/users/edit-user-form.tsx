@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLayoutEffect } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { PageContainer } from "@/components/layout/page-header";
@@ -14,13 +15,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/features/auth/auth-parts";
+import { PasswordStrength } from "@/features/auth/password-strength";
 import { apiClient } from "@/lib/api/client";
 import { handleApiError, notifySuccess, SUCCESS } from "@/lib/feedback";
 import type { RecordStatus } from "@/types/domain";
 
 import type { EditUserData } from "./data/queries";
 import { buildRoleCard } from "./role-card";
-import { FORM_FIELDS, STAGE_OPTIONS, toFormValues, toggleStage, toPayload, userFormSchema, type UserFormValues } from "./user-form";
+import {
+  FORM_FIELDS,
+  newUserFormSchema,
+  STAGE_OPTIONS,
+  toFormValues,
+  toggleStage,
+  toPayload,
+  userFormSchema,
+  type UserFormValues,
+} from "./user-form";
 import { UsersHeader } from "./users-header";
 
 const FORM_ID = "edit-user-form";
@@ -35,15 +47,21 @@ const rowClass = "flex items-center border-b border-border-subtle py-[9px] last:
  * Add or edit user (48): user details, the stages the person can enter, and what the role can do.
  * Saves through USR-3 (add) or USR-4 (edit), then goes to /users with K5 or K6. API field errors show under their
  * fields (E1-E3) with focus on the first; the values stay and Save is disabled only while the request runs (E14).
+ * Password policy: Add user needs the initial password; Edit user may set a new one for someone else (which signs them
+ * out everywhere), and shows no password field on the signed-in user's own account (`isSelf`).
  */
-export function EditUserForm({ user, options, matrix }: EditUserData) {
+export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
   const router = useRouter();
-  const { register, control, handleSubmit, reset, setError, formState } = useForm<UserFormValues>({
-    resolver: zodResolver(userFormSchema),
+  const { register, control, handleSubmit, reset, resetField, setError, formState } = useForm<UserFormValues>({
+    resolver: zodResolver(user ? userFormSchema : newUserFormSchema),
     defaultValues: toFormValues(user),
   });
+  // Visited pages stay mounted but hidden (Activity), so an unsaved password would wait here for the next visit and go
+  // out with a later save. This cleanup runs whenever the page is hidden or unmounted.
+  useLayoutEffect(() => () => resetField("password"), [resetField]);
   const { errors, isSubmitting } = formState;
   const card = buildRoleCard(useWatch({ control, name: "role" }), matrix);
+  const password = useWatch({ control, name: "password" });
   // A user whose office was closed keeps it as a choice, so saving other fields doesn't drop it.
   const offices =
     user?.officeId && !options.offices.some((office) => office.id === user.officeId)
@@ -62,8 +80,9 @@ export function EditUserForm({ user, options, matrix }: EditUserData) {
       return;
     }
     notifySuccess(user ? SUCCESS.userSaved : SUCCESS.userAdded);
-    // The page stays mounted (Activity), so the next visit starts from the saved values, or empty after an add.
-    reset(user ? values : toFormValues(null));
+    // The page stays mounted (Activity), so the next visit starts from the saved values, or empty after an add. The
+    // password is never kept.
+    reset(user ? { ...values, password: "" } : toFormValues(null));
     router.push("/users");
   });
 
@@ -148,21 +167,31 @@ export function EditUserForm({ user, options, matrix }: EditUserData) {
                   </NativeSelect>
                   <FieldError errors={[errors.language]} />
                 </Field>
-                <Field className="gap-1.5 sm:col-span-2">
-                  <FieldLabel htmlFor="user-password" className={labelClass}>
-                    Password
-                  </FieldLabel>
-                  {/* C5: read-only, never sent; drawn with the normal field fill. Users set it from their invite link. */}
-                  <Input
-                    size="sm"
-                    id="user-password"
-                    type="password"
-                    readOnly
-                    autoComplete="off"
-                    placeholder="Set by user at first sign-in"
-                    className="read-only:bg-input-background"
-                  />
-                </Field>
+                {isSelf ? null : (
+                  <Field className="gap-1.5 sm:col-span-2" data-invalid={!!errors.password}>
+                    <FieldLabel htmlFor="user-password" className={labelClass}>
+                      {user ? (
+                        "Set a new password"
+                      ) : (
+                        <>
+                          Password <RequiredMark />
+                        </>
+                      )}
+                    </FieldLabel>
+                    <PasswordInput
+                      id="user-password"
+                      label={user ? "new password" : "password"}
+                      required={!user}
+                      autoComplete="new-password"
+                      placeholder={user ? "Leave empty to keep the current password" : undefined}
+                      className="h-[42px] text-sm"
+                      aria-invalid={!!errors.password}
+                      {...register("password")}
+                    />
+                    <FieldError errors={[errors.password]} />
+                    {!user || password ? <PasswordStrength password={password} /> : null}
+                  </Field>
+                )}
                 <Field className="gap-1.5" data-invalid={!!errors.status}>
                   <FieldLabel htmlFor="user-status" className={labelClass}>
                     Status

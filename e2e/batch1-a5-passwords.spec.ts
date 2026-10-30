@@ -1,151 +1,124 @@
-import { expect, type Page, test } from "@playwright/test";
+import { type Browser, expect, type Page, test } from "@playwright/test";
 
 import { SIGNED_OUT } from "./sessions";
 
-// Batch 1, A5 Passwords: AT-P1 to AT-P3 (Change password, AUTH-5) and the Set password checks that need no real link
-// (AUTH-4). A valid link only exists in the API console, so AT-U8 to AT-U10 stay manual; the API tests cover them.
-// Anita signs in through the form. Other specs sign in as Anita too, so afterAll always restores E2E_PASSWORD.
+// Password policy (replaces Batch 1 A5's Change password and Set password flows): nobody changes or resets their own
+// password in the app. Management types a new user's password on Add user (batch1-a2-users.spec.ts, AT-U7) and can set
+// a new one for another user on Edit user (USR-4), which signs that user out everywhere. Change password, Forgot
+// password and Set password are gone, and AUTH-4/AUTH-5 answer 403 password_change_disabled.
+// Joseph M (Warehouse staff) is the user whose password is set: no saved session or other spec signs him in, and his
+// E2E_PASSWORD is put back afterwards.
 
-test.use({ viewport: { width: 1440, height: 900 }, storageState: SIGNED_OUT });
+test.use({ viewport: { width: 1440, height: 900 } });
 
-const ANITA = "anita@mrgarments.com";
+const JOSEPH = "joseph@mrgarments.com";
 const NEW_PASSWORD = "Ledger2026x";
-const password = () => {
+const M2 = "Email or password is incorrect.";
+const M4 = "Your session has ended. Please sign in again.";
+const DISABLED = "Passwords are set by a Management user.";
+const REMOVED = ["/change-password", "/forgot-password", "/set-password?token=not-a-real-link"];
+
+const e2ePassword = () => {
   const value = process.env.E2E_PASSWORD;
   expect(value, "Set E2E_PASSWORD in .env.test.local").toBeTruthy();
   return value!;
 };
 
-async function signIn(page: Page, secret: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email or username").fill(ANITA);
+async function signIn(page: Page, email: string, secret: string) {
+  if (!page.url().includes("/login")) await page.goto("/login");
+  await page.getByLabel("Email or username").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(secret);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
-const changeForm = (page: Page) => ({
-  current: page.getByLabel("Current password", { exact: true }),
-  next: page.getByLabel("New password", { exact: true }),
-  confirm: page.getByLabel("Confirm new password", { exact: true }),
-  save: page.getByRole("button", { name: "Save new password" }),
-});
+async function signedOutPage(browser: Browser, baseURL: string | undefined) {
+  const context = await browser.newContext({ baseURL, storageState: SIGNED_OUT, viewport: { width: 1440, height: 900 } });
+  return { context, page: await context.newPage() };
+}
 
-test.describe("Change password as Anita", () => {
-  test.describe.configure({ mode: "serial" });
+test("the self-service password pages are gone, signed out or in", async ({ page, browser, baseURL }) => {
+  // Signed in as Suresh: each goes to his landing page.
+  for (const path of REMOVED) {
+    await page.goto(path);
+    await expect(page, path).toHaveURL("/");
+  }
 
-  test.afterAll(async ({ playwright }, testInfo) => {
-    // Put Anita's password back if this run changed it (AUTH-1 then AUTH-5, from the app's own address).
-    const baseURL = testInfo.project.use.baseURL ?? "";
-    const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
-    const signedIn = await api.post("/api/v1/auth/login", { data: { email: ANITA, password: NEW_PASSWORD, keepSignedIn: false } });
-    if (signedIn.ok()) {
-      const restored = await api.post("/api/v1/auth/change-password", {
-        data: { currentPassword: NEW_PASSWORD, newPassword: password(), confirmPassword: password() },
-      });
-      expect(restored.status(), "restore Anita's E2E_PASSWORD").toBe(204);
+  // Signed out: each goes to sign in, which has no Forgot password link, only the note.
+  const visitor = await signedOutPage(browser, baseURL);
+  try {
+    for (const path of REMOVED) {
+      await visitor.page.goto(path);
+      await expect(visitor.page, path).toHaveURL("/login");
     }
-    await api.dispose();
-  });
-
-  test("AT-P1: wrong current password, no capital letter and a mismatch show M6, M8 and M11", async ({ page }) => {
-    await signIn(page, password());
-    await expect(page).not.toHaveURL(/\/login/);
-    await page.goto("/change-password");
-    const form = changeForm(page);
-    await form.current.fill("Wrong2026x");
-    await form.next.fill("ledger2026");
-    await form.confirm.fill("ledger2027");
-    await form.save.click();
-
-    await expect(page.getByText("Current password is incorrect.")).toBeVisible();
-    await expect(page.getByText("Use at least 8 characters, a number and a capital letter.")).toBeVisible();
-    await expect(page.getByText("New passwords do not match.")).toBeVisible();
-    await expect(form.current).toBeFocused();
-    await expect(form.next).toHaveValue("ledger2026");
-    await expect(form.save).toBeEnabled();
-  });
-
-  test("AT-P2 and AT-P3: a valid change ends the other browser's session; only the new password signs in", async ({
-    page,
-    browser,
-    baseURL,
-  }) => {
-    await signIn(page, password());
-    await expect(page).not.toHaveURL(/\/login/);
-
-    // AT-P2: Anita is also signed in in a second browser.
-    const other = await browser.newContext({ storageState: SIGNED_OUT, baseURL, viewport: { width: 1440, height: 900 } });
-    const otherPage = await other.newPage();
-    await signIn(otherPage, password());
-    await expect(otherPage).not.toHaveURL(/\/login/);
-
-    await page.goto("/change-password");
-    const form = changeForm(page);
-    await form.current.fill(password());
-    await form.next.fill(NEW_PASSWORD);
-    await form.confirm.fill(NEW_PASSWORD);
-    await form.save.click();
-    await expect(page).toHaveURL("/profile");
-    await expect(page.getByText("Password changed", { exact: true })).toBeVisible();
-
-    // This browser keeps working (renewed session ID); the second one's next action goes to sign-in with M4.
-    await page.reload();
-    await expect(page).toHaveURL("/profile");
-    await otherPage.reload();
-    await expect(otherPage).toHaveURL(/\/login/);
-    await expect(otherPage.getByText("Your session has ended. Please sign in again.")).toBeVisible();
-    await other.close();
-
-    // AT-P3: sign out, then the old password gets M2 and the new one signs in.
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL("/login");
-    await signIn(page, password());
-    await expect(page.getByText("Email or password is incorrect.")).toBeVisible();
-    await signIn(page, NEW_PASSWORD);
-    await expect(page).not.toHaveURL(/\/login/);
-  });
+    await expect(visitor.page.getByRole("link", { name: "Forgot password?" })).toHaveCount(0);
+    await expect(visitor.page.getByText("Forgot your password or need an account? Ask a Management user.")).toBeVisible();
+  } finally {
+    await visitor.context.close();
+  }
 });
 
-test.describe("Set password (no real link)", () => {
-  test("shows 03's layout without Current password", async ({ page }) => {
-    await page.goto("/set-password?token=not-a-real-link");
-    await expect(page).toHaveTitle("Set password · MR Garments");
-    await expect(page.getByRole("heading", { level: 1, name: "Set your password" })).toBeVisible();
-    await expect(page.getByText("Choose a password for your account.")).toBeVisible();
-    await expect(page.getByLabel("Current password", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Show new password", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Show confirm new password", exact: true })).toBeVisible();
-    await expect(page.getByRole("meter", { name: "Password strength" })).toHaveAttribute("aria-valuenow", "0");
-    await expect(page.getByRole("list", { name: "Password rules" }).getByRole("listitem")).toHaveCount(3);
-    await expect(page.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
+test("AUTH-5 change-password and AUTH-4 reset-password answer 403 password_change_disabled", async ({ page, baseURL }) => {
+  const headers = { Origin: baseURL ?? "" };
+  const change = await page.request.post("/api/v1/auth/change-password", {
+    data: { currentPassword: e2ePassword(), newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD },
+    headers,
   });
+  const reset = await page.request.post("/api/v1/auth/reset-password", { data: { token: "not-a-real-link", newPassword: NEW_PASSWORD }, headers });
+  for (const response of [change, reset]) {
+    expect(response.status()).toBe(403);
+    expect(await response.json()).toEqual({ error: { code: "password_change_disabled", message: DISABLED } });
+  }
+});
 
-  test("checks the confirmation and the rules, then refuses a bad link with M12", async ({ page }) => {
-    await page.goto("/set-password?token=not-a-real-link");
-    const next = page.getByLabel("New password", { exact: true });
-    const confirm = page.getByLabel("Confirm new password", { exact: true });
-    const save = page.getByRole("button", { name: "Save password" });
+test("Management sets Joseph's new password: his session ends and only the new password signs in", async ({ page, browser, baseURL }) => {
+  const joseph = await signedOutPage(browser, baseURL);
+  await page.goto("/users");
+  // From the link, not the URL: the list stays on screen (and in the address bar) until the form is ready.
+  const edit = page.getByRole("link", { name: "Edit Joseph M" });
+  const id = new URL((await edit.getAttribute("href"))!, baseURL).searchParams.get("id")!;
+  await edit.click();
+  try {
+    await signIn(joseph.page, JOSEPH, e2ePassword());
+    await expect(joseph.page).not.toHaveURL(/\/login/);
 
-    // M11 in the browser.
-    await next.fill(NEW_PASSWORD);
-    await confirm.fill(`${NEW_PASSWORD}y`);
-    await save.click();
-    await expect(page.getByText("New passwords do not match.")).toBeVisible();
-    await expect(confirm).toBeFocused();
-
-    // M8 from the API, which checks the rules before the link.
-    await next.fill("ledger2026");
-    await confirm.fill("ledger2026");
-    await save.click();
+    const field = page.getByLabel("Set a new password", { exact: true });
+    await expect(field).toHaveValue("");
+    // M8 from the API under the field; nothing saved.
+    await field.fill("ledger2026");
+    await expect(page.getByRole("meter", { name: "Password strength" })).toHaveAttribute("aria-valuenow", "2");
+    await page.getByRole("button", { name: "Save user" }).click();
     await expect(page.getByText("Use at least 8 characters, a number and a capital letter.")).toBeVisible();
-    await expect(next).toBeFocused();
+    await expect(field).toBeFocused();
 
-    // M12 above the form; the values stay.
-    await next.fill(NEW_PASSWORD);
-    await confirm.fill(NEW_PASSWORD);
-    await save.click();
-    await expect(page.getByText("This link is invalid or has expired. Ask your manager for a new one.")).toBeVisible();
-    await expect(page).toHaveURL(/\/set-password/);
-    await expect(next).toHaveValue(NEW_PASSWORD);
-  });
+    await field.fill(NEW_PASSWORD);
+    await page.getByRole("button", { name: "Save user" }).click();
+    await expect(page).toHaveURL("/users");
+    await expect(page.getByText("User saved", { exact: true })).toBeVisible();
+
+    // His next action goes to sign in with M4; the old password gets M2, the new one signs in.
+    await joseph.page.reload();
+    await expect(joseph.page).toHaveURL(/\/login/);
+    await expect(joseph.page.getByText(M4)).toBeVisible();
+    await signIn(joseph.page, JOSEPH, e2ePassword());
+    await expect(joseph.page.getByText(M2)).toBeVisible();
+    await signIn(joseph.page, JOSEPH, NEW_PASSWORD);
+    await expect(joseph.page).not.toHaveURL(/\/login/);
+  } finally {
+    const restored = await page.request.patch(`/api/v1/users/${id}`, { data: { password: e2ePassword() }, headers: { Origin: baseURL ?? "" } });
+    expect(restored.status(), "restore Joseph's E2E_PASSWORD").toBe(200);
+    await joseph.context.close();
+  }
+});
+
+test("Suresh's own account has no password field, and the API refuses his own password with 403", async ({ page, baseURL }) => {
+  await page.goto("/users");
+  const edit = page.getByRole("link", { name: "Edit Suresh Menon" });
+  const id = new URL((await edit.getAttribute("href"))!, baseURL).searchParams.get("id")!;
+  await edit.click();
+  await expect(page.getByRole("textbox", { name: "Full name" })).toHaveValue("Suresh Menon");
+  await expect(page.getByLabel(/password/i)).toHaveCount(0);
+
+  const response = await page.request.patch(`/api/v1/users/${id}`, { data: { password: NEW_PASSWORD }, headers: { Origin: baseURL ?? "" } });
+  expect(response.status()).toBe(403);
+  expect((await response.json()).error.code).toBe("password_change_disabled");
 });

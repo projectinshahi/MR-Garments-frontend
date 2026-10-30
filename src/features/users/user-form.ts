@@ -15,9 +15,10 @@ export const STAGE_OPTIONS = [
 ] as const;
 
 /** Form fields, in screen order. The names match the API's, so its `fields` errors land on them (E1-E3). */
-export const FORM_FIELDS = ["name", "email", "phone", "role", "officeId", "language", "status", "stages"] as const;
+export const FORM_FIELDS = ["name", "email", "phone", "role", "officeId", "language", "password", "status", "stages"] as const;
 
-// The browser checks only what it can know (M13, M14, M16); the API checks everything, including M15 and M17-M20.
+// The browser checks only what it can know (M13, M14, M16, and a password on Add user); the API checks everything,
+// including M15, M17-M20 and the password rules (M8, M9).
 export const userFormSchema = z.object({
   name: z.string().trim().min(1, MESSAGES.fullNameEmpty),
   email: z.string().trim().pipe(z.email(MESSAGES.emailInvalid)),
@@ -28,7 +29,11 @@ export const userFormSchema = z.object({
   language: z.string(),
   status: z.enum(["Active", "Inactive"]),
   stages: z.array(z.number()),
+  // Edit user: optional, empty keeps the current password. Never trimmed.
+  password: z.string(),
 });
+/** Add user: Management types the user's initial password (password policy). */
+export const newUserFormSchema = userFormSchema.extend({ password: z.string().min(1, MESSAGES.passwordEmpty) });
 export type UserFormValues = z.infer<typeof userFormSchema>;
 
 /** Edit: the user's values. Add: an empty form, active, English, no office, no stages. */
@@ -43,11 +48,16 @@ export const toFormValues = (user: UserDetail | null): UserFormValues =>
         language: user.language,
         status: user.status,
         stages: user.stages,
+        password: "",
       }
-    : { name: "", email: "", phone: "", role: "", officeId: "", language: "English", status: "Active", stages: [] };
+    : { name: "", email: "", phone: "", role: "", officeId: "", language: "English", status: "Active", stages: [], password: "" };
 
-/** The USR-3/USR-4 body. Never a password (C5). */
-export const toPayload = ({ officeId, ...values }: UserFormValues) => ({ ...values, officeId: officeId || null });
+/** The USR-3/USR-4 body. The password goes only when one was typed (always on Add user). */
+export const toPayload = ({ officeId, password, ...values }: UserFormValues) => ({
+  ...values,
+  officeId: officeId || null,
+  ...(password ? { password } : {}),
+});
 
 export const toggleStage = (stages: number[], stage: number, checked: boolean) =>
   checked ? [...new Set([...stages, stage])].sort((a, b) => a - b) : stages.filter((s) => s !== stage);

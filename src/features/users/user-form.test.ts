@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { UserDetail } from "./data/queries";
-import { toFormValues, toggleStage, toPayload, userFormSchema } from "./user-form";
+import { newUserFormSchema, toFormValues, toggleStage, toPayload, userFormSchema } from "./user-form";
 
 const wang: UserDetail = {
   id: "u-wang",
@@ -28,16 +28,18 @@ describe("user form mapping", () => {
       language: "English",
       status: "Active",
       stages: [2, 3],
+      password: "",
     });
     expect(toFormValues({ ...wang, officeId: null }).officeId).toBe("");
-    expect(toFormValues(null)).toEqual({ name: "", email: "", phone: "", role: "", officeId: "", language: "English", status: "Active", stages: [] });
+    expect(toFormValues(null)).toEqual({ name: "", email: "", phone: "", role: "", officeId: "", language: "English", status: "Active", stages: [], password: "" });
   });
 
-  it("sends no office as null and never a password (C5)", () => {
+  it("sends no office as null, and a password only when one was typed (untrimmed)", () => {
     const payload = toPayload({ ...toFormValues(wang), officeId: "" });
     expect(payload).toEqual({ name: "Wang Fang", email: "wang@mrgarments.com", phone: "", role: "China staff", officeId: null, language: "English", status: "Active", stages: [2, 3] });
     expect("password" in payload).toBe(false);
     expect(toPayload(toFormValues(wang)).officeId).toBe("loc-gz");
+    expect(toPayload({ ...toFormValues(wang), password: " Ledger2026x " }).password).toBe(" Ledger2026x ");
   });
 
   it("ticks and unticks stages in order", () => {
@@ -54,5 +56,12 @@ describe("userFormSchema", () => {
     const messages = Object.fromEntries((result.error?.issues ?? []).map((issue) => [issue.path[0], issue.message]));
     expect(messages).toEqual({ name: "Enter the full name.", email: "Enter a valid email address.", role: "Choose a role." });
     expect(userFormSchema.safeParse(toFormValues(wang)).success).toBe(true);
+  });
+
+  it("needs a password on Add user only; the API checks its rules", () => {
+    const filled = { ...toFormValues(null), name: "Test User", email: "test@mrgarments.com", role: "China staff" as const };
+    expect(newUserFormSchema.safeParse(filled).error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([["password", "Enter a password."]]);
+    expect(newUserFormSchema.safeParse({ ...filled, password: "weak" }).success).toBe(true);
+    expect(userFormSchema.safeParse(filled).success).toBe(true);
   });
 });

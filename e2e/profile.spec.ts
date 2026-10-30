@@ -49,6 +49,7 @@ test("shows the signed-in user's own profile; email, role and office are read-on
   await expect(page.getByText(changed, { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /change password/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /change password/i })).toHaveCount(0);
+  await expect(page.getByText("To change it, ask a Management user.")).toBeVisible();
 
   await expect(page.getByRole("switch")).toHaveCount(0);
   await expect(page.getByText(NOTIFICATIONS_LINE)).toBeVisible();

@@ -140,6 +140,8 @@ export function ProfileScreen({ profile, languages }: { profile: Profile; langua
                   {/* The date in India, so the server and the browser render the same text. */}
                   {profile.passwordChangedAt ? `Last changed ${formatDate(todayInIndia(new Date(profile.passwordChangedAt)))}` : "Not set"}
                 </p>
+                {/* Password policy: nobody changes their own password in the app. */}
+                <p className={rowDetailClass}>To change it, ask a Management user.</p>
               </div>
             </SectionCard>
           </div>

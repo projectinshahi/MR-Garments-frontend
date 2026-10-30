@@ -10,7 +10,6 @@ vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 const ID = "7d9a8a7e-0000-4000-8000-000000000000";
 const SAMPLE = [
   "/home",
-  "/forgot-password",
 ];
 const LIVE = [
   "/",
@@ -49,8 +48,6 @@ const LIVE = [
   "/settings/suppliers",
   "/settings/items",
   "/login",
-  "/change-password",
-  "/set-password",
 ];
 
 describe("Sample Data — Not Live notice", () => {
