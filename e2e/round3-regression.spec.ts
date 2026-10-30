@@ -1,7 +1,7 @@
 import type { APIRequestContext, Browser, BrowserContextOptions, Page } from "@playwright/test";
 
 import type { ContainerListItem } from "../src/lib/api/types";
-import { ANITA, type Api, containerNumber, expect, field, kpi, kv, longDate, settled, shortDate, signInState, test, toast, today } from "./live-api";
+import { amountCell, ANITA, type Api, containerNumber, expect, field, kpi, kv, longDate, settled, shortDate, signInState, test, toast, today } from "./live-api";
 import { LOADING_STAFF_STATE, MANAGEMENT_STATE, PROCUREMENT_STATE, SIGNED_OUT, STAFF_STATE } from "./sessions";
 
 // Round 3: independent regression over the five live tabs. Every test creates its own records through the API (or the
@@ -129,7 +129,14 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       "/payments",
       async (page) => {
         await poSearch(page).fill(po);
-        await expect(rowOf(page, po).getByRole("cell")).toHaveText([`${po}Shenzhen Apparel`, "4,000", s.paid.replace("¥", ""), s.paidInr, s.balance.replace("¥", ""), "Not yet due"]);
+        await expect(rowOf(page, po).getByRole("cell")).toHaveText([
+          `${po}Shenzhen Apparel`,
+          amountCell("4,000"),
+          amountCell(s.paid.replace("¥", "")),
+          s.paidInr,
+          amountCell(s.balance.replace("¥", "")),
+          "Not yet due",
+        ]);
       },
     ],
     [

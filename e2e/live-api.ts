@@ -27,6 +27,11 @@ export const num = (value: number, decimals = 0) =>
   new Intl.NumberFormat("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 export const inr = (value: number) => `₹${num(value)}`;
 export const cny = (value: number) => `¥${num(value)}`;
+/**
+ * A "Payments by order" amount cell: a bare number ("4,000") while every order is in one currency, as in the
+ * reference, and with its symbol ("¥4,000") once orders in another currency exist (currency-usd.spec.ts makes one).
+ */
+export const amountCell = (amount: string, symbol = "¥") => new RegExp(`^${symbol === "$" ? "\\$" : symbol}?${amount.replace(/[.,]/g, "\\$&")}$`);
 export const shortDate = (iso: string) => `${parts(iso)[2]} ${MONTHS[parts(iso)[1] - 1]}`;
 export const longDate = (iso: string) => `${shortDate(iso)} ${parts(iso)[0]}`;
 /** "October 2026" for any date in that month. */

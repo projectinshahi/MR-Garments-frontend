@@ -27,7 +27,7 @@ test("the dashboard shows live figures, and a new order moves them", async ({ pa
   await expect(kpiValue(page, "Active orders")).toHaveText(String(expected.active));
   await expect(stage1).toHaveAttribute("aria-valuenow", String(expected.stage1));
   await expect(kpiValue(page, "Late deliveries")).toHaveText(String(expected.late));
-  await expect(kpiValue(page, "Payments due (CNY)")).toHaveText(/^¥/);
+  await expect(kpiValue(page, "Payments due")).toHaveText(/^¥/);
 
   // A year-late order: one more active order at stage 1, one more late delivery, and it heads the deliveries list
   // (oldest due date first; other specs' late orders are days late).
@@ -48,7 +48,7 @@ test.describe("Accounts (no calendar or containers access)", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
     await expect(kpiValue(page, "Active orders")).toHaveText(/^\d+$/);
-    await expect(kpiValue(page, "Payments due (CNY)")).toHaveText(/^¥/);
+    await expect(kpiValue(page, "Payments due")).toHaveText(/^¥/);
     for (const label of ["Due in next 7 days", "Late deliveries", "Containers on the way"]) {
       await expect(kpiValue(page, label)).toHaveText("–");
     }
