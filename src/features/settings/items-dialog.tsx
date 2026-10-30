@@ -168,7 +168,12 @@ function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => v
           </Field>
         ) : null}
       </div>
-      <SettingsDialogFooter onCancel={onCancel} submitLabel="Save item" submitting={formState.isSubmitting} />
+      <SettingsDialogFooter
+        onCancel={onCancel}
+        submitLabel="Save item"
+        submitting={formState.isSubmitting}
+        remove={row && { path: `/items/${row.id}`, name: row.name, noun: "item" }}
+      />
       <ConfirmDialog
         open={!!deactivating}
         title={`Deactivate ${row?.name}?`}

@@ -6,11 +6,12 @@ import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { apiClient } from "@/lib/api/client";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
-// The Settings add/edit dialogs (tabs 1-7) and the deactivate confirmation. Coordinator-owned; the tabs build their
-// forms on it. Measured from 53_17.4_Add_supplier_(pop-up).jpeg: 21 px title over a 14 px description, 12.5 px bold
+// The Settings add/edit dialogs (tabs 1-7), Delete, and the deactivate and delete confirmations. Coordinator-owned;
+// the tabs build their forms on it. Measured from 53_17.4_Add_supplier_(pop-up).jpeg: 21 px title over a 14 px description, 12.5 px bold
 // labels 5 px above 42 px fields with 14 px text, 14 px between rows, 42 px footer buttons.
 
 export const fieldClass = "gap-[5px]";
@@ -94,10 +95,33 @@ export function SettingsDialog({
   );
 }
 
-/** Cancel and the submit button, disabled while the request runs (E14: no spinner is designed). */
-export function SettingsDialogFooter({ onCancel, submitLabel, submitting }: { onCancel: () => void; submitLabel: string; submitting: boolean }) {
+/** The record an edit dialog can delete: its API path (`/teams/<id>`), its name and its noun in lower case. */
+export type Deletable = { path: string; name: string; noun: string };
+
+export const DELETE_TEXT = {
+  deleted: (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)} deleted`,
+  confirm: (noun: string) => `It's removed for good. A ${noun} already used on a record can't be deleted: deactivate it instead.`,
+};
+
+/**
+ * Cancel and the submit button, disabled while the request runs (E14: no spinner is designed). With `remove` (edit
+ * dialogs), a Delete button on the left asks first, then deletes the record; a record in use is refused by the API
+ * (409 `in_use`), whose message is toasted, and the dialog stays open so it can be deactivated instead.
+ */
+export function SettingsDialogFooter({
+  onCancel,
+  submitLabel,
+  submitting,
+  remove,
+}: {
+  onCancel: () => void;
+  submitLabel: string;
+  submitting: boolean;
+  remove?: Deletable;
+}) {
   return (
     <DialogFooter className="mt-5 pt-4">
+      {remove ? <DeleteButton record={remove} disabled={submitting} /> : null}
       <Button type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel}>
         Cancel
       </Button>
@@ -105,6 +129,39 @@ export function SettingsDialogFooter({ onCancel, submitLabel, submitting }: { on
         {submitLabel}
       </Button>
     </DialogFooter>
+  );
+}
+
+function DeleteButton({ record, disabled }: { record: Deletable; disabled: boolean }) {
+  // The dialog is open, so the current path is the tab's own: deleting closes and reloads like a save.
+  const { saved } = useSettingsDialog(usePathname());
+  const [asking, setAsking] = useState(false);
+  async function remove() {
+    try {
+      await apiClient.delete(record.path);
+    } catch (error) {
+      setAsking(false);
+      handleApiError(error);
+      return;
+    }
+    setAsking(false);
+    saved(DELETE_TEXT.deleted(record.noun));
+  }
+  return (
+    <>
+      <Button type="button" variant="destructive" className={cn(footerButtonClass, "sm:mr-auto")} onClick={() => setAsking(true)} disabled={disabled}>
+        Delete
+      </Button>
+      <ConfirmDialog
+        open={asking}
+        title={`Delete ${record.name}?`}
+        description={DELETE_TEXT.confirm(record.noun)}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={remove}
+        onCancel={() => setAsking(false)}
+      />
+    </>
   );
 }
 

@@ -117,7 +117,12 @@ function TransportCompanyForm({ row, onCancel, onSaved }: { row?: TransportCompa
           </Field>
         ) : null}
       </div>
-      <SettingsDialogFooter onCancel={onCancel} submitLabel="Save transport company" submitting={formState.isSubmitting} />
+      <SettingsDialogFooter
+        onCancel={onCancel}
+        submitLabel="Save transport company"
+        submitting={formState.isSubmitting}
+        remove={editing && { path: `/transport-companies/${editing.id}`, name: editing.name, noun: "transport company" }}
+      />
       {editing ? (
         <ConfirmDialog
           open={!!deactivating}

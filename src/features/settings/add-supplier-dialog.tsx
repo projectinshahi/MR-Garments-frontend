@@ -156,7 +156,12 @@ function SupplierForm({
             </Field>
           )}
         </div>
-        <SettingsDialogFooter onCancel={onCancel} submitLabel="Save supplier" submitting={formState.isSubmitting} />
+        <SettingsDialogFooter
+          onCancel={onCancel}
+          submitLabel="Save supplier"
+          submitting={formState.isSubmitting}
+          remove={supplier && { path: `/suppliers/${supplier.id}`, name: supplier.name, noun: "supplier" }}
+        />
       </form>
       <ConfirmDialog
         open={!!confirming}

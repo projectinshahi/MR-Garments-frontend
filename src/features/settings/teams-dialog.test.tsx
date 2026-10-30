@@ -17,10 +17,11 @@ vi.mock("next/navigation", () => ({
 }));
 const replaceState = vi.spyOn(window.history, "replaceState");
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn() } }));
+vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), patch: vi.fn(), delete: vi.fn() } }));
 
 const post = vi.mocked(apiClient.post);
 const patch = vi.mocked(apiClient.patch);
+const remove = vi.mocked(apiClient.delete);
 const TAKEN = "A team with this name already exists.";
 const RETAIL: TeamRow = { id: "t-1", name: "Retail team", piecesInStock: 110, landedCostOfStockInr: 35700, averagePerPieceInr: 324.55, status: "Active" };
 
@@ -43,6 +44,7 @@ describe("Add team", () => {
     expect(screen.getByRole("dialog", { name: "Add team" })).toBeVisible();
     expect(field("Team name")).toHaveValue("");
     expect(screen.queryByLabelText("Status")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
 
     await user.type(field("Team name"), " Export team ");
     await user.click(save);
@@ -110,5 +112,42 @@ describe("Edit team", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/teams/t-1", { name: "Retail team", status: "Inactive" });
     expect(toast.success).toHaveBeenCalledWith("Team saved");
+  });
+});
+
+describe("Delete team", () => {
+  const DELETE = "Delete Retail team?";
+
+  it("asks first naming the team, then deletes it, toasts, closes and reloads", async () => {
+    remove.mockResolvedValue(undefined);
+    const { user } = open("dialog=edit&id=t-1");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const confirm = await screen.findByRole("dialog", { name: DELETE });
+    expect(confirm).toHaveTextContent("A team already used on a record can't be deleted: deactivate it instead.");
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: DELETE })).toBeNull());
+    expect(remove).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
+    expect(remove).toHaveBeenCalledWith("/teams/t-1");
+    expect(toast.success).toHaveBeenCalledWith("Team deleted");
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
+  });
+
+  it("in use: toasts the API's message and keeps the edit dialog open to deactivate instead", async () => {
+    const inUse = "This team is used by 2 warehouse receipts, so it can't be deleted. Deactivate it instead.";
+    remove.mockRejectedValue(new ApiError(409, "in_use", inUse));
+    const { user, field } = open("dialog=edit&id=t-1");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(inUse));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: DELETE })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "Edit team" })).toBeVisible();
+    expect(field("Status")).toBeEnabled();
+    expect(nav.router.refresh).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
