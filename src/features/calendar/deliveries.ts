@@ -30,12 +30,13 @@ export const isoDay = (date: Date) => format(date, "yyyy-MM-dd");
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
- * The CAL-1 rows still awaited from the supplier, as the views show them on `today`. An order whose main line is fully
+ * The CAL-1 rows still awaited from the supplier, as the views show them on `today`. An order with every line fully
  * received is no longer awaited, so it leaves the calendar and the dashboard's delivery figures, like a loaded order
- * (stage 3); a partly received one stays. Every CAL-1 consumer goes through here.
+ * (stage 3); a partly received one stays. An API without `fullyReceived` only tells about the main line, so that
+ * decides. Every CAL-1 consumer goes through here.
  */
 export const toDeliveries = (items: DeliveryItem[], today: string) =>
-  items.filter((item) => item.received < item.quantity).map((item) => toDelivery(item, today));
+  items.filter((item) => !(item.fullyReceived ?? item.received >= item.quantity)).map((item) => toDelivery(item, today));
 
 /** A CAL-1 row as the views show it on `today`. */
 function toDelivery({ po, supplier, item, quantity, unit, due }: DeliveryItem, today: string): Delivery {
