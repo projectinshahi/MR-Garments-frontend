@@ -10,7 +10,6 @@ import { formatCNY, formatINR, formatNumber, formatQty, formatShortDate } from "
 import { STAGES } from "@/types/domain";
 
 import { ContainersGantt } from "./containers-gantt";
-import type { CsvCell } from "./csv";
 import { filterLabel } from "./data/filters";
 import type {
   ContainersTimelineReport,
@@ -22,10 +21,12 @@ import type {
   ReportPage,
 } from "./data/queries";
 import { ExportActions } from "./report-actions";
+import { type ReportFile, reportFile } from "./report-files";
 import { LandedCostChart, LateOrdersTable, MonthTable, ReceivedTable, SupplierPaymentsTable } from "./report-widgets";
 
 // The six reports (33–38): breadcrumb "Reports / <title>" (back to the hub with the same filters), the filters in a
-// pill when set, export buttons, xs KPI tiles and the report body. Each CSV holds the report's table as shown.
+// pill when set, export buttons, xs KPI tiles and the report body. Each export holds the report's tables as shown
+// (report-files.ts).
 
 type Filtered = { filter: { from: string | null; supplier: string | null } };
 
@@ -34,10 +35,10 @@ const plural = (count: number, noun: string, nouns = `${noun}s`) => `${count} ${
 const few = (list: string[], separator: string) => (list.length > 3 ? `${list.slice(0, 3).join(separator)} +${list.length - 3}` : list.join(separator));
 const orDash = (value: number | null, show: (value: number) => string) => (value === null ? "–" : show(value));
 
-type FrameProps = { title: string; name: string; page: ReportPage<Filtered>; csv: CsvCell[][]; period?: boolean; children: React.ReactNode };
+type FrameProps = { title: string; page: ReportPage<Filtered>; file: ReportFile; period?: boolean; children: React.ReactNode };
 
 /** `period={false}`: the report ignores the period (13.2 always shows the next 14 days), so its pill leaves it out. */
-function ReportFrame({ title, name, page, csv, period = true, children }: FrameProps) {
+function ReportFrame({ title, page, file, period = true, children }: FrameProps) {
   const label = filterLabel(period ? page.data.filter : { ...page.data.filter, from: null });
   return (
     <>
@@ -45,7 +46,7 @@ function ReportFrame({ title, name, page, csv, period = true, children }: FrameP
         title={title}
         parent={{ label: "Reports", href: `/reports${page.query}` }}
         titleAddon={label ? <StatusPill tone="neutral">{label}</StatusPill> : undefined}
-        actions={<ExportActions csv={{ filename: `${name}-${page.today}.csv`, rows: csv }} />}
+        actions={<ExportActions file={file} />}
       />
       <PageContainer>{children}</PageContainer>
     </>
@@ -66,15 +67,8 @@ function Footnote({ children }: { children: React.ReactNode }) {
 export function OrderStatusScreen({ page }: { page: ReportPage<OrderStatusReport> }) {
   const { data } = page;
   const max = Math.max(...data.stageCounts);
-  const csv: CsvCell[][] = [
-    ["Stage", "Orders"],
-    ...data.stageCounts.map((count, index) => [`${index + 1}. ${STAGES[index]}`, count]),
-    [],
-    ["PO", "Supplier", "Due", "Late by (days)"],
-    ...data.late.map((order) => [order.po, order.supplier, order.due, order.lateDays]),
-  ];
   return (
-    <ReportFrame title="Order status" name="order-status" page={page} csv={csv}>
+    <ReportFrame title="Order status" page={page} file={reportFile("order-status", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Active orders" value={formatNumber(data.total)} sub={`across ${STAGES.length} stages`} />
         <KpiCard size="xs" label="Late orders" value={formatNumber(data.late.length)} sub="need follow-up" tone="danger" />
@@ -115,9 +109,8 @@ const dayLabel = (date: string) => format(parseISO(date), "EEE d");
 export function DeliveriesPerDayScreen({ page }: { page: ReportPage<DeliveriesPerDayReport> }) {
   const { data } = page;
   const busiest = data.busiest;
-  const csv: CsvCell[][] = [["Date", "Deliveries due"], ...data.days.map((day) => [day.date, day.count])];
   return (
-    <ReportFrame title="Deliveries per day" name="deliveries-per-day" page={page} csv={csv} period={false}>
+    <ReportFrame title="Deliveries per day" page={page} file={reportFile("deliveries-per-day", data, page.today)} period={false}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Due next 7 days" value={formatNumber(data.dueNext7)} sub={`from ${plural(data.suppliersNext7, "supplier")}`} />
         <KpiCard size="xs" label="Due next 14 days" value={formatNumber(data.dueNext14)} sub={`${formatShortDate(data.from)} to ${formatShortDate(data.to)}`} />
@@ -154,12 +147,8 @@ export function DeliveriesPerDayScreen({ page }: { page: ReportPage<DeliveriesPe
 /** 13.3 Ordered vs received (35_13.3_Ordered_vs_received.jpeg). */
 export function OrderedVsReceivedScreen({ page }: { page: ReportPage<OrderedVsReceivedReport> }) {
   const { data } = page;
-  const csv: CsvCell[][] = [
-    ["PO", "Supplier", "Item", "Unit", "Ordered", "Received", "Short", "Value of short (CNY)", "Payment"],
-    ...data.lines.map((l) => [l.po, l.supplier, l.item, l.unit, l.ordered, l.received, l.short, l.shortValueCny, l.short > 0 ? "Reduced" : "Full"]),
-  ];
   return (
-    <ReportFrame title="Ordered vs received" name="ordered-vs-received" page={page} csv={csv}>
+    <ReportFrame title="Ordered vs received" page={page} file={reportFile("ordered-vs-received", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Orders checked" value={formatNumber(data.ordersChecked)} sub="received in China" />
         <KpiCard size="xs" label="Orders with a shortage" value={formatNumber(data.shortPos.length)} sub={few(data.shortPos, " · ") || "none"} tone="danger" />
@@ -174,9 +163,8 @@ export function OrderedVsReceivedScreen({ page }: { page: ReportPage<OrderedVsRe
 /** 13.4 Containers timeline (36_13.4_Containers_timeline.jpeg). */
 export function ContainersTimelineScreen({ page }: { page: ReportPage<ContainersTimelineReport> }) {
   const { data } = page;
-  const csv: CsvCell[][] = [["Container", "Status", "Loaded", "Arrival"], ...data.containers.map((c) => [c.number, c.status, c.loadedOn, c.arrival])];
   return (
-    <ReportFrame title="Containers timeline" name="containers-timeline" page={page} csv={csv}>
+    <ReportFrame title="Containers timeline" page={page} file={reportFile("containers-timeline", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Active containers" value={formatNumber(data.active)} />
         <KpiCard size="xs" label="Arriving in 7 days" value={formatNumber(data.arrivingIn7Days.length)} sub={few(data.arrivingIn7Days.map(formatShortDate), " · ")} />
@@ -199,13 +187,8 @@ export function ContainersTimelineScreen({ page }: { page: ReportPage<Containers
 export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsPerSupplierReport> }) {
   const { data } = page;
   const { totals } = data;
-  const csv: CsvCell[][] = [
-    ["Supplier", "Orders", "Order value (CNY)", "Paid (CNY)", "Paid (INR)", "Balance (CNY)"],
-    ...data.suppliers.map((s) => [s.supplier, s.orders.join(", "), s.orderValueCny, s.paidCny, s.paidInr, s.balanceCny]),
-    ["Total", plural(totals.orders, "open order"), totals.orderValueCny, totals.paidCny, totals.paidInr, totals.balanceCny],
-  ];
   return (
-    <ReportFrame title="Payments per supplier" name="payments-per-supplier" page={page} csv={csv}>
+    <ReportFrame title="Payments per supplier" page={page} file={reportFile("payments-per-supplier", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Order value" value={formatCNY(totals.orderValueCny)} sub={plural(totals.orders, "open order")} />
         <KpiCard size="xs" label="Paid so far" value={formatCNY(totals.paidCny)} sub={`${formatINR(totals.paidInr)} at payment-day rates`} />
@@ -226,13 +209,8 @@ export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsP
 export function LandedCostByMonthScreen({ page }: { page: ReportPage<LandedCostByMonthReport> }) {
   const { data } = page;
   const { totals, biggest } = data;
-  const csv: CsvCell[][] = [
-    ["Month", "Pieces", "Landed cost (INR)", "Per piece (INR)"],
-    ...data.months.map((m) => [m.month, m.pieces, m.landedCostInr, m.perPieceInr]),
-    ["Total", totals.pieces, totals.landedCostInr, totals.perPieceInr],
-  ];
   return (
-    <ReportFrame title="Landed cost by month" name="landed-cost-by-month" page={page} csv={csv}>
+    <ReportFrame title="Landed cost by month" page={page} file={reportFile("landed-cost-by-month", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Landed cost, all months" value={formatINR(totals.landedCostInr)} sub={formatQty(totals.pieces, "pcs")} />
         <KpiCard

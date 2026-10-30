@@ -1,33 +1,66 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useTransition } from "react";
 
 import { FilterSelect } from "@/components/shared/filters";
-import { notInPrototype } from "@/components/shared/prototype";
 import { Button } from "@/components/ui/button";
 import { hrefWith, optionParam } from "@/features/calendar/params";
+import { apiClient } from "@/lib/api/client";
+import { handleApiError } from "@/lib/feedback";
+import { todayInIndia } from "@/lib/today";
 
-import { type CsvFile, downloadCsv } from "./csv";
+import { reportQuery } from "./data/filters";
+import { downloadReport, type FileFormat, type ReportFile, type ReportName, type ReportResponse, reportFile } from "./report-files";
 
-/** A button from the reference whose action has no design (D5): Excel and PDF exports (no library is installed). */
-export function PrototypeButton({ action, ...props }: React.ComponentProps<typeof Button> & { action: string }) {
-  return <Button type="button" onClick={() => notInPrototype(action)} {...props} />;
+/** Runs one download at a time; a failure (session ended included) is handled as every API call is (E1-E14). */
+function useDownload(make: () => Promise<ReportFile>) {
+  const [pending, startTransition] = useTransition();
+  const download = (format: FileFormat) =>
+    startTransition(async () => {
+      try {
+        await downloadReport(await make(), format);
+      } catch (error) {
+        handleApiError(error);
+      }
+    });
+  return { pending, download };
 }
 
-/** Header actions on every report (33–38): CSV of the report's data, then the reference's Excel and PDF buttons. */
-export function ExportActions({ csv }: { csv: CsvFile }) {
+/** Header actions on every report (33–38): the report's tables, as the page shows them, as CSV, Excel or PDF. */
+export function ExportActions({ file }: { file: ReportFile }) {
+  const { pending, download } = useDownload(async () => file);
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => downloadCsv(csv)}>
+      <Button type="button" variant="outline" disabled={pending} onClick={() => download("csv")}>
         Export CSV
       </Button>
-      <PrototypeButton action="Export Excel" variant="outline">
+      <Button type="button" variant="outline" disabled={pending} onClick={() => download("xlsx")}>
         Export Excel
-      </PrototypeButton>
-      <PrototypeButton action="Export PDF" variant="outline">
+      </Button>
+      <Button type="button" variant="outline" disabled={pending} onClick={() => download("pdf")}>
         Export PDF
-      </PrototypeButton>
+      </Button>
+    </>
+  );
+}
+
+/**
+ * A hub card's Excel and PDF buttons (32): the report with the hub's filters, as its Open report link shows it. The hub
+ * has no report data, so the click loads GET /reports/<name> (the call the report page makes).
+ */
+export function CardDownloads({ name, title, query, className }: { name: ReportName; title: string; query: string; className: string }) {
+  const { pending, download } = useDownload(async () =>
+    reportFile(name, await apiClient.get<ReportResponse>(`/reports/${name}${reportQuery(new URLSearchParams(query))}`), todayInIndia()),
+  );
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label={`Excel export: ${title}`} onClick={() => download("xlsx")}>
+        Excel
+      </Button>
+      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label={`PDF export: ${title}`} onClick={() => download("pdf")}>
+        PDF
+      </Button>
     </>
   );
 }

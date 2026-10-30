@@ -16,12 +16,17 @@ test.use({ viewport: { width: 1440, height: 900 } });
 
 const rowOf = (page: Page, text: string) => page.getByRole("table").getByRole("row").filter({ hasText: text });
 const heading = (page: Page, name: string) => page.getByRole("heading", { level: 1, name });
+/** Clicks the button and returns the download's file name and its bytes as text (one character per byte). */
+async function download(page: Page, button: string) {
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: button }).click()]);
+  return { name: file.suggestedFilename(), text: (await readFile(await file.path())).toString("latin1") };
+}
 async function choose(page: Page, current: string, option: string) {
   await page.getByRole("button", { name: current }).click();
   await page.getByRole("menuitemradio", { name: option }).click();
 }
 
-test("landed cost and every report show the new order's real figures, filters narrow them, CSV downloads", async ({ page, api }) => {
+test("landed cost and every report show the new order's real figures, filters narrow them, exports download them", async ({ page, api }) => {
   test.setTimeout(240_000);
   const order = await api.createOrder({
     supplier: "Hangzhou Knits",
@@ -80,7 +85,7 @@ test("landed cost and every report show the new order's real figures, filters na
     await expect(page.getByRole("img", { name: new RegExp(`^${container}: loaded `) })).toBeVisible();
   });
 
-  await test.step("13.5: the supplier's open order, narrowed by the supplier filter, exported as CSV", async () => {
+  await test.step("13.5: the supplier's open order, narrowed by the supplier filter, exported as CSV, Excel and PDF", async () => {
     const suppliers = (await api.options()).suppliers;
     const id = (name: string) => suppliers.find((s) => s.name === name)!.id;
     await page.goto(`/reports/payments-per-supplier?supplier=${id("Hangzhou Knits")}`);
@@ -88,20 +93,27 @@ test("landed cost and every report show the new order's real figures, filters na
     await expect(rowOf(page, "Hangzhou Knits")).toContainText(po);
     await expect(page.getByRole("table").getByRole("row")).toHaveCount(3); // header, Hangzhou Knits, total
 
-    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]);
-    expect(download.suggestedFilename()).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
-    const csv = await readFile(await download.path(), "utf8");
+    const { name, text: csv } = await download(page, "Export CSV");
+    expect(name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(csv).toContain("Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)");
     // Other specs' orders share the cell, and a cell with commas is quoted ("PO-2142, PO-2128").
     expect(csv).toMatch(new RegExp(`^Hangzhou Knits,"?[^\\n]*\\b${po}\\b`, "m"));
+    // The .xlsx zip is uncompressed and the PDF's text uncompressed too, so their bytes hold the cell text.
+    const excel = await download(page, "Export Excel");
+    expect(excel.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    for (const text of ["Supplier: Hangzhou Knits", "Paid (INR)", ">Hangzhou Knits<", po]) expect(excel.text).toContain(text);
+    const pdf = await download(page, "Export PDF");
+    expect(pdf.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.pdf$/);
+    for (const text of ["(Payments per supplier) Tj", "Supplier: Hangzhou Knits", "(Paid \\(INR\\)) Tj", "(Hangzhou Knits) Tj"]) expect(pdf.text).toContain(text);
 
     await page.goto(`/reports/payments-per-supplier?supplier=${id("Yiwu Trims Ltd.")}`);
     await expect(rowOf(page, po)).toHaveCount(0);
-    await page.getByRole("button", { name: "Export Excel" }).click();
-    await expect(toast(page, "Export Excel is not included in the current prototype.")).toBeVisible();
+    const other = await download(page, "Export PDF");
+    expect(other.text).toContain("Supplier: Yiwu Trims Ltd.");
+    expect(other.text).not.toContain(po);
   });
 
-  await test.step("13.6 loads; the hub shows live stat strips, an empty download list and carries its filters", async () => {
+  await test.step("13.6 loads; the hub shows live stat strips, an empty download list and carries its filters to links and files", async () => {
     await page.goto("/reports/landed-cost-by-month");
     await expect(heading(page, "Landed cost by month")).toBeVisible();
     await expect(kpi(page, "Landed cost, all months")).toBeVisible();
@@ -116,6 +128,10 @@ test("landed cost and every report show the new order's real figures, filters na
     const month = periodLabel(today().slice(0, 7));
     await choose(page, "Period: All dates", month);
     await expect(page).toHaveURL(/period=/);
+    // A card's file is its report with the hub's filters, named by the period.
+    const card = await download(page, "Excel export: Payments and balance due");
+    expect(card.name).toBe(`payments-per-supplier-${today().slice(0, 7)}.xlsx`);
+    for (const text of ["Supplier: Hangzhou Knits", po]) expect(card.text).toContain(text);
     await page.getByRole("link", { name: "Open report: Order status" }).click();
     await expect(heading(page, "Order status")).toBeVisible();
     await expect(page.getByText(`${month} · Hangzhou Knits`)).toBeVisible(); // the header pill
