@@ -59,9 +59,11 @@ test("edit user form holds Wang Fang's details", async ({ page }) => {
   await expect(page.getByRole("combobox", { name: "Role" })).toHaveValue("China staff");
   await expect(page.getByRole("combobox", { name: "Office" }).locator("option:checked")).toHaveText("Guangzhou office");
   await expect(page.getByRole("combobox", { name: "Language" })).toHaveValue("English");
-  const password = page.getByLabel("Password");
-  await expect(password).toHaveAttribute("placeholder", "Set by user at first sign-in");
-  await expect(password).not.toBeEditable();
+  // Password policy: Management may set a new password for someone else; left empty, the current one stays.
+  const password = page.getByLabel("Set a new password", { exact: true });
+  await expect(password).toHaveValue("");
+  await expect(password).toHaveAttribute("placeholder", "Leave empty to keep the current password");
+  await expect(password).toBeEditable();
   await expect(page.getByRole("combobox", { name: "Status" })).toHaveValue("Active");
 
   await expect(page.getByRole("checkbox", { name: "Receiving (China)" })).toBeChecked();

@@ -112,11 +112,12 @@ test("Management sets Joseph's new password: his session ends and only the new p
 
 test("Suresh's own account has no password field, and the API refuses his own password with 403", async ({ page, baseURL }) => {
   await page.goto("/users");
-  await page.getByRole("link", { name: "Edit Suresh Menon" }).click();
+  const edit = page.getByRole("link", { name: "Edit Suresh Menon" });
+  const id = new URL((await edit.getAttribute("href"))!, baseURL).searchParams.get("id")!;
+  await edit.click();
   await expect(page.getByRole("textbox", { name: "Full name" })).toHaveValue("Suresh Menon");
   await expect(page.getByLabel(/password/i)).toHaveCount(0);
 
-  const id = new URL(page.url()).searchParams.get("id")!;
   const response = await page.request.patch(`/api/v1/users/${id}`, { data: { password: NEW_PASSWORD }, headers: { Origin: baseURL ?? "" } });
   expect(response.status()).toBe(403);
   expect((await response.json()).error.code).toBe("password_change_disabled");
