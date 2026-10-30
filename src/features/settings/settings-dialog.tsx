@@ -7,6 +7,7 @@ import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
@@ -98,15 +99,18 @@ export function SettingsDialog({
 /** The record an edit dialog can delete: its API path (`/teams/<id>`), its name and its noun in lower case. */
 export type Deletable = { path: string; name: string; noun: string };
 
+const capitalised = (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 export const DELETE_TEXT = {
-  deleted: (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)} deleted`,
+  deleted: (noun: string) => `${capitalised(noun)} deleted`,
+  alreadyDeleted: (noun: string) => `${capitalised(noun)} was already deleted.`,
   confirm: (noun: string) => `It's removed for good. A ${noun} already used on a record can't be deleted: deactivate it instead.`,
 };
 
 /**
  * Cancel and the submit button, disabled while the request runs (E14: no spinner is designed). With `remove` (edit
  * dialogs), a Delete button on the left asks first, then deletes the record; a record in use is refused by the API
- * (409 `in_use`), whose message is toasted, and the dialog stays open so it can be deactivated instead.
+ * (409 `in_use`), whose message is toasted, and the dialog stays open so it can be deactivated instead. A 404 means
+ * someone deleted it first: that closes and reloads like a delete.
  */
 export function SettingsDialogFooter({
   onCancel,
@@ -137,15 +141,19 @@ function DeleteButton({ record, disabled }: { record: Deletable; disabled: boole
   const { saved } = useSettingsDialog(usePathname());
   const [asking, setAsking] = useState(false);
   async function remove() {
+    let message = DELETE_TEXT.deleted(record.noun);
     try {
       await apiClient.delete(record.path);
     } catch (error) {
-      setAsking(false);
-      handleApiError(error);
-      return;
+      if (!(error instanceof ApiError && error.status === 404)) {
+        setAsking(false);
+        handleApiError(error);
+        return;
+      }
+      message = DELETE_TEXT.alreadyDeleted(record.noun);
     }
     setAsking(false);
-    saved(DELETE_TEXT.deleted(record.noun));
+    saved(message);
   }
   return (
     <>

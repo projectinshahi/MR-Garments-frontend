@@ -150,4 +150,16 @@ describe("Delete team", () => {
     expect(nav.router.refresh).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
   });
+
+  it("already deleted (404): says so, closes and reloads like a delete", async () => {
+    remove.mockRejectedValue(new ApiError(404, "not_found", "Team not found."));
+    const { user } = open("dialog=edit&id=t-1");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
+    expect(toast.success).toHaveBeenCalledWith("Team was already deleted.");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
+  });
 });
