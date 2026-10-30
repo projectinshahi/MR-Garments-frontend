@@ -2,7 +2,7 @@ import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ConfirmDialog, editHref, SettingsDialog, useSettingsDialog } from "./settings-dialog";
+import { ConfirmDialog, DELETE_TEXT, editHref, SettingsDialog, useSettingsDialog } from "./settings-dialog";
 
 const nav = vi.hoisted(() => ({ pathname: "/settings/teams", query: "", router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({
@@ -58,6 +58,14 @@ describe("SettingsDialog", () => {
     rerender(dialog("Edit team", "Team name"));
     expect(screen.getByRole("dialog", { name: "Edit team" })).toBeVisible();
     expect(screen.getByLabelText("Team name")).toBeVisible();
+  });
+});
+
+describe("DELETE_TEXT", () => {
+  it("gives the confirmation the right article", () => {
+    expect(DELETE_TEXT.confirm("item")).toContain(" An item already used on a record");
+    expect(DELETE_TEXT.confirm("office or warehouse")).toContain(" An office or warehouse already used");
+    expect(DELETE_TEXT.confirm("transport company")).toContain(" A transport company already used");
   });
 });
 

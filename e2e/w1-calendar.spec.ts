@@ -208,23 +208,34 @@ test("List: date range, status chips, supplier filter carried across views, and 
 test("a partly received order stays on the calendar; it leaves once fully received or loaded into a container", async ({ page, api }) => {
   const order = await api.createOrder({ deliveryDate: today(5) });
   const late = await api.createOrder({ orderDate: today(-20), deliveryDate: today(-3) });
+  const twoLines = await api.createOrder({
+    deliveryDate: today(6),
+    lines: [
+      { item: "Denim jeans", quantity: 100, rateCny: 10 },
+      { item: "Kids t-shirts", quantity: 50, rateCny: 3 },
+    ],
+  });
   const row = (po: string) => listRows(page).filter({ hasText: po });
   await page.goto("/calendar/list");
   await expect(row(order.po)).toBeVisible();
 
   await api.receive(order.po, { "Denim jeans": 40 });
   await api.receive(late.po, { "Denim jeans": 40 });
+  await api.receive(twoLines.po, { "Denim jeans": 100 }); // the main line in full, the t-shirts still awaited
   await page.reload();
   await expect(row(order.po)).toContainText("Due in 5 days"); // stage 2, 60 pcs still awaited
   await expect(row(late.po)).toContainText("3 days late");
+  await expect(row(twoLines.po)).toContainText("Due in 6 days");
 
   // The rest arrives: nothing is awaited from the supplier any more, although the order is still at stage 2.
   await api.receive(order.po, { "Denim jeans": 60 }, { shortRemark: "" });
   await api.load([{ po: late.po, item: "Denim jeans", quantity: 40 }]);
+  await api.receive(twoLines.po, { "Kids t-shirts": 50 }, { shortRemark: "" });
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Delivery Calendar" })).toBeVisible();
   await expect(row(order.po)).toHaveCount(0);
   await expect(row(late.po)).toHaveCount(0); // stage 3
+  await expect(row(twoLines.po)).toHaveCount(0);
   await page.goto(`/calendar?month=${today(5).slice(0, 7)}`);
   await expect(page.getByRole("heading", { level: 1, name: "Delivery Calendar" })).toBeVisible();
   await expect(page.getByRole("link", { name: order.po })).toHaveCount(0);

@@ -51,7 +51,19 @@ describe("calendar derivations", () => {
     });
   });
 
-  it("leaves out an order whose main line is fully received; a partly received one keeps its status", () => {
+  it("leaves out an order with every line fully received; one with a line still awaited keeps its status", () => {
+    const received = toDeliveries(
+      [
+        { ...row("PO-3001", "Foshan Fabrics", "2026-09-20", 2_000), fullyReceived: true },
+        { ...row("PO-3002", "Foshan Fabrics", "2026-09-21", 2_000), fullyReceived: false }, // main line done, another line short
+        { ...row("PO-3003", "Foshan Fabrics", "2026-10-02", 0), fullyReceived: false },
+      ],
+      TODAY,
+    );
+    expect(received.map((d) => [d.po, d.statusLabel])).toEqual([["PO-3002", "9 days late"], ["PO-3003", "Due in 2 days"]]);
+  });
+
+  it("decides by the main line when the API has no fullyReceived (older API)", () => {
     const received = toDeliveries(
       [row("PO-3001", "Foshan Fabrics", "2026-09-20", 2_000), row("PO-3002", "Foshan Fabrics", "2026-09-21", 1_999), row("PO-3003", "Foshan Fabrics", "2026-10-02", 2_000)],
       TODAY,
