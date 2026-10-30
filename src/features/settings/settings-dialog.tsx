@@ -103,7 +103,8 @@ const capitalised = (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)}
 export const DELETE_TEXT = {
   deleted: (noun: string) => `${capitalised(noun)} deleted`,
   alreadyDeleted: (noun: string) => `${capitalised(noun)} was already deleted.`,
-  confirm: (noun: string) => `It's removed for good. A ${noun} already used on a record can't be deleted: deactivate it instead.`,
+  confirm: (noun: string) =>
+    `It's removed for good. ${/^[aeiou]/.test(noun) ? "An" : "A"} ${noun} already used on a record can't be deleted: deactivate it instead.`,
 };
 
 /**
