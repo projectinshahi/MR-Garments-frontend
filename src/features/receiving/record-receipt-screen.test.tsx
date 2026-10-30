@@ -69,6 +69,29 @@ describe("RecordReceiptScreen", () => {
     expect(screen.getByText("No deliveries yet.")).toBeInTheDocument();
   });
 
+  it("hides the payment card when REC-2 withholds the money (China staff); Management still sees it", async () => {
+    const user = userEvent.setup();
+    const staff: ReceiptOptions = {
+      ...options,
+      orders: options.orders.map((o) => ({
+        ...o,
+        orderValueCny: null,
+        depositsPaidCny: null,
+        lines: o.lines.map((line) => ({ ...line, unitPriceCny: null })),
+      })),
+    };
+    const { unmount } = render(<RecordReceiptScreen data={{ ...data, options: staff }} />);
+    await user.type(screen.getByRole("textbox", { name: "Received now, Men's jackets" }), "460");
+    expect(screen.queryByRole("heading", { name: "Effect on payment" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Deliveries for PO-2035" })).toBeInTheDocument();
+    unmount();
+
+    render(<RecordReceiptScreen data={data} />);
+    expect(screen.getByRole("heading", { name: "Effect on payment" })).toBeInTheDocument();
+    expect(screen.getByText("¥ 72,000")).toBeInTheDocument();
+  });
+
   it("blocks over-receipt in the browser", async () => {
     const user = userEvent.setup();
     render(<RecordReceiptScreen data={data} />);

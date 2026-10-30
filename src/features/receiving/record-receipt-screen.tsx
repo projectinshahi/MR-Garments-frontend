@@ -77,8 +77,10 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
     ordered: line.ordered,
     receivedEarlier: line.receivedEarlier,
     receivedNow: Number(typed[i]?.quantity) || 0,
-    unitPrice: line.unitPriceCny,
+    unitPrice: line.unitPriceCny ?? undefined,
   }));
+  // REC-2 sends the money as null to users who can't view payments (China staff): no "Effect on payment" card for them.
+  const showPayment = order?.orderValueCny !== null;
   const effect = paymentEffect({ orderValue: order?.orderValueCny ?? 0, depositsPaid: order?.depositsPaidCny ?? 0 }, lines);
   const deliveries = deliveryEvents(data.receipts, orderId);
   const linesError = errors.lines?.message ?? errors.lines?.root?.message;
@@ -261,24 +263,26 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
           </form>
 
           <div className="flex flex-col gap-(--page-gap)">
-            <SectionCard title="Effect on payment" titleGap="none">
-              <KeyValueList
-                size="sm"
-                className="mt-[10px]"
-                items={[
-                  { label: "Order value", value: spacedCNY(order?.orderValueCny ?? 0) },
-                  { label: "Deposits paid", value: spacedCNY(order?.depositsPaidCny ?? 0) },
-                  { label: "Balance before this receipt", value: spacedCNY(effect.balanceBefore) },
-                  ...effect.deductions
-                    .filter((d) => d.short > 0)
-                    .map((d) => ({
-                      label: `Short: ${formatQty(d.short, d.unit)} × ${formatCNY(d.unitPrice)}`,
-                      value: <span className="font-bold text-danger">− {spacedCNY(d.amount)}</span>,
-                    })),
-                ]}
-                total={{ label: "Balance to pay now", value: spacedCNY(effect.balanceNow) }}
-              />
-            </SectionCard>
+            {showPayment ? (
+              <SectionCard title="Effect on payment" titleGap="none">
+                <KeyValueList
+                  size="sm"
+                  className="mt-[10px]"
+                  items={[
+                    { label: "Order value", value: spacedCNY(order?.orderValueCny ?? 0) },
+                    { label: "Deposits paid", value: spacedCNY(order?.depositsPaidCny ?? 0) },
+                    { label: "Balance before this receipt", value: spacedCNY(effect.balanceBefore) },
+                    ...effect.deductions
+                      .filter((d) => d.short > 0)
+                      .map((d) => ({
+                        label: `Short: ${formatQty(d.short, d.unit)} × ${formatCNY(d.unitPrice)}`,
+                        value: <span className="font-bold text-danger">− {spacedCNY(d.amount)}</span>,
+                      })),
+                  ]}
+                  total={{ label: "Balance to pay now", value: spacedCNY(effect.balanceNow) }}
+                />
+              </SectionCard>
+            ) : null}
             <SectionCard title={order ? `Deliveries for ${order.po}` : "Deliveries"} titleGap="none">
               {deliveries.length ? (
                 <Timeline
