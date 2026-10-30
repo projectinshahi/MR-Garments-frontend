@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DeliveryItem } from "@/lib/api/types";
 
-import { toDelivery } from "./deliveries";
+import { toDeliveries } from "./deliveries";
 import { filterDeliveries, filterQuery, hrefWith, monthLinks, monthParam, readFilters, toParams, weekLinks, weekParam } from "./params";
 
 const TODAY = "2026-10-27"; // a Tuesday
@@ -19,14 +19,15 @@ const row = (po: string, supplier: string, due: string): DeliveryItem => ({
   due,
 });
 
-const deliveries = [
+const rows = [
   row("PO-1", "Foshan Fabrics", "2026-10-20"),
   row("PO-2", "Yiwu Trims Ltd.", "2026-10-27"),
   row("PO-3", "Foshan Fabrics", "2026-11-03"),
   row("PO-4", "Foshan Fabrics", "2026-11-04"),
   row("PO-5", "Yiwu Trims Ltd.", "2026-11-26"),
   row("PO-6", "Foshan Fabrics", "2026-11-27"),
-].map((r) => toDelivery(r, TODAY));
+];
+const deliveries = toDeliveries(rows, TODAY);
 const pos = (list: typeof deliveries) => list.map((d) => d.po);
 
 describe("period parameters", () => {

@@ -244,7 +244,8 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.getByRole("textbox", { name: "Received now, Men's jackets" }).fill("40");
     await page.getByRole("button", { name: "Save receipt" }).click();
     await expect(page).toHaveURL("/receiving");
-    s = { ...s, receipts: [...s.receipts, { cells: ["40", "100"] }], receivedMain: "100 pcs", shortMain: "0 pcs" };
+    // The main line is now fully received: nothing is awaited from the supplier, so the order leaves the Calendar.
+    s = { ...s, receipts: [...s.receipts, { cells: ["40", "100"] }], receivedMain: "100 pcs", shortMain: "0 pcs", onCalendar: false };
     await everywhere(page, po, due, s, true);
   });
 

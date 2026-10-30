@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DeliveryItem } from "@/lib/api/types";
 
-import { toDelivery } from "./deliveries";
+import { toDeliveries } from "./deliveries";
 import { MonthView } from "./month-view";
 
 const TODAY = "2026-11-03";
@@ -28,7 +28,7 @@ const items = [
 ];
 
 const view = (query = "") =>
-  render(<MonthView today={TODAY} deliveries={items.map((item) => toDelivery(item, TODAY))} linkOrders params={new URLSearchParams(query)} />);
+  render(<MonthView today={TODAY} deliveries={toDeliveries(items, TODAY)} linkOrders params={new URLSearchParams(query)} />);
 const lateCard = () => screen.queryByRole("list", { name: "Late deliveries" });
 const latePos = () => within(lateCard()!).getAllByRole("link").map((link) => link.textContent);
 
