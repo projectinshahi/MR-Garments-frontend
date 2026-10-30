@@ -8,7 +8,7 @@ import type {
   PaymentsPerSupplierReport,
 } from "@/lib/api/reports-types";
 import { formatDate, formatDateTime } from "@/lib/formatters";
-import { type Currency, STAGES } from "@/types/domain";
+import { type Currency, CURRENCIES, STAGES } from "@/types/domain";
 
 import { type CsvCell, toCsv } from "./csv";
 import { periodLabel } from "./data/filters";
@@ -30,6 +30,14 @@ export const NO_ROWS = "No rows";
 
 /** The one place a currency reaches the files: its code in the header ("Paid (INR)"), never ₹ or ¥ (the PDF fonts have no ₹). */
 export const money = (header: string, currency: Currency): Column => ({ header: `${header} (${currency})`, currency });
+/**
+ * Rows in order currencies, one table per currency (CNY, USD, INR) so each amount column's header (`money`) names its
+ * currency and no total adds two currencies. No rows: one CNY table, as before.
+ */
+function perCurrency<T extends { currency: Currency }>(rows: T[]): [Currency, T[]][] {
+  const tables = CURRENCIES.map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]).filter(([, list]) => list.length);
+  return tables.length ? tables : [["CNY", []]];
+}
 const date = (header: string): Column => ({ header, date: true });
 const columns = (...list: (string | Column)[]) => list.map((column) => (typeof column === "string" ? { header: column } : column));
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -72,12 +80,11 @@ const REPORTS: { [N in ReportName]: Spec<Reports[N]> } = {
   },
   "ordered-vs-received": {
     title: "Ordered vs received",
-    sections: (d) => [
-      {
-        columns: columns("PO", "Supplier", "Item", "Unit", "Ordered", "Received", "Short", money("Value of short", "CNY"), "Payment"),
-        rows: d.lines.map((l) => [l.po, l.supplier, l.item, l.unit, l.ordered, l.received, l.short, l.shortValueCny, l.short > 0 ? "Reduced" : "Full"]),
-      },
-    ],
+    sections: (d) =>
+      perCurrency(d.lines).map(([currency, lines]) => ({
+        columns: columns("PO", "Supplier", "Item", "Unit", "Ordered", "Received", "Short", money("Value of short", currency), "Payment"),
+        rows: lines.map((l) => [l.po, l.supplier, l.item, l.unit, l.ordered, l.received, l.short, l.shortValueCny, l.short > 0 ? "Reduced" : "Full"]),
+      })),
   },
   "containers-timeline": {
     title: "Containers timeline",
@@ -91,13 +98,15 @@ const REPORTS: { [N in ReportName]: Spec<Reports[N]> } = {
   },
   "payments-per-supplier": {
     title: "Payments per supplier",
-    sections: ({ suppliers, totals: t }) => [
-      {
-        columns: columns("Supplier", "Orders", money("Order value", "CNY"), money("Paid", "CNY"), money("Paid", "INR"), money("Balance", "CNY")),
-        rows: suppliers.map((s) => [s.supplier, s.orders.join(", "), s.orderValueCny, s.paidCny, s.paidInr, s.balanceCny]),
-        total: suppliers.length ? ["Total", plural(t.orders, "open order"), t.orderValueCny, t.paidCny, t.paidInr, t.balanceCny] : undefined,
-      },
-    ],
+    sections: (d) =>
+      perCurrency(d.suppliers).map(([currency, suppliers]) => {
+        const t = d.totalsByCurrency.find((total) => total.currency === currency);
+        return {
+          columns: columns("Supplier", "Orders", money("Order value", currency), money("Paid", currency), money("Paid", "INR"), money("Balance", currency)),
+          rows: suppliers.map((s) => [s.supplier, s.orders.join(", "), s.orderValueCny, s.paidCny, s.paidInr, s.balanceCny]),
+          total: t && suppliers.length ? ["Total", plural(t.orders, "open order"), t.orderValueCny, t.paidCny, t.paidInr, t.balanceCny] : undefined,
+        };
+      }),
   },
   "landed-cost-by-month": {
     title: "Landed cost by month",

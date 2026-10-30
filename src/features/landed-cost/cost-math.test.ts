@@ -6,6 +6,7 @@ import type { LandedCostRow } from "./data/queries";
 const row = (partial: Partial<LandedCostRow>): LandedCostRow => ({
   orderId: "o1",
   po: "PO-2028",
+  currency: "CNY",
   supplier: { id: "s1", name: "Guangzhou Textile Co." },
   item: "Denim jeans",
   quantity: 2500,

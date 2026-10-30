@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart } from "@/components/shared/bar-chart";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatCNY, formatINR, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
 import type { LandedCostByMonthReport, OrderedVsReceivedReport, OrderStatusReport, PaymentsPerSupplierReport } from "./data/queries";
 import { monthLabel } from "./report-logic";
@@ -59,7 +59,7 @@ export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
       accessorKey: "shortValueCny",
       header: "Value of short",
       meta: { align: "right", className: "w-[152px]" },
-      cell: ({ row }) => (row.original.shortValueCny === null ? DASH : formatCNY(row.original.shortValueCny)),
+      cell: ({ row }) => (row.original.shortValueCny === null ? DASH : formatMoney(row.original.shortValueCny, row.original.currency)),
     },
     {
       id: "payment",
@@ -73,41 +73,48 @@ export function ReceivedTable({ lines }: { lines: ReceivedLine[] }) {
 
 type SupplierRow = PaymentsPerSupplierReport["suppliers"][number];
 
-/** Payments per supplier (37), with the totals row. */
-export function SupplierPaymentsTable({ rows, totals }: Pick<PaymentsPerSupplierReport, "totals"> & { rows: SupplierRow[] }) {
+type Totals = PaymentsPerSupplierReport["totalsByCurrency"];
+
+/**
+ * Payments per supplier (37), with the totals row. A row per supplier and currency; each amount in its row's currency,
+ * and the totals one per currency ("¥5,800 · $200"), never added together. INR is one total.
+ */
+export function SupplierPaymentsTable({ rows, totals }: { rows: SupplierRow[]; totals: Totals }) {
+  const each = (pick: (total: Totals[number]) => number) => formatMoneyList(totals.map((total) => ({ currency: total.currency, amount: pick(total) })));
+  const orders = totals.reduce((sum, total) => sum + total.orders, 0);
   const columns: ColumnDef<SupplierRow>[] = [
     { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[287px] font-bold" }, footer: "Total" },
-    { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${totals.orders} open order${totals.orders === 1 ? "" : "s"}` },
+    { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${orders} open order${orders === 1 ? "" : "s"}` },
     {
       accessorKey: "orderValueCny",
       header: "Order value",
       meta: { align: "right", className: "w-[146px]" },
-      cell: ({ row }) => formatCNY(row.original.orderValueCny),
-      footer: formatCNY(totals.orderValueCny),
+      cell: ({ row }) => formatMoney(row.original.orderValueCny, row.original.currency),
+      footer: each((total) => total.orderValueCny),
     },
     {
       accessorKey: "paidCny",
       header: "Paid",
       meta: { align: "right", className: "w-[146px]" },
-      cell: ({ row }) => formatCNY(row.original.paidCny),
-      footer: formatCNY(totals.paidCny),
+      cell: ({ row }) => formatMoney(row.original.paidCny, row.original.currency),
+      footer: each((total) => total.paidCny),
     },
     {
       accessorKey: "paidInr",
       header: "Paid in INR",
       meta: { align: "right", className: "w-[160px]" },
       cell: ({ row }) => formatINR(row.original.paidInr),
-      footer: formatINR(totals.paidInr),
+      footer: formatINR(totals.reduce((sum, total) => sum + total.paidInr, 0)),
     },
     {
       accessorKey: "balanceCny",
       header: "Balance",
       meta: { align: "right", className: "w-[145px]" },
-      cell: ({ row }) => formatCNY(row.original.balanceCny),
-      footer: formatCNY(totals.balanceCny),
+      cell: ({ row }) => formatMoney(row.original.balanceCny, row.original.currency),
+      footer: each((total) => total.balanceCny),
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplierId} density="snug" size="sm" header="tall" />;
+  return <DataTable columns={columns} data={rows} getRowId={(row) => `${row.supplierId}-${row.currency}`} density="snug" size="sm" header="tall" />;
 }
 
 type MonthCost = LandedCostByMonthReport["months"][number];
