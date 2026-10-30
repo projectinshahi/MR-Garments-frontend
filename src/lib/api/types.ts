@@ -186,7 +186,7 @@ export type CreateOrderBody = {
 };
 export type CreateOrderResponse = { order: { id: string; po: string } };
 
-/** CAL-1 GET /api/v1/deliveries: orders at stage 1-2, due date oldest first. */
+/** CAL-1 GET /api/v1/deliveries: orders at stage 1-2, due date oldest first. Item, quantity and received: main line. */
 export type DeliveryItem = {
   orderId: string;
   po: string;
@@ -196,6 +196,8 @@ export type DeliveryItem = {
   unit: Unit;
   received: number;
   due: string;
+  /** Every line has received >= its quantity. Missing from an API older than this field. */
+  fullyReceived?: boolean;
 };
 
 /** PAY-1 GET /api/v1/payments */
