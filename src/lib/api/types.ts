@@ -245,16 +245,16 @@ export type ReceiptListItem = {
   receivedBy: string;
 };
 
-/** REC-2 GET /api/v1/receipts/options */
+/** REC-2 GET /api/v1/receipts/options. The money fields are null for users without payments View (China staff). */
 export type ReceiptOptions = {
   offices: Named[];
   orders: {
     orderId: string;
     po: string;
     supplier: string;
-    orderValueCny: number;
-    depositsPaidCny: number;
-    lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number }[];
+    orderValueCny: number | null;
+    depositsPaidCny: number | null;
+    lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number | null }[];
   }[];
 };
 
