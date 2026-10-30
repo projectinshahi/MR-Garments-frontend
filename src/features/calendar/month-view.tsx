@@ -25,7 +25,9 @@ export function MonthView({ today, deliveries: all, linkOrders, params }: Calend
   const deliveries = filterDeliveries(all, today, supplier);
   const first = parseISO(month);
   const title = format(first, "MMMM yyyy");
-  const late = deliveries.filter((d) => d.status === "late");
+  // DEF-12: the late deliveries due in the month shown; today's month also keeps those still late from earlier months.
+  const thisMonth = isSameMonth(first, parseISO(today));
+  const late = deliveries.filter((d) => d.status === "late" && (thisMonth || isSameMonth(parseISO(d.due), first)));
 
   return (
     <PageContainer>
@@ -59,11 +61,13 @@ export function MonthView({ today, deliveries: all, linkOrders, params }: Calend
                     const items = dueOn(deliveries, day);
                     const outside = !isSameMonth(day, first);
                     const isToday = isoDay(day) === today;
+                    // At least the reference's 136 px (five chips): a busier day makes its week taller instead of spilling
+                    // its chips over the week below.
                     return (
                       <div
                         key={isoDay(day)}
                         role="cell"
-                        className={cn("h-[136px] border-r border-b px-[7px] pt-1", outside && "bg-table-head")}
+                        className={cn("min-h-[136px] border-r border-b px-[7px] pt-1", outside && "bg-table-head")}
                       >
                         <div className="flex h-5 items-start justify-between gap-1">
                           <span

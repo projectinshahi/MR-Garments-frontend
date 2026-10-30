@@ -75,7 +75,24 @@ test("Month: deliveries on their day, ‹ › and Today, the supplier filter, em
   await expect(page).toHaveURL(`/orders/${yiwu.po}`);
 });
 
-test("Week: delivery cards, ‹ › and Today, an empty week, and the late banner", async ({ page, api }) => {
+test("Month: a busy day makes its week taller, so its chips stay in its cell and each opens its order", async ({ page, api }) => {
+  const due = `${YEAR}-05-13`;
+  const orders = [];
+  for (let i = 0; i < 7; i++) orders.push(await api.createOrder({ supplier: "Yiwu Trims Ltd.", deliveryDate: due }));
+
+  await page.goto(`/calendar?month=${YEAR}-05`);
+  const day = page.getByRole("table", { name: `May ${YEAR}` }).getByRole("cell").filter({ has: page.getByRole("link", { name: orders[0]!.po }) });
+  const cell = (await day.boundingBox())!;
+  for (const { po } of orders) {
+    const chip = (await day.getByRole("link", { name: po }).boundingBox())!;
+    expect(chip.y + chip.height, po).toBeLessThanOrEqual(cell.y + cell.height);
+  }
+  const last = orders.at(-1)!;
+  await day.getByRole("link", { name: last.po }).click();
+  await expect(page).toHaveURL(`/orders/${last.po}`);
+});
+
+test("Week: delivery cards, ‹ › and Today, an empty week, the late banner and the Month late card", async ({ page, api }) => {
   const due = `${YEAR}-06-17`;
   const order = await api.createOrder({ supplier: "Yiwu Trims Ltd.", lines: [{ item: "Kids t-shirts", quantity: 600, rateCny: 3 }], deliveryDate: due });
   const monday = mondayOf(due);
@@ -103,6 +120,7 @@ test("Week: delivery cards, ‹ › and Today, an empty week, and the late banne
 
   // A delivery due before this week shows in the late banner (Week) and the late card (Month).
   const late = await api.createOrder({ orderDate: today(-30), deliveryDate: today(-10) });
+  const older = await api.createOrder({ orderDate: today(-60), deliveryDate: today(-45) }); // always an earlier month
   await page.reload();
   await expect(page.getByText("Late from before this week:")).toBeVisible();
   await expect(page.getByText(`${late.po} Foshan Fabrics (due ${shortDate(today(-10))}, 10 days late)`)).toBeVisible();
@@ -110,6 +128,15 @@ test("Week: delivery cards, ‹ › and Today, an empty week, and the late banne
   const lateCard = page.getByRole("list", { name: "Late deliveries" }).getByRole("listitem").filter({ has: page.getByRole("link", { name: late.po }) });
   await expect(lateCard).toContainText(`Foshan Fabrics · due ${shortDate(today(-10))}`);
   await expect(lateCard).toContainText("10 days");
+
+  // Today's month lists every delivery still late; any other month only its own late ones (DEF-12).
+  const lateList = page.getByRole("list", { name: "Late deliveries" });
+  await expect(lateList.getByRole("link", { name: older.po })).toBeVisible();
+  await page.goto(`/calendar?month=${today(-45).slice(0, 7)}`);
+  await expect(lateList.getByRole("link", { name: older.po })).toBeVisible();
+  await expect(lateList.getByRole("link", { name: late.po })).toHaveCount(0);
+  await page.goto(`/calendar?month=${YEAR}-06`);
+  await expect(page.getByText("No late deliveries.")).toBeVisible();
 });
 
 test("List: date range, status chips, supplier filter carried across views, and PO links", async ({ page, api }) => {
