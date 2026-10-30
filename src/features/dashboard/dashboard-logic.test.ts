@@ -6,7 +6,7 @@ import { toDashboard } from "./dashboard-logic";
 
 const TODAY = "2026-10-29";
 const order = (po: string, stage: OrderListItem["stage"]) => ({ po, stage }) as OrderListItem;
-const delivery = (po: string, due: string, supplier = "Foshan Fabrics") => ({ po, due, supplier }) as DeliveryItem;
+const delivery = (po: string, due: string, supplier = "Foshan Fabrics", received = 0) => ({ po, due, supplier, quantity: 100, received }) as DeliveryItem;
 const payment = (id: string, status: "paid" | "due", dueDate: string | null, amountCny: number) =>
   ({ id, po: `PO-${id}`, kind: "Balance", payee: "Shenzhen Apparel", status, dueDate, amountCny }) as PaymentsResponse["payments"][number];
 const container = (number: string, status: ContainerListItem["status"], eta: string) =>
@@ -32,11 +32,17 @@ describe("toDashboard", () => {
     });
   });
 
-  it("lists late deliveries, then those due within 7 days, and counts their suppliers", () => {
+  it("lists late deliveries, then those due within 7 days, and counts their suppliers, leaving out fully received orders", () => {
     const { deliveries } = toDashboard(
       {
         orders: [],
-        deliveries: [delivery("A", "2026-10-25"), delivery("B", "2026-10-29", "Yiwu Trims"), delivery("C", "2026-11-05"), delivery("D", "2026-11-06")],
+        deliveries: [
+          delivery("A", "2026-10-25"),
+          delivery("R", "2026-10-26", "Hangzhou Knits", 100), // fully received: no longer awaited
+          delivery("B", "2026-10-29", "Yiwu Trims"),
+          delivery("C", "2026-11-05"),
+          delivery("D", "2026-11-06"),
+        ],
         payments: { orders: [], payments: [] },
         containers: [],
       },

@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import type { DeliveryItem } from "@/lib/api/types";
 
-import { deliveriesPerDay, dueOn, isoDay, lateBy, monthWeeks, supplierOptions, toDelivery, weekDays } from "./deliveries";
+import { deliveriesPerDay, dueOn, isoDay, lateBy, monthWeeks, supplierOptions, toDeliveries, weekDays } from "./deliveries";
 
 const TODAY = "2026-09-30";
 
-const row = (po: string, supplier: string, due: string): DeliveryItem => ({
+const row = (po: string, supplier: string, due: string, received = 0): DeliveryItem => ({
   orderId: `id-${po}`,
   po,
   supplier,
   item: "Ladies tops",
   quantity: 2_000,
   unit: "pcs",
-  received: 0,
+  received,
   due,
 });
 
@@ -26,7 +26,7 @@ const rows = [
   row("PO-2049", "Foshan Fabrics", "2026-10-07"),
   row("PO-2058", "Foshan Fabrics", "2026-10-08"),
 ];
-const deliveries = rows.map((r) => toDelivery(r, TODAY));
+const deliveries = toDeliveries(rows, TODAY);
 
 describe("calendar derivations", () => {
   it("maps API rows to statuses and labels against today: late, due within 7 days, on track", () => {
@@ -49,6 +49,14 @@ describe("calendar derivations", () => {
       status: "late",
       statusLabel: "4 days late",
     });
+  });
+
+  it("leaves out an order whose main line is fully received; a partly received one keeps its status", () => {
+    const received = toDeliveries(
+      [row("PO-3001", "Foshan Fabrics", "2026-09-20", 2_000), row("PO-3002", "Foshan Fabrics", "2026-09-21", 1_999), row("PO-3003", "Foshan Fabrics", "2026-10-02", 2_000)],
+      TODAY,
+    );
+    expect(received.map((d) => [d.po, d.statusLabel])).toEqual([["PO-3002", "9 days late"]]);
   });
 
   it("builds five Monday-first weeks for October 2026, 28 Sep to 1 Nov", () => {

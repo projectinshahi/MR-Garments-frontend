@@ -194,6 +194,30 @@ test("the mobile menu closes at once; a progress bar shows until the page is rea
   expect(problems).toEqual([]);
 });
 
+// The calendar's ‹ › links and its URL selects keep the current view until the next one is ready, like the sidebar.
+test("the calendar's next month and date range show the progress bar until the new view is on screen", async ({ page }) => {
+  const bar = page.getByRole("progressbar", { name: "Loading page" });
+  await page.goto("/calendar?month=2099-03");
+  await expect(page.getByRole("heading", { level: 2, name: "March 2099" })).toBeVisible();
+  const months = await slowNavigation(page, "/calendar");
+  await page.getByRole("link", { name: "Next month" }).click();
+  await expect(bar).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "March 2099" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "April 2099" })).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  expect(months).toHaveLength(1);
+
+  await page.goto("/calendar/list");
+  const ranges = await slowNavigation(page, "/calendar/list");
+  await page.getByRole("button", { name: "Date range: All dates" }).click();
+  await page.getByRole("menuitemradio", { name: "Next 7 days" }).click();
+  await expect(bar).toBeVisible();
+  await expect(page).toHaveURL("/calendar/list?range=next-7");
+  await expect(page.getByRole("button", { name: "Date range: Next 7 days" })).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  expect(ranges).toHaveLength(1);
+});
+
 // A container's page has no loading frame of its own (an order's has, so opening one is instant), so the list stays
 // while it loads.
 test("opening a container from its table row shows the progress bar until the container is on screen", async ({ page, api }) => {

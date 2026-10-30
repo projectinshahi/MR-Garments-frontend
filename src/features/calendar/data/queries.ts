@@ -6,7 +6,7 @@ import type { DeliveryItem } from "@/lib/api/types";
 import { getMe } from "@/lib/session";
 import { todayInIndia } from "@/lib/today";
 
-import { toDelivery } from "../deliveries";
+import { toDeliveries } from "../deliveries";
 
 export type { Delivery, DeliveryStatus } from "../deliveries";
 
@@ -20,5 +20,5 @@ export type CalendarData = Awaited<ReturnType<typeof getCalendar>>;
 export const getCalendar = cache(async () => {
   const [items, me] = await Promise.all([apiGet<DeliveryItem[]>("/deliveries"), getMe()]);
   const today = todayInIndia();
-  return { today, deliveries: items.map((item) => toDelivery(item, today)), linkOrders: me ? canOpen(me, "/orders") : false };
+  return { today, deliveries: toDeliveries(items, today), linkOrders: me ? canOpen(me, "/orders") : false };
 });

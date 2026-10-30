@@ -1,6 +1,6 @@
 import { addDays, format, parseISO } from "date-fns";
 
-import { lateBy, toDelivery } from "@/features/calendar/deliveries";
+import { lateBy, toDeliveries } from "@/features/calendar/deliveries";
 import { containerKpis, toContainerRow } from "@/features/containers/containers-logic";
 import type { ContainerListItem, DeliveryItem, OrderListItem, PaymentsResponse } from "@/lib/api/types";
 import type { StageNumber, Terms, Tone } from "@/types/domain";
@@ -33,9 +33,12 @@ function orders(list: OrderListItem[]) {
   };
 }
 
-/** CAL-1 (stage 1-2, due date oldest first): late ones, then those due within 7 days, as the calendar labels them. */
+/**
+ * CAL-1 (stage 1-2, due date oldest first) without fully received orders: late ones, then those due within 7 days, as
+ * the calendar labels and counts them.
+ */
 function deliveries(items: DeliveryItem[], today: string) {
-  const all = items.map((item) => toDelivery(item, today));
+  const all = toDeliveries(items, today);
   const late = all.filter((d) => d.status === "late");
   const dueSoon = all.filter((d) => d.status === "due-soon");
   return {
