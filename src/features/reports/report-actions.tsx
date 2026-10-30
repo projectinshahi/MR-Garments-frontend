@@ -1,8 +1,9 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useTransition } from "react";
 
+import { useNavigate } from "@/components/layout/navigation-progress";
 import { FilterSelect } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
 import { hrefWith, optionParam } from "@/features/calendar/params";
@@ -69,7 +70,8 @@ type UrlSelectProps = Omit<React.ComponentProps<typeof FilterSelect>, "value" | 
 
 /**
  * A filter dropdown kept in the URL (`?<param>=`, "all" removes it; the other parameters stay), so the server page
- * reloads its data with the filter. Calendar's ParamSelect, with every FilterSelect option (the hub's inline label).
+ * reloads its data with the filter; the old choice shows until the new page is loaded, so the progress bar follows the
+ * navigation. Calendar's ParamSelect, with every FilterSelect option (the hub's inline label).
  */
 export function UrlSelect({ param, ...select }: UrlSelectProps) {
   return (
@@ -80,14 +82,14 @@ export function UrlSelect({ param, ...select }: UrlSelectProps) {
 }
 
 function BoundSelect({ param, ...select }: UrlSelectProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   const params = useSearchParams();
   return (
     <FilterSelect
       {...select}
       value={optionParam(params, param, select.options)}
-      onValueChange={(value) => router.push(hrefWith(pathname, params, param, value === "all" ? null : value))}
+      onValueChange={(value) => navigate(hrefWith(pathname, params, param, value === "all" ? null : value))}
     />
   );
 }
