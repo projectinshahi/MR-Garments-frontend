@@ -48,7 +48,7 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
 
   await test.step("Deposits & Payments: the $700 balance at 88.50 is ₹61,950; the row is in dollars", async () => {
     await page.goto("/payments");
-    await page.getByRole("button", { name: "+ Record payment" }).click();
+    await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = page.getByRole("dialog", { name: "Record payment" });
     await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · Yiwu Trims Ltd.` });
     await form.getByRole("combobox", { name: "Kind", exact: true }).selectOption("Balance");

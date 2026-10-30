@@ -68,7 +68,7 @@ test("an order without payments says so", async ({ page, api }) => {
   await page.goto("/payments");
   await openOrder(page, order.po);
   await expect(card(page, order.po)).toContainText(`No payments recorded for ${order.po} yet.`);
-  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText("0");
+  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText(amountCell("0"));
 });
 
 test("Record payment: opens, cancels, checks every field, and saves a payment that updates the totals", async ({ page, api }) => {
@@ -210,7 +210,7 @@ test("double-clicking Record payment records one payment", async ({ page, api })
   await input(form, "Mode").fill("Cash");
   await form.getByRole("button", { name: "Record payment" }).dblclick();
   await expect(toast(page, `Payment recorded for ${order.po}`).first()).toBeVisible();
-  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText("100");
+  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText(amountCell("100"));
   expect(await paymentsOf(api, order.id)).toHaveLength(1);
 });
 
