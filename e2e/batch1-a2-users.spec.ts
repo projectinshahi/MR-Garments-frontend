@@ -152,27 +152,33 @@ test("AT-U12: the role card follows the Role select; Add user asks for the initi
   await expect(page).toHaveURL("/users");
 });
 
-test("AT-U4: a stage outside the role shows M18 under the ticks and saves nothing", async ({ page }) => {
+// Stage ticks follow the role (QA 2026-10-30): ticks the role can't hold are disabled, and changing the role unticks
+// them before Save. The API's M18/M19 stay as the backstop, checked in the backend users.test.ts (AT-U4, AT-U5).
+test("AT-U4: only the role's own stages can be ticked (Wang Fang, China staff)", async ({ page }) => {
   await openEdit(page, "Wang Fang");
-  await field.stage(page, "Clearing (India)").click();
-  await field.save(page).click();
-  await expect(stagesCard(page).getByText("China staff can't enter data for Clearing (India). Untick it first.")).toBeVisible();
-  await expect(page).toHaveURL(/\/users\/edit\?id=/);
-  await expect(field.stage(page, "Clearing (India)")).toBeChecked();
-  await expect(field.save(page)).toBeEnabled();
-
-  await page.reload();
-  await expect(field.stage(page, "Clearing (India)")).not.toBeChecked();
-  await expect(field.stage(page, "Container loading")).toBeChecked();
+  for (const stage of ["Receiving (China)", "Container loading"]) await expect(field.stage(page, stage)).toBeEnabled();
+  for (const stage of ["Clearing (India)", "Transport", "Warehouse"]) {
+    await expect(field.stage(page, stage)).toBeDisabled();
+    await expect(field.stage(page, stage)).not.toBeChecked();
+  }
+  await expect(stagesCard(page).getByText("doesn't use stage access", { exact: false })).toHaveCount(0);
 });
 
-test("AT-U5: changing the role while Receiving is ticked shows M18 (Li Wei, as Chen Yu)", async ({ page }) => {
+test("AT-U5: changing the role unticks the stages the new role can't hold, and nothing is saved until Save (Li Wei)", async ({ page }) => {
   await openEdit(page, "Li Wei");
+  await expect(field.stage(page, "Receiving (China)")).toBeChecked();
   await field.role(page).selectOption("India staff");
-  await field.save(page).click();
-  await expect(stagesCard(page).getByText("India staff can't enter data for Receiving (China). Untick it first.")).toBeVisible();
+  await expect(field.stage(page, "Receiving (China)")).not.toBeChecked();
+  await expect(field.stage(page, "Receiving (China)")).toBeDisabled();
+  await expect(field.stage(page, "Clearing (India)")).toBeEnabled();
+
+  await field.role(page).selectOption("Procurement");
+  await expect(stagesCard(page).getByText("Procurement doesn't use stage access.")).toBeVisible();
+  for (const stage of ["Receiving (China)", "Clearing (India)", "Warehouse"]) await expect(field.stage(page, stage)).toBeDisabled();
+
   await page.reload();
   await expect(field.role(page)).toHaveValue("China staff");
+  await expect(field.stage(page, "Receiving (China)")).toBeChecked();
 });
 
 test("AT-U6: the last Management user can't be demoted or deactivated (M20)", async ({ page }) => {

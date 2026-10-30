@@ -1,18 +1,35 @@
 import { z } from "zod";
 
+import type { RolesResponse } from "@/lib/api/types";
 import { MESSAGES } from "@/lib/feedback";
 import type { Role } from "@/types/domain";
 
 import type { UserDetail } from "./data/queries";
 
-/** The stage ticks on 48 (stages 2-6), labelled as drawn. */
+/** The stage ticks on 48 (stages 2-6), labelled as drawn, with the matrix row behind each (backend STAGE_CAPABILITY). */
 export const STAGE_OPTIONS = [
-  { stage: 2, label: "Receiving (China)" },
-  { stage: 3, label: "Container loading" },
-  { stage: 4, label: "Clearing (India)" },
-  { stage: 5, label: "Transport" },
-  { stage: 6, label: "Warehouse" },
+  { stage: 2, label: "Receiving (China)", capability: "receiving" },
+  { stage: 3, label: "Container loading", capability: "containers" },
+  { stage: 4, label: "Clearing (India)", capability: "clearing" },
+  { stage: 5, label: "Transport", capability: "transport" },
+  { stage: 6, label: "Warehouse", capability: "warehouse" },
 ] as const;
+
+/**
+ * The stages a role may hold (Q7, backend grantableStages): the stage rows where ROL-1 gives the role Enter. Only the
+ * staff roles have Enter on a stage row, so Management, Procurement, Accounts and "no role yet" hold none.
+ */
+export const grantableStages = (role: Role | "", { matrix }: RolesResponse): number[] =>
+  role ? STAGE_OPTIONS.filter(({ capability }) => matrix[capability]?.[role] === "Enter").map(({ stage }) => stage) : [];
+
+/** Changing the role unticks the stages the new role can't hold, before Save (the API's M18/M19 stay as the backstop). */
+export const keepGrantable = (stages: number[], role: Role | "", roles: RolesResponse) => {
+  const allowed = grantableStages(role, roles);
+  return stages.filter((stage) => allowed.includes(stage));
+};
+
+/** Under the ticks when the chosen role holds no stage (M19's first sentence). Proposed wording, needs sign-off. */
+export const noStagesHint = (role: Role) => `${role} doesn't use stage access.`;
 
 /** Form fields, in screen order. The names match the API's, so its `fields` errors land on them (E1-E3). */
 export const FORM_FIELDS = ["name", "email", "phone", "role", "officeId", "language", "password", "status", "stages"] as const;
