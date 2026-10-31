@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Activity } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { MESSAGES } from "@/lib/feedback";
 
 import type { UserDetail } from "./data/queries";
 import { EditUserForm } from "./edit-user-form";
+import { DEACTIVATE_NOTE } from "./user-form";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/users/edit" }));
@@ -231,6 +232,59 @@ describe("EditUserForm", () => {
     await user.click(screen.getByRole("button", { name: "Save user" }));
     await waitFor(() => expect(patch).toHaveBeenCalled());
     expect(patch.mock.calls[0]![1]).not.toHaveProperty("password");
+  });
+
+  it("asks before deactivating: Cancel saves nothing and keeps the form, Deactivate saves (contract D3)", async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ user: { ...wang, status: "Inactive" } });
+    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    const status = screen.getByRole("combobox", { name: "Status" });
+    await user.selectOptions(status, "Inactive");
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate user?" });
+    expect(confirm).toHaveTextContent(`Are you sure you want to deactivate Wang Fang? ${DEACTIVATE_NOTE}`);
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(patch).not.toHaveBeenCalled();
+    expect(status).toHaveValue("Inactive");
+
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: "Deactivate user?" })).getByRole("button", { name: "Deactivate user" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/users"));
+    expect(patch).toHaveBeenCalledOnce();
+    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ status: "Inactive" }));
+    expect(success).toHaveBeenCalledWith("User saved");
+  });
+
+  it("shows the API's own-account refusal under Status (409 own_account)", async () => {
+    const user = userEvent.setup();
+    const own = "You can't deactivate your own account.";
+    patch.mockRejectedValue(new ApiError(409, "own_account", own, { status: own }));
+    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf={false} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Status" }), "Inactive");
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: "Deactivate user?" })).getByRole("button", { name: "Deactivate user" }));
+
+    const group = screen.getAllByRole("group").find((field) => within(field).queryByRole("combobox", { name: "Status" }))!;
+    expect(await within(group).findByText(own)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("locks Status on the signed-in user's own account and says why; other changes still save", async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ user: wang });
+    render(<EditUserForm user={wang} options={options} matrix={matrix} isSelf />);
+    const status = screen.getByRole("combobox", { name: "Status" });
+    expect(status).toBeDisabled();
+    expect(status).toHaveAccessibleDescription("You can't deactivate your own account.");
+
+    await user.click(tick("Container loading"));
+    await user.click(screen.getByRole("button", { name: "Save user" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/users"));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(patch).toHaveBeenCalledWith("/users/u-wang", expect.objectContaining({ status: "Active", stages: [2] }));
   });
 
   it("shows no password field on the signed-in user's own account", () => {

@@ -5,9 +5,10 @@ import { SIGNED_OUT } from "./sessions";
 // Batch 1, A2 (users): AT-U1 to U7, U11, U12, and the browser halves of AT-T1 (with AT-A5) and AT-T2, on the seeded
 // API, signed in as Suresh (Management).
 // - The saved-session users suresh and chen are never changed: AT-U5 and AT-T1 use Li Wei, who has Chen Yu's role and
-//   grant (China staff, Receiving). AT-U6 only tries changes to Suresh that the API refuses.
+//   grant (China staff, Receiving). AT-U6 only tries changes to Suresh that the API refuses or the form locks.
 // - Every successful change is undone in a `finally` through USR-4, so later specs see the seeded users.
-// - One worker runs the tests in file order. AT-U7 is last: users can't be deleted, so it leaves Test User inactive.
+// - One worker runs the tests in file order. AT-U7 is last: a user who has signed in can't be removed (USR-5), so it
+//   leaves Test User inactive.
 // - Password policy: Add user takes the initial password, and the new user signs in with it (AT-U7). There are no
 //   invite links, so AT-U8 to U10 no longer exist. Setting another user's password: batch1-a5-passwords.spec.ts.
 
@@ -181,17 +182,17 @@ test("AT-U5: changing the role unticks the stages the new role can't hold, and n
   await expect(field.stage(page, "Receiving (China)")).toBeChecked();
 });
 
-test("AT-U6: the last Management user can't be demoted or deactivated (M20)", async ({ page }) => {
+test("AT-U6: the last Management user can't be demoted (M20), and nobody can deactivate their own account (D3)", async ({ page }) => {
   await openEdit(page, "Suresh Menon");
   await field.role(page).selectOption("Procurement");
   await field.save(page).click();
   await expect(groupOf(page, "Role").getByText(M20)).toBeVisible();
   await expect(groupOf(page, "Status").getByText(M20)).toHaveCount(0);
 
+  // D3: USR-4 refuses your own deactivation (409 own_account), so the form locks your own Status.
   await field.role(page).selectOption("Management");
-  await field.status(page).selectOption("Inactive");
-  await field.save(page).click();
-  await expect(groupOf(page, "Status").getByText(M20)).toBeVisible();
+  await expect(field.status(page)).toBeDisabled();
+  await expect(page.getByText("You can't deactivate your own account.", { exact: true })).toBeVisible();
 
   await page.reload();
   await expect(field.role(page)).toHaveValue("Management");
@@ -228,7 +229,11 @@ test("AT-T1 and AT-A5: deactivating a signed-in user ends their session and stop
   try {
     await expect(li.page).toHaveURL("/home");
     await field.status(page).selectOption("Inactive");
-    await saveAndExpect(page, "User saved");
+    // Deactivating asks first (the shared confirmation).
+    await field.save(page).click();
+    await page.getByRole("alertdialog", { name: "Deactivate user?" }).getByRole("button", { name: "Deactivate user" }).click();
+    await expect(page).toHaveURL("/users");
+    await expect(page.getByText("User saved", { exact: true })).toBeVisible();
     await page.getByRole("group", { name: "User status" }).getByRole("button", { name: "Inactive (1)" }).click();
     await expect(page.getByRole("table").getByRole("row", { name: /Li Wei/ })).toBeVisible();
 
@@ -302,7 +307,8 @@ test("AT-U7: adding a user with an initial password lists them as Active, and th
     await expect(testUser).toHaveURL("/home");
     await context.close();
   } finally {
-    // Users can't be deleted: set Test User inactive so the list shows the 8 seeded users as active again.
+    // Test User has signed in, so USR-5 refuses to remove them: set them inactive so the list shows the 8 seeded users
+    // as active again.
     const edit = page.getByRole("link", { name: "Edit Test User" });
     await page.goto("/users");
     await page.getByRole("group", { name: "User status" }).getByRole("button", { name: "All", exact: true }).click();

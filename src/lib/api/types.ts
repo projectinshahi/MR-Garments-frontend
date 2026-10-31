@@ -186,6 +186,20 @@ export type CreateOrderBody = {
 };
 export type CreateOrderResponse = { order: { id: string; po: string } };
 
+/**
+ * ORD-5 PATCH /api/v1/orders/:po (ordersEdit >= Enter; docs/orders-users-contract.md). Any subset, at least one key.
+ * Stage 1: dates and lines; stages 2-5: `deliveryDate` only (else 409 `order_locked`); stage 6: nothing. `lines`
+ * replaces the whole list in order: a line with `id` updates that line, one without is added, one left out is removed.
+ */
+export type UpdateOrderBody = {
+  orderDate?: string;
+  deliveryDate?: string;
+  lines?: { id?: string; itemId: string; quantity: number; rateCny: number }[];
+};
+export type UpdateOrderResponse = { order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string } };
+// ORD-6 DELETE /api/v1/orders/:po (admin Full) and USR-5 DELETE /api/v1/users/:id (admin Full) answer 204 with no body;
+// a record that is used answers 409 `in_use` with a message written for the user.
+
 /** CAL-1 GET /api/v1/deliveries: orders at stage 1-2, due date oldest first. Item, quantity and received: main line. */
 export type DeliveryItem = {
   orderId: string;

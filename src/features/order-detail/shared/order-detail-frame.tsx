@@ -6,6 +6,10 @@ import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
 import { LoadingState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { getOrderDetail, type OrderView } from "@/features/order-detail/data/queries";
+import { OrderDetailActions } from "@/features/order-detail/shared/order-detail-actions";
+import { getActiveItems } from "@/features/orders/data/queries";
+import { isEditableStage, orderPermissions } from "@/features/orders/order-permissions";
+import { getMe } from "@/lib/session";
 
 // Clearing & transport, Warehouse, Cost and History are hidden: ORD-4 has no per-order section for them yet (the stage
 // screens record clearing, transport and warehouse per container since wave 3).
@@ -18,11 +22,19 @@ const TABS: { segment: string; label: string; chip: string; section?: "payments"
   { segment: "/containers", label: "Containers", chip: "e", section: "containers" },
 ];
 
-/** Header ("Orders / PO-2028") and the tabs this user may open, shared by the order-detail tabs. */
+/**
+ * Header ("Orders / PO-2028", with Delete and Edit order for those allowed; Print order stays hidden, D5) and the tabs this user may
+ * open, shared by the order-detail tabs.
+ */
 export async function OrderDetailFrame({ params, children }: { params: Promise<{ po: string }>; children: React.ReactNode }) {
   const { po } = await params;
-  const order = await getOrderDetail(po);
+  const [order, me] = await Promise.all([getOrderDetail(po), getMe()]);
   if (!order) notFound();
+  const permissions = orderPermissions(me);
+  const canEdit = permissions.canEdit && isEditableStage(order.stage);
+  // Only an editor needs the item choices (ORD-2).
+  const items = canEdit ? await getActiveItems() : [];
+  const { stage, orderDate, deliveryDate, paidCny, lines } = order;
   const tabs: RouteTab[] = TABS.filter((tab) => !tab.section || order[tab.section] !== null).map((tab) => ({
     href: `/orders/${order.po}${tab.segment}`,
     label: tab.label,
@@ -31,7 +43,19 @@ export async function OrderDetailFrame({ params, children }: { params: Promise<{
 
   return (
     <>
-      <PageHeader title={order.po} parent={{ label: "Orders", href: "/orders" }} />
+      <PageHeader
+        title={order.po}
+        parent={{ label: "Orders", href: "/orders" }}
+        actions={
+          <OrderDetailActions
+            order={{ po: order.po, stage, orderDate, deliveryDate, paidCny, lines }}
+            supplier={order.supplier.name}
+            items={items}
+            canEdit={canEdit}
+            canDelete={permissions.canDelete}
+          />
+        }
+      />
       <RouteTabs tabs={tabs} label="Order sections" />
       {/* Switching tabs keeps the header and shows this while the tab loads. */}
       <Suspense fallback={<LoadingState />}>{children}</Suspense>

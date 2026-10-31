@@ -28,6 +28,9 @@ export const keepGrantable = (stages: number[], role: Role | "", roles: RolesRes
   return stages.filter((stage) => allowed.includes(stage));
 };
 
+/** What deactivating a user changes, in the confirmations on the list and the form (proposed wording, contract D3). */
+export const DEACTIVATE_NOTE = "They're signed out at once and can't sign in. Their name stays on everything they recorded.";
+
 /** Under the ticks when the chosen role holds no stage (M19's first sentence). Proposed wording, needs sign-off. */
 export const noStagesHint = (role: Role) => `${role} doesn't use stage access.`;
 

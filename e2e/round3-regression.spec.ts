@@ -429,7 +429,7 @@ test("back/forward across list, detail, tab and container; breadcrumbs", async (
   const f = await makeFlow(api);
   await page.goto("/orders");
   await orderSearch(page).fill(f.po);
-  await rowOf(page, f.po).getByRole("link", { name: f.po }).click();
+  await rowOf(page, f.po).getByRole("link", { name: f.po, exact: true }).click();
   await expect(page).toHaveURL(`/orders/${f.po}`);
   await tabs(page).getByRole("link", { name: "Containers" }).click();
   await expect(page).toHaveURL(`/orders/${f.po}/containers`);

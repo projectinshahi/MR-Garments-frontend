@@ -30,3 +30,8 @@ export async function getOrdersList() {
   const supplierNames = [...new Set([...options.suppliers.map((s) => s.name), ...orders.map((o) => o.supplier)])];
   return { orders, counts, supplierNames };
 }
+
+/** ORD-2's active items, for the Edit order lines. */
+export async function getActiveItems() {
+  return (await apiGet<OrderOptions>("/orders/options")).items;
+}
