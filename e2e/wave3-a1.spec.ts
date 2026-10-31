@@ -57,12 +57,13 @@ for (const tab of TABS) {
     await page.getByRole("link", { name: `Edit ${renamed}` }).click();
     await edit.getByLabel("Status").selectOption("Inactive");
     await save(edit);
-    const confirm = page.getByRole("dialog", { name: `Deactivate ${renamed}?` });
+    const confirm = page.getByRole("alertdialog", { name: `Deactivate ${tab.noun}?` });
+    await expect(confirm).toContainText(`Are you sure you want to deactivate ${renamed}?`);
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toBeHidden();
     await expect(edit.getByLabel("Status")).toHaveValue("Inactive");
     await save(edit);
-    await confirm.getByRole("button", { name: "Deactivate" }).click();
+    await confirm.getByRole("button", { name: `Deactivate ${tab.noun}` }).click();
     // The open confirmation already hides the edit dialog and the list from the accessibility tree, so wait for the
     // save itself: the URL drops ?dialog= only after it succeeds.
     await expect(page).toHaveURL(new RegExp(`${tab.path}$`));

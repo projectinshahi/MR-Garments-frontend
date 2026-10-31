@@ -171,15 +171,16 @@ describe("Edit item", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save());
 
-    const confirm = await screen.findByRole("dialog", { name: "Deactivate Denim jeans?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate item?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Denim jeans?");
     expect(confirm).toHaveTextContent("An inactive item no longer appears on new orders.");
     expect(patch).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Deactivate Denim jeans?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Deactivate item?" })).not.toBeInTheDocument());
     expect(patch).not.toHaveBeenCalled();
 
     await user.click(save());
-    await user.click(await screen.findByRole("button", { name: "Deactivate" }));
+    await user.click(await screen.findByRole("button", { name: "Deactivate item" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/items/i-1", expect.objectContaining({ status: "Inactive" }));
     expect(toast.success).toHaveBeenCalledWith("Item saved");

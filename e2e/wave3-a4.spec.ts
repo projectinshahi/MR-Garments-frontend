@@ -47,12 +47,13 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
   await page.getByRole("link", { name: `Edit ${NAME}` }).click();
   await edit.getByLabel("Status").selectOption("Inactive");
   await edit.getByRole("button", { name: "Save item" }).click();
-  const confirm = page.getByRole("dialog", { name: `Deactivate ${NAME}?` });
+  const confirm = page.getByRole("alertdialog", { name: "Deactivate item?" });
+  await expect(confirm).toContainText(`Are you sure you want to deactivate ${NAME}?`);
   await expect(confirm).toContainText("An inactive item no longer appears on new orders.");
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(confirm).toBeHidden();
   await edit.getByRole("button", { name: "Save item" }).click();
-  await confirm.getByRole("button", { name: "Deactivate" }).click();
+  await confirm.getByRole("button", { name: "Deactivate item" }).click();
   await expect(page.getByText("Item saved")).toBeVisible();
   await expect(edit).toBeHidden();
 

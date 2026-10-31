@@ -116,13 +116,14 @@ describe("Edit transport company", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save());
 
-    const confirm = screen.getByRole("dialog", { name: "Deactivate Kerala Roadways?" });
+    const confirm = screen.getByRole("alertdialog", { name: "Deactivate transport company?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Kerala Roadways?");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(confirm).not.toBeInTheDocument());
     expect(patch).not.toHaveBeenCalled();
 
     await user.click(save());
-    await user.click(within(screen.getByRole("dialog", { name: "Deactivate Kerala Roadways?" })).getByRole("button", { name: "Deactivate" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: "Deactivate transport company?" })).getByRole("button", { name: "Deactivate transport company" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/transport-companies/tc-1", expect.objectContaining({ status: "Inactive" }));
     expect(toast.success).toHaveBeenCalledWith("Transport company saved");

@@ -12,7 +12,7 @@ import { apiClient } from "@/lib/api/client";
 import type { CreateLocationBody, LocationResponse, LocationRow, OfficeType, UpdateLocationBody } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { ConfirmDialog, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
 
 // No reference design: built from the shared dialog in the style of 53_17.4_Add_supplier_(pop-up).jpeg.
 
@@ -127,14 +127,15 @@ function OfficeForm({ row, onCancel, onSaved }: { row?: LocationRow; onCancel: (
         onCancel={onCancel}
         submitLabel="Save office or warehouse"
         submitting={isSubmitting}
-        remove={row && { path: `/locations/${row.id}`, name: row.name, noun: "office or warehouse" }}
+        remove={
+          row && { path: `/locations/${row.id}`, name: row.name, noun: "office or warehouse", active: row.status === "Active", deactivateNote: OFFICE_TEXT.deactivate }
+        }
       />
-      <ConfirmDialog
+      <DeactivateConfirm
         open={!!confirming}
-        title={`Deactivate ${row?.name}?`}
-        description={OFFICE_TEXT.deactivate}
-        confirmLabel="Deactivate"
-        destructive
+        name={row?.name ?? ""}
+        noun="office or warehouse"
+        note={OFFICE_TEXT.deactivate}
         onConfirm={async () => {
           await save(confirming!);
           setConfirming(null);

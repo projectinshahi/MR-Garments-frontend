@@ -12,7 +12,9 @@ import { apiClient } from "@/lib/api/client";
 import type { ClearingAgentResponse, ClearingAgentRow, CreateClearingAgentBody, UpdateClearingAgentBody } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { addHref, ConfirmDialog, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { addHref, DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+
+const DEACTIVATE_NOTE = "It won’t be offered on new clearings. Clearings that already use it keep it.";
 
 // No reference design: built from the Add supplier dialog (53_17.4) and the shared Settings dialog shell.
 
@@ -129,15 +131,16 @@ function ClearingAgentForm({ row, onCancel, onSaved }: { row?: ClearingAgentRow;
         onCancel={onCancel}
         submitLabel="Save clearing agent"
         submitting={formState.isSubmitting}
-        remove={editing && { path: `/clearing-agents/${editing.id}`, name: editing.name, noun: "clearing agent" }}
+        remove={
+          editing && { path: `/clearing-agents/${editing.id}`, name: editing.name, noun: "clearing agent", active: editing.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+        }
       />
       {editing ? (
-        <ConfirmDialog
+        <DeactivateConfirm
           open={!!deactivating}
-          title={`Deactivate ${editing.name}?`}
-          description="It won’t be offered on new clearings. Clearings that already use it keep it."
-          confirmLabel="Deactivate"
-          destructive
+          name={editing.name}
+          noun="clearing agent"
+          note={DEACTIVATE_NOTE}
           onConfirm={async () => {
             if (deactivating) await save(deactivating);
             setDeactivating(null);

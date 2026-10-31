@@ -1,11 +1,13 @@
 "use client";
 
+import { CircleAlertIcon, TriangleAlertIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
@@ -96,22 +98,24 @@ export function SettingsDialog({
   );
 }
 
-/** The record an edit dialog can delete: its API path (`/teams/<id>`), its name and its noun in lower case. */
-export type Deletable = { path: string; name: string; noun: string };
+/**
+ * The record an edit dialog can delete: its API path (`/teams/<id>`), its name, its noun in lower case, whether it is
+ * Active, and the tab's deactivate note (what deactivating changes), offered when the API refuses the delete.
+ */
+export type Deletable = { path: string; name: string; noun: string; active: boolean; deactivateNote: string };
 
 const capitalised = (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 export const DELETE_TEXT = {
   deleted: (noun: string) => `${capitalised(noun)} deleted`,
   alreadyDeleted: (noun: string) => `${capitalised(noun)} was already deleted.`,
-  confirm: (noun: string) =>
-    `It's removed for good. ${/^[aeiou]/.test(noun) ? "An" : "A"} ${noun} already used on a record can't be deleted: deactivate it instead.`,
+  deactivated: (noun: string) => `${capitalised(noun)} deactivated`,
+  alreadyInactive: "It's already inactive, so it isn't offered on new records.",
 };
 
 /**
  * Cancel and the submit button, disabled while the request runs (E14: no spinner is designed). With `remove` (edit
- * dialogs), a Delete button on the left asks first, then deletes the record; a record in use is refused by the API
- * (409 `in_use`), whose message is toasted, and the dialog stays open so it can be deactivated instead. A 404 means
- * someone deleted it first: that closes and reloads like a delete.
+ * dialogs), a Delete button on the left asks first (DeleteButton). A 404 means someone deleted it first: that closes
+ * and reloads like a delete.
  */
 export function SettingsDialogFooter({
   onCancel,
@@ -137,39 +141,82 @@ export function SettingsDialogFooter({
   );
 }
 
+/**
+ * Delete asks first ("Delete supplier?"); Cancel calls nothing. The API decides (BR-06): a record in use is refused
+ * (409 `in_use`), and the same dialog turns into "Deactivate supplier instead?" with the API's reason and the tab's
+ * deactivate note, or, for a record already inactive, explains and only closes. Any other failure toasts
+ * (handleApiError) and keeps the dialog open, so confirming again retries. Success closes and reloads like a save.
+ */
 function DeleteButton({ record, disabled }: { record: Deletable; disabled: boolean }) {
   // The dialog is open, so the current path is the tab's own: deleting closes and reloads like a save.
   const { saved } = useSettingsDialog(usePathname());
-  const [asking, setAsking] = useState(false);
-  async function remove() {
-    let message = DELETE_TEXT.deleted(record.noun);
-    try {
-      await apiClient.delete(record.path);
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 404)) {
-        setAsking(false);
-        handleApiError(error);
-        return;
-      }
-      message = DELETE_TEXT.alreadyDeleted(record.noun);
-    }
-    setAsking(false);
+  // null: closed. "ask": the delete confirmation. A string: the API's reason the record can't be deleted.
+  const [step, setStep] = useState<null | "ask" | { inUse: string }>(null);
+  const { name, noun } = record;
+
+  function done(message: string) {
+    setStep(null);
     saved(message);
   }
+  async function send(request: () => Promise<unknown>, success: string) {
+    try {
+      await request();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return done(DELETE_TEXT.alreadyDeleted(noun));
+      // The API's message ends "Deactivate it instead.", which the in-use step offers as its button.
+      if (error instanceof ApiError && error.status === 409 && error.code === "in_use")
+        return setStep({ inUse: error.message.replace(/\s*Deactivate it instead\.$/, "") });
+      handleApiError(error);
+      return;
+    }
+    done(success);
+  }
+
+  const inUse = step !== null && step !== "ask" ? step.inUse : null;
+  const ask =
+    inUse === null
+      ? {
+          tone: "danger" as const,
+          title: `Delete ${noun}?`,
+          description: (
+            <p>
+              Are you sure you want to delete <strong className="text-foreground">{name}</strong>? This can&apos;t be undone. If the {noun} is
+              already used on any record, it can&apos;t be deleted.
+            </p>
+          ),
+          confirmLabel: `Delete ${noun}`,
+          pendingLabel: "Deleting…",
+          onConfirm: () => send(() => apiClient.delete(record.path), DELETE_TEXT.deleted(noun)),
+        }
+      : record.active
+        ? {
+            title: `Deactivate ${noun} instead?`,
+            description: (
+              <>
+                <p>{inUse}</p>
+                <p>{record.deactivateNote}</p>
+              </>
+            ),
+            confirmLabel: `Deactivate ${noun}`,
+            pendingLabel: "Deactivating…",
+            onConfirm: () => send(() => apiClient.patch(record.path, { status: "Inactive" }), DELETE_TEXT.deactivated(noun)),
+          }
+        : {
+            title: `Can't delete ${noun}`,
+            description: (
+              <>
+                <p>{inUse}</p>
+                <p>{DELETE_TEXT.alreadyInactive}</p>
+              </>
+            ),
+          };
+
   return (
     <>
-      <Button type="button" variant="destructive" className={cn(footerButtonClass, "sm:mr-auto")} onClick={() => setAsking(true)} disabled={disabled}>
+      <Button type="button" variant="destructive" className={cn(footerButtonClass, "sm:mr-auto")} onClick={() => setStep("ask")} disabled={disabled}>
         Delete
       </Button>
-      <ConfirmDialog
-        open={asking}
-        title={`Delete ${record.name}?`}
-        description={DELETE_TEXT.confirm(record.noun)}
-        confirmLabel="Delete"
-        destructive
-        onConfirm={remove}
-        onCancel={() => setAsking(false)}
-      />
+      <ConfirmDialog open={step !== null} onCancel={() => setStep(null)} {...ask} />
     </>
   );
 }
@@ -185,52 +232,147 @@ export function setApiErrors<T extends FieldValues>(error: unknown, setError: Us
 }
 
 /**
- * "Are you sure?" before deactivating a record. Confirm stays disabled while `onConfirm` runs; the caller closes
- * the dialog (onCancel or by changing `open`) when it is done.
+ * The confirmation before a Settings record is deleted or deactivated: an alertdialog over the edit dialog. `danger`
+ * is for what can't be undone (Delete: red icon, solid red button), `warning` for what can (Deactivate: amber icon,
+ * the soft red button) or only informs (leave out `confirmLabel`: its one button is Close). Focus starts on Cancel, so
+ * Enter never confirms by accident, and returns to the button that opened it on close. While `onConfirm` runs, the
+ * button shows `pendingLabel` with a spinner and nothing can close or confirm again; the caller closes the dialog
+ * (onCancel or `open`) when it is done.
  */
 export function ConfirmDialog({
   open,
+  tone = "warning",
   title,
   description,
   confirmLabel,
-  destructive = false,
+  pendingLabel,
   onConfirm,
   onCancel,
 }: {
   open: boolean;
+  tone?: "danger" | "warning";
   title: string;
-  description: string;
-  confirmLabel: string;
-  destructive?: boolean;
-  onConfirm: () => void | Promise<void>;
+  description: React.ReactNode;
+  confirmLabel?: string;
+  pendingLabel?: string;
+  onConfirm?: () => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [pending, setPending] = useState(false);
+  // A second click can land before the render that disables the button; this stops it sending twice.
+  const running = useRef(false);
   async function confirm() {
+    if (running.current || !onConfirm) return;
+    running.current = true;
     setPending(true);
     try {
       await onConfirm();
     } finally {
+      running.current = false;
       setPending(false);
     }
   }
 
+  // A new step while open (the API said the record is in use) puts focus back on Cancel, so a repeated Enter can't
+  // confirm something the user hasn't read yet.
+  const cancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) cancel.current?.focus();
+  }, [open, title]);
+  // Radix returns focus to a DialogTrigger, and these open from a button's handler instead, so remember that button.
+  const opener = useRef<HTMLElement | null>(null);
+
+  const Icon = tone === "danger" ? TriangleAlertIcon : CircleAlertIcon;
   return (
     <Dialog open={open} onOpenChange={(next) => (next || pending ? undefined : onCancel())}>
-      <DialogContent showCloseButton={false} className="gap-0 pb-[26px] sm:max-w-[440px]">
-        <DialogHeader className="gap-[7px]">
-          <DialogTitle className="text-[21px] leading-[19px]">{title}</DialogTitle>
-          <DialogDescription className="text-sm leading-5">{description}</DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        role="alertdialog"
+        showCloseButton={false}
+        className="gap-0 pb-[26px] sm:max-w-[460px]"
+        onOpenAutoFocus={() => {
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          opener.current?.focus();
+        }}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-full",
+              tone === "danger" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning",
+            )}
+          >
+            <Icon className="size-5" />
+          </span>
+          <DialogHeader className="min-w-0 gap-[7px]">
+            <DialogTitle className="text-[21px] leading-[26px]">{title}</DialogTitle>
+            {/* The class goes on DialogDescription, which merges it over its 15 px default; asChild alone would not. */}
+            <DialogDescription asChild className="flex flex-col gap-2 text-sm leading-5 [overflow-wrap:anywhere]">
+              <div>{description}</div>
+            </DialogDescription>
+          </DialogHeader>
+        </div>
         <DialogFooter className="mt-5 pt-4">
-          <Button type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel} disabled={pending}>
-            Cancel
+          <Button ref={cancel} type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel} disabled={pending}>
+            {confirmLabel ? "Cancel" : "Close"}
           </Button>
-          <Button type="button" variant={destructive ? "destructive" : "default"} className={footerButtonClass} onClick={confirm} disabled={pending}>
-            {confirmLabel}
-          </Button>
+          {confirmLabel ? (
+            <Button
+              type="button"
+              variant={tone === "danger" ? "default" : "destructive"}
+              className={cn(footerButtonClass, tone === "danger" && "bg-destructive text-white hover:bg-danger", pending && "disabled:opacity-100")}
+              onClick={confirm}
+              disabled={pending}
+              aria-busy={pending}
+            >
+              {pending ? (
+                <>
+                  <Spinner aria-hidden />
+                  {pendingLabel ?? confirmLabel}
+                </>
+              ) : (
+                confirmLabel
+              )}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** "Deactivate supplier?" before a save sets an Active record Inactive; `note` says what that changes. */
+export function DeactivateConfirm({
+  open,
+  name,
+  noun,
+  note,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  name: string;
+  noun: string;
+  note: string;
+  onConfirm: () => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  return (
+    <ConfirmDialog
+      open={open}
+      title={`Deactivate ${noun}?`}
+      description={
+        <p>
+          Are you sure you want to deactivate <strong className="text-foreground">{name}</strong>? {note}
+        </p>
+      }
+      confirmLabel={`Deactivate ${noun}`}
+      pendingLabel="Deactivating…"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }

@@ -12,7 +12,9 @@ import { apiClient } from "@/lib/api/client";
 import type { CreateTransportCompanyBody, TransportCompanyResponse, TransportCompanyRow, UpdateTransportCompanyBody } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { addHref, ConfirmDialog, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { addHref, DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+
+const DEACTIVATE_NOTE = "It won’t be offered on new trips. Trips that already use it keep it.";
 
 // No reference design: built from the Add supplier dialog (53_17.4) and the shared Settings dialog shell.
 
@@ -121,15 +123,22 @@ function TransportCompanyForm({ row, onCancel, onSaved }: { row?: TransportCompa
         onCancel={onCancel}
         submitLabel="Save transport company"
         submitting={formState.isSubmitting}
-        remove={editing && { path: `/transport-companies/${editing.id}`, name: editing.name, noun: "transport company" }}
+        remove={
+          editing && {
+            path: `/transport-companies/${editing.id}`,
+            name: editing.name,
+            noun: "transport company",
+            active: editing.status === "Active",
+            deactivateNote: DEACTIVATE_NOTE,
+          }
+        }
       />
       {editing ? (
-        <ConfirmDialog
+        <DeactivateConfirm
           open={!!deactivating}
-          title={`Deactivate ${editing.name}?`}
-          description="It won’t be offered on new trips. Trips that already use it keep it."
-          confirmLabel="Deactivate"
-          destructive
+          name={editing.name}
+          noun="transport company"
+          note={DEACTIVATE_NOTE}
           onConfirm={async () => {
             if (deactivating) await save(deactivating);
             setDeactivating(null);
