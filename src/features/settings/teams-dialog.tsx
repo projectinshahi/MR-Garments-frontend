@@ -12,7 +12,7 @@ import { apiClient } from "@/lib/api/client";
 import type { CreateTeamBody, TeamResponse, TeamRow, UpdateTeamBody } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { ConfirmDialog, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
 
 // No reference design: built from the shared dialog in the style of 53_17.4_Add_supplier_(pop-up).jpeg.
 
@@ -94,14 +94,13 @@ function TeamForm({ row, onCancel, onSaved }: { row?: TeamRow; onCancel: () => v
         onCancel={onCancel}
         submitLabel="Save team"
         submitting={isSubmitting}
-        remove={row && { path: `/teams/${row.id}`, name: row.name, noun: "team" }}
+        remove={row && { path: `/teams/${row.id}`, name: row.name, noun: "team", active: row.status === "Active", deactivateNote: TEAM_TEXT.deactivate }}
       />
-      <ConfirmDialog
+      <DeactivateConfirm
         open={!!confirming}
-        title={`Deactivate ${row?.name}?`}
-        description={TEAM_TEXT.deactivate}
-        confirmLabel="Deactivate"
-        destructive
+        name={row?.name ?? ""}
+        noun="team"
+        note={TEAM_TEXT.deactivate}
         onConfirm={async () => {
           await save(confirming!);
           setConfirming(null);

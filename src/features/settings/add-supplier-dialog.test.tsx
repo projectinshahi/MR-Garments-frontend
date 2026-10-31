@@ -179,10 +179,11 @@ describe("Edit supplier", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
 
-    const confirm = await screen.findByRole("dialog", { name: "Deactivate Ningbo Denim Works?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate supplier?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Ningbo Denim Works?");
     expect(confirm).toHaveTextContent("It won't appear when a new order is created.");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Deactivate/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument());
     expect(screen.getByRole("dialog", { name: "Edit supplier" })).toBeVisible();
     expect(field("Status")).toHaveValue("Inactive");
     expect(patch).not.toHaveBeenCalled();
@@ -193,7 +194,7 @@ describe("Edit supplier", () => {
     const { user, field, save } = open(EDIT);
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
-    await user.click(await screen.findByRole("button", { name: "Deactivate" }));
+    await user.click(await screen.findByRole("button", { name: "Deactivate supplier" }));
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/suppliers/s-6", expect.objectContaining({ name: NINGBO.name, status: "Inactive" }));
@@ -208,7 +209,7 @@ describe("Edit supplier", () => {
     await user.click(save);
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/suppliers/s-7", expect.objectContaining({ status: "Active" })));
-    expect(screen.queryByRole("dialog", { name: /Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument();
   });
 
   it("shows M22 under Supplier name for a rename to a taken name, after the confirmation too", async () => {
@@ -218,10 +219,10 @@ describe("Edit supplier", () => {
     await user.type(field("Supplier name"), "Wenzhou Buttons");
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
-    await user.click(await screen.findByRole("button", { name: "Deactivate" }));
+    await user.click(await screen.findByRole("button", { name: "Deactivate supplier" }));
 
     expect(await screen.findByText(M22)).toBeVisible();
-    expect(screen.queryByRole("dialog", { name: /Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument();
     expect(field("Supplier name")).toHaveValue("Wenzhou Buttons");
     expect(field("Supplier name")).toHaveAttribute("aria-invalid", "true");
     expect(toast.success).not.toHaveBeenCalled();

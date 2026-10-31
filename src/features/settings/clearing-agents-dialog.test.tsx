@@ -136,14 +136,15 @@ describe("Edit clearing agent", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save());
 
-    const confirm = screen.getByRole("dialog", { name: "Deactivate Kochi Clearing Services?" });
+    const confirm = screen.getByRole("alertdialog", { name: "Deactivate clearing agent?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Kochi Clearing Services?");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(confirm).not.toBeInTheDocument());
     expect(patch).not.toHaveBeenCalled();
     expect(field("Status")).toHaveValue("Inactive");
 
     await user.click(save());
-    await user.click(within(screen.getByRole("dialog", { name: "Deactivate Kochi Clearing Services?" })).getByRole("button", { name: "Deactivate" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: "Deactivate clearing agent?" })).getByRole("button", { name: "Deactivate clearing agent" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/clearing-agents/ca-1", expect.objectContaining({ status: "Inactive" }));
     expect(toast.success).toHaveBeenCalledWith("Clearing agent saved");
@@ -156,10 +157,10 @@ describe("Edit clearing agent", () => {
     await user.type(field("Clearing agent name"), "Southern Port Agents");
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save());
-    await user.click(within(screen.getByRole("dialog", { name: /^Deactivate/ })).getByRole("button", { name: "Deactivate" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: /^Deactivate/ })).getByRole("button", { name: "Deactivate clearing agent" }));
 
     expect(await screen.findByText(TAKEN)).toBeVisible();
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /^Deactivate/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument());
     expect(screen.getByRole("dialog", { name: "Edit clearing agent" })).toBeVisible();
     expect(replaceState).not.toHaveBeenCalled();
   });
@@ -171,7 +172,7 @@ describe("Edit clearing agent", () => {
     await user.selectOptions(field("Status"), "Active");
     await user.click(save());
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/clearing-agents/ca-2", expect.objectContaining({ status: "Active" })));
-    expect(screen.queryByRole("dialog", { name: /^Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument();
   });
 
   it("stays closed for an id that isn't in the list", () => {

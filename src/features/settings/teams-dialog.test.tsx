@@ -101,14 +101,15 @@ describe("Edit team", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
 
-    const confirm = await screen.findByRole("dialog", { name: "Deactivate Retail team?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate team?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Retail team?");
     expect(confirm).toHaveTextContent("no longer appears when goods are split in the warehouse");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Deactivate Retail team?" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Deactivate team?" })).toBeNull());
     expect(patch).not.toHaveBeenCalled();
 
     await user.click(save);
-    await user.click(within(await screen.findByRole("dialog", { name: "Deactivate Retail team?" })).getByRole("button", { name: "Deactivate" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: "Deactivate team?" })).getByRole("button", { name: "Deactivate team" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/teams/t-1", { name: "Retail team", status: "Inactive" });
     expect(toast.success).toHaveBeenCalledWith("Team saved");
@@ -116,46 +117,54 @@ describe("Edit team", () => {
 });
 
 describe("Delete team", () => {
-  const DELETE = "Delete Retail team?";
+  const DELETE = "Delete team?";
 
   it("asks first naming the team, then deletes it, toasts, closes and reloads", async () => {
     remove.mockResolvedValue(undefined);
     const { user } = open("dialog=edit&id=t-1");
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    const confirm = await screen.findByRole("dialog", { name: DELETE });
-    expect(confirm).toHaveTextContent("A team already used on a record can't be deleted: deactivate it instead.");
+    const confirm = await screen.findByRole("alertdialog", { name: DELETE });
+    expect(confirm).toHaveTextContent(
+      "Are you sure you want to delete Retail team? This can't be undone. If the team is already used on any record, it can't be deleted.",
+    );
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: DELETE })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(remove).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: DELETE })).getByRole("button", { name: "Delete team" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(remove).toHaveBeenCalledWith("/teams/t-1");
     expect(toast.success).toHaveBeenCalledWith("Team deleted");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
   });
 
-  it("in use: toasts the API's message and keeps the edit dialog open to deactivate instead", async () => {
-    const inUse = "This team is used by 2 warehouse receipts, so it can't be deleted. Deactivate it instead.";
-    remove.mockRejectedValue(new ApiError(409, "in_use", inUse));
-    const { user, field } = open("dialog=edit&id=t-1");
+  it("in use: gives the API's reason and deactivates the team instead", async () => {
+    remove.mockRejectedValue(new ApiError(409, "in_use", "This team is used by 2 warehouse receipts, so it can't be deleted. Deactivate it instead."));
+    patch.mockResolvedValue({ team: { ...RETAIL, status: "Inactive" } });
+    const { user } = open("dialog=edit&id=t-1");
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: DELETE })).getByRole("button", { name: "Delete team" }));
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(inUse));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: DELETE })).toBeNull());
-    expect(screen.getByRole("dialog", { name: "Edit team" })).toBeVisible();
-    expect(field("Status")).toBeEnabled();
+    const instead = await screen.findByRole("alertdialog", { name: "Deactivate team instead?" });
+    expect(instead).toHaveTextContent("This team is used by 2 warehouse receipts, so it can't be deleted.");
+    expect(instead).toHaveTextContent("no longer appears when goods are split in the warehouse");
+    expect(instead).not.toHaveTextContent("Deactivate it instead.");
+    expect(toast.error).not.toHaveBeenCalled();
     expect(nav.router.refresh).not.toHaveBeenCalled();
-    expect(toast.success).not.toHaveBeenCalled();
+
+    await user.click(within(instead).getByRole("button", { name: "Deactivate team" }));
+    await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
+    expect(patch).toHaveBeenCalledWith("/teams/t-1", { status: "Inactive" });
+    expect(toast.success).toHaveBeenCalledWith("Team deactivated");
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/teams");
   });
 
   it("already deleted (404): says so, closes and reloads like a delete", async () => {
     remove.mockRejectedValue(new ApiError(404, "not_found", "Team not found."));
     const { user } = open("dialog=edit&id=t-1");
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(within(await screen.findByRole("dialog", { name: DELETE })).getByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: DELETE })).getByRole("button", { name: "Delete team" }));
 
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(toast.success).toHaveBeenCalledWith("Team was already deleted.");

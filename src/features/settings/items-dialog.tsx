@@ -12,7 +12,9 @@ import { apiClient } from "@/lib/api/client";
 import type { ItemResponse, ItemRow } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { ConfirmDialog, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+
+const DEACTIVATE_NOTE = "An inactive item no longer appears on new orders. Orders that already have it keep it.";
 
 // Add or edit item: no reference design, so it is built like Add supplier (53). The checks mirror the API's, with
 // its messages (backend master-data/items.routes.ts MESSAGES), so both sides say the same thing.
@@ -172,14 +174,13 @@ function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => v
         onCancel={onCancel}
         submitLabel="Save item"
         submitting={formState.isSubmitting}
-        remove={row && { path: `/items/${row.id}`, name: row.name, noun: "item" }}
+        remove={row && { path: `/items/${row.id}`, name: row.name, noun: "item", active: row.status === "Active", deactivateNote: DEACTIVATE_NOTE }}
       />
-      <ConfirmDialog
+      <DeactivateConfirm
         open={!!deactivating}
-        title={`Deactivate ${row?.name}?`}
-        description="An inactive item no longer appears on new orders. Orders that already have it keep it."
-        confirmLabel="Deactivate"
-        destructive
+        name={row?.name ?? ""}
+        noun="item"
+        note={DEACTIVATE_NOTE}
         onConfirm={async () => {
           if (deactivating) await send(deactivating);
           setDeactivating(null);

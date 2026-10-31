@@ -46,7 +46,7 @@ test("a new order is listed with its figures; the row and the PO link open it", 
   // So does its PO link (keyboard reachable).
   await page.goto("/orders");
   await search(page).fill(order.po);
-  await rowOf(page, order.po).getByRole("link", { name: order.po }).click();
+  await rowOf(page, order.po).getByRole("link", { name: order.po, exact: true }).click();
   await expect(page).toHaveURL(`/orders/${order.po}`);
 
   // Persisted: a reload of the list still has it.

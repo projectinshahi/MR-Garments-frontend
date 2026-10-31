@@ -156,14 +156,15 @@ describe("Edit shipping agent", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
 
-    const confirm = await screen.findByRole("dialog", { name: "Deactivate Sino Freight?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate shipping agent?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Sino Freight?");
     expect(confirm).toHaveTextContent("It won't appear when a container is loaded.");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Deactivate/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: /^Deactivate/ })).not.toBeInTheDocument());
     expect(patch).not.toHaveBeenCalled();
 
     await user.click(save);
-    await user.click(await screen.findByRole("button", { name: "Deactivate" }));
+    await user.click(await screen.findByRole("button", { name: "Deactivate shipping agent" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/shipping-agents/a-1", expect.objectContaining({ status: "Inactive" }));
     expect(toast.success).toHaveBeenCalledWith("Shipping agent saved");

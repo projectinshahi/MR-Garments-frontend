@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { hasAccess } from "@/config/navigation";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import type { LocationRow, RecordStatus, Role, RolesResponse } from "@/lib/api/types";
@@ -40,11 +41,20 @@ export type RolesData = Awaited<ReturnType<typeof getRoles>>;
 /** The languages form 48 offers (the API accepts the same list). */
 const LANGUAGES = ["English"];
 
-/** Users list (47). Filters run on the client over every user, as before. */
+/**
+ * Users list (47). Filters run on the client over every user, as before. `canManage` (admin Full, contract D1) offers
+ * Remove on every row but `meId`'s, the signed-in user's own: the page opens at admin View, so it is checked here.
+ */
 export async function getUsersList() {
-  const [list, { roles }] = await Promise.all([apiGet<UsersListResponse>("/users"), apiGet<RolesResponse>("/roles")]);
+  const [list, { roles }, me] = await Promise.all([apiGet<UsersListResponse>("/users"), apiGet<RolesResponse>("/roles"), getMe()]);
   const now = new Date();
-  return { users: list.data.map((row) => toUserRow(row, now)), counts: list.counts, roles };
+  return {
+    users: list.data.map((row) => toUserRow(row, now)),
+    counts: list.counts,
+    roles,
+    canManage: !!me && hasAccess(me, "admin", "Full"),
+    meId: me?.id ?? null,
+  };
 }
 
 const notFoundOn404 = (error: unknown): never => {

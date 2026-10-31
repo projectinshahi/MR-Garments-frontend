@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 import {
   addHref,
-  ConfirmDialog,
+  DeactivateConfirm,
   fieldClass,
   labelClass,
   setApiErrors,
@@ -22,6 +22,8 @@ import {
   SettingsDialogFooter,
   useSettingsDialog,
 } from "./settings-dialog";
+
+const DEACTIVATE_NOTE = "It won't appear when a container is loaded. Containers that already use it keep it.";
 
 const PATH = "/settings/shipping-agents";
 export const ADD_SHIPPING_AGENT_HREF = addHref(PATH);
@@ -130,15 +132,16 @@ function ShippingAgentForm({ agent, onCancel, onSaved }: { agent?: ShippingAgent
           onCancel={onCancel}
           submitLabel="Save shipping agent"
           submitting={formState.isSubmitting}
-          remove={agent && { path: `/shipping-agents/${agent.id}`, name: agent.name, noun: "shipping agent" }}
+          remove={
+            agent && { path: `/shipping-agents/${agent.id}`, name: agent.name, noun: "shipping agent", active: agent.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+          }
         />
       </form>
-      <ConfirmDialog
+      <DeactivateConfirm
         open={!!confirming}
-        title={`Deactivate ${agent?.name}?`}
-        description="It won't appear when a container is loaded. Containers that already use it keep it."
-        confirmLabel="Deactivate"
-        destructive
+        name={agent?.name ?? ""}
+        noun="shipping agent"
+        note={DEACTIVATE_NOTE}
         onConfirm={() => save(confirming!)}
         onCancel={() => setConfirming(null)}
       />

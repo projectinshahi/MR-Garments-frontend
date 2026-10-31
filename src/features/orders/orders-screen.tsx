@@ -8,15 +8,16 @@ import { OrdersList } from "./orders-list";
 
 /**
  * Orders list (05_3_Orders_list.jpeg): header with "+ New order", filter row, and the paginated orders table.
- * "+ New order" shows only to users who may place orders (ordersEdit >= Enter).
+ * "+ New order" and the rows' Edit show only to users who may place orders (ordersEdit >= Enter); Delete only with
+ * admin Full (D1).
  */
-export function OrdersScreen({ data, canCreate }: { data: OrdersListData; canCreate: boolean }) {
+export function OrdersScreen({ data, canEdit, canDelete }: { data: OrdersListData; canEdit: boolean; canDelete: boolean }) {
   return (
     <>
       <PageHeader
         title="Orders"
         actions={
-          canCreate ? (
+          canEdit ? (
             <Button asChild size="header">
               <Link href="/orders/new">+ New order</Link>
             </Button>
@@ -24,7 +25,7 @@ export function OrdersScreen({ data, canCreate }: { data: OrdersListData; canCre
         }
       />
       <PageContainer>
-        <OrdersList {...data} />
+        <OrdersList {...data} canEdit={canEdit} canDelete={canDelete} />
       </PageContainer>
     </>
   );

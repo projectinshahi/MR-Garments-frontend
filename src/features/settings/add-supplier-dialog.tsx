@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 import {
   addHref,
-  ConfirmDialog,
+  DeactivateConfirm,
   fieldClass,
   labelClass,
   setApiErrors,
@@ -28,6 +28,7 @@ import { supplierSchema, type SupplierDraft } from "./settings-logic";
 const PATH = "/settings/suppliers";
 export const ADD_SUPPLIER_HREF = addHref(PATH);
 export const SUPPLIER_SAVED = "Supplier saved";
+const DEACTIVATE_NOTE = "It won't appear when a new order is created. Orders that already use it keep it.";
 
 const STATUSES = ["Active", "Inactive"] as const;
 const formSchema = supplierSchema.extend({ status: z.enum(STATUSES) });
@@ -160,15 +161,16 @@ function SupplierForm({
           onCancel={onCancel}
           submitLabel="Save supplier"
           submitting={formState.isSubmitting}
-          remove={supplier && { path: `/suppliers/${supplier.id}`, name: supplier.name, noun: "supplier" }}
+          remove={
+            supplier && { path: `/suppliers/${supplier.id}`, name: supplier.name, noun: "supplier", active: supplier.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+          }
         />
       </form>
-      <ConfirmDialog
+      <DeactivateConfirm
         open={!!confirming}
-        title={`Deactivate ${supplier?.name}?`}
-        description="It won't appear when a new order is created. Orders that already use it keep it."
-        confirmLabel="Deactivate"
-        destructive
+        name={supplier?.name ?? ""}
+        noun="supplier"
+        note={DEACTIVATE_NOTE}
         onConfirm={() => save(confirming!)}
         onCancel={() => setConfirming(null)}
       />

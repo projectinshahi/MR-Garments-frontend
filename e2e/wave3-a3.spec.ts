@@ -16,12 +16,14 @@ async function deactivate(page: Page, name: string, editTitle: string, toast: st
   await dialog.getByRole("button", { name: /^Save/ }).click();
 
   // Cancel keeps the edit dialog open and saves nothing; Deactivate saves.
-  const confirm = page.getByRole("dialog", { name: `Deactivate ${name}?` });
+  const noun = editTitle.replace(/^Edit /, "");
+  const confirm = page.getByRole("alertdialog", { name: `Deactivate ${noun}?` });
+  await expect(confirm).toContainText(`Are you sure you want to deactivate ${name}?`);
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(confirm).toBeHidden();
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /^Save/ }).click();
-  await confirm.getByRole("button", { name: "Deactivate" }).click();
+  await confirm.getByRole("button", { name: `Deactivate ${noun}` }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText(toast, { exact: true })).toBeVisible();
 

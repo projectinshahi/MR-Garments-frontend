@@ -3,11 +3,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { PageContainer } from "@/components/layout/page-header";
 import { Callout, SectionCard } from "@/components/shared/cards";
+import { DeactivateConfirm } from "@/components/shared/confirm-dialog";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import type { RecordStatus } from "@/types/domain";
 import type { EditUserData } from "./data/queries";
 import { buildRoleCard } from "./role-card";
 import {
+  DEACTIVATE_NOTE,
   FORM_FIELDS,
   grantableStages,
   keepGrantable,
@@ -52,6 +54,7 @@ const rowClass = "flex items-center border-b border-border-subtle py-[9px] last:
  * fields (E1-E3) with focus on the first; the values stay and Save is disabled only while the request runs (E14).
  * Password policy: Add user needs the initial password; Edit user may set a new one for someone else (which signs them
  * out everywhere), and shows no password field on the signed-in user's own account (`isSelf`).
+ * Saving an Active user as Inactive asks first; the signed-in user's own Status can't change (contract D3).
  */
 export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
   const router = useRouter();
@@ -75,7 +78,10 @@ export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
       ? [...options.offices, { id: user.officeId, name: user.office ?? "" }]
       : options.offices;
 
-  const onSubmit = handleSubmit(async (values) => {
+  // The values waiting for the deactivation to be confirmed (Active -> Inactive asks first, as in Settings).
+  const [confirming, setConfirming] = useState<UserFormValues | null>(null);
+
+  async function save(values: UserFormValues) {
     try {
       if (user) await apiClient.patch(`/users/${user.id}`, toPayload(values));
       else await apiClient.post("/users", toPayload(values));
@@ -91,7 +97,8 @@ export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
     // password is never kept.
     reset(user ? { ...values, password: "" } : toFormValues(null));
     router.push("/users");
-  });
+  }
+  const onSubmit = handleSubmit((values) => (user?.status === "Active" && values.status === "Inactive" ? setConfirming(values) : save(values)));
 
   return (
     <>
@@ -212,11 +219,24 @@ export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
                   <FieldLabel htmlFor="user-status" className={labelClass}>
                     Status
                   </FieldLabel>
-                  <NativeSelect size="sm" id="user-status" aria-invalid={!!errors.status} {...register("status")}>
+                  {/* Your own account can't be deactivated (D3; USR-4 refuses it with 409 `own_account`). */}
+                  <NativeSelect
+                    size="sm"
+                    id="user-status"
+                    disabled={isSelf}
+                    aria-describedby={isSelf ? "status-hint" : undefined}
+                    aria-invalid={!!errors.status}
+                    {...register("status")}
+                  >
                     {STATUSES.map((status) => (
                       <option key={status}>{status}</option>
                     ))}
                   </NativeSelect>
+                  {isSelf ? (
+                    <p id="status-hint" className="text-[12.5px] leading-[18px] text-muted-foreground">
+                      You can&apos;t deactivate your own account.
+                    </p>
+                  ) : null}
                   <FieldError errors={[errors.status]} />
                 </Field>
               </div>
@@ -275,6 +295,17 @@ export function EditUserForm({ user, options, matrix, isSelf }: EditUserData) {
             </ul>
           </SectionCard>
         </form>
+        <DeactivateConfirm
+          open={!!confirming}
+          name={user?.name ?? ""}
+          noun="user"
+          note={DEACTIVATE_NOTE}
+          onConfirm={async () => {
+            await save(confirming!);
+            setConfirming(null);
+          }}
+          onCancel={() => setConfirming(null)}
+        />
       </PageContainer>
     </>
   );

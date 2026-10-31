@@ -1,7 +1,8 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import { useNavigate } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
@@ -13,7 +14,9 @@ import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
 import type { OrderRow, OrdersListData } from "./data/queries";
+import { DeleteOrderButton, rowActionClass } from "./delete-order";
 import { filterOrders, type OrderChip } from "./filter-orders";
+import { isEditableStage } from "./order-permissions";
 
 const ALL = "all";
 const PAGE_SIZE = 10;
@@ -65,9 +68,37 @@ const columns: ColumnDef<OrderRow>[] = [
   },
 ];
 
-/** Filter row and the orders table. Every order is loaded; filters and pages run on the client. */
-export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
+// Not in 05 (owner's request, orders-users sprint): Edit (opens the edit dialog on the order page; none at stage 6)
+// and Delete, for those allowed. The column shrinks to its links; Stage gives up the width.
+function actionsColumn(canEdit: boolean, canDelete: boolean): ColumnDef<OrderRow> {
+  return {
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    meta: { className: "w-px whitespace-nowrap" },
+    cell: ({ row }) => {
+      const order = row.original;
+      return (
+        // The row opens the order. Stop these clicks, and the confirmation's (React bubbles them out of its portal).
+        <span className="flex gap-3" onClick={(event) => event.stopPropagation()}>
+          {canEdit && isEditableStage(order.stage) ? (
+            <Link href={`/orders/${order.po}?edit=1`} aria-label={`Edit ${order.po}`} className={rowActionClass}>
+              Edit
+            </Link>
+          ) : null}
+          {canDelete ? <DeleteOrderButton po={order.po} supplier={order.supplier} inList /> : null}
+        </span>
+      );
+    },
+  };
+}
+
+/**
+ * Filter row and the orders table. Every order is loaded; filters and pages run on the client. `canEdit` and
+ * `canDelete` (D1, decided on the server) add the row actions.
+ */
+export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }: OrdersListData & { canEdit: boolean; canDelete: boolean }) {
   const navigate = useNavigate();
+  const tableColumns = useMemo(() => (canEdit || canDelete ? [...columns, actionsColumn(canEdit, canDelete)] : columns), [canEdit, canDelete]);
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState(ALL);
   const [supplier, setSupplier] = useState(ALL);
@@ -117,7 +148,7 @@ export function OrdersList({ orders, counts, supplierNames }: OrdersListData) {
       <DataTable
         // Remount on a filter change so the pager returns to page 1.
         key={JSON.stringify(filters)}
-        columns={columns}
+        columns={tableColumns}
         data={rows}
         getRowId={(order) => order.po}
         density="tall"

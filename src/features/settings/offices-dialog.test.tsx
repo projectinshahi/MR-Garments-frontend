@@ -118,14 +118,15 @@ describe("Edit office or warehouse", () => {
     await user.selectOptions(field("Status"), "Inactive");
     await user.click(save);
 
-    const confirm = await screen.findByRole("dialog", { name: "Deactivate Main warehouse?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Deactivate office or warehouse?" });
+    expect(confirm).toHaveTextContent("Are you sure you want to deactivate Main warehouse?");
     expect(confirm).toHaveTextContent("no longer appears when recording receipts or assigning users");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Deactivate Main warehouse?" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Deactivate office or warehouse?" })).toBeNull());
     expect(patch).not.toHaveBeenCalled();
 
     await user.click(save);
-    await user.click(within(await screen.findByRole("dialog", { name: "Deactivate Main warehouse?" })).getByRole("button", { name: "Deactivate" }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: "Deactivate office or warehouse?" })).getByRole("button", { name: "Deactivate office or warehouse" }));
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/locations/l-3", { name: "Main warehouse", address: "Kochi", status: "Inactive" });
     expect(toast.success).toHaveBeenCalledWith("Office or warehouse saved");
