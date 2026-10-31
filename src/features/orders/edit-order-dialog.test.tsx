@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,17 @@ describe("Edit order at stage 1", () => {
     setDate(/^Order date/, "2026-09-28");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { orderDate: "2026-09-28" }));
+  });
+
+  // Regression (2026-10-31, "deleted product still on the order page"): only a line that already has an item that is
+  // inactive now may keep showing it; an added line offers ORD-2's active items only.
+  it("offers an added line only the active items, never the inactive item kept on line 2", async () => {
+    const { user } = open();
+    await user.click(screen.getByRole("button", { name: "+ Add item" }));
+    const optionNames = (name: string) => within(screen.getByRole("combobox", { name })).getAllByRole("option").map((option) => option.textContent);
+    expect(optionNames("Item, line 3")).toEqual(["Select item", "Denim jeans", "Cotton fabric"]);
+    expect(optionNames("Item, line 1")).toEqual(["Select item", "Denim jeans", "Cotton fabric"]);
+    expect(optionNames("Item, line 2")).toEqual(["Select item", "Silk scarves", "Denim jeans", "Cotton fabric"]);
   });
 
   it("refuses a total below what's paid before calling the API, and keeps at least one line", async () => {
