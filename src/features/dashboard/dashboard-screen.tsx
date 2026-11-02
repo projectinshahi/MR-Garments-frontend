@@ -1,7 +1,7 @@
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardLink, KpiCard, KpiRow, SectionCard, TodayPill } from "@/components/shared/cards";
 import { ProgressBar } from "@/components/shared/progress";
-import { formatCNY } from "@/lib/formatters";
+import { formatMoneyList } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
 import type { DashboardData } from "./data/queries";
@@ -46,11 +46,11 @@ export function DashboardScreen({ data }: { data: DashboardData }) {
             label="Containers on the way"
             {...kpi(containers, (c) => ({ value: c.onTheWay, sub: `${c.arrivingThisWeek} arriving this week` }))}
           />
-          {/* The reference shows INR; due payments carry no exchange rate until paid, so the API has CNY only. */}
+          {/* The reference shows INR; due payments carry no exchange rate until paid: each order currency apart. */}
           <KpiCard
             size="sm"
-            label="Payments due (CNY)"
-            {...kpi(paymentsDue, (p) => ({ value: formatCNY(p.amountCny), sub: `next ${p.windowDays} days` }))}
+            label="Payments due"
+            {...kpi(paymentsDue, (p) => ({ value: formatMoneyList(p.amounts), sub: `next ${p.windowDays} days` }))}
           />
         </KpiRow>
 

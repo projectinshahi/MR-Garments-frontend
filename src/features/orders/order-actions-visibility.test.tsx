@@ -53,6 +53,7 @@ const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   deliveryDate: "2026-11-15",
   stage,
   supplier: "Foshan Fabrics",
+  currency: "CNY",
   item: "Denim jeans",
   quantity: 100,
   unit: "pcs",

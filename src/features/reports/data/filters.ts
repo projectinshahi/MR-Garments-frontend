@@ -8,7 +8,7 @@ import type { FilterOption } from "@/components/shared/filters";
 // hand-edited URL shows the unfiltered page instead of an error.
 
 export const isId = (value: string | null): value is string => z.uuid().safeParse(value).success;
-const isMonth = (value: string | null): value is string => !!value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+export const isMonth = (value: string | null): value is string => !!value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 const asQuery = (query: URLSearchParams) => (query.size ? `?${query}` : "");
 
 /** The well-formed ids among `keys` (URL key -> API key), as an API query: "" or "?supplierId=…". */
@@ -22,7 +22,7 @@ export function idQuery(params: URLSearchParams, keys: Record<string, string>) {
 }
 
 /** First and last day of a YYYY-MM month. */
-const monthRange = (month: string) => ({ from: `${month}-01`, to: format(endOfMonth(parseISO(`${month}-01`)), "yyyy-MM-dd") });
+export const monthRange = (month: string) => ({ from: `${month}-01`, to: format(endOfMonth(parseISO(`${month}-01`)), "yyyy-MM-dd") });
 
 /** The reports' API query: `?period=` becomes from/to of that month, `?supplier=` the supplierId. */
 export function reportQuery(params: URLSearchParams) {

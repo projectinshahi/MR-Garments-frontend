@@ -16,6 +16,7 @@ const order = (po: string, over: Partial<Order> = {}): Order => ({
   orderId: `o-${po}`,
   po,
   supplier: "Ningbo Knits",
+  currency: "CNY",
   orderValueCny: 10_000,
   paidCny: 4_000,
   paidInr: 48_000,
@@ -27,6 +28,7 @@ const due = (id: string, po: string, dueDate: string, amountCny: number): Paymen
   id,
   orderId: `o-${po}`,
   po,
+  currency: "CNY",
   kind: "Balance",
   payee: "Ningbo Knits",
   payeeRole: "supplier",
@@ -77,12 +79,20 @@ describe("toPaymentsData", () => {
       paid("p7", "PO-3007"), // paid: never due
     ];
     const { kpis } = toPaymentsData({ orders: [], payments }, today);
-    expect(kpis.dueNext7).toEqual({ amountCny: 500, count: 2, first: { po: "PO-3003", due: "2026-11-10" } });
-    expect(kpis.dueNext30).toEqual({ amountCny: 1_400, count: 4, first: { po: "PO-3003", due: "2026-11-10" } });
+    expect(kpis.dueNext7).toEqual({ amounts: [{ currency: "CNY", amount: 500 }], count: 2, first: { po: "PO-3003", due: "2026-11-10" } });
+    expect(kpis.dueNext30).toEqual({ amounts: [{ currency: "CNY", amount: 1_400 }], count: 4, first: { po: "PO-3003", due: "2026-11-10" } });
+  });
+
+  it("never adds due amounts in different currencies", () => {
+    const payments = [due("p1", "PO-3001", "2026-11-12", 100), { ...due("p2", "PO-3002", "2026-11-13", 40), currency: "USD" as const }, due("p3", "PO-3003", "2026-11-14", 50)];
+    expect(toPaymentsData({ orders: [], payments }, today).kpis.dueNext7.amounts).toEqual([
+      { currency: "CNY", amount: 150 },
+      { currency: "USD", amount: 40 },
+    ]);
   });
 
   it("names nobody when nothing is due", () => {
-    expect(toPaymentsData({ orders: [], payments: [] }, today).kpis.dueNext7).toEqual({ amountCny: 0, count: 0, first: null });
+    expect(toPaymentsData({ orders: [], payments: [] }, today).kpis.dueNext7).toEqual({ amounts: [], count: 0, first: null });
   });
 
   it("maps order rows and tones overdue and soon next-due dates", () => {
@@ -102,6 +112,7 @@ describe("toPaymentsData", () => {
       orderId: "o-PO-3001",
       po: "PO-3001",
       supplier: "Ningbo Knits",
+      currency: "CNY",
       orderValue: 10_000,
       paid: 4_000,
       paidInr: 48_000,

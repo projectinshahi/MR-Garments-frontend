@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/shared/data-table";
 import { ErrorState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatCNY, formatShortDate } from "@/lib/formatters";
+import { formatMoney, formatShortDate } from "@/lib/formatters";
 
 import type { ContainerRow, DeliveryRow, PaymentDueRow } from "./dashboard-logic";
 
@@ -29,7 +29,7 @@ const paymentColumns: ColumnDef<PaymentDueRow>[] = [
   { accessorKey: "po", header: "PO", meta: { className: "w-[82px]" } },
   { accessorKey: "payment", header: "Payment", meta: { className: "w-[77px]" } },
   { accessorKey: "due", header: "Due", meta: { className: "w-[80px]" }, cell: ({ row }) => formatShortDate(row.original.due) },
-  { accessorKey: "amountCny", header: "Amount (CNY)", meta: { align: "right" }, cell: ({ row }) => formatCNY(row.original.amountCny) },
+  { accessorKey: "amountCny", header: "Amount", meta: { align: "right" }, cell: ({ row }) => formatMoney(row.original.amountCny, row.original.currency) },
 ];
 
 const containerColumns: ColumnDef<ContainerRow>[] = [

@@ -1,7 +1,7 @@
 import type { Browser, BrowserContextOptions, Page } from "@playwright/test";
 
 import type { ContainerListItem, ReceiptListItem } from "../src/lib/api/types";
-import { ANITA, containerNumber, expect, field, kpi, kv, longDate, settled, shortDate, signInState, test, toast, today } from "./live-api";
+import { amountCell, ANITA, containerNumber, expect, field, kpi, kv, longDate, settled, shortDate, signInState, test, toast, today } from "./live-api";
 import { LOADING_STAFF_STATE, PROCUREMENT_STATE, SIGNED_OUT, STAFF_STATE } from "./sessions";
 
 // Round 2: one fresh order walked through the five live tabs by the roles that do each step, in a real browser,
@@ -32,7 +32,14 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await expect(rowOf(viewer, po)).toContainText(paidInr);
     await viewer.goto("/payments");
     await viewer.getByRole("searchbox", { name: "Search PO or supplier" }).fill(po);
-    await expect(rowOf(viewer, po).getByRole("cell")).toHaveText([`${po}Shenzhen Apparel`, "4,000", paid.replace("¥", ""), paidInr, balance.replace("¥", ""), "Not yet due"]);
+    await expect(rowOf(viewer, po).getByRole("cell")).toHaveText([
+      `${po}Shenzhen Apparel`,
+      amountCell("4,000"),
+      amountCell(paid.replace("¥", "")),
+      paidInr,
+      amountCell(balance.replace("¥", "")),
+      "Not yet due",
+    ]);
     await viewer.goto(`/orders/${po}/payments`);
     await expect(kpi(viewer, "Order value")).toContainText("¥4,000");
     await expect(kpi(viewer, "Paid so far")).toContainText(paid);

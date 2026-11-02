@@ -8,7 +8,7 @@ export function shareOfTotal(values: number[]) {
   return { total, percents: values.map((value) => (total ? Math.round((value / total) * 1000) / 10 : 0)) };
 }
 
-/** Goods payments' totals: each payment is already in INR at its own date's rate; the average is total INR / total ¥. */
+/** Goods payments' totals: each payment is already in INR at its own date's rate; the average is total INR / total in the order's currency. */
 export function convertPayments(payments: LandedCostRow["goodsPayments"]) {
   const totalCny = sum(payments, (p) => p.amountCny);
   const totalInr = sum(payments, (p) => p.amountInr);

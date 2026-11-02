@@ -38,7 +38,7 @@ export type ReceiptLine = {
   ordered: number;
   receivedEarlier: number;
   receivedNow: number;
-  /** CNY per unit; lines with a price reduce the payment when short. */
+  /** Per unit, in the order's currency; lines with a price reduce the payment when short. */
   unitPrice?: number;
 };
 

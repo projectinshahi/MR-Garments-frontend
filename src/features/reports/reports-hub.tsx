@@ -5,7 +5,7 @@ import { Callout, SectionCard } from "@/components/shared/cards";
 import { EmptyState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
-import { formatCNY, formatINR, formatNumber } from "@/lib/formatters";
+import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 
 import type { ReportsHubData, ReportsSummary } from "./data/queries";
 import { CardDownloads, UrlSelect } from "./report-actions";
@@ -50,10 +50,10 @@ const CARDS: ReportCard[] = [
   {
     category: "Payments",
     title: "Payments and balance due",
-    description: "Paid and due amounts for each supplier, in INR.",
+    description: "Paid and due amounts for each supplier.",
     name: "payments-per-supplier",
-    // Due payments have no exchange rate yet, so the amount stays in yuan.
-    stat: (s) => `${formatCNY(s.payments.dueNext30Cny)} due in next 30 days`,
+    // Due payments have no exchange rate yet: each order currency apart, never added together (DEF-25: not INR).
+    stat: (s) => `${formatMoneyList(s.payments.dueNext30ByCurrency)} due in next 30 days`,
   },
   {
     category: "Cost",

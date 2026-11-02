@@ -18,8 +18,10 @@ vi.mock("@/lib/today", () => ({ todayInIndia: () => "2026-11-10" }));
 
 const post = vi.mocked(apiClient.post);
 const ORDERS = [
-  { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits" },
-  { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk" },
+  { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY" as const },
+  { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY" as const },
+  { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const },
+  { orderId: "o4", po: "PO-3004", supplier: "Kochi Mills", currency: "INR" as const },
 ];
 const AGENTS = [{ id: "a1", name: "Sino Freight" }];
 
@@ -138,5 +140,23 @@ describe("RecordPaymentDialog", () => {
 
     await form.user.click(screen.getByRole("button", { name: "Open" }));
     expect(within(screen.getByRole("dialog")).getByLabelText((text) => text.startsWith("Amount (¥)"))).toHaveValue("");
+  });
+
+  it("follows the chosen order's currency: $ labels for a USD order, no rate for an INR order", async () => {
+    post.mockResolvedValue({ payment: { id: "p1" } });
+    const ui = await open();
+    await ui.user.selectOptions(ui.field("Order"), "o3");
+    expect(ui.field("Amount ($)")).toBeVisible();
+    expect(ui.field("Rate (₹ per $)")).toBeVisible();
+
+    await ui.user.selectOptions(ui.field("Order"), "o4");
+    expect(within(ui.dialog).queryByLabelText((text) => text.startsWith("Rate"))).not.toBeInTheDocument();
+    await ui.user.selectOptions(ui.field("Kind"), "Deposit");
+    await ui.user.type(ui.field("Amount (₹)"), "50,000");
+    await ui.user.type(ui.field("Mode"), "NEFT");
+    expect(within(ui.dialog).getByText("₹50,000")).toBeVisible();
+    await ui.user.click(ui.submit);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).toEqual({ orderId: "o4", kind: "Deposit", payeeRole: "supplier", agentId: null, amountCny: 50000, paidOn: "2026-11-10", mode: "NEFT" });
   });
 });

@@ -1,5 +1,5 @@
 import { KpiCard, KpiRow } from "@/components/shared/cards";
-import { formatCNY, formatINR, formatShortDate } from "@/lib/formatters";
+import { formatINR, formatMoneyList, formatShortDate } from "@/lib/formatters";
 
 import type { DueWindow, PaymentsScreenData } from "./data/queries";
 import { PaymentsView } from "./payments-view";
@@ -26,12 +26,12 @@ export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
             value={formatINR(kpis.paidSoFarInr)}
             sub={`across ${plural(kpis.paidOrders, "order")}`}
           />
-          {/* Due payments have no INR rate until paid (PAY-1), so these show the CNY amount. */}
-          <KpiCard size="xs" label="Due in next 7 days" value={formatCNY(kpis.dueNext7.amountCny)} sub={dueSub(kpis.dueNext7)} />
+          {/* Due payments have no INR rate until paid (PAY-1): each currency's amount, never added together. */}
+          <KpiCard size="xs" label="Due in next 7 days" value={formatMoneyList(kpis.dueNext7.amounts)} sub={dueSub(kpis.dueNext7)} />
           <KpiCard
             size="xs"
             label="Due in next 30 days"
-            value={formatCNY(kpis.dueNext30.amountCny)}
+            value={formatMoneyList(kpis.dueNext30.amounts)}
             sub={payments(kpis.dueNext30.count)}
           />
         </KpiRow>

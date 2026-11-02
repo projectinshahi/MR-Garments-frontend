@@ -14,13 +14,13 @@ vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 
 const api: PaymentsResponse = {
   orders: [
-    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", orderValueCny: 10_000, paidCny: 0, paidInr: 0, balanceCny: 10_000, nextDue: null },
-    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12" },
+    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 0, paidInr: 0, balanceCny: 10_000, nextDue: null },
+    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12" },
   ],
   // PAY-1 order: newest first by coalesce(paidOn, dueDate).
   payments: [
-    { id: "p2", orderId: "o2", po: "PO-3002", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null },
-    { id: "p1", orderId: "o2", po: "PO-3002", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer" },
+    { id: "p2", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null },
+    { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer" },
   ],
 };
 type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean };
@@ -78,6 +78,19 @@ describe("PaymentsScreen", () => {
     expect(screen.getByRole("heading", { name: "Record payment for PO-3002" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("link", { name: "PO-3002" })).toHaveAttribute("href", "/orders/PO-3002");
+  });
+
+  it("keeps the reference's ¥ headers for one currency, and gives each amount its symbol when currencies differ", () => {
+    renderScreen();
+    expect(screen.getByText("Order value (¥)")).toBeInTheDocument();
+    cleanup();
+    const usd = { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, orderValueCny: 1_200, paidCny: 200, paidInr: 17_600, balanceCny: 1_000, nextDue: null };
+    renderScreen({ ...api, orders: [...api.orders, usd] });
+    expect(screen.getByText("Order value")).toBeInTheDocument();
+    expect(screen.queryByText("Order value (¥)")).not.toBeInTheDocument();
+    expect(screen.getByText("$1,200")).toBeInTheDocument();
+    expect(screen.getAllByText("¥20,000").length).toBeGreaterThan(0);
+    expect(screen.getByText("Amounts in each order's currency and INR")).toBeInTheDocument();
   });
 
   it("says so when the API has no orders", () => {

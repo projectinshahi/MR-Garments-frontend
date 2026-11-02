@@ -3,7 +3,7 @@ import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards
 import { KeyValueList } from "@/components/shared/key-value-list";
 import type { OrderPayment, OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
-import { formatCNY, formatINR, formatRate } from "@/lib/formatters";
+import { formatINR, formatMoney, formatRate } from "@/lib/formatters";
 
 import { PaymentsTable, type PaymentRow } from "./payments-table";
 
@@ -15,19 +15,20 @@ export function PaymentsScreen({ order, payments }: { order: OrderView; payments
   // INR is amountCny * rateInr rounded to 2 decimals, per payment (contracts, Conventions).
   const rows: PaymentRow[] = payments.map((p) => ({ ...p, inr: p.rateInr === null ? null : Math.round(p.amountCny * p.rateInr * 100) / 100 }));
   const paid = rows.filter((p) => p.status === "paid");
+  const money = (value: number) => formatMoney(value, order.currency);
 
   return (
     <PageContainer>
-      <OrderContextStrip order={order} fact={`Order value ${formatCNY(order.orderValueCny)}`} />
+      <OrderContextStrip order={order} fact={`Order value ${money(order.orderValueCny)}`} />
       <KpiRow gap="sm">
-        <KpiCard size="xs" label="Order value" value={formatCNY(order.orderValueCny)} />
-        <KpiCard size="xs" label="Paid so far" value={formatCNY(order.paidCny)} sub={`${paid.length} ${paid.length === 1 ? "payment" : "payments"}`} />
-        <KpiCard size="xs" label="Balance to pay" value={formatCNY(order.balanceCny)} sub={order.balanceCny <= 0 ? "Fully paid" : undefined} />
+        <KpiCard size="xs" label="Order value" value={money(order.orderValueCny)} />
+        <KpiCard size="xs" label="Paid so far" value={money(order.paidCny)} sub={`${paid.length} ${paid.length === 1 ? "payment" : "payments"}`} />
+        <KpiCard size="xs" label="Balance to pay" value={money(order.balanceCny)} sub={order.balanceCny <= 0 ? "Fully paid" : undefined} />
       </KpiRow>
 
       <div className="grid gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <SectionCard title="Deposits and payments" bottomGap="tight" className="min-w-0">
-          <PaymentsTable rows={rows} totals={{ paidCny: order.paidCny, paidInr: order.paidInr }} />
+          <PaymentsTable rows={rows} totals={{ paidCny: order.paidCny, paidInr: order.paidInr, currency: order.currency }} />
         </SectionCard>
 
         <div className="flex min-w-0 flex-col gap-(--page-gap)">
@@ -40,7 +41,7 @@ export function PaymentsScreen({ order, payments }: { order: OrderView; payments
               size="sm"
               className="mt-3"
               boldValues
-              items={paid.map((p) => ({ label: `${formatCNY(p.amountCny)} × ${formatRate(p.rateInr ?? 0)}`, value: formatINR(p.inr ?? 0) }))}
+              items={paid.map((p) => ({ label: `${money(p.amountCny)} × ${formatRate(p.rateInr ?? 0)}`, value: formatINR(p.inr ?? 0) }))}
               total={{ label: "Goods cost in INR", value: formatINR(order.paidInr) }}
             />
           </SectionCard>

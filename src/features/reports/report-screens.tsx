@@ -6,7 +6,7 @@ import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards
 import { ProgressBar } from "@/components/shared/progress";
 import { EmptyState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatCNY, formatINR, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { formatINR, formatMoneyList, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
 import { ContainersGantt } from "./containers-gantt";
@@ -54,12 +54,12 @@ function ReportFrame({ title, page, file, period = true, children }: FrameProps)
 }
 
 /** Card subtitle under the title: 12.5 px muted (34, 36). */
-function CardSubtitle({ children }: { children: React.ReactNode }) {
+export function CardSubtitle({ children }: { children: React.ReactNode }) {
   return <p className="text-[12.5px] leading-[21px] text-muted-foreground">{children}</p>;
 }
 
 /** Muted note under a card (34, 37). */
-function Footnote({ children }: { children: React.ReactNode }) {
+export function Footnote({ children }: { children: React.ReactNode }) {
   return <p className="text-[12.5px] leading-4 text-muted-foreground">{children}</p>;
 }
 
@@ -152,7 +152,7 @@ export function OrderedVsReceivedScreen({ page }: { page: ReportPage<OrderedVsRe
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Orders checked" value={formatNumber(data.ordersChecked)} sub="received in China" />
         <KpiCard size="xs" label="Orders with a shortage" value={formatNumber(data.shortPos.length)} sub={few(data.shortPos, " · ") || "none"} tone="danger" />
-        <KpiCard size="xs" label="Value of shortages" value={formatCNY(data.shortValueCny)} sub="taken off supplier payments" />
+        <KpiCard size="xs" label="Value of shortages" value={formatMoneyList(data.shortValueByCurrency)} sub="taken off supplier payments" />
         <KpiCard size="xs" label="Orders received in full" value={formatNumber(data.fullOrders)} sub="no shortage" />
       </KpiRow>
       <div className="min-w-0">{data.lines.length ? <ReceivedTable lines={data.lines} /> : <EmptyState title="No orders received in China yet." />}</div>
@@ -186,16 +186,19 @@ export function ContainersTimelineScreen({ page }: { page: ReportPage<Containers
 /** 13.5 Payments per supplier (37_13.5_Payments_per_supplier.jpeg). */
 export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsPerSupplierReport> }) {
   const { data } = page;
-  const { totals } = data;
+  const totals = data.totalsByCurrency;
+  // Order-currency totals one per currency ("¥5,800 · $200"); INR and order counts add up.
+  const each = (pick: (total: (typeof totals)[number]) => number) => formatMoneyList(totals.map((total) => ({ currency: total.currency, amount: pick(total) })));
+  const sum = (pick: (total: (typeof totals)[number]) => number) => totals.reduce((total, row) => total + pick(row), 0);
   return (
     <ReportFrame title="Payments per supplier" page={page} file={reportFile("payments-per-supplier", data, page.today)}>
       <KpiRow gap="sm">
-        <KpiCard size="xs" label="Order value" value={formatCNY(totals.orderValueCny)} sub={plural(totals.orders, "open order")} />
-        <KpiCard size="xs" label="Paid so far" value={formatCNY(totals.paidCny)} sub={`${formatINR(totals.paidInr)} at payment-day rates`} />
-        <KpiCard size="xs" label="Balance to pay" value={formatCNY(totals.balanceCny)} sub={`next 30 days ${formatCNY(data.dueNext30Cny)} due`} />
+        <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub={plural(sum((t) => t.orders), "open order")} />
+        <KpiCard size="xs" label="Paid so far" value={each((t) => t.paidCny)} sub={`${formatINR(sum((t) => t.paidInr))} at payment-day rates`} />
+        <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub={`next 30 days ${formatMoneyList(data.dueNext30ByCurrency)} due`} />
       </KpiRow>
       <div className="min-w-0">
-        {data.suppliers.length ? <SupplierPaymentsTable rows={data.suppliers} totals={totals} /> : <EmptyState title="No open orders." />}
+        {data.suppliers.length ? <SupplierPaymentsTable rows={data.suppliers} totals={totals} query={page.query} /> : <EmptyState title="No open orders." />}
       </div>
       {/* "Paid payments page" is plain text: that page is not designed. */}
       <Footnote>

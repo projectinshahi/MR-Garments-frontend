@@ -21,7 +21,9 @@ const REPORT: PaymentsPerSupplierReport = {
   filter: { from: "2026-09-01", to: "2026-09-30", supplier: "Foshan Fabrics" },
   suppliers: [],
   totals: { orders: 0, orderValueCny: 0, paidCny: 0, paidInr: 0, balanceCny: 0 },
+  totalsByCurrency: [],
   dueNext30Cny: 0,
+  dueNext30ByCurrency: [],
   finishedPos: [],
 };
 

@@ -3,12 +3,15 @@ import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import type { OrderOptions } from "@/lib/api/types";
-import { formatCNY, formatDate, formatINR, formatRate, formatShortDate } from "@/lib/formatters";
+import { formatDate, formatINR, formatMoney, formatRate, formatShortDate } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
-const spacedCNY = (value: number) => formatCNY(value, { spaced: true });
+const spacedMoney = (value: number, currency: Currency) => formatMoney(value, currency, { spaced: true });
+/** A paid payment in INR: amount × its rate, rounded to the paisa per payment, as the API does (DEF-13). */
+const inrOf = (payment: Payment) => Math.round(payment.amountCny * (payment.rateInr ?? 0) * 100) / 100;
 const date = (value: string | null) => (value ? formatDate(value) : "–");
 
 type PaymentDetailCardProps = {
@@ -22,10 +25,10 @@ type PaymentDetailCardProps = {
 
 /** Right card: the selected order's payments, each paid one at its own rate, and the totals. Records only. */
 export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDetailCardProps) {
-  const { po, supplier } = order;
+  const { po, supplier, currency } = order;
   const totalCny = payments.reduce((sum, p) => sum + p.amountCny, 0);
   // A due payment has no rate yet (PAY-1 gives one only once paid), so the INR total covers paid payments only.
-  const totalInr = payments.reduce((sum, p) => sum + p.amountCny * (p.rateInr ?? 0), 0);
+  const totalInr = payments.reduce((sum, p) => sum + inrOf(p), 0);
   const allPriced = payments.every((p) => p.rateInr !== null);
 
   return (
@@ -46,7 +49,7 @@ export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDe
           <ol className="mt-3.5 flex flex-col gap-3">
             {payments.map((payment, index) => (
               <li key={payment.id}>
-                <PaymentBlock number={index + 1} payment={payment} />
+                <PaymentBlock number={index + 1} payment={payment} currency={currency} />
               </li>
             ))}
           </ol>
@@ -55,7 +58,7 @@ export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDe
             <div>
               <p className="text-[15px] leading-5 font-bold">Total for this order</p>
               <p className="text-[12.5px] leading-4 text-muted-foreground">
-                {spacedCNY(totalCny)}
+                {spacedMoney(totalCny, currency)}
                 {allPriced ? null : " · INR covers paid payments only"}
               </p>
             </div>
@@ -79,18 +82,18 @@ export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDe
   );
 }
 
-function PaymentBlock({ number, payment }: { number: number; payment: Payment }) {
+function PaymentBlock({ number, payment, currency }: { number: number; payment: Payment; currency: Currency }) {
   const paid = payment.status === "paid";
   const facts = paid
     ? [
         { label: "Paid on", value: date(payment.paidOn) },
-        { label: "Amount", value: spacedCNY(payment.amountCny) },
+        { label: "Amount", value: spacedMoney(payment.amountCny, currency) },
         { label: "Rate on that day", value: payment.rateInr === null ? "–" : formatRate(payment.rateInr) },
         { label: "Mode", value: payment.mode ?? "–" },
       ]
     : [
         { label: "Due date", value: date(payment.dueDate) },
-        { label: "Amount", value: spacedCNY(payment.amountCny) },
+        { label: "Amount", value: spacedMoney(payment.amountCny, currency) },
       ];
 
   return (
@@ -113,12 +116,13 @@ function PaymentBlock({ number, payment }: { number: number; payment: Payment })
           </div>
         ))}
       </dl>
-      {payment.rateInr === null ? null : (
+      {/* An INR payment needs no change to INR (its rate is 1). */}
+      {payment.rateInr === null || currency === "INR" ? null : (
         <div className="mt-3 flex h-[43px] items-center justify-between gap-3 rounded-lg border border-dashed border-placeholder/60 bg-card px-3">
           <span className="text-[13.5px] text-label">
-            {spacedCNY(payment.amountCny)} × {formatRate(payment.rateInr)}
+            {spacedMoney(payment.amountCny, currency)} × {formatRate(payment.rateInr)}
           </span>
-          <span className="text-[16.5px] font-bold">{formatINR(payment.amountCny * payment.rateInr)}</span>
+          <span className="text-[16.5px] font-bold">{formatINR(inrOf(payment))}</span>
         </div>
       )}
     </article>

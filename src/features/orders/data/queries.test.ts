@@ -17,6 +17,7 @@ const order = (po: string, patch: Partial<OrderListItem>): OrderListItem => ({
   deliveryDate: "2026-12-01",
   stage: 1,
   supplier: { id: "s-1", name: "Foshan Fabrics" },
+  currency: "CNY",
   item: "Cotton denim fabric",
   quantity: 2400,
   unit: "m",
@@ -34,7 +35,7 @@ const list = [
 ];
 const options: OrderOptions = {
   nextPo: "PO-2054",
-  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "" }],
+  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY" }],
   items: [],
   agents: [],
 };

@@ -10,8 +10,9 @@ import { LegendSwatch, StackedBar, type StackedSegment } from "@/components/shar
 import { notInPrototype } from "@/components/shared/prototype";
 import { EmptyState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatINR, formatNumber, formatRate, formatShortDate } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, formatINR, formatNumber, formatRate, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import type { Currency } from "@/types/domain";
 
 import { breakdownParts, convertPayments, costByTeam, type CostPartKey, shareOfTotal, type TeamCost } from "./cost-math";
 import type { LandedCostData, LandedCostRow } from "./data/queries";
@@ -159,7 +160,7 @@ export function LandedCostBody({ orders, teams, teamId }: Pick<LandedCostData, "
         <div className="grid gap-(--page-gap) lg:grid-cols-2">
           <Breakdown row={selected} />
           <SectionCard title="Goods cost, changed to INR on each payment date" className="min-w-0 pb-[17px]">
-            <GoodsCostTable payments={selected.goodsPayments} />
+            <GoodsCostTable payments={selected.goodsPayments} currency={selected.currency} />
             <Callout size="sm" className="mt-3">
               Each payment uses the rate of its own date, so the goods cost is the real amount paid.
             </Callout>
@@ -212,7 +213,8 @@ const goodsCell = (row: GoodsRow, text: string) => <span className={cn("block le
 // Reference header: 12 px text, 1.5 px above the centre of the 36 px compact header row.
 const goodsHead = (label: string) => <span className="block pb-[3px] text-xs">{label}</span>;
 
-const goodsColumns: ColumnDef<GoodsRow>[] = [
+/** The goods payments are in the order's `currency` (its symbol in the amount header, as "Amount (¥)" in the reference). */
+const goodsColumns = (currency: Currency): ColumnDef<GoodsRow>[] => [
   { accessorKey: "label", header: () => goodsHead("Payment"), meta: col("w-[92px]"), cell: ({ row }) => goodsCell(row.original, row.original.label) },
   {
     accessorKey: "date",
@@ -222,7 +224,7 @@ const goodsColumns: ColumnDef<GoodsRow>[] = [
   },
   {
     accessorKey: "amountCny",
-    header: () => goodsHead("Amount (¥)"),
+    header: () => goodsHead(`Amount (${CURRENCY_SYMBOL[currency]})`),
     meta: { align: "right", className: PAD },
     cell: ({ row }) => goodsCell(row.original, formatNumber(row.original.amountCny, Number.isInteger(row.original.amountCny) ? 0 : 2)),
   },
@@ -239,12 +241,12 @@ const goodsColumns: ColumnDef<GoodsRow>[] = [
  * "Goods cost, changed to INR on each payment date". The Total row is a bold body row: the reference separates it
  * with the ordinary row rule, not the DataTable footer's navy rule and tint.
  */
-function GoodsCostTable({ payments }: { payments: LandedCostRow["goodsPayments"] }) {
+function GoodsCostTable({ payments, currency }: { payments: LandedCostRow["goodsPayments"]; currency: Currency }) {
   if (payments.length === 0) return <EmptyState title="Nothing paid to the supplier yet." />;
   const { totalCny, totalInr, averageRate } = convertPayments(payments);
   const data: GoodsRow[] = [
     ...payments.map((p) => ({ id: p.id, label: p.kind, date: p.paidOn, amountCny: p.amountCny, rate: formatRate(p.rateInr), amountInr: p.amountInr })),
     { id: "total", label: "Total", amountCny: totalCny, rate: `${formatRate(averageRate)} avg`, amountInr: totalInr, total: true },
   ];
-  return <DataTable columns={goodsColumns} data={data} getRowId={(row) => row.id} density="compact" variant="plain" className="pt-px" />;
+  return <DataTable columns={goodsColumns(currency)} data={data} getRowId={(row) => row.id} density="compact" variant="plain" className="pt-px" />;
 }

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 import type { CreatePaymentBody } from "@/lib/api/types";
+import type { Currency } from "@/types/domain";
 
 // Record payment (PAY-2): what the inputs hold (strings, as typed), the client-side checks mirroring the API, and the
 // PAY-2 body. Messages are the API's own (backend payments.routes.ts MESSAGES), so both sides say the same thing.
+// The amount is in the order's currency; an INR order takes no rate (the server stores 1).
 
 /** The "Paid to" value for the order's supplier; any other value is a shipping agent's id. */
 export const SUPPLIER_PAYEE = "supplier";
@@ -33,15 +35,18 @@ export const paymentINR = (amountCny: string, rateInr: string) => {
 const decimal = (message: string, min: number, max: number) =>
   z.string().transform(toNumber).pipe(z.number({ error: message }).min(min, message).max(max, message));
 
-/** `today` is the date in India (YYYY-MM-DD): a payment can't be dated after it. */
-export const recordPaymentSchema = (today: string) =>
+/**
+ * `today` is the date in India (YYYY-MM-DD): a payment can't be dated after it. `currency` is the chosen order's: an
+ * INR order's rate is not asked, and not sent.
+ */
+export const recordPaymentSchema = (today: string, currency: Currency = "CNY") =>
   z.object({
     orderId: z.string().min(1, M.order),
     kind: z.string().pipe(z.enum(["Deposit", "Balance"], { error: M.kind })),
     payee: z.string().min(1, M.payee),
     amountCny: decimal(M.amount, 0.01, 999_999_999_999),
     paidOn: z.iso.date({ error: M.paidOn }).refine((day) => day <= today, M.paidOnFuture),
-    rateInr: decimal(M.rateInr, 0.0001, 99_999_999),
+    rateInr: currency === "INR" ? z.string().transform(() => undefined) : decimal(M.rateInr, 0.0001, 99_999_999),
     mode: z.string().trim().min(1, M.mode).max(100, M.modeTooLong),
   });
 export type RecordPaymentInput = z.input<ReturnType<typeof recordPaymentSchema>>;
@@ -57,9 +62,9 @@ export const emptyPayment = (orderId: string, today: string): RecordPaymentInput
   mode: "",
 });
 
-export function toCreatePaymentBody({ payee, ...values }: RecordPaymentValues): CreatePaymentBody {
+export function toCreatePaymentBody({ payee, rateInr, ...values }: RecordPaymentValues): CreatePaymentBody {
   const supplier = payee === SUPPLIER_PAYEE;
-  return { ...values, payeeRole: supplier ? "supplier" : "agent", agentId: supplier ? null : payee };
+  return { ...values, ...(rateInr === undefined ? {} : { rateInr }), payeeRole: supplier ? "supplier" : "agent", agentId: supplier ? null : payee };
 }
 
 /** PAY-2 422 field → the form field it belongs under. Fields the form doesn't have are shown as a toast instead. */

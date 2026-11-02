@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import type { PaymentsResponse } from "../src/lib/api/types";
-import { ANITA, type Api, expect, field, freshSignIn, inr, kpi, num, settled, test, toast, today } from "./live-api";
+import { amountCell, ANITA, type Api, expect, field, freshSignIn, inr, kpi, num, settled, test, toast, today } from "./live-api";
 import { MANAGEMENT_STATE, PROCUREMENT_STATE, STAFF_STATE } from "./sessions";
 
 // Deposits & Payments (16) against PAY-1 and PAY-2 (Record payment). Role/label locators only.
@@ -40,7 +40,7 @@ test("KPIs, the order's row and its payments card, with search and its empty sta
   await expect(kpi(page, "Due in next 30 days")).toContainText("0 payments");
 
   await openOrder(page, order.po);
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Hangzhou Knits`, "8,000", "2,000", "₹24,000", "6,000", "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Hangzhou Knits`, amountCell("8,000"), amountCell("2,000"), "₹24,000", amountCell("6,000"), "Not yet due"]);
   const detail = card(page, order.po);
   await expect(detail).toContainText("Hangzhou Knits");
   await expect(detail.getByRole("heading", { name: "1. Deposit" })).toBeVisible();
@@ -68,7 +68,7 @@ test("an order without payments says so", async ({ page, api }) => {
   await page.goto("/payments");
   await openOrder(page, order.po);
   await expect(card(page, order.po)).toContainText(`No payments recorded for ${order.po} yet.`);
-  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText("0");
+  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText(amountCell("0"));
 });
 
 test("Record payment: opens, cancels, checks every field, and saves a payment that updates the totals", async ({ page, api }) => {
@@ -114,7 +114,7 @@ test("Record payment: opens, cancels, checks every field, and saves a payment th
   await expect(toast(page, `Payment recorded for ${order.po}`)).toBeVisible();
   await expect(dialog(page)).toHaveCount(0);
   await openOrder(page, order.po);
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Yiwu Trims Ltd.`, "5,000", "1,500", "₹18,750", "3,500", "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Yiwu Trims Ltd.`, amountCell("5,000"), amountCell("1,500"), "₹18,750", amountCell("3,500"), "Not yet due"]);
   await expect(card(page, order.po).getByRole("heading", { name: "1. Deposit" })).toBeVisible();
   await expect(card(page, order.po)).toContainText("UPI");
 
@@ -148,7 +148,7 @@ test("the card's button records a payment to a shipping agent for that order", a
   // Numbered oldest first, as in reference 16.
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(["1. Deposit", "2. Balance"]);
   await expect(detail).toContainText("¥ 500 × 12.25");
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, "3,000", "1,500", `₹${num(12_000 + 6125)}`, "1,500", "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("1,500"), `₹${num(12_000 + 6125)}`, amountCell("1,500"), "Not yet due"]);
   // PAY-1 lists payments newest first.
   expect((await paymentsOf(api, order.id)).map((p) => [p.kind, p.payee, p.payeeRole])).toEqual([
     ["Balance", "Dragon Cargo", "agent"],
@@ -210,7 +210,7 @@ test("double-clicking Record payment records one payment", async ({ page, api })
   await input(form, "Mode").fill("Cash");
   await form.getByRole("button", { name: "Record payment" }).dblclick();
   await expect(toast(page, `Payment recorded for ${order.po}`).first()).toBeVisible();
-  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText("100");
+  await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText(amountCell("100"));
   expect(await paymentsOf(api, order.id)).toHaveLength(1);
 });
 
@@ -233,7 +233,7 @@ test.describe("Accounts (payments Enter)", () => {
     const management = settled(await browser.newPage({ storageState: MANAGEMENT_STATE, viewport: { width: 1440, height: 900 } }));
     await management.goto("/payments");
     await openOrder(management, order.po);
-    await expect(rowOf(management, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, "3,000", "3,000", "₹36,000", "0", "Not yet due"]);
+    await expect(rowOf(management, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("3,000"), "₹36,000", amountCell("0"), "Not yet due"]);
     await management.close();
   });
 });

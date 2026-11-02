@@ -3,7 +3,7 @@ import { SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import type { OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
-import { formatDate } from "@/lib/formatters";
+import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
 
 import { ItemsTable } from "./items-table";
 
@@ -19,7 +19,7 @@ export function ItemsScreen({ order }: { order: OrderView }) {
       <div className="grid gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-(--page-gap)">
           <SectionCard title="Items ordered" bottomGap="tight">
-            <ItemsTable lines={order.lines} />
+            <ItemsTable lines={order.lines} currency={order.currency} />
           </SectionCard>
         </div>
 
@@ -37,7 +37,7 @@ export function ItemsScreen({ order }: { order: OrderView }) {
                 ].filter((row) => row.value),
                 { label: "Order date", value: formatDate(order.orderDate) },
                 { label: "Delivery date", value: formatDate(order.deliveryDate) },
-                { label: "Currency", value: "¥ Chinese yuan" },
+                { label: "Currency", value: CURRENCY_NAME[order.currency] },
               ]}
             />
           </SectionCard>
