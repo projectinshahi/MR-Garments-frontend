@@ -15,10 +15,12 @@ const NONE = { from: null, to: null, supplier: null };
 const payments: PaymentsPerSupplierReport = {
   filter: { from: "2026-09-01", to: "2026-09-30", supplier: "Foshan Fabrics" },
   suppliers: [
-    { supplierId: "s1", supplier: "Foshan Fabrics", orders: ["PO-2047", "PO-2041"], orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 },
+    { supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", orders: ["PO-2047", "PO-2041"], orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 },
   ],
   totals: { orders: 2, orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 },
+  totalsByCurrency: [{ currency: "CNY", orders: 2, orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 }],
   dueNext30Cny: 0,
+  dueNext30ByCurrency: [],
   finishedPos: [],
 };
 const containers: ContainersTimelineReport = {
@@ -99,6 +101,18 @@ describe("report files", () => {
       biggest: null,
     };
     expect(csvRows(reportFile("landed-cost-by-month", months, TODAY))[1]).toEqual(["Oct 2026 (so far)", 1800, 991440, 550.8]);
+  });
+
+  it("write one table per order currency, each with its code in the headers and its own total, never one sum", () => {
+    const usd = { supplierId: "s2", supplier: "Boston Denim", currency: "USD" as const, orders: ["PO-2050"], orderValueCny: 1200, paidCny: 200, paidInr: 17600, balanceCny: 1000 };
+    const mixed: PaymentsPerSupplierReport = {
+      ...payments,
+      suppliers: [...payments.suppliers, usd],
+      totalsByCurrency: [...payments.totalsByCurrency, { currency: "USD", orders: 1, orderValueCny: 1200, paidCny: 200, paidInr: 17600, balanceCny: 1000 }],
+    };
+    expect(toCsv(csvRows(reportFile("payments-per-supplier", mixed, TODAY)))).toBe(
+      `Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)\r\nFoshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,120000.5\r\nTotal,2 open orders,160000.5,40000,480000,120000.5\r\n\r\nSupplier,Orders,Order value (USD),Paid (USD),Paid (INR),Balance (USD)\r\nBoston Denim,PO-2050,1200,200,17600,1000\r\nTotal,1 open order,1200,200,17600,1000`,
+    );
   });
 });
 

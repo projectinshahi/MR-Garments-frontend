@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  currencyLabel,
   formatCNY,
   formatDate,
   formatDateTime,
   formatINR,
   formatLakh,
+  formatMoney,
+  formatMoneyList,
   formatQty,
   formatRate,
   formatRelativeDateTime,
   formatShortDate,
   formatToday,
+  sumByCurrency,
 } from "@/lib/formatters";
 
 // Expected strings are copied from the reference screenshots.
@@ -27,6 +31,31 @@ describe("money", () => {
     expect(formatCNY(62780, { spaced: true })).toBe("¥ 62,780");
     expect(formatCNY(32, { decimals: 2 })).toBe("¥32.00");
     expect(formatCNY(-2400, { spaced: true })).toBe("−¥ 2,400");
+  });
+
+  it("formats every order currency with its symbol and Indian grouping", () => {
+    expect(formatMoney(141000, "CNY")).toBe("¥1,41,000");
+    expect(formatMoney(1200, "USD")).toBe("$1,200");
+    expect(formatMoney(0.35, "USD", { decimals: 2 })).toBe("$0.35");
+    expect(formatMoney(-2400, "INR", { spaced: true })).toBe("−₹ 2,400");
+    expect(currencyLabel("USD")).toBe("USD ($)");
+  });
+
+  it("totals per currency and never adds two currencies", () => {
+    const rows = [
+      { c: "USD" as const, v: 10.105 },
+      { c: "CNY" as const, v: 100 },
+      { c: "USD" as const, v: 0.2 },
+    ];
+    const totals = sumByCurrency(rows, (r) => r.c, (r) => r.v);
+    expect(totals).toEqual([
+      { currency: "CNY", amount: 100 },
+      { currency: "USD", amount: 10.31 },
+    ]);
+    expect(formatMoneyList(totals, { decimals: 2 })).toBe("¥100.00 · $10.31");
+    expect(formatMoneyList([{ currency: "CNY", amount: 0 }, { currency: "USD", amount: 5 }])).toBe("$5");
+    expect(formatMoneyList([])).toBe("¥0");
+    expect(formatMoneyList([{ currency: "USD", amount: 0 }])).toBe("$0");
   });
 
   it("formats lakh, rates and quantities", () => {

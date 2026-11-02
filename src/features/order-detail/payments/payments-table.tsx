@@ -4,9 +4,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/shared/data-table";
 import type { OrderPayment } from "@/features/order-detail/data/queries";
-import { formatCNY, formatDate, formatINR, formatRate } from "@/lib/formatters";
+import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 
-type Totals = { paidCny: number; paidInr: number };
+/** `currency`: the order's, which its payments are in. */
+type Totals = { paidCny: number; paidInr: number; currency: Currency };
 /** A payment with its INR value at its own rate; null for a payment not made yet (no rate). */
 export type PaymentRow = OrderPayment & { inr: number | null };
 
@@ -26,8 +28,8 @@ function columns(totals: Totals): ColumnDef<PaymentRow>[] {
     {
       accessorKey: "amountCny",
       header: "Amount",
-      cell: ({ row }) => formatCNY(row.original.amountCny),
-      footer: () => formatCNY(totals.paidCny),
+      cell: ({ row }) => formatMoney(row.original.amountCny, totals.currency),
+      footer: () => formatMoney(totals.paidCny, totals.currency),
       meta: { align: "right" },
     },
     {

@@ -7,6 +7,7 @@ const row = (po: string, supplier: string): OrderPaymentRow => ({
   orderId: `o-${po}`,
   po,
   supplier,
+  currency: "CNY",
   orderValue: 0,
   paid: 0,
   paidInr: 0,

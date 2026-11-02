@@ -4,8 +4,9 @@ import { canOpen, hasAccess } from "@/config/navigation";
 import { apiGet } from "@/lib/api/server";
 import type { OrderOptions, PaymentsResponse } from "@/lib/api/types";
 import { getMe } from "@/lib/session";
+import { sumByCurrency } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
-import type { Tone } from "@/types/domain";
+import type { Currency, MoneyTotal, Tone } from "@/types/domain";
 
 // Deposits & Payments (16) reads PAY-1. The call reads the session cookie, so the page renders inside the (app)
 // loading.tsx Suspense boundary; a failed call throws to the (app) error.tsx.
@@ -16,13 +17,12 @@ export type OrderPaymentRow = {
   orderId: string;
   po: string;
   supplier: string;
-  /** CNY */
+  /** The order's: orderValue, paid and balance are in it. */
+  currency: Currency;
   orderValue: number;
-  /** CNY */
   paid: number;
   /** INR, each payment at the rate of its own date */
   paidInr: number;
-  /** CNY */
   balance: number;
   /** YYYY-MM-DD, the earliest due payment; null shows "Not yet due". */
   nextDue: string | null;
@@ -30,8 +30,8 @@ export type OrderPaymentRow = {
   nextDueTone?: Tone;
 };
 
-/** Due payments whose due date falls from today to today + N days. The API has no INR rate for them: CNY only. */
-export type DueWindow = { amountCny: number; count: number; first: { po: string; due: string } | null };
+/** Due payments whose due date falls from today to today + N days, one total per currency (no INR rate until paid). */
+export type DueWindow = { amounts: MoneyTotal[]; count: number; first: { po: string; due: string } | null };
 
 /** `paidOrders`: how many orders `paidSoFarInr` comes from (something paid). */
 export type PaymentsKpis = { paidSoFarInr: number; paidOrders: number; dueNext7: DueWindow; dueNext30: DueWindow };
@@ -52,7 +52,7 @@ function dueWithin(payments: Payment[], today: string, days: number): DueWindow 
     .filter((p): p is Payment & { dueDate: string } => p.status === "due" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return {
-    amountCny: due.reduce((sum, p) => sum + p.amountCny, 0),
+    amounts: sumByCurrency(due, (p) => p.currency, (p) => p.amountCny),
     count: due.length,
     first: due[0] ? { po: due[0].po, due: due[0].dueDate } : null,
   };
@@ -72,6 +72,7 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
       orderId: o.orderId,
       po: o.po,
       supplier: o.supplier,
+      currency: o.currency,
       orderValue: o.orderValueCny,
       paid: o.paidCny,
       paidInr: o.paidInr,

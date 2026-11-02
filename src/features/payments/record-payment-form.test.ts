@@ -64,6 +64,12 @@ describe("toCreatePaymentBody", () => {
     });
     expect(toCreatePaymentBody({ ...values, payee: "agent-1" })).toMatchObject({ payeeRole: "agent", agentId: "agent-1" });
   });
+
+  it("an INR order needs no rate and sends none; a USD order needs one", () => {
+    const inr = recordPaymentSchema(today, "INR").parse({ ...filled, rateInr: "" });
+    expect(toCreatePaymentBody(inr)).not.toHaveProperty("rateInr");
+    expect(recordPaymentSchema(today, "USD").safeParse({ ...filled, rateInr: "" }).error?.issues.map((issue) => issue.message)).toEqual([MESSAGES.rateInr]);
+  });
 });
 
 describe("paymentINR", () => {

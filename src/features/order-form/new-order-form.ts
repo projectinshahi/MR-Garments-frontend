@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 import type { CreateOrderBody, OrderOptions } from "@/lib/api/types";
+import { CURRENCIES } from "@/types/domain";
 
 import { parseNumber } from "./order-totals";
 
 // New order form (15): what the inputs hold (strings, as typed), its client-side checks matching ORD-3, and the
 // ORD-3 body. The reference has "+ Add item" and "+ Add deposit" but no remove control, so a row left completely
 // empty is ignored rather than rejected. Messages are proposed wording, except the delivery-date one (contract).
+// Amounts are in the order's currency (the supplier's by default); an INR order's deposits take no rate (stored as 1).
 
 /** A deposit's payee: "supplier" (the order's supplier) or a shipping agent's id. */
 export const SUPPLIER_PAYEE = "supplier";
@@ -33,13 +35,13 @@ const depositSchema = z
     if (!isPositive(deposit.amountCny)) issue(ctx, "amountCny", "Enter the amount.");
     if (!deposit.payee) issue(ctx, "payee", "Choose who was paid.");
     if (!deposit.paidOn) issue(ctx, "paidOn", "Choose the date paid.");
-    if (!isPositive(deposit.rateInr)) issue(ctx, "rateInr", "Enter the rate.");
     if (!deposit.mode.trim()) issue(ctx, "mode", "Enter the mode.");
   });
 
 export const newOrderSchema = z
   .object({
     supplierId: z.string().min(1, "Choose a supplier."),
+    currency: z.enum(CURRENCIES),
     orderDate: z.string().min(1, "Choose the order date."),
     deliveryDate: z.string().min(1, "Choose the delivery date."),
     lines: z
@@ -51,6 +53,13 @@ export const newOrderSchema = z
   .refine((order) => !order.orderDate || !order.deliveryDate || order.deliveryDate >= order.orderDate, {
     path: ["deliveryDate"],
     message: "The delivery date can't be before the order date.",
+  })
+  .superRefine((order, ctx) => {
+    if (order.currency === "INR") return;
+    order.deposits.forEach((deposit, index) => {
+      if (!isBlankDeposit(deposit) && !isPositive(deposit.rateInr))
+        ctx.addIssue({ code: "custom", path: ["deposits", index, "rateInr"], message: "Enter the rate." });
+    });
   });
 export type NewOrderValues = z.infer<typeof newOrderSchema>;
 
@@ -66,8 +75,10 @@ export const emptyDeposit = (paidOn: string): NewOrderValues["deposits"][number]
 /** The ORD-3 body: blank rows dropped, numbers parsed, payees resolved to the supplier's or agent's name. */
 export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOptions, "suppliers" | "agents">): CreateOrderBody {
   const supplierName = options.suppliers.find((s) => s.id === values.supplierId)?.name ?? "";
+  const inr = values.currency === "INR";
   return {
     supplierId: values.supplierId,
+    currency: values.currency,
     orderDate: values.orderDate,
     deliveryDate: values.deliveryDate,
     lines: values.lines
@@ -82,7 +93,7 @@ export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOpt
           payeeRole: supplier ? "supplier" : "agent",
           amountCny: parseNumber(deposit.amountCny),
           paidOn: deposit.paidOn,
-          rateInr: parseNumber(deposit.rateInr),
+          ...(inr ? {} : { rateInr: parseNumber(deposit.rateInr) }),
           mode: deposit.mode.trim(),
         };
       }),

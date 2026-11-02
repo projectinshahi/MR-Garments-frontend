@@ -4,7 +4,7 @@ import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Journey } from "@/components/shared/timeline";
 import type { OrderView } from "@/features/order-detail/data/queries";
-import { formatCNY, formatDate, formatINR, formatQty } from "@/lib/formatters";
+import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
 
 import { journeySteps } from "./journey";
 
@@ -56,7 +56,7 @@ export function OverviewScreen({ order }: { order: OrderView }) {
           <KeyValueList
             size="sm"
             className="mt-3"
-            items={[{ label: `Goods, paid ${formatCNY(order.paidCny)}`, value: formatINR(order.paidInr) }]}
+            items={[{ label: `Goods, paid ${formatMoney(order.paidCny, order.currency)}`, value: formatINR(order.paidInr) }]}
           />
         </SectionCard>
       </div>

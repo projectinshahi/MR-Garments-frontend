@@ -152,11 +152,13 @@ describe("Edit supplier", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("patches the editable fields and status (not the currency), then toasts Supplier saved, closes and reloads", async () => {
+  it("patches the editable fields, the currency and status, then toasts Supplier saved, closes and reloads", async () => {
     patch.mockResolvedValue(saved);
     const { user, field, save } = open(EDIT);
     await user.clear(field("City"));
     await user.type(field("City"), " Shanghai ");
+    expect([...(field("Currency") as HTMLSelectElement).options].map((option) => option.text)).toEqual(["¥ Chinese yuan", "$ US dollar", "₹ Indian rupee"]);
+    await user.selectOptions(field("Currency"), "USD");
     await user.click(save);
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
@@ -165,6 +167,7 @@ describe("Edit supplier", () => {
       city: "Shanghai",
       contactPerson: NINGBO.contactPerson,
       phone: NINGBO.phone,
+      currency: "USD",
       address: NINGBO.address,
       notes: NINGBO.notes,
       status: "Active",

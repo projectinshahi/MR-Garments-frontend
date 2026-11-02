@@ -1,7 +1,10 @@
+import type { Currency, MoneyTotal } from "@/types/domain";
+
 import type { ContainerState, ContainerTerms, PaymentKind, Unit } from "./types";
 
 // Landed cost and Reports (backend docs/wave3-contracts.md sections 6.4, 7 and 8). Owner: A6. INR amounts have 2
-// decimals; dates are YYYY-MM-DD; months YYYY-MM.
+// decimals; dates are YYYY-MM-DD; months YYYY-MM. Order-currency amounts (...Cny) come with their `currency`, and their
+// totals one per currency (`MoneyTotal[]`): amounts in different currencies are never added together.
 
 type Named = { id: string; name: string };
 
@@ -12,6 +15,8 @@ export type LandedCostRow = {
   orderId: string;
   po: string;
   supplier: Named;
+  /** The order's: the currency of `goodsPayments[].amountCny`. Every other amount here is INR. */
+  currency: Currency;
   /** Main line (position 0). */
   item: string;
   quantity: number;
@@ -65,7 +70,7 @@ export type ReportsSummary = Report<{
   deliveries: { dueNext7: number; late: number };
   receiving: { shortOrders: number; shortPcs: number; shortM: number };
   containers: { onTheWay: number; arrivingIn7Days: number };
-  payments: { dueNext30Cny: number };
+  payments: { dueNext30Cny: number; dueNext30ByCurrency: MoneyTotal[] };
   landedCost: { finishedOrders: number; finishedTotalInr: number };
 }>;
 
@@ -101,6 +106,7 @@ export type OrderedVsReceivedReport = Report<{
     orderId: string;
     po: string;
     supplier: string;
+    currency: Currency;
     item: string;
     unit: Unit;
     ordered: number;
@@ -111,7 +117,9 @@ export type OrderedVsReceivedReport = Report<{
   }[];
   ordersChecked: number;
   shortPos: string[];
+  /** CNY lines only (older frontends); use shortValueByCurrency. */
   shortValueCny: number;
+  shortValueByCurrency: MoneyTotal[];
   fullOrders: number;
 }>;
 
@@ -127,11 +135,18 @@ export type ContainersTimelineReport = Report<{
   nextArrival: { date: string; number: string } | null;
 }>;
 
+type SupplierTotals = { orders: number; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number };
+
 /** GET /api/v1/reports/payments-per-supplier: open orders (stage below 6), supplier payments only. */
 export type PaymentsPerSupplierReport = Report<{
-  suppliers: { supplierId: string; supplier: string; orders: string[]; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number }[];
-  totals: { orders: number; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number };
+  /** One row per supplier and order currency (CNY, USD, INR, then order value, largest first). */
+  suppliers: { supplierId: string; supplier: string; currency: Currency; orders: string[]; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number }[];
+  /** CNY orders only (older frontends); use totalsByCurrency. */
+  totals: SupplierTotals;
+  totalsByCurrency: (SupplierTotals & { currency: Currency })[];
+  /** CNY only; use dueNext30ByCurrency. */
   dueNext30Cny: number;
+  dueNext30ByCurrency: MoneyTotal[];
   finishedPos: string[];
 }>;
 

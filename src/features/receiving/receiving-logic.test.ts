@@ -43,11 +43,12 @@ const options: ReceiptOptions = {
       orderId: "o35",
       po: "PO-2035",
       supplier: "Shenzhen Apparel",
+      currency: "CNY",
       orderValueCny: 72000,
       depositsPaidCny: 40000,
       lines: [{ orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 }],
     },
-    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", orderValueCny: 1, depositsPaidCny: 0, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
+    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", currency: "CNY", orderValueCny: 1, depositsPaidCny: 0, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
   ],
 };
 

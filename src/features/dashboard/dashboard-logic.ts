@@ -3,7 +3,8 @@ import { addDays, format, parseISO } from "date-fns";
 import { lateBy, toDeliveries } from "@/features/calendar/deliveries";
 import { containerKpis, toContainerRow } from "@/features/containers/containers-logic";
 import type { ContainerListItem, DeliveryItem, OrderListItem, PaymentsResponse } from "@/lib/api/types";
-import type { StageNumber, Terms, Tone } from "@/types/domain";
+import { sumByCurrency } from "@/lib/formatters";
+import type { Currency, StageNumber, Terms, Tone } from "@/types/domain";
 
 // Pure derivations for the dashboard (04) from ORD-1, CAL-1, PAY-1 and CON-1. `today` is YYYY-MM-DD in India, so the
 // dashboard agrees with the Orders, Calendar, Payments and Containers screens on the same day.
@@ -20,7 +21,7 @@ const PAYMENTS_WINDOW_DAYS = 30;
 
 export type StageCount = { stage: StageNumber; count: number };
 export type DeliveryRow = { po: string; supplier: string; due: string; status: string; tone: Tone };
-export type PaymentDueRow = { id: string; payee: string; po: string; payment: "Deposit" | "Balance"; due: string; amountCny: number };
+export type PaymentDueRow = { id: string; payee: string; po: string; payment: "Deposit" | "Balance"; due: string; amountCny: number; currency: Currency };
 export type ContainerRow = { container: string; agent: string; terms: Terms; etaIndia: string };
 
 /** Active orders are stages 1-5 (stage 6, India warehouse, is complete); the stage list shows all six. */
@@ -57,16 +58,16 @@ function deliveries(items: DeliveryItem[], today: string) {
   };
 }
 
-/** Due payments from today to 30 days ahead, as the Payments screen counts them. Due payments have no INR rate: CNY. */
+/** Due payments from today to 30 days ahead, as the Payments screen counts them: no INR rate yet, so one total per currency. */
 function paymentsDue({ payments }: PaymentsResponse, today: string) {
   const until = format(addDays(parseISO(today), PAYMENTS_WINDOW_DAYS), "yyyy-MM-dd");
   const due = payments
     .filter((p): p is typeof p & { dueDate: string } => p.status === "due" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return {
-    amountCny: due.reduce((sum, p) => sum + p.amountCny, 0),
+    amounts: sumByCurrency(due, (p) => p.currency, (p) => p.amountCny),
     windowDays: PAYMENTS_WINDOW_DAYS,
-    rows: due.slice(0, ROWS).map((p): PaymentDueRow => ({ id: p.id, payee: p.payee, po: p.po, payment: p.kind, due: p.dueDate, amountCny: p.amountCny })),
+    rows: due.slice(0, ROWS).map((p): PaymentDueRow => ({ id: p.id, payee: p.payee, po: p.po, payment: p.kind, due: p.dueDate, amountCny: p.amountCny, currency: p.currency })),
   };
 }
 

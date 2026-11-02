@@ -7,8 +7,8 @@ import { toDashboard } from "./dashboard-logic";
 const TODAY = "2026-10-29";
 const order = (po: string, stage: OrderListItem["stage"]) => ({ po, stage }) as OrderListItem;
 const delivery = (po: string, due: string, supplier = "Foshan Fabrics", received = 0) => ({ po, due, supplier, quantity: 100, received }) as DeliveryItem;
-const payment = (id: string, status: "paid" | "due", dueDate: string | null, amountCny: number) =>
-  ({ id, po: `PO-${id}`, kind: "Balance", payee: "Shenzhen Apparel", status, dueDate, amountCny }) as PaymentsResponse["payments"][number];
+const payment = (id: string, status: "paid" | "due", dueDate: string | null, amountCny: number, currency: "CNY" | "USD" = "CNY") =>
+  ({ id, po: `PO-${id}`, currency, kind: "Balance", payee: "Shenzhen Apparel", status, dueDate, amountCny }) as PaymentsResponse["payments"][number];
 const container = (number: string, status: ContainerListItem["status"], eta: string) =>
   ({ number, status, eta, agent: { id: "a", name: "Sino Freight" }, terms: "FOB", orders: [] }) as unknown as ContainerListItem;
 
@@ -65,8 +65,15 @@ describe("toDashboard", () => {
       payment("far", "due", "2026-11-29", 4),
     ];
     const { paymentsDue } = toDashboard({ orders: [], deliveries: [], payments: { orders: [], payments }, containers: [] }, TODAY);
-    expect(paymentsDue).toMatchObject({ amountCny: 350, windowDays: 30 });
+    expect(paymentsDue).toMatchObject({ amounts: [{ currency: "CNY", amount: 350 }], windowDays: 30 });
     expect(paymentsDue !== "denied" && paymentsDue !== "failed" && paymentsDue.rows.map((r) => r.id)).toEqual(["p1", "p2"]);
+  });
+
+  it("never adds due payments in different currencies", () => {
+    const payments = [payment("c1", "due", "2026-10-30", 100), payment("u1", "due", "2026-10-31", 20, "USD"), payment("c2", "due", "2026-11-01", 5)];
+    const { paymentsDue } = toDashboard({ orders: [], deliveries: [], payments: { orders: [], payments }, containers: [] }, TODAY);
+    expect(paymentsDue).toMatchObject({ amounts: [{ currency: "CNY", amount: 105 }, { currency: "USD", amount: 20 }] });
+    expect(paymentsDue !== "denied" && paymentsDue !== "failed" && paymentsDue.rows.map((r) => r.currency)).toEqual(["CNY", "USD", "CNY"]);
   });
 
   it("lists containers at sea by ETA and counts those arriving this week", () => {
@@ -87,6 +94,6 @@ describe("toDashboard", () => {
     const sections = toDashboard({ orders: "failed", deliveries: "denied", payments: { orders: [], payments: [] }, containers: [] }, TODAY);
     expect(sections.orders).toBe("failed");
     expect(sections.deliveries).toBe("denied");
-    expect(sections.paymentsDue).toMatchObject({ amountCny: 0, rows: [] });
+    expect(sections.paymentsDue).toMatchObject({ amounts: [], rows: [] });
   });
 });

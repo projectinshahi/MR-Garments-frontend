@@ -1,8 +1,9 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 
 import { LOCALE, MOCK_TODAY } from "@/lib/constants";
+import { type Currency, CURRENCIES, type MoneyTotal } from "@/types/domain";
 
-// Formats as they appear in the references. INR and CNY both use Indian digit grouping (₹15,00,000, ¥1,41,000).
+// Formats as they appear in the references. Every currency uses Indian digit grouping (₹15,00,000, ¥1,41,000, $1,200).
 
 const numberFormats = new Map<number, Intl.NumberFormat>();
 
@@ -18,12 +19,42 @@ export function formatNumber(value: number, decimals = 0) {
 const signed = (value: number, symbol: string, decimals: number) =>
   `${value < 0 ? "−" : ""}${symbol}${formatNumber(Math.abs(value), decimals)}`;
 
-/** ₹13,77,000 · ₹550.80 (decimals: 2) */
-export const formatINR = (value: number, decimals = 0) => signed(value, "₹", decimals);
+/** On screen an amount shows its symbol; selects and labels add the code ("USD ($)"), files use the code alone. */
+export const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", INR: "₹" } as const satisfies Record<Currency, string>;
+/** "Currency" in order terms and the supplier dialog. */
+export const CURRENCY_NAME = { CNY: "¥ Chinese yuan", USD: "$ US dollar", INR: "₹ Indian rupee" } as const satisfies Record<Currency, string>;
+/** "CNY (¥)": a currency select's option. */
+export const currencyLabel = (currency: Currency) => `${currency} (${CURRENCY_SYMBOL[currency]})`;
 
-/** ¥80,000 · "¥ 62,780" (spaced, as on the New order screen) · ¥32.00 (decimals: 2) */
-export const formatCNY = (value: number, { decimals = 0, spaced = false } = {}) =>
-  signed(value, spaced ? "¥ " : "¥", decimals);
+type MoneyOptions = { decimals?: number; spaced?: boolean };
+
+/** ¥80,000 · "$ 62,780" (spaced, as on the New order screen) · ₹32.00 (decimals: 2). One formatter for every currency. */
+export const formatMoney = (value: number, currency: Currency, { decimals = 0, spaced = false }: MoneyOptions = {}) =>
+  signed(value, spaced ? `${CURRENCY_SYMBOL[currency]} ` : CURRENCY_SYMBOL[currency], decimals);
+
+/** ₹13,77,000 · ₹550.80 (decimals: 2) */
+export const formatINR = (value: number, decimals = 0) => formatMoney(value, "INR", { decimals });
+
+/** ¥80,000 · "¥ 62,780" (spaced) · ¥32.00 (decimals: 2) */
+export const formatCNY = (value: number, options: MoneyOptions = {}) => formatMoney(value, "CNY", options);
+
+/**
+ * One total per currency (CNY, USD, INR order), for the currencies the rows have: amounts in different currencies are
+ * never added together. Rounded to the cent, as the API rounds.
+ */
+export function sumByCurrency<T>(rows: T[], currencyOf: (row: T) => Currency, amountOf: (row: T) => number): MoneyTotal[] {
+  return CURRENCIES.filter((currency) => rows.some((row) => currencyOf(row) === currency)).map((currency) => ({
+    currency,
+    amount: Math.round(rows.reduce((sum, row) => sum + (currencyOf(row) === currency ? amountOf(row) : 0), 0) * 100) / 100,
+  }));
+}
+
+/** "¥80,000 · $1,200": each currency apart, zeros left out; "¥0" (or `empty`'s symbol) when nothing is left. */
+export function formatMoneyList(totals: MoneyTotal[], options: MoneyOptions = {}, empty: Currency = "CNY") {
+  const shown = totals.filter((total) => total.amount !== 0);
+  if (shown.length === 0) return formatMoney(0, totals[0]?.currency ?? empty, options);
+  return shown.map((total) => formatMoney(total.amount, total.currency, options)).join(" · ");
+}
 
 /** ₹42.6 L (lakh short form, dashboard) */
 export const formatLakh = (value: number) => `₹${formatNumber(value / 100_000, 1)} L`;
