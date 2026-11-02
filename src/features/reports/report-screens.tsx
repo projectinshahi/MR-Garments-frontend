@@ -54,12 +54,12 @@ function ReportFrame({ title, page, file, period = true, children }: FrameProps)
 }
 
 /** Card subtitle under the title: 12.5 px muted (34, 36). */
-function CardSubtitle({ children }: { children: React.ReactNode }) {
+export function CardSubtitle({ children }: { children: React.ReactNode }) {
   return <p className="text-[12.5px] leading-[21px] text-muted-foreground">{children}</p>;
 }
 
 /** Muted note under a card (34, 37). */
-function Footnote({ children }: { children: React.ReactNode }) {
+export function Footnote({ children }: { children: React.ReactNode }) {
   return <p className="text-[12.5px] leading-4 text-muted-foreground">{children}</p>;
 }
 
@@ -198,7 +198,7 @@ export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsP
         <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub={`next 30 days ${formatMoneyList(data.dueNext30ByCurrency)} due`} />
       </KpiRow>
       <div className="min-w-0">
-        {data.suppliers.length ? <SupplierPaymentsTable rows={data.suppliers} totals={totals} /> : <EmptyState title="No open orders." />}
+        {data.suppliers.length ? <SupplierPaymentsTable rows={data.suppliers} totals={totals} query={page.query} /> : <EmptyState title="No open orders." />}
       </div>
       {/* "Paid payments page" is plain text: that page is not designed. */}
       <Footnote>

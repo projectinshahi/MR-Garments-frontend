@@ -1,7 +1,9 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 
+import { LinkPending, useNavigate } from "@/components/layout/navigation-progress";
 import { BarChart } from "@/components/shared/bar-chart";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -77,13 +79,32 @@ type Totals = PaymentsPerSupplierReport["totalsByCurrency"];
 
 /**
  * Payments per supplier (37), with the totals row. A row per supplier and currency; each amount in its row's currency,
- * and the totals one per currency ("¥5,800 · $200"), never added together. INR is one total.
+ * and the totals one per currency ("¥5,800 · $200"), never added together. INR is one total. The supplier name and
+ * the row open the supplier's detail (RPT-5D) with the report's filters (`query`).
  */
-export function SupplierPaymentsTable({ rows, totals }: { rows: SupplierRow[]; totals: Totals }) {
+export function SupplierPaymentsTable({ rows, totals, query }: { rows: SupplierRow[]; totals: Totals; query: string }) {
+  const navigate = useNavigate();
+  const detail = (row: SupplierRow) => `/reports/payments-per-supplier/${row.supplierId}${query}`;
   const each = (pick: (total: Totals[number]) => number) => formatMoneyList(totals.map((total) => ({ currency: total.currency, amount: pick(total) })));
   const orders = totals.reduce((sum, total) => sum + total.orders, 0);
   const columns: ColumnDef<SupplierRow>[] = [
-    { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[287px] font-bold" }, footer: "Total" },
+    {
+      accessorKey: "supplier",
+      header: "Supplier",
+      meta: { className: "w-[287px] font-bold" },
+      // The row opens the detail too; the link keeps it keyboard-reachable. Stopping its click avoids a second navigation.
+      cell: ({ row }) => (
+        <Link
+          href={detail(row.original)}
+          onClick={(event) => event.stopPropagation()}
+          className="rounded-sm outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {row.original.supplier}
+          <LinkPending />
+        </Link>
+      ),
+      footer: "Total",
+    },
     { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${orders} open order${orders === 1 ? "" : "s"}` },
     {
       accessorKey: "orderValueCny",
@@ -114,7 +135,17 @@ export function SupplierPaymentsTable({ rows, totals }: { rows: SupplierRow[]; t
       footer: each((total) => total.balanceCny),
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => `${row.supplierId}-${row.currency}`} density="snug" size="sm" header="tall" />;
+  return (
+    <DataTable
+      columns={columns}
+      data={rows}
+      getRowId={(row) => `${row.supplierId}-${row.currency}`}
+      onRowClick={(row) => navigate(detail(row))}
+      density="snug"
+      size="sm"
+      header="tall"
+    />
+  );
 }
 
 type MonthCost = LandedCostByMonthReport["months"][number];

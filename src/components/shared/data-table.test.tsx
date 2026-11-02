@@ -47,6 +47,20 @@ describe("DataTable", () => {
     expect(onPageChange).toHaveBeenCalledWith(1);
   });
 
+  it("shows the caller's page (pageIndex), which only moves when the caller passes the next one", async () => {
+    const onPageChange = vi.fn();
+    const pagination = { pageSize: 2, rowCount: 5, onPageChange, itemLabel: "items" };
+    const { rerender } = render(<DataTable columns={columns} data={rows.slice(2, 4)} pagination={{ ...pagination, pageIndex: 1 }} />);
+    expect(screen.getByText("Showing 3 to 4 of 5 items")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+    await userEvent.click(screen.getByRole("button", { name: "Page 3" }));
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+    rerender(<DataTable columns={columns} data={rows.slice(0, 1)} pagination={{ ...pagination, pageIndex: 2 }} />);
+    expect(screen.getByText("Showing 5 to 5 of 5 items")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+  });
+
   it("marks the selected row and reports row clicks", async () => {
     const onRowClick = vi.fn();
     render(<DataTable columns={columns} data={rows} getRowId={(r) => r.id} selectedRowId="2" onRowClick={onRowClick} />);

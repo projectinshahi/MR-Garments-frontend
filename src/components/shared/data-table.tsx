@@ -48,6 +48,8 @@ type DataTablePagination = {
   itemLabel?: string;
   /** Required with rowCount: called with the next page index. */
   onPageChange?: (pageIndex: number) => void;
+  /** The page shown (0-based) when the caller owns it, e.g. from the URL; then only `onPageChange` moves it. */
+  pageIndex?: number;
 };
 
 type DataTableProps<TData, TValue> = {
@@ -114,6 +116,7 @@ export function DataTable<TData, TValue>({
           manualPagination: manual,
           rowCount: pagination.rowCount,
           initialState: { pagination: { pageIndex: 0, pageSize: pagination.pageSize } },
+          state: pagination.pageIndex === undefined ? undefined : { pagination: { pageIndex: pagination.pageIndex, pageSize: pagination.pageSize } },
         }
       : {}),
   });
@@ -227,12 +230,12 @@ function DataTablePager<TData>({ table, pagination }: { table: TanstackTable<TDa
   const box = "flex size-[30px] items-center justify-center rounded-md border bg-card text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
   return (
-    <nav aria-label="Table pagination" className="flex items-center justify-between gap-4 border-t px-5 py-3.5">
+    <nav aria-label="Table pagination" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-5 py-3.5">
       <p className="text-[13px] text-muted-foreground">
         Showing {from} to {to} of {total}
         {pagination.itemLabel ? ` ${pagination.itemLabel}` : ""}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={box} aria-label="Previous page" onClick={() => go(pageIndex - 1)} disabled={!table.getCanPreviousPage()}>
           ‹
         </button>
