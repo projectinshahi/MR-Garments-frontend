@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardNote, SectionCard } from "@/components/shared/cards";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { ProgressBar } from "@/components/shared/progress";
@@ -19,9 +20,11 @@ import { cn } from "@/lib/utils";
 
 import type { ReceiveGoodsData } from "./data/queries";
 import {
+  bundlesLabel,
   capTeamPieces,
   costSoFar,
   RECEIPT_FIELDS,
+  receiptProblems,
   receiptValues,
   splitSummary,
   teamCost,
@@ -52,7 +55,8 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
   const { form, today, me, canEnter } = data;
   const { trip, receipt, lines, teams, cost, previousOutstanding } = form;
   const [values, setValues] = useState(() => receiptValues(form, today, me));
-  const { errors, saving, save } = useStageSave(`/warehouse-receipts/${trip.id}`, RECEIPT_FIELDS, SAVED, "/warehouse");
+  const { errors, setErrors, saving, save } = useStageSave(`/warehouse-receipts/${trip.id}`, RECEIPT_FIELDS, SAVED, "/warehouse");
+  const [confirming, setConfirming] = useState(false);
   const set = (patch: Partial<ReceiptValues>) => setValues((current) => ({ ...current, ...patch }));
   const bind = (key: Exclude<keyof ReceiptValues, "split">, clean = (value: string) => value) => ({
     value: values[key],
@@ -61,6 +65,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
   });
   const { total, assigned, left } = splitSummary(lines, values.split);
   const unit = unitOf(lines);
+  const bundles = bundlesLabel(Number(values.bundlesReceived));
   const sofar = cost ? costSoFar(cost) : null;
   const notice = trip.status !== "unloaded" ? "These goods haven't been unloaded yet." : receipt?.status === "stocked" ? "This record is complete and can't be changed." : null;
   const readOnly = !canEnter || !!notice;
@@ -226,7 +231,18 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                     >
                       Save draft
                     </Button>
-                    <Button type="button" size="lg" className="w-[250px] min-w-0 text-[15px]" disabled={saving} onClick={() => void save(toReceiptBody(values), true)}>
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="w-[250px] min-w-0 text-[15px]"
+                      disabled={saving}
+                      onClick={() => {
+                        // The final action can't be undone: check the form, then ask about the bundles before saving.
+                        const problems = receiptProblems(values, assigned);
+                        setErrors(problems);
+                        setConfirming(Object.keys(problems).length === 0);
+                      }}
+                    >
                       Save and add to stock
                     </Button>
                   </FormFooter>
@@ -317,6 +333,29 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
           ) : null}
         </div>
       </PageContainer>
+
+      <ConfirmDialog
+        // Closes once saved, or when WH-3 puts a message under a field; a toasted failure leaves it open to try again.
+        // A page that turned read-only (another user completed it) closes it too.
+        open={confirming && !readOnly}
+        tone="confirm"
+        title="Confirm Goods Receipt"
+        description={
+          <>
+            <p>Are you sure you want to confirm the goods received?</p>
+            <p className="rounded-xl bg-callout-info px-[14.5px] py-2.5 text-center text-[32px] leading-10 font-bold tracking-tight text-foreground">{bundles}</p>
+            <p>
+              You are confirming receipt of <strong className="text-foreground">{bundles.toLowerCase()}</strong>.
+            </p>
+          </>
+        }
+        confirmLabel="Confirm Receipt"
+        pendingLabel="Confirming…"
+        onConfirm={async () => {
+          if ((await save(toReceiptBody(values), true)) !== "failed") setConfirming(false);
+        }}
+        onCancel={() => setConfirming(false)}
+      />
     </>
   );
 }

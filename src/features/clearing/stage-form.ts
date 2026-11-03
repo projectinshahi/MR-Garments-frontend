@@ -50,31 +50,35 @@ export const amountText = (value: number | null | undefined) => (value === null 
 /**
  * PUTs the form to `path`. Field errors (422) for `fields` go under those fields, others are toasted; a 409 without
  * fields (another user completed the record, or the stage before isn't done) is toasted and the page refreshed.
- * After saving: a toast, then the list (`doneHref`) for the final action or a refresh for a draft.
+ * After saving: a toast, then the list (`doneHref`) for the final action or a refresh for a draft. Resolves to "saved",
+ * "fields" (refused, with messages now under `fields`) or "failed" (refused or unreachable, toasted).
  */
 export function useStageSave(path: string, fields: readonly string[], saved: { draft: string; complete: string }, doneHref: string) {
   const router = useRouter();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  async function save(body: object, complete: boolean) {
+  async function save(body: object, complete: boolean): Promise<"saved" | "fields" | "failed"> {
     setSaving(true);
     try {
       await apiClient.put(path, { ...body, complete });
     } catch (error) {
       const problems = Object.entries(handleApiError(error) ?? {});
-      setErrors(Object.fromEntries(problems.filter(([key]) => fields.includes(key))));
+      const shown = problems.filter(([key]) => fields.includes(key));
+      setErrors(Object.fromEntries(shown));
       problems.filter(([key]) => !fields.includes(key)).forEach(([, message]) => notifyError(message));
       if (error instanceof ApiError && error.status === 409 && !error.fields) router.refresh();
       setSaving(false);
-      return;
+      return shown.length ? "fields" : "failed";
     }
     setErrors({});
     notifySuccess(complete ? saved.complete : saved.draft);
     if (complete) router.push(doneHref);
     router.refresh();
     setSaving(false);
+    return "saved";
   }
 
-  return { errors, saving, save };
+  // setErrors: a form's own checks show their messages the same way as the API's.
+  return { errors, setErrors, saving, save };
 }

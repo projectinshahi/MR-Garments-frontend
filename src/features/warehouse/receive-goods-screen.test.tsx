@@ -1,7 +1,8 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/lib/api/errors";
 import type { ReceiveGoodsForm } from "@/lib/api/stages-types";
 
 import { ReceiveGoodsScreen } from "./receive-goods-screen";
@@ -17,6 +18,8 @@ vi.mock("@/lib/feedback", async (original) => ({
   notifySuccess: (m: string) => success(m),
   notifyError: vi.fn(),
 }));
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: { error: (m: string) => toastError(m), success: vi.fn() } }));
 
 const form: ReceiveGoodsForm = {
   trip: {
@@ -46,6 +49,16 @@ const cost = { goodsInr: 12000, seaFreightInr: 0, clearingInr: 37050, transportI
 const view = (patch: Partial<ReceiveGoodsForm> = {}, canEnter = true) =>
   render(<ReceiveGoodsScreen data={{ form: { ...form, ...patch }, today: "2026-10-05", me: "Joseph M", canEnter }} />);
 const stockButton = () => screen.queryByRole("button", { name: "Save and add to stock" });
+const confirmation = () => screen.queryByRole("alertdialog", { name: "Confirm Goods Receipt" });
+const confirmButton = () => within(confirmation()!).getByRole("button", { name: /Confirm Receipt|Confirming…/ });
+/** Gives Retail every piece and types the bundles received. */
+async function fill(user: ReturnType<typeof userEvent.setup>, bundles: string) {
+  const retail = screen.getByRole("textbox", { name: "Retail team, Denim jeans" });
+  await user.clear(retail);
+  await user.type(retail, "100");
+  await user.clear(screen.getByLabelText(/Bundles received/));
+  if (bundles) await user.type(screen.getByLabelText(/Bundles received/), bundles);
+}
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -68,6 +81,7 @@ describe("ReceiveGoodsScreen", () => {
     await user.clear(wholesale);
     expect(screen.getByRole("status")).toHaveTextContent("40 pcs left unassigned");
     await user.click(stockButton()!);
+    await user.click(confirmButton());
     await waitFor(() => expect(push).toHaveBeenCalledWith("/warehouse"));
     expect(put).toHaveBeenCalledWith("/warehouse-receipts/t1", {
       locationId: "w1",
@@ -180,5 +194,124 @@ describe("ReceiveGoodsScreen", () => {
     view({}, false);
     expect(stockButton()).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Retail team, Denim jeans" })).toBeDisabled();
+  });
+});
+
+describe("Confirm Goods Receipt", () => {
+  it("asks before adding to stock, with the bundles entered (125, then a changed 80); Cancel and Escape save nothing", async () => {
+    const user = userEvent.setup();
+    view();
+    await fill(user, "125");
+    await user.click(stockButton()!);
+    const dialog = confirmation()!;
+    expect(dialog).toHaveTextContent("Are you sure you want to confirm the goods received?");
+    expect(within(dialog).getByText("125 Bundles")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("You are confirming receipt of 125 bundles.");
+    // Focus starts on Cancel, so Enter can't confirm by accident.
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(confirmation()).not.toBeInTheDocument());
+
+    await fill(user, "80");
+    await user.click(stockButton()!);
+    expect(within(confirmation()!).getByText("80 Bundles")).toBeInTheDocument();
+    expect(confirmation()).toHaveTextContent("You are confirming receipt of 80 bundles.");
+    expect(within(confirmation()!).queryByText("125 Bundles")).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(confirmation()).not.toBeInTheDocument());
+
+    expect(put).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Bundles received/)).toHaveValue("80");
+  });
+
+  it("Confirm Receipt saves exactly once, shows that it is saving, and closes once saved", async () => {
+    let finish!: (value: unknown) => void;
+    put.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    view();
+    await fill(user, "125");
+    await user.dblClick(stockButton()!);
+    expect(confirmation()).toBeInTheDocument();
+
+    await user.dblClick(confirmButton());
+    expect(confirmButton()).toHaveAccessibleName("Confirming…");
+    expect(confirmButton()).toBeDisabled();
+    expect(within(confirmation()!).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(confirmation()).toBeInTheDocument();
+
+    finish({ receipt: { id: "r1", status: "stocked" } });
+    await waitFor(() => expect(confirmation()).not.toBeInTheDocument());
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(put).toHaveBeenCalledWith("/warehouse-receipts/t1", {
+      locationId: "w1",
+      receivedOn: "2026-10-03",
+      receivedBy: "Joseph M",
+      bundlesReceived: 125,
+      lines: [{ orderLineId: "l1", teamId: "retail", quantity: 100 }],
+      complete: true,
+    });
+    expect(success).toHaveBeenCalledWith("Goods added to stock");
+    expect(push).toHaveBeenCalledWith("/warehouse");
+  });
+
+  it("isn't offered for invalid bundles or a missing required field: the messages show under the fields", async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(stockButton()!);
+    expect(screen.getByText("Give at least one piece to a team.")).toBeInTheDocument();
+    expect(confirmation()).not.toBeInTheDocument();
+
+    for (const bundles of ["", "0", "00"]) {
+      await fill(user, bundles);
+      await user.click(stockButton()!);
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(screen.getByText("Enter the bundles received (1 or more).")).toBeInTheDocument();
+      expect(screen.queryByText("Give at least one piece to a team.")).not.toBeInTheDocument();
+    }
+    // The field keeps digits only: no sign, decimal point or letters.
+    await fill(user, "-1.5e");
+    expect(screen.getByLabelText(/Bundles received/)).toHaveValue("15");
+
+    await user.clear(screen.getByLabelText(/Received by/));
+    await user.click(stockButton()!);
+    expect(confirmation()).not.toBeInTheDocument();
+    expect(screen.getByText("Enter who received the goods.")).toBeInTheDocument();
+    expect(screen.queryByText("Enter the bundles received (1 or more).")).not.toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("on a failed save keeps the dialog open with the error shown, and Confirm Receipt tries again", async () => {
+    put.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce({ receipt: { id: "r1", status: "stocked" } });
+    const user = userEvent.setup();
+    view();
+    await fill(user, "125");
+    await user.click(stockButton()!);
+    await user.click(confirmButton());
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Something went wrong."));
+    expect(confirmation()).toBeInTheDocument();
+    expect(confirmButton()).toHaveAccessibleName("Confirm Receipt");
+    expect(confirmButton()).toBeEnabled();
+    expect(push).not.toHaveBeenCalled();
+
+    await user.click(confirmButton());
+    await waitFor(() => expect(confirmation()).not.toBeInTheDocument());
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledWith("/warehouse");
+  });
+
+  it("closes on a field error from the API so its message under the field can be read and fixed", async () => {
+    const message = "The received date can't be before the unloading date.";
+    put.mockRejectedValueOnce(new ApiError(422, "validation_failed", "Check the form.", { receivedOn: message }));
+    const user = userEvent.setup();
+    view();
+    await fill(user, "125");
+    await user.click(stockButton()!);
+    await user.click(confirmButton());
+    await waitFor(() => expect(confirmation()).not.toBeInTheDocument());
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
   });
 });

@@ -5,9 +5,11 @@ import { formatINR } from "@/lib/formatters";
 
 import {
   ALL,
+  bundlesLabel,
   capTeamPieces,
   costSoFar,
   filterReceipts,
+  receiptProblems,
   receiptValues,
   splitSummary,
   summarizeReceipts,
@@ -136,5 +138,28 @@ describe("receive goods", () => {
     expect(unitOf(form().lines)).toBe("pcs");
     expect(unitOf([...form().lines, { ...line, orderLineId: "l2", unit: "m" }])).toBe("units");
     expect(unitOf([])).toBe("pcs");
+  });
+});
+
+describe("receiptProblems and bundlesLabel (Confirm Goods Receipt)", () => {
+  const valid = { locationId: "w1", receivedOn: "2026-10-03", receivedBy: "Joseph M", bundlesReceived: "125", split: {} };
+  it("allows the question only with the required fields, 1 to 2,147,483,647 bundles and a piece given to a team", () => {
+    expect(receiptProblems(valid, 1)).toEqual({});
+    expect(receiptProblems({ ...valid, bundlesReceived: "2147483647" }, 1)).toEqual({});
+    for (const bundlesReceived of ["", "0", "2147483648", "1.5", "-1"]) {
+      expect(receiptProblems({ ...valid, bundlesReceived }, 1)).toEqual({ bundlesReceived: "Enter the bundles received (1 or more)." });
+    }
+    expect(receiptProblems({ locationId: "", receivedOn: "", receivedBy: "  ", bundlesReceived: "3", split: {} }, 0)).toEqual({
+      locationId: "Choose a warehouse from the list.",
+      receivedOn: "Enter the date received.",
+      receivedBy: "Enter who received the goods.",
+      lines: "Give at least one piece to a team.",
+    });
+  });
+
+  it("names the bundles with Indian grouping, singular for one", () => {
+    expect(bundlesLabel(125)).toBe("125 Bundles");
+    expect(bundlesLabel(1)).toBe("1 Bundle");
+    expect(bundlesLabel(125000)).toBe("1,25,000 Bundles");
   });
 });
