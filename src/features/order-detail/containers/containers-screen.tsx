@@ -31,7 +31,7 @@ const goodsOf = (c: OrderContainer) =>
 
 /** CON-6: the container goes with every order's goods in it, so the confirmation names the other POs. */
 function DeleteContainer({ po, c }: { po: string; c: OrderContainer }) {
-  const others = c.orders.filter((other) => other !== po);
+  const others = (c.orders ?? []).filter((other) => other !== po);
   return (
     <DeleteRecordButton
       path={`/containers/${c.id}`}

@@ -380,8 +380,11 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
         loadedOn: string | null;
         sailedOn: string | null;
         eta: string;
-        /** Every PO in the container, this one included (CON-6 takes all their goods out with it). */
-        orders: string[];
+        /**
+         * Every PO in the container, this one included (CON-6 takes all their goods out with it). Absent from a backend
+         * deployed before CON-6, which the page must survive: Vercel goes live before Render does.
+         */
+        orders?: string[];
         /** Only this order's lines in the container. */
         lines: { orderLineId: string; item: string; unit: Unit; bundles: number; quantity: number }[];
       }[]

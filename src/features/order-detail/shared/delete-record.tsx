@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 /**
  * A record's "Delete" on the order page (REC-4 a receipt, CON-6 a container) and its confirmation; Cancel calls
  * nothing. The API decides: what still depends on the record is refused (409 `in_use`) and the same dialog explains why
- * with Close only. A 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
+ * with Close only. Its own 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
  * dialog open, so confirming again retries. Done: a toast and a refresh, so the order's figures and stage follow.
  * Proposed wording.
  */
@@ -46,7 +46,8 @@ export function DeleteRecordButton({
     try {
       await apiClient.delete(path);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) return done(`${Noun} was already deleted.`);
+      // Only the record's own 404 ("Receipt not found.") means it is gone; "Endpoint not found." is a backend without it.
+      if (error instanceof ApiError && error.status === 404 && error.message === `${Noun} not found.`) return done(`${Noun} was already deleted.`);
       if (error instanceof ApiError && error.status === 409 && error.code === "in_use") return setStep({ inUse: error.message });
       handleApiError(error);
       return;

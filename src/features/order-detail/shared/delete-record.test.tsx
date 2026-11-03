@@ -164,6 +164,27 @@ describe("Delete Container (CON-6)", () => {
     expect(router.refresh).toHaveBeenCalledOnce();
   });
 
+  it("still renders against a backend from before CON-6 (no PO list): the tab and its Delete stay", async () => {
+    const older = container(["PO-2051"]);
+    delete older.orders;
+    const user = userEvent.setup();
+    render(<ContainersScreen order={order} containers={[older]} linkContainers canDelete />);
+    expect(screen.getByText("Goods of this order in the container")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete container TCLU6000001" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete Container?" });
+    expect(dialog).not.toHaveTextContent("It also holds");
+  });
+
+  it("a backend without the delete endpoint (404 Endpoint not found.) is an error, not 'already deleted'", async () => {
+    remove.mockRejectedValue(new ApiError(404, "not_found", "Endpoint not found."));
+    const { user, dialog, confirm } = await askContainer();
+    await user.click(confirm);
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(dialog).toBeInTheDocument();
+  });
+
   it("in use: says which records keep it, with Close only", async () => {
     const reason = "Container TCLU6000001 has a clearing record (Clearing in India), so it can't be deleted. Those records can't be removed in the app.";
     remove.mockRejectedValue(new ApiError(409, "in_use", reason));
