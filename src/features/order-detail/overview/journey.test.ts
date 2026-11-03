@@ -13,6 +13,7 @@ const container = {
   loadedOn: "2026-09-09",
   sailedOn: null,
   eta: "2026-09-28",
+  orders: [],
   lines: [],
 };
 const order: Order = { stage: 3, orderDate: "2026-08-05", receipts: [receipt], containers: [container] };
