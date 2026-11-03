@@ -148,8 +148,14 @@ test("an arrived container is cleared, moved by road and received into stock", a
 
     await joseph.getByRole("textbox", { name: "Wholesale team, Denim jeans" }).fill("40");
     await expect(summary).toContainText("Nothing left unassigned");
+    // A double-click opens the confirmation once (the second click doesn't close it); a double-click there saves once.
     await joseph.getByRole("button", { name: "Save and add to stock" }).dblclick();
+    const confirm = joseph.getByRole("alertdialog", { name: "Confirm Goods Receipt" });
+    await expect(confirm).toContainText("3 Bundles");
+    await expect(confirm).toContainText("You are confirming receipt of 3 bundles.");
+    await confirm.getByRole("button", { name: "Confirm Receipt" }).dblclick();
     await expect(toast(joseph, "Goods added to stock").first()).toBeVisible();
+    await expect(confirm).toHaveCount(0);
     await expect(joseph).toHaveURL("/warehouse");
     await joseph.getByRole("searchbox", { name: "Search item or PO" }).fill(order.po);
     await expect(rowOf(joseph, order.po)).toContainText(number);

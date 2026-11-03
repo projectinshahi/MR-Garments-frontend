@@ -1,4 +1,5 @@
 import type { ReceiveGoodsForm, SaveReceiptBody, WarehouseListRow } from "@/lib/api/stages-types";
+import { formatNumber } from "@/lib/formatters";
 
 export const ALL = "all";
 
@@ -72,6 +73,24 @@ export function toReceiptBody(values: ReceiptValues): Omit<SaveReceiptBody, "com
     ),
   };
 }
+
+/**
+ * Before the "Confirm Goods Receipt" question: the required fields, with WH-3's own messages, plus a positive bundle
+ * count (WH-3 takes 0, a draft keeps it) and a piece given to a team. {} when it may be asked; WH-3 checks the rest.
+ */
+export function receiptProblems(values: ReceiptValues, assigned: number) {
+  const problems: Record<string, string> = {};
+  if (!values.locationId) problems.locationId = "Choose a warehouse from the list.";
+  if (!values.receivedOn) problems.receivedOn = "Enter the date received.";
+  if (!values.receivedBy.trim()) problems.receivedBy = "Enter who received the goods.";
+  const bundles = Number(values.bundlesReceived);
+  if (!/^\d+$/.test(values.bundlesReceived) || bundles < 1 || bundles > 2_147_483_647) problems.bundlesReceived = "Enter the bundles received (1 or more).";
+  if (assigned === 0) problems.lines = "Give at least one piece to a team.";
+  return problems;
+}
+
+/** "125 Bundles", "1 Bundle": the count the confirmation asks about. */
+export const bundlesLabel = (count: number) => `${formatNumber(count)} ${count === 1 ? "Bundle" : "Bundles"}`;
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 

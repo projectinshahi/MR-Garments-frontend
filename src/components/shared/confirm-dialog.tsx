@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlertIcon, TriangleAlertIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,11 @@ export const dialogFooterButtonClass = "h-[42px] px-[17px]";
 /**
  * An alertdialog over the screen or dialog that opened it. `danger` is for what can't be undone (Delete: red icon,
  * solid red button), `warning` for what can (Deactivate: amber icon, the soft red button) or only informs (leave out
- * `confirmLabel`: its one button is Close). Focus starts on Cancel, so Enter never confirms by accident, and returns to
- * the button that opened it on close. While `onConfirm` runs, the button shows `pendingLabel` with a spinner and nothing
- * can close or confirm again; the caller closes the dialog (onCancel or `open`) when it is done.
+ * `confirmLabel`: its one button is Close), `confirm` for a final step that isn't destructive (Receive goods: green icon,
+ * the solid primary button; a click outside doesn't close it, so the second click of a double-click on the button that
+ * opened it can't). Focus starts on Cancel, so Enter never confirms by accident, and returns to the button that opened
+ * it on close. While `onConfirm` runs, the button shows `pendingLabel` with a spinner and nothing can close or confirm
+ * again; the caller closes the dialog (onCancel or `open`) when it is done.
  */
 export function ConfirmDialog({
   open,
@@ -33,7 +35,7 @@ export function ConfirmDialog({
   onCancel,
 }: {
   open: boolean;
-  tone?: "danger" | "warning";
+  tone?: "danger" | "warning" | "confirm";
   title: string;
   description: React.ReactNode;
   confirmLabel?: string;
@@ -65,13 +67,14 @@ export function ConfirmDialog({
   // Radix returns focus to a DialogTrigger, and these open from a button's handler instead, so remember that button.
   const opener = useRef<HTMLElement | null>(null);
 
-  const Icon = tone === "danger" ? TriangleAlertIcon : CircleAlertIcon;
+  const Icon = tone === "danger" ? TriangleAlertIcon : tone === "confirm" ? CircleCheckIcon : CircleAlertIcon;
   return (
     <Dialog open={open} onOpenChange={(next) => (next || pending ? undefined : onCancel())}>
       <DialogContent
         role="alertdialog"
         showCloseButton={false}
         className="gap-0 pb-[26px] sm:max-w-[460px]"
+        onPointerDownOutside={tone === "confirm" ? (event) => event.preventDefault() : undefined}
         onOpenAutoFocus={() => {
           opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         }}
@@ -85,7 +88,7 @@ export function ConfirmDialog({
             aria-hidden
             className={cn(
               "flex size-10 shrink-0 items-center justify-center rounded-full",
-              tone === "danger" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning",
+              { danger: "bg-danger-soft text-danger", warning: "bg-warning-soft text-warning", confirm: "bg-success-soft text-success" }[tone],
             )}
           >
             <Icon className="size-5" />
@@ -105,7 +108,7 @@ export function ConfirmDialog({
           {confirmLabel ? (
             <Button
               type="button"
-              variant={tone === "danger" ? "default" : "destructive"}
+              variant={tone === "warning" ? "destructive" : "default"}
               className={cn(dialogFooterButtonClass, tone === "danger" && "bg-destructive text-white hover:bg-danger", pending && "disabled:opacity-100")}
               onClick={confirm}
               disabled={pending}
