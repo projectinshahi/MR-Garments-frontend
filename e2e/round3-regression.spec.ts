@@ -170,7 +170,8 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
         await containerSearch(page).fill(po);
         if (!s.container) return void (await expect(page.getByText(po)).toHaveCount(0));
         await expect(rowOf(page, s.container.number).getByRole("cell")).toHaveText([
-          s.container.number, "Sino Freight", "FOB", po, "6", shortDate(today()), s.container.sailed, s.container.eta, s.container.status,
+          // Management (containers Full) also has the Actions column's Delete.
+          s.container.number, "Sino Freight", "FOB", po, "6", shortDate(today()), s.container.sailed, s.container.eta, s.container.status, "Delete",
         ]);
       },
     ],
