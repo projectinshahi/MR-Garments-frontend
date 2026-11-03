@@ -11,7 +11,14 @@ import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 /**
- * A record's "Delete" on the order page (REC-4 a receipt, CON-6 a container) and its confirmation; Cancel calls
+ * A list's Actions column (Containers, Clearing, Transport). Below lg the table scrolls inside its card, so the column
+ * stays pinned at the right edge and Delete is always in view; header and totals cells keep the table-head colour.
+ */
+export const ACTIONS_COLUMN_CLASS =
+  "max-lg:sticky max-lg:right-0 max-lg:z-10 max-lg:bg-card max-lg:shadow-[inset_1px_0_0_var(--border)] [&:is(th)]:bg-table-head [tfoot_&]:bg-table-head";
+
+/**
+ * A record's "Delete" (REC-4 a receipt, CON-6 a container, CLR-4 a clearing, TRN-4 a trip) and its confirmation; Cancel calls
  * nothing. The API decides: what still depends on the record is refused (409 `in_use`) and the same dialog explains why
  * with Close only. Its own 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
  * dialog open, so confirming again retries. Done: a toast and a refresh, so the order's figures and stage follow.
@@ -26,7 +33,7 @@ export function DeleteRecordButton({
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
-  noun: "receipt" | "container";
+  noun: "receipt" | "container" | "clearing" | "trip";
   /** The button's accessible name, naming the record ("Delete receipt of 3 Oct 2026"). */
   label: string;
   title: string;

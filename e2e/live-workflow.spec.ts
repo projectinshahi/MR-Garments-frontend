@@ -299,7 +299,8 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await viewer.goto("/containers");
     await viewer.getByRole("searchbox", { name: "Search container or PO" }).fill(po);
     await expect(rowOf(viewer, number).getByRole("cell")).toHaveText([
-      number, "Sino Freight", "FOB", po, "8", shortDate(today()), shortDate(today()), shortDate(today(21)), "Arrived, in clearing",
+      // Management (containers Full) also has the Actions column's Delete.
+      number, "Sino Freight", "FOB", po, "8", shortDate(today()), shortDate(today()), shortDate(today(21)), "Arrived, in clearing", "Delete",
     ]);
     await rowOf(viewer, number).getByRole("link", { name: po }).click();
     await expect(viewer).toHaveURL(`/orders/${po}`);

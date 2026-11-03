@@ -11,8 +11,9 @@ import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
+import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import type { ClearingListRow } from "@/lib/api/stages-types";
-import { formatNumber, formatShortDate } from "@/lib/formatters";
+import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 import type { Tone } from "@/types/domain";
 
 import { ALL, clearingState, clearingStatusLabel, filterClearings, timeAtPort, type ClearingFilters, type ClearingState } from "./clearing-logic";
@@ -35,8 +36,55 @@ const focusRing = "rounded-sm font-bold outline-none focus-visible:ring-3 focus-
 const formHref = (row: ClearingListRow) => `/clearing/${row.containerId}`;
 const sumCost = (rows: ClearingListRow[]) => rows.reduce((sum, r) => sum + r.clearingCostInr, 0);
 
-// Column widths from 26_9.1_Clearing_list.jpeg; Clearing cost takes the rest.
-const columnsFor = (today: string): ColumnDef<ClearingListRow>[] => [
+// Clicks inside the Actions cell (its dialog's too: a portal, but they bubble through React) must not open the row.
+const stop = (event: React.MouseEvent) => event.stopPropagation();
+
+/** CLR-4: the clearing of one container. The confirmation names what depends on it (a trip refuses the delete). */
+function DeleteClearing({ row }: { row: ClearingListRow }) {
+  const trip = row.trip;
+  return (
+    <DeleteRecordButton
+      path={`/clearings/${row.containerId}`}
+      noun="clearing"
+      label={`Delete clearing of container ${row.number}`}
+      title="Delete Clearing?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete the clearing of container <strong className="text-foreground">{row.number}</strong>? This can&apos;t be
+            undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Status", clearingStatusLabel(row)],
+              ["Clearing agent", row.agent?.name ?? "–"],
+              ["Arrived at port", row.arrivedOn ? formatDate(row.arrivedOn) : "–"],
+              ["Bill of entry", row.billOfEntry || "–"],
+              ["Clearing cost", formatExactINR(row.clearingCostInr)],
+              ["Orders", row.orders.join(", ") || "–"],
+            ]}
+          />
+          {trip ? (
+            <p className="font-bold text-foreground">
+              {trip.warehouseReceipt
+                ? `Transport trip ${trip.lrNumber} and its ${trip.warehouseReceipt} warehouse receipt depend on this clearing, so it can't be deleted: warehouse receipts can't be removed in the app.`
+                : `Transport trip ${trip.lrNumber} (${trip.status === "on_road" ? "on the way" : "unloaded"}) depends on this clearing, so it can't be deleted until that trip is deleted.`}
+            </p>
+          ) : (
+            <p className="font-bold text-foreground">
+              Its duty and charges leave the landed cost, and the container goes back to waiting for clearing.
+            </p>
+          )}
+          <p>Payments aren&apos;t affected. A clearing with a transport trip can&apos;t be deleted.</p>
+        </>
+      }
+    />
+  );
+}
+
+// Column widths from 26_9.1_Clearing_list.jpeg; Clearing cost takes the rest. With Actions (canDelete, Management, no
+// reference) the clearing agent gives up its fixed width, so the table still fits the 1440 px page.
+const columnsFor = (today: string, canDelete: boolean): ColumnDef<ClearingListRow>[] => [
   {
     accessorKey: "number",
     header: "Container",
@@ -49,7 +97,7 @@ const columnsFor = (today: string): ColumnDef<ClearingListRow>[] => [
     ),
     footer: ({ table }) => `Total, ${formatNumber(table.getCoreRowModel().rows.length)} containers`,
   },
-  { id: "agent", header: "Clearing agent", meta: { className: "w-[194px]" }, cell: ({ row }) => row.original.agent?.name ?? "–" },
+  { id: "agent", header: "Clearing agent", meta: { className: canDelete ? undefined : "w-[194px]" }, cell: ({ row }) => row.original.agent?.name ?? "–" },
   {
     id: "arrivedOn",
     header: "Arrived at port",
@@ -64,6 +112,22 @@ const columnsFor = (today: string): ColumnDef<ClearingListRow>[] => [
     meta: { className: "w-[145px]" },
     cell: ({ row }) => <StatusPill tone={STATE_TONE[clearingState(row.original)]}>{clearingStatusLabel(row.original)}</StatusPill>,
   },
+  ...(canDelete
+    ? [
+        {
+          id: "actions",
+          header: "Actions",
+          meta: { className: `w-[72px] ${ACTIONS_COLUMN_CLASS}` },
+          // Only a container with a clearing record has one to delete.
+          cell: ({ row }) =>
+            row.original.status === "waiting" ? null : (
+              <span onClick={stop}>
+                <DeleteClearing row={row.original} />
+              </span>
+            ),
+        } satisfies ColumnDef<ClearingListRow>,
+      ]
+    : []),
   { id: "timeAtPort", header: "Time at port", meta: { className: "w-[110px]" }, cell: ({ row }) => timeAtPort(row.original, today) },
   {
     id: "clearingCost",
@@ -79,9 +143,9 @@ const columnsFor = (today: string): ColumnDef<ClearingListRow>[] => [
  * the agent or the duty are rows too. Search, agent and status chips filter on the client.
  */
 export function ClearingListScreen({ data }: { data: ClearingListData }) {
-  const { kpis, today, canEnter } = data;
+  const { kpis, today, canEnter, canDelete } = data;
   const navigate = useNavigate();
-  const columns = useMemo(() => columnsFor(today), [today]);
+  const columns = useMemo(() => columnsFor(today, canDelete), [today, canDelete]);
   const [filters, setFilters] = useState<ClearingFilters>({ query: "", agent: ALL, state: ALL });
   const [period, setPeriod] = useState(PERIODS[0].value);
   const set = (patch: Partial<ClearingFilters>) => setFilters((current) => ({ ...current, ...patch }));
