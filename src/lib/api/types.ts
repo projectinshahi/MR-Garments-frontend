@@ -380,6 +380,8 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
         loadedOn: string | null;
         sailedOn: string | null;
         eta: string;
+        /** Every PO in the container, this one included (CON-6 takes all their goods out with it). */
+        orders: string[];
         /** Only this order's lines in the container. */
         lines: { orderLineId: string; item: string; unit: Unit; bundles: number; quantity: number }[];
       }[]

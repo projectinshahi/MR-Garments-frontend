@@ -3,6 +3,7 @@ import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { EmptyState } from "@/components/shared/states";
 import { Timeline } from "@/components/shared/timeline";
 import type { OrderReceipt, OrderView } from "@/features/order-detail/data/queries";
+import { DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { formatDate, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
@@ -12,9 +13,9 @@ import { ReceivingTable } from "./receiving-table";
 /**
  * Order detail, tab d (09_3.1.d_Receiving.jpeg) from ORD-4: KPIs (the main line, as in the orders list), the latest
  * receipt with every line's totals, and each receipt in the history. No photos or papers are recorded, so that card
- * is left out.
+ * is left out. `canDelete` (receiving Full): each receipt in the history has Delete (REC-4).
  */
-export function ReceivingScreen({ order, receipts }: { order: OrderView; receipts: OrderReceipt[] }) {
+export function ReceivingScreen({ order, receipts, canDelete = false }: { order: OrderView; receipts: OrderReceipt[]; canDelete?: boolean }) {
   const latest = receipts.at(-1);
   if (!latest) {
     return (
@@ -39,6 +40,35 @@ export function ReceivingScreen({ order, receipts }: { order: OrderView; receipt
       .filter((line) => line.quantity > 0)
       .map((line) => `${formatQty(line.quantity, line.unit)} ${line.item}`)
       .join(", ");
+  const deleteAction = (receipt: OrderReceipt) => (
+    <DeleteRecordButton
+      path={`/receipts/${receipt.id}`}
+      noun="receipt"
+      label={`Delete receipt of ${formatDate(receipt.receivedOn)}, ${received(receipt)}`}
+      title="Delete Goods Receipt?"
+      description={
+        <>
+          <p>
+            {/* nowrap: "PO-" and "2050" never split over two lines. */}
+            Are you sure you want to delete this receipt from <strong className="whitespace-nowrap text-foreground">{order.po}</strong>? This
+            can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Received on", formatDate(receipt.receivedOn)],
+              ["Office", receipt.office],
+              ["Received", received(receipt)],
+              ["Bundles", formatNumber(receipt.bundles)],
+            ]}
+          />
+          <p>
+            The order&apos;s received quantity goes down by this receipt. If any of these goods are already in a container, delete
+            that container first.
+          </p>
+        </>
+      }
+    />
+  );
 
   return (
     <PageContainer>
@@ -74,7 +104,12 @@ export function ReceivingScreen({ order, receipts }: { order: OrderView; receipt
               className="mt-2.5"
               items={receipts.toReversed().map((receipt, index) => ({
                 title: `Received ${received(receipt)}`,
-                detail: [formatShortDate(receipt.receivedOn), receipt.office, receipt.receivedBy].filter(Boolean).join(" · "),
+                detail: (
+                  <span className="flex flex-wrap items-baseline gap-x-3">
+                    {[formatShortDate(receipt.receivedOn), receipt.office, receipt.receivedBy].filter(Boolean).join(" · ")}
+                    {canDelete ? deleteAction(receipt) : null}
+                  </span>
+                ),
                 marker: index === 0 ? "dot" : "ring",
               }))}
             />

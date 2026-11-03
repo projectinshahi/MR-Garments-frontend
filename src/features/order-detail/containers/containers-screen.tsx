@@ -6,10 +6,12 @@ import { KeyValueList } from "@/components/shared/key-value-list";
 import { EmptyState } from "@/components/shared/states";
 import { TermsBadge } from "@/components/shared/status-pill";
 import { Journey, type JourneyStep } from "@/components/shared/timeline";
+import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import type { OrderContainer, OrderView } from "@/features/order-detail/data/queries";
+import { DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { ReadOnlyField } from "@/features/order-detail/receiving/read-only-field";
-import { formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { formatDate, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
 const linkClass = "rounded-sm outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -23,12 +25,64 @@ function route(c: OrderContainer): JourneyStep[] {
   ];
 }
 
+/** "60 pcs Denim jeans, 20 m Cotton fabric · 15 bundles": this order's goods in the container. */
+const goodsOf = (c: OrderContainer) =>
+  `${c.lines.map((line) => `${formatQty(line.quantity, line.unit)} ${line.item}`).join(", ")} · ${formatNumber(c.lines.reduce((sum, line) => sum + line.bundles, 0))} bundles`;
+
+/** CON-6: the container goes with every order's goods in it, so the confirmation names the other POs. */
+function DeleteContainer({ po, c }: { po: string; c: OrderContainer }) {
+  const others = c.orders.filter((other) => other !== po);
+  return (
+    <DeleteRecordButton
+      path={`/containers/${c.id}`}
+      noun="container"
+      label={`Delete container ${c.number}`}
+      title="Delete Container?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete container <strong className="text-foreground">{c.number}</strong>? This can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Status", CONTAINER_STATUS[c.status].label],
+              ["Terms", c.terms],
+              ["Shipping agent", c.agent.name],
+              ["Loaded on", c.loadedOn ? formatDate(c.loadedOn) : "–"],
+              [`${po} in it`, goodsOf(c)],
+            ]}
+          />
+          {others.length > 0 ? (
+            <p className="font-bold text-foreground">
+              It also holds goods of {others.join(", ")}. They are taken out of the container too.
+            </p>
+          ) : null}
+          <p>
+            The goods go back to received in China, ready to load again. A container with clearing, transport or warehouse
+            records can&apos;t be deleted.
+          </p>
+        </>
+      }
+    />
+  );
+}
+
 /**
  * Order detail, tab e (10_3.1.e_Containers.jpeg) from ORD-4: each container carrying this order (oldest first) with its
  * route and this order's goods in it. Ports, seal and bill of lading aren't part of ORD-4, so they are left out.
- * `linkContainers`: the user may open the container page.
+ * `linkContainers`: the user may open the container page. `canDelete` (containers Full): each container has Delete.
  */
-export function ContainersScreen({ order, containers, linkContainers }: { order: OrderView; containers: OrderContainer[]; linkContainers: boolean }) {
+export function ContainersScreen({
+  order,
+  containers,
+  linkContainers,
+  canDelete = false,
+}: {
+  order: OrderView;
+  containers: OrderContainer[];
+  linkContainers: boolean;
+  canDelete?: boolean;
+}) {
   const count = containers.length;
   const fact = `${count} ${count === 1 ? "container" : "containers"}`;
   if (count === 0) {
@@ -60,6 +114,7 @@ export function ContainersScreen({ order, containers, linkContainers }: { order:
                   )}
                 </>
               }
+              aside={canDelete ? <DeleteContainer po={order.po} c={c} /> : undefined}
               titleGap="none"
               className="flex-1"
             >
