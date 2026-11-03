@@ -287,7 +287,7 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                       }))}
                     />
                     <p className="mt-1 text-[12.5px] leading-4 text-muted-foreground">
-                      The supplier&apos;s other orders, not this PO. Not included in the cost above.
+                      Unpaid orders placed before this trip. Not included in the cost above.
                     </p>
                   </div>
                 ) : null}

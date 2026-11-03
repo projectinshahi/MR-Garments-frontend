@@ -134,7 +134,7 @@ describe("ReceiveGoodsScreen", () => {
     expect(screen.getByText("Guangzhou Textile Co. · 3 unpaid orders")).toBeInTheDocument();
     // Never added across currencies, never converted.
     expect(screen.getByText("¥1,210.50 · $200.00")).toBeInTheDocument();
-    expect(screen.getByText("The supplier's other orders, not this PO. Not included in the cost above.")).toBeInTheDocument();
+    expect(screen.getByText("Unpaid orders placed before this trip. Not included in the cost above.")).toBeInTheDocument();
     // Total, cost per piece and Retail's team cost are the same figures as without it.
     expect(costTexts()).toEqual(without);
   });

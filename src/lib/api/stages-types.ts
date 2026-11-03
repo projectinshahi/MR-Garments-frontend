@@ -223,8 +223,9 @@ export type ReceiveGoodsForm = {
     final: boolean;
   } | null;
   /**
-   * Per supplier of the trip's orders (by name): the unpaid balance of its other orders, one total per order currency,
-   * never converted. Informational only: not part of `cost`. null without landedCost and payments View.
+   * Per supplier of the trip's orders (by name): the unpaid balance of its orders placed before the trip (order date
+   * before the trip's loading day) other than the trip's POs, one total per order currency, never converted.
+   * Informational only: not part of `cost`. null without landedCost and payments View.
    */
   previousOutstanding: { supplierId: string; supplier: string; currency: Currency; orders: number; byCurrency: MoneyTotal[] }[] | null;
 };
