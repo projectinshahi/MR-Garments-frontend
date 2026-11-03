@@ -83,6 +83,7 @@ const form = (patch: Partial<ReceiveGoodsForm> = {}): ReceiveGoodsForm => ({
   ],
   warehouses: [{ id: "w1", name: "Main warehouse" }],
   cost: { goodsInr: 980000, seaFreightInr: 0, clearingInr: 370500, transportInr: 26500, totalInr: 1377000, orderedPieces: 2500, final: false },
+  previousOutstanding: null,
   ...patch,
 });
 const line = form().lines[0]!;

@@ -40,6 +40,7 @@ const form: ReceiveGoodsForm = {
   ],
   warehouses: [{ id: "w1", name: "Main warehouse" }],
   cost: null,
+  previousOutstanding: null,
 };
 const cost = { goodsInr: 12000, seaFreightInr: 0, clearingInr: 37050, transportInr: 2650, totalInr: 51700, orderedPieces: 100, final: false };
 const view = (patch: Partial<ReceiveGoodsForm> = {}, canEnter = true) =>
@@ -104,6 +105,56 @@ describe("ReceiveGoodsScreen", () => {
     expect(screen.getByText("Estimate")).toBeInTheDocument();
     expect(screen.getByText("₹517.00")).toBeInTheDocument();
     expect(screen.getByText("Cost by team")).toBeInTheDocument();
+  });
+
+  it("shows the supplier's previous outstanding apart, per currency, and leaves the cost, per piece and team costs alone", () => {
+    const receipt = { id: "r1", locationId: "w1", receivedOn: "2026-10-04", receivedBy: "Joseph M", bundlesReceived: 4, status: "draft" as const, lines: [{ orderLineId: "l1", teamId: "retail", quantity: 100 }] };
+    const costTexts = () => ["₹51,700", "₹517.00", "₹51,700"].map((text) => screen.getAllByText(text).length);
+    view({ cost, receipt });
+    const without = costTexts();
+    cleanup();
+
+    view({
+      cost,
+      receipt,
+      previousOutstanding: [
+        {
+          supplierId: "s1",
+          supplier: "Guangzhou Textile Co.",
+          currency: "CNY",
+          orders: 3,
+          byCurrency: [
+            { currency: "CNY", amount: 1210.5 },
+            { currency: "USD", amount: 200 },
+          ],
+        },
+      ],
+    });
+    expect(screen.getByText("Previous supplier outstanding")).toBeInTheDocument();
+    expect(screen.getByText("Guangzhou Textile Co. · 3 unpaid orders")).toBeInTheDocument();
+    // Never added across currencies, never converted.
+    expect(screen.getByText("¥1,210.50 · $200.00")).toBeInTheDocument();
+    expect(screen.getByText("The supplier's other orders, not this PO. Not included in the cost above.")).toBeInTheDocument();
+    // Total, cost per piece and Retail's team cost are the same figures as without it.
+    expect(costTexts()).toEqual(without);
+  });
+
+  it("shows nothing owed as 0 in the supplier's currency, one row per supplier, and no row without the figures", () => {
+    view({
+      cost,
+      previousOutstanding: [
+        { supplierId: "s1", supplier: "Foshan Fabrics", currency: "USD", orders: 0, byCurrency: [] },
+        { supplierId: "s2", supplier: "Yiwu Trims", currency: "CNY", orders: 1, byCurrency: [{ currency: "INR", amount: 5000 }] },
+      ],
+    });
+    expect(screen.getAllByText("Previous supplier outstanding")).toHaveLength(2);
+    expect(screen.getByText("Foshan Fabrics · 0 unpaid orders")).toBeInTheDocument();
+    expect(screen.getByText("$0.00")).toBeInTheDocument();
+    expect(screen.getByText("Yiwu Trims · 1 unpaid order")).toBeInTheDocument();
+    expect(screen.getByText("₹5,000.00")).toBeInTheDocument();
+    cleanup();
+    view({ cost, previousOutstanding: null });
+    expect(screen.queryByText("Previous supplier outstanding")).not.toBeInTheDocument();
   });
 
   it("on a CNF container shows the sea freight its orders carry from a FOB container, not the CNF note", () => {

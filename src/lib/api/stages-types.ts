@@ -1,7 +1,7 @@
 // Clearing (CLR-1..3), Transport (TRN-1..3) and Warehouse (WH-1..3): backend docs/wave3-contracts.md section 8.
 // Owner: A5. Dates YYYY-MM-DD; money INR with 2 decimals; quantities whole numbers.
 
-import type { Terms } from "@/types/domain";
+import type { Currency, MoneyTotal, Terms } from "@/types/domain";
 
 import type { ContainerState } from "./types";
 
@@ -222,6 +222,11 @@ export type ReceiveGoodsForm = {
     orderedPieces: number;
     final: boolean;
   } | null;
+  /**
+   * Per supplier of the trip's orders (by name): the unpaid balance of its other orders, one total per order currency,
+   * never converted. Informational only: not part of `cost`. null without landedCost and payments View.
+   */
+  previousOutstanding: { supplierId: string; supplier: string; currency: Currency; orders: number; byCurrency: MoneyTotal[] }[] | null;
 };
 
 /** WH-3 PUT /warehouse-receipts/:transportId. */
