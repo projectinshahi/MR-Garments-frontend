@@ -14,7 +14,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatExactINR, useStageSave } from "@/features/clearing/stage-form";
-import { formatINR, formatNumber, formatQty } from "@/lib/formatters";
+import { formatINR, formatMoneyList, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { ReceiveGoodsData } from "./data/queries";
@@ -50,7 +50,7 @@ const SAVED = { draft: "Receipt draft saved", complete: "Goods added to stock" }
  */
 export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
   const { form, today, me, canEnter } = data;
-  const { trip, receipt, lines, teams, cost } = form;
+  const { trip, receipt, lines, teams, cost, previousOutstanding } = form;
   const [values, setValues] = useState(() => receiptValues(form, today, me));
   const { errors, saving, save } = useStageSave(`/warehouse-receipts/${trip.id}`, RECEIPT_FIELDS, SAVED, "/warehouse");
   const set = (patch: Partial<ReceiptValues>) => setValues((current) => ({ ...current, ...patch }));
@@ -268,6 +268,29 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                   <p className="text-[13px] leading-[18px] text-callout-info-foreground">Cost per piece so far</p>
                   <p className="text-[36px] leading-10 font-bold tracking-tight">{formatINR(sofar.perPiece, 2)}</p>
                 </div>
+                {previousOutstanding?.length ? (
+                  // Earlier liabilities to the supplier, under the cost and apart from it: never in the total, per piece or teams.
+                  <div className="mt-[14.5px] border-t border-border-subtle pt-1">
+                    <KeyValueList
+                      size="sm"
+                      density="compact"
+                      items={previousOutstanding.map((owed) => ({
+                        label: (
+                          <>
+                            Previous supplier outstanding
+                            <span className="block text-[12.5px] leading-[15px] text-muted-foreground">
+                              {owed.supplier} · {owed.orders} unpaid {owed.orders === 1 ? "order" : "orders"}
+                            </span>
+                          </>
+                        ),
+                        value: <span className="font-bold">{formatMoneyList(owed.byCurrency, { decimals: 2 }, owed.currency)}</span>,
+                      }))}
+                    />
+                    <p className="mt-1 text-[12.5px] leading-4 text-muted-foreground">
+                      Unpaid orders placed before this trip. Not included in the cost above.
+                    </p>
+                  </div>
+                ) : null}
               </SectionCard>
 
               <SectionCard title="Cost by team" titleGap="none" bottomGap="form">
