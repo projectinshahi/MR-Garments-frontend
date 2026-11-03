@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useNavigate } from "@/components/layout/navigation-progress";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
@@ -12,8 +12,9 @@ import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filt
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { formatExactINR } from "@/features/clearing/stage-form";
+import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import type { TransportList, TripListRow } from "@/lib/api/stages-types";
-import { formatNumber, formatShortDate } from "@/lib/formatters";
+import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 
 import type { TransportListData } from "./data/queries";
 import { ALL, filterTransports, kpiSubs, transportTotals, type TransportFilters } from "./transport-logic";
@@ -44,9 +45,50 @@ const rowsOf = (rows: { original: TripListRow }[]) => rows.map((r) => r.original
 
 const kpiSub = (text: string) => <span className="text-[12.5px]">{text}</span>;
 
+// Clicks inside the Actions cell (its dialog's too: a portal, but they bubble through React) must not open the row.
+const stop = (event: React.MouseEvent) => event.stopPropagation();
+
+/** TRN-4: one container's road trip. The confirmation names what depends on it (a warehouse receipt refuses it). */
+function DeleteTrip({ row }: { row: TripListRow }) {
+  return (
+    <DeleteRecordButton
+      path={`/transports/${row.containerId}`}
+      noun="trip"
+      label={`Delete trip ${row.lrNumber}`}
+      title="Delete Transport Trip?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete trip <strong className="whitespace-nowrap text-foreground">{row.lrNumber}</strong> of container{" "}
+            <strong className="text-foreground">{row.container}</strong>? This can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Vehicle", row.vehicleNumber],
+              ["Transport company", row.company.name],
+              ["Orders", row.orders.join(", ") || "–"],
+              ["Loaded on", formatDate(row.loadedOn)],
+              ["Unloaded on", row.unloadedOn ? formatDate(row.unloadedOn) : "–"],
+              ["Bundles", row.status === "on_road" ? `${formatNumber(row.bundlesLoaded)} loaded, on the way` : `${formatNumber(row.bundlesReceived ?? 0)} of ${formatNumber(row.bundlesLoaded)} received`],
+              ["Transport cost", formatExactINR(row.costInr)],
+            ]}
+          />
+          <p className="font-bold text-foreground">
+            {row.warehouseReceipt
+              ? `Its ${row.warehouseReceipt} warehouse receipt depends on this trip, so it can't be deleted: warehouse receipts can't be removed in the app.`
+              : "Its freight and handling leave the landed cost, and the container goes back to Ready for transport."}
+          </p>
+          <p>The clearing and payments aren&apos;t affected. A trip with a warehouse receipt can&apos;t be deleted.</p>
+        </>
+      }
+    />
+  );
+}
+
 // Column widths from the reference; together they fill the 1134 px table. With DataTable's 14.5 px cell padding the
-// columns' content needs 1138 px (the table scrolled sideways), so cells pad 14 px; the outer edges keep 14.5 px.
-const columns: ColumnDef<TripListRow>[] = [
+// columns' content needs 1138 px (the table scrolled sideways), so cells pad 14 px; the outer edges keep 14.5 px. With
+// Actions (canDelete, Management, no reference) the company and orders give up their fixed widths to make room.
+const columnsFor = (canDelete: boolean): ColumnDef<TripListRow>[] => [
   {
     id: "vehicle",
     header: "Vehicle / LR number",
@@ -54,9 +96,19 @@ const columns: ColumnDef<TripListRow>[] = [
     cell: ({ row }) => <VehicleCell row={row.original} />,
     footer: ({ table }) => transportTotals(rowsOf(table.getRowModel().rows)).label,
   },
-  { id: "company", header: "Transport company", meta: { className: "w-[145px] px-[14px]" }, cell: ({ row }) => row.original.company.name },
+  {
+    id: "company",
+    header: "Transport company",
+    meta: { className: canDelete ? "px-[14px]" : "w-[145px] px-[14px]" },
+    cell: ({ row }) => row.original.company.name,
+  },
   { accessorKey: "container", header: "Container", meta: { className: "w-[128px] px-[14px]" } },
-  { id: "orders", header: "Orders", meta: { className: "w-[149px] px-[14px]" }, cell: ({ row }) => row.original.orders.join(", ") },
+  {
+    id: "orders",
+    header: "Orders",
+    meta: { className: canDelete ? "px-[14px]" : "w-[149px] px-[14px]" },
+    cell: ({ row }) => row.original.orders.join(", "),
+  },
   {
     accessorKey: "bundlesLoaded",
     header: "Bundles loaded",
@@ -89,6 +141,20 @@ const columns: ColumnDef<TripListRow>[] = [
       );
     },
   },
+  ...(canDelete
+    ? [
+        {
+          id: "actions",
+          header: "Actions",
+          meta: { className: `w-[72px] px-[14px] ${ACTIONS_COLUMN_CLASS}` },
+          cell: ({ row }) => (
+            <span onClick={stop}>
+              <DeleteTrip row={row.original} />
+            </span>
+          ),
+        } satisfies ColumnDef<TripListRow>,
+      ]
+    : []),
   {
     accessorKey: "costInr",
     header: "Transport cost",
@@ -121,8 +187,9 @@ const readyColumns: ColumnDef<Ready>[] = [
  * the client. Below the designed table, the cleared containers still waiting for a vehicle.
  */
 export function TransportListScreen({ data }: { data: TransportListData }) {
-  const { kpis, ready, canEnter } = data;
+  const { kpis, ready, canEnter, canDelete } = data;
   const navigate = useNavigate();
+  const columns = useMemo(() => columnsFor(canDelete), [canDelete]);
   const [filters, setFilters] = useState<TransportFilters>({ query: "", company: ALL, state: ALL });
   const [period, setPeriod] = useState(PERIODS[0].value);
   const set = (patch: Partial<TransportFilters>) => setFilters((current) => ({ ...current, ...patch }));

@@ -14,7 +14,12 @@ export type TransportFormData = NonNullable<Awaited<ReturnType<typeof getTranspo
 /** Transport list (28): TRN-1 and whether the signed-in user may record trips (transport >= Enter). */
 export async function getTransportList() {
   const [list, me] = await Promise.all([apiGet<TransportList>("/transports"), getMe()]);
-  return { ...list, canEnter: !!me && hasAccess(me, "transport", "Enter") };
+  return {
+    ...list,
+    canEnter: !!me && hasAccess(me, "transport", "Enter"),
+    // TRN-4 needs transport Full (Management); the API refuses anyone else too.
+    canDelete: !!me && hasAccess(me, "transport", "Full"),
+  };
 }
 
 /** Transport form (27) for one container: TRN-2, or null for an unknown id (the page calls notFound()). */

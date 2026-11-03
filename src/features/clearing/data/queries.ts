@@ -14,7 +14,13 @@ export type ClearingFormData = NonNullable<Awaited<ReturnType<typeof getClearing
 /** Clearing list (26): CLR-1 and whether the signed-in user may record clearings (clearing >= Enter). */
 export async function getClearingList() {
   const [list, me] = await Promise.all([apiGet<ClearingList>("/clearings"), getMe()]);
-  return { ...list, today: todayInIndia(), canEnter: !!me && hasAccess(me, "clearing", "Enter") };
+  return {
+    ...list,
+    today: todayInIndia(),
+    canEnter: !!me && hasAccess(me, "clearing", "Enter"),
+    // CLR-4 needs clearing Full (Management); the API refuses anyone else too.
+    canDelete: !!me && hasAccess(me, "clearing", "Full"),
+  };
 }
 
 /** Clearing form (25) for one container: CLR-2, or null for an unknown id (the page calls notFound()). */

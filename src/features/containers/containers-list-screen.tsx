@@ -12,7 +12,7 @@ import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filt
 import { PoLink } from "@/components/shared/po-link";
 import { StatusPill, TermsBadge } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
-import { DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 
 import { ALL, CONTAINER_STATUS, containerChips, filterContainers, type ContainerChip, type ContainerFilters } from "./containers-logic";
@@ -64,9 +64,7 @@ function DeleteContainer({ row }: { row: ContainerRow }) {
   );
 }
 
-// Below lg the table scrolls inside its card: Actions stays pinned at the right edge so Delete is always in view.
-const actionsClass =
-  "w-[84px] max-lg:sticky max-lg:right-0 max-lg:z-10 max-lg:bg-card max-lg:shadow-[inset_1px_0_0_var(--border)] [&:is(th)]:bg-table-head";
+const actionsClass = `w-[84px] ${ACTIONS_COLUMN_CLASS}`;
 
 // Column widths measured from 24_8.1_Containers_list.jpeg (cell starts at the 1440 px reference). Actions (canDelete,
 // Management) has no reference: it follows Status.

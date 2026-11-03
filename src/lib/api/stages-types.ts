@@ -30,6 +30,8 @@ export type ClearingListRow = {
   status: ClearingStatus | "waiting";
   /** The four charges; 0 while waiting. */
   clearingCostInr: number;
+  /** The trip that depends on the clearing (CLR-4 refuses while there is one). Absent from a backend before CLR-4. */
+  trip?: { lrNumber: string; status: TripStatus; warehouseReceipt: "draft" | "stocked" | null } | null;
 };
 
 /** CLR-1 GET /clearings. KPIs count clearings cleared today or in the 29 days before (India). */
@@ -87,6 +89,8 @@ export type TripListRow = {
   status: TripStatus;
   /** Freight + loading and unloading. */
   costInr: number;
+  /** The warehouse receipt that depends on the trip (TRN-4 refuses while there is one). Absent before TRN-4. */
+  warehouseReceipt?: "draft" | "stocked" | null;
 };
 
 /** TRN-1 GET /transports. KPIs count trips unloaded today or in the 29 days before (India). */
