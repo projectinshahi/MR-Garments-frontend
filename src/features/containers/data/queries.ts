@@ -30,6 +30,8 @@ export async function getContainersList() {
     // From the rows, not CON-2: that needs Enter access and the list only View.
     agents: agentNames(containers),
     canEnter: !!me && hasAccess(me, "containers", "Enter"),
+    // CON-6 needs containers Full (Management); the API refuses anyone else too.
+    canDelete: !!me && hasAccess(me, "containers", "Full"),
     linkPos: !!me && canOpen(me, "/orders"),
   };
 }

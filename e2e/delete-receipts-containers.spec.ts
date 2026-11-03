@@ -1,5 +1,5 @@
 import { expect, test, toast } from "./live-api";
-import { PROCUREMENT_STATE } from "./sessions";
+import { LOADING_STAFF_STATE, PROCUREMENT_STATE } from "./sessions";
 
 // Deleting an order's receipts and containers (REC-4, CON-6), then the order (ORD-6), against the live API. Role/label
 // locators only (hidden <Activity> routes stay in the DOM). Each test makes its own order.
@@ -60,6 +60,42 @@ test("Management clears an order's container, then its receipt, then deletes the
   await expect(toast(page, "Order deleted").first()).toBeVisible();
   await expect(page).toHaveURL("/orders");
   expect((await api.request.get(`/api/v1/orders/${po}`)).status()).toBe(404);
+});
+
+test("Management deletes a container from the Containers list: Actions follows Status, the row stays put", async ({ page, api }) => {
+  const { po } = await api.createOrder();
+  await api.receive(po, { "Denim jeans": 60 });
+  const container = await api.load([{ po, item: "Denim jeans", quantity: 60, bundles: 6 }]);
+
+  await page.goto("/containers");
+  expect((await page.getByRole("columnheader").allTextContents()).slice(-2)).toEqual(["Status", "Actions"]);
+  await page.getByRole("searchbox", { name: "Search container or PO" }).fill(container.number);
+  const remove = page.getByRole("button", { name: `Delete container ${container.number}` });
+  await remove.click();
+  const ask = page.getByRole("alertdialog", { name: "Delete Container?" });
+  await expect(ask).toContainText(`Orders inside${po}`);
+  await ask.getByRole("button", { name: "Cancel" }).click();
+  await expect(ask).toBeHidden();
+  // Neither Delete nor Cancel opened the row's container page.
+  await expect(page).toHaveURL("/containers");
+
+  await remove.click();
+  await ask.getByRole("button", { name: "Delete container" }).click();
+  await expect(toast(page, "Container deleted").first()).toBeVisible();
+  await expect(remove).toHaveCount(0);
+  await expect(page).toHaveURL("/containers");
+  expect((await api.order(po)).stage).toBe(2);
+});
+
+test.describe("China staff (containers Enter)", () => {
+  test.use({ storageState: LOADING_STAFF_STATE });
+
+  test("see the Containers list without an Actions column", async ({ page }) => {
+    await page.goto("/containers");
+    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Actions" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Delete container/ })).toHaveCount(0);
+  });
 });
 
 test.describe("Procurement (receiving View, no containers)", () => {

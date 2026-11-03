@@ -12,7 +12,8 @@ import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filt
 import { PoLink } from "@/components/shared/po-link";
 import { StatusPill, TermsBadge } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
-import { formatShortDate } from "@/lib/formatters";
+import { DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 
 import { ALL, CONTAINER_STATUS, containerChips, filterContainers, type ContainerChip, type ContainerFilters } from "./containers-logic";
 import type { ContainerRow, ContainersListData } from "./data/queries";
@@ -29,8 +30,47 @@ const linkClass = "rounded-sm outline-none hover:underline focus-visible:ring-3 
 // Links inside a clickable row: the row's own click must not also navigate.
 const stop = (event: React.MouseEvent) => event.stopPropagation();
 
-// Column widths measured from 24_8.1_Containers_list.jpeg (cell starts at the 1440 px reference).
-const columnsFor = (linkPos: boolean): ColumnDef<ContainerRow>[] => [
+/** CON-6 from the list: the order page's Delete Container dialog, with every PO in the container. */
+function DeleteContainer({ row }: { row: ContainerRow }) {
+  return (
+    <DeleteRecordButton
+      path={`/containers/${row.id}`}
+      noun="container"
+      label={`Delete container ${row.number}`}
+      title="Delete Container?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete container <strong className="text-foreground">{row.number}</strong>? This can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Status", CONTAINER_STATUS[row.status].label],
+              ["Terms", row.terms],
+              ["Shipping agent", row.agent],
+              ["Loaded on", row.loadedOn ? formatDate(row.loadedOn) : "–"],
+              ["Orders inside", row.orders.map((o) => o.po).join(", ") || "–"],
+              ["Bundles", formatNumber(row.bundles)],
+            ]}
+          />
+          {row.orders.length > 0 ? <p className="font-bold text-foreground">The goods of every order in it are taken out of the container.</p> : null}
+          <p>
+            The goods go back to received in China, ready to load again. A container with clearing, transport or warehouse
+            records can&apos;t be deleted.
+          </p>
+        </>
+      }
+    />
+  );
+}
+
+// Below lg the table scrolls inside its card: Actions stays pinned at the right edge so Delete is always in view.
+const actionsClass =
+  "w-[84px] max-lg:sticky max-lg:right-0 max-lg:z-10 max-lg:bg-card max-lg:shadow-[inset_1px_0_0_var(--border)] [&:is(th)]:bg-table-head";
+
+// Column widths measured from 24_8.1_Containers_list.jpeg (cell starts at the 1440 px reference). Actions (canDelete,
+// Management) has no reference: it follows Status.
+const columnsFor = (linkPos: boolean, canDelete: boolean): ColumnDef<ContainerRow>[] => [
   {
     accessorKey: "number",
     header: "Container",
@@ -73,6 +113,21 @@ const columnsFor = (linkPos: boolean): ColumnDef<ContainerRow>[] => [
     header: "Status",
     cell: ({ row }) => <StatusPill tone={CONTAINER_STATUS[row.original.status].tone}>{CONTAINER_STATUS[row.original.status].label}</StatusPill>,
   },
+  ...(canDelete
+    ? [
+        {
+          id: "actions",
+          header: "Actions",
+          meta: { className: actionsClass },
+          // The dialog renders in a portal but its clicks bubble here through React: none may open the row.
+          cell: ({ row }) => (
+            <span onClick={stop}>
+              <DeleteContainer row={row.original} />
+            </span>
+          ),
+        } satisfies ColumnDef<ContainerRow>,
+      ]
+    : []),
 ];
 
 /**
@@ -80,9 +135,9 @@ const columnsFor = (linkPos: boolean): ColumnDef<ContainerRow>[] => [
  * A row (or its container number, for the keyboard) opens the container's detail page.
  */
 export function ContainersListScreen({ data }: { data: ContainersListData }) {
-  const { kpis, canEnter, linkPos } = data;
+  const { kpis, canEnter, canDelete, linkPos } = data;
   const navigate = useNavigate();
-  const columns = useMemo(() => columnsFor(linkPos), [linkPos]);
+  const columns = useMemo(() => columnsFor(linkPos, canDelete), [linkPos, canDelete]);
   const [filters, setFilters] = useState<ContainerFilters>({ query: "", agent: ALL, terms: ALL, chip: "active" });
   const set = (patch: Partial<ContainerFilters>) => setFilters((current) => ({ ...current, ...patch }));
   const rows = filterContainers(data.containers, filters);

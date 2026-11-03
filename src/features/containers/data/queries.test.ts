@@ -45,9 +45,12 @@ describe("containers queries", () => {
     expect(data.kpis).toEqual({ active: 1, arrivingThisWeek: ["MSKU 4471203"], loadingNow: [], arrivedInClearing: [] });
     expect(data.footnote).toContain("(PO-2037 above)");
     expect(data.agents).toEqual(["Sino Freight"]);
-    expect(data).toMatchObject({ canEnter: true, linkPos: false });
+    expect(data).toMatchObject({ canEnter: true, canDelete: false, linkPos: false });
     getMe.mockResolvedValue(viewer);
-    expect(await getContainersList()).toMatchObject({ canEnter: false, linkPos: true });
+    expect(await getContainersList()).toMatchObject({ canEnter: false, canDelete: false, linkPos: true });
+    // Delete (CON-6) only with containers Full: Management.
+    getMe.mockResolvedValue({ shell: "management", permissions: { containers: "Full", ordersView: "Full" } });
+    expect(await getContainersList()).toMatchObject({ canEnter: true, canDelete: true, linkPos: true });
   });
 
   it("returns CON-2 options with today, or null without Enter (no CON-2 call)", async () => {

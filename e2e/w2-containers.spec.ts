@@ -45,7 +45,8 @@ test("the list shows each container, filters by search, agent, terms and status,
 
   await search(page).fill(sino.number);
   await expect(rowOf(page, sino.number).getByRole("cell")).toHaveText([
-    sino.number, "Sino Freight", "FOB", `${order.po} (part)`, "3", shortDate(today(-1)), "–", shortDate(today(19)), "Loading",
+    // Management (containers Full) also has the Actions column's Delete.
+    sino.number, "Sino Freight", "FOB", `${order.po} (part)`, "3", shortDate(today(-1)), "–", shortDate(today(19)), "Loading", "Delete",
   ]);
   // Search by PO finds both containers of the order.
   await search(page).fill(order.po);
