@@ -11,6 +11,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { FilterSelect, SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
+import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, PLAIN_ACTIONS_COLUMN_CLASS, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import type { WarehouseList, WarehouseListRow } from "@/lib/api/stages-types";
 import { formatDate, formatINR, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
@@ -26,9 +27,98 @@ const TEAM_WIDTHS = ["w-[73.5px]", "w-[105.5px]", "w-[78.5px]"];
 
 const focusRing = "rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 const receiveHref = (transportId: string) => `/warehouse/receive/${transportId}`;
+// Clicks inside an Actions cell (its dialog's too: a portal, but they bubble through React) must not open the row.
+const stop = (event: React.MouseEvent) => event.stopPropagation();
 
-/** Column widths measured from the reference; the totals row follows the rows shown. */
-const columnsFor = (teams: Team[], totals: Totals, showCosts: boolean): ColumnDef<WarehouseListRow>[] => [
+/** "Retail 60 · Wholesale 40": pieces per team, in the teams' order; a team no longer listed counts as "Other teams". */
+function splitText(split: Record<string, number>, teams: Team[]) {
+  const named = teams.filter((team) => (split[team.id] ?? 0) > 0).map((team) => `${teamLabel(team.name)} ${formatNumber(split[team.id]!)}`);
+  const other = Object.entries(split).reduce((sum, [id, pieces]) => (teams.some((team) => team.id === id) ? sum : sum + pieces), 0);
+  return [...named, ...(other > 0 ? [`Other teams ${formatNumber(other)}`] : [])].join(" · ") || "None yet";
+}
+
+const DeleteNote = () => <p>Payments, the trip and the clearing aren&apos;t affected.</p>;
+
+/** WH-4 of a stocked receipt, from one of its rows: the receipt covers every order in the trip, filtered out or not. */
+function DeleteStocked({ row, all, teams }: { row: WarehouseListRow; all: WarehouseListRow[]; teams: Team[] }) {
+  const mine = all.filter((r) => r.receiptId === row.receiptId);
+  const split: Record<string, number> = {};
+  for (const r of mine) for (const [id, pieces] of Object.entries(r.teams)) split[id] = (split[id] ?? 0) + pieces;
+  const pos = mine.map((r) => r.po).join(", ");
+  const received = mine.reduce((sum, r) => sum + r.received, 0);
+  return (
+    <DeleteRecordButton
+      path={`/warehouse-receipts/${row.transportId}`}
+      noun="warehouse receipt"
+      label={`Delete warehouse receipt of ${row.po}, container ${row.container}`}
+      title="Delete Warehouse Receipt?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete the warehouse receipt of {row.lrNumber ? <>trip <strong className="whitespace-nowrap text-foreground">{row.lrNumber}</strong> </> : null}
+            (container <strong className="text-foreground">{row.container}</strong>)? This can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Status", "Completed, in stock"],
+              ["Orders", pos],
+              ["Warehouse", row.location.name],
+              ["Received on", formatDate(row.receivedOn)],
+              ["Received", `${formatQty(received, "pcs")}${row.bundlesReceived === undefined ? "" : ` · ${formatNumber(row.bundlesReceived)} bundles`}`],
+              ["Teams", splitText(split, teams)],
+            ]}
+          />
+          <p className="font-bold text-foreground">
+            Its goods leave stock: these team quantities are removed, the cost per piece of {pos} is no longer final, and the trip goes back to
+            waiting to be received.
+          </p>
+          <DeleteNote />
+        </>
+      }
+    />
+  );
+}
+
+/** WH-4 of a draft: nothing of it is in stock yet. */
+function DeleteDraft({ trip, teams }: { trip: Ready; teams: Team[] }) {
+  const draft = trip.draft;
+  return (
+    <DeleteRecordButton
+      path={`/warehouse-receipts/${trip.transportId}`}
+      noun="warehouse receipt"
+      label={`Delete draft warehouse receipt of trip ${trip.lrNumber}`}
+      title="Delete Warehouse Receipt?"
+      description={
+        <>
+          <p>
+            Are you sure you want to delete the draft warehouse receipt of trip <strong className="whitespace-nowrap text-foreground">{trip.lrNumber}</strong>{" "}
+            (container <strong className="text-foreground">{trip.container}</strong>)? This can&apos;t be undone.
+          </p>
+          <RecordFacts
+            facts={[
+              ["Status", "Draft"],
+              ["Orders", trip.orders.join(", ") || "–"],
+              ["Warehouse", draft?.location ?? trip.destination],
+              ["Received on", draft ? formatDate(draft.receivedOn) : "–"],
+              ["Received", draft ? `${formatQty(draft.received, "pcs")} · ${formatNumber(draft.bundlesReceived)} bundles` : "–"],
+              ["Teams", draft ? splitText(draft.teams, teams) : "–"],
+            ]}
+          />
+          <p className="font-bold text-foreground">
+            Only the draft goes: nothing of it is in stock, so stock, costs and order stages don&apos;t change. The trip stays waiting to be received.
+          </p>
+          <DeleteNote />
+        </>
+      }
+    />
+  );
+}
+
+/**
+ * Column widths measured from the reference; the totals row follows the rows shown. With Actions (canDelete, Management,
+ * no reference; the table has no Status, so it comes last) the item gives up its fixed width so the table still fits.
+ */
+const columnsFor = (teams: Team[], totals: Totals, showCosts: boolean, canDelete: boolean, all: WarehouseListRow[]): ColumnDef<WarehouseListRow>[] => [
   { accessorKey: "receivedOn", header: "Received on", cell: ({ row }) => formatDate(row.original.receivedOn), footer: "Total", meta: { className: "w-[126px]" } },
   {
     accessorKey: "item",
@@ -42,7 +132,7 @@ const columnsFor = (teams: Team[], totals: Totals, showCosts: boolean): ColumnDe
       </div>
     ),
     footer: () => `${totals.items} ${totals.items === 1 ? "item" : "items"}`,
-    meta: { className: "w-[252px]" },
+    meta: { className: canDelete ? undefined : "w-[252px]" },
   },
   { accessorKey: "container", header: "Container", meta: { className: "w-[150px]" } },
   {
@@ -73,10 +163,21 @@ const columnsFor = (teams: Team[], totals: Totals, showCosts: boolean): ColumnDe
         } satisfies ColumnDef<WarehouseListRow>,
       ]
     : []),
+  ...(canDelete
+    ? [
+        {
+          id: "actions",
+          header: "Actions",
+          meta: { className: `w-[72px] ${ACTIONS_COLUMN_CLASS}` },
+          cell: ({ row }) => <DeleteStocked row={row.original} all={all} teams={teams} />,
+        } satisfies ColumnDef<WarehouseListRow>,
+      ]
+    : []),
 ];
 
 type Ready = WarehouseList["ready"][number];
-const readyColumns: ColumnDef<Ready>[] = [
+/** Trips waiting to be received; with Actions (canDelete) right after Status: Delete on a draft only. */
+const readyColumnsFor = (canDelete: boolean, teams: Team[]): ColumnDef<Ready>[] => [
   {
     id: "vehicle",
     header: "Vehicle / LR number",
@@ -99,6 +200,22 @@ const readyColumns: ColumnDef<Ready>[] = [
     meta: { className: "w-[140px]" },
     cell: ({ row }) => (row.original.receiptStatus === "draft" ? <StatusPill tone="info">Draft saved</StatusPill> : <StatusPill tone="warning">Not started</StatusPill>),
   },
+  ...(canDelete
+    ? [
+        {
+          id: "actions",
+          header: "Actions",
+          meta: { className: `w-[72px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
+          // A trip not started has no receipt to delete.
+          cell: ({ row }) =>
+            row.original.receiptStatus === "draft" ? (
+              <span onClick={stop}>
+                <DeleteDraft trip={row.original} teams={teams} />
+              </span>
+            ) : null,
+        } satisfies ColumnDef<Ready>,
+      ]
+    : []),
 ];
 
 /**
@@ -107,7 +224,7 @@ const readyColumns: ColumnDef<Ready>[] = [
  * Below the designed table, the unloaded trips still waiting to be received.
  */
 export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
-  const { teams, ready, showCosts, canEnter } = data;
+  const { teams, ready, showCosts, canEnter, canDelete } = data;
   const navigate = useNavigate();
   const [filters, setFilters] = useState<ReceiptFilters>({ query: "", warehouse: data.warehouses[0]?.id ?? ALL, team: ALL });
   const set = (patch: Partial<ReceiptFilters>) => setFilters((current) => ({ ...current, ...patch }));
@@ -176,7 +293,7 @@ export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
         </KpiRow>
 
         <DataTable
-          columns={columnsFor(teams, totals, showCosts)}
+          columns={columnsFor(teams, totals, showCosts, canDelete, data.rows)}
           data={rows}
           getRowId={(r) => r.id}
           size="sm"
@@ -191,7 +308,7 @@ export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
         {ready.length ? (
           <SectionCard title="Waiting to be received" aside={<CardNote size="sm">Unloaded, not yet in stock</CardNote>} titleGap="none" bottomGap="tight">
             <DataTable
-              columns={readyColumns}
+              columns={readyColumnsFor(canDelete, teams)}
               data={ready}
               getRowId={(r) => r.transportId}
               variant="plain"

@@ -19,6 +19,8 @@ export async function getWarehouseList() {
     ...list,
     showCosts: !!me && hasAccess(me, "landedCost", "View"),
     canEnter: !!me && hasAccess(me, "warehouse", "Enter"),
+    // WH-4 needs warehouse Full (Management); the API refuses anyone else too.
+    canDelete: !!me && hasAccess(me, "warehouse", "Full"),
   };
 }
 

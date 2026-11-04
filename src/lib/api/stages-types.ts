@@ -164,6 +164,9 @@ export type WarehouseListRow = {
   teams: Record<string, number>;
   /** The order's landed cost per piece; null without landedCost >= View or while unknown. */
   costPerPieceInr: number | null;
+  /** The receipt's trip and bundles (WH-4's confirmation). Absent from a backend before WH-4. */
+  lrNumber?: string;
+  bundlesReceived?: number;
 };
 
 /** WH-1 GET /warehouse-receipts. `teams`: the active teams (the split columns). */
@@ -181,6 +184,8 @@ export type WarehouseList = {
     destination: string;
     receiptStatus: "draft" | null;
     orders: string[];
+    /** The draft's own values (WH-4's confirmation); null without one. Absent from a backend before WH-4. */
+    draft?: { receivedOn: string; location: string; bundlesReceived: number; received: number; teams: Record<string, number> } | null;
   }[];
   teams: Ref[];
   warehouses: Ref[];
