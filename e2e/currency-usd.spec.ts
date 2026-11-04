@@ -68,6 +68,8 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
       "₹88,350",
       amountCell("0", "$"),
       "Not yet due",
+      // Management (payments Full): the Delete menu of the order's payments.
+      "Delete",
     ]);
   });
 

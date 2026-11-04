@@ -136,6 +136,8 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
           s.paidInr,
           amountCell(s.balance.replace("¥", "")),
           "Not yet due",
+          // Management (payments Full): the Delete menu, once the order has a payment.
+          ...(s.payments > 0 ? ["Delete"] : []),
         ]);
       },
     ],
@@ -219,7 +221,7 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
   await test.step("record a payment (Payments dialog), reload", async () => {
     await page.goto("/payments");
     await poSearch(page).fill(po);
-    await rowOf(page, po).getByRole("button", { name: po }).click();
+    await rowOf(page, po).getByRole("button", { name: po, exact: true }).click();
     await page.getByRole("button", { name: `+ Record payment for ${po}` }).click();
     const form = page.getByRole("dialog", { name: `Record payment for ${po}` });
     await form.getByRole("combobox", { name: "Kind" }).selectOption("Balance");
@@ -479,7 +481,7 @@ test("PO links from Payments, Calendar (month, week, list), Receiving and Contai
   // Payments: the row selects the order, the card heading links to it.
   await page.goto("/payments");
   await poSearch(page).fill(f.po);
-  await rowOf(page, f.po).getByRole("button", { name: f.po }).click();
+  await rowOf(page, f.po).getByRole("button", { name: f.po, exact: true }).click();
   await page.getByRole("heading", { name: `${f.po} payments` }).getByRole("link", { name: f.po }).click();
   await expect(page).toHaveURL(`/orders/${f.po}`);
 
@@ -736,7 +738,7 @@ test("payment, receipt and container forms: 500, aborted and 401 keep the values
   // Payment.
   await page.goto("/payments");
   await poSearch(page).fill(order.po);
-  await rowOf(page, order.po).getByRole("button", { name: order.po }).click();
+  await rowOf(page, order.po).getByRole("button", { name: order.po, exact: true }).click();
   await page.getByRole("button", { name: `+ Record payment for ${order.po}` }).click();
   const form = page.getByRole("dialog", { name: `Record payment for ${order.po}` });
   await form.getByRole("combobox", { name: "Kind" }).selectOption("Balance");
