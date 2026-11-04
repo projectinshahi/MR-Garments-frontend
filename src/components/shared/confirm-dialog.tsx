@@ -73,7 +73,8 @@ export function ConfirmDialog({
       <DialogContent
         role="alertdialog"
         showCloseButton={false}
-        className="gap-0 pb-[26px] sm:max-w-[460px]"
+        // A long record (facts listing many orders) scrolls inside the dialog rather than off a short screen.
+        className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto pb-[26px] sm:max-w-[460px]"
         onPointerDownOutside={tone === "confirm" ? (event) => event.preventDefault() : undefined}
         onOpenAutoFocus={() => {
           opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

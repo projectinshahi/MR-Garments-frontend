@@ -10,11 +10,39 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreateTransportCompanyBody, TransportCompanyResponse, TransportCompanyRow, UpdateTransportCompanyBody } from "@/lib/api/types";
+import { formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import { addHref, DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import {
+  addHref,
+  DeactivateConfirm,
+  type Deletable,
+  fieldClass,
+  labelClass,
+  orDash,
+  setApiErrors,
+  SettingsDialog,
+  SettingsDialogFooter,
+  useSettingsDialog,
+} from "./settings-dialog";
 
 const DEACTIVATE_NOTE = "It won’t be offered on new trips. Trips that already use it keep it.";
+
+/** The transport company as its Delete sees it: the edit dialog's and the table row's. */
+export const transportCompanyDeletable = (row: TransportCompanyRow): Deletable => ({
+  path: `/transport-companies/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "transport company",
+  active: row.status === "Active",
+  deactivateNote: DEACTIVATE_NOTE,
+  usedBy: "trips",
+  details: [
+    ["Contact person", orDash(row.contactPerson)],
+    ["Phone", orDash(row.phone)],
+    ["Trips so far", formatNumber(row.tripsSoFar)],
+  ],
+});
 
 // No reference design: built from the Add supplier dialog (53_17.4) and the shared Settings dialog shell.
 
@@ -124,13 +152,7 @@ function TransportCompanyForm({ row, onCancel, onSaved }: { row?: TransportCompa
         submitLabel="Save transport company"
         submitting={formState.isSubmitting}
         remove={
-          editing && {
-            path: `/transport-companies/${editing.id}`,
-            name: editing.name,
-            noun: "transport company",
-            active: editing.status === "Active",
-            deactivateNote: DEACTIVATE_NOTE,
-          }
+          editing && transportCompanyDeletable(editing)
         }
       />
       {editing ? (

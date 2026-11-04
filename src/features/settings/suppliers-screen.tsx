@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { SupplierRow } from "@/lib/api/types";
 import { CURRENCY_SYMBOL } from "@/lib/formatters";
 
-import { ADD_SUPPLIER_HREF, SupplierDialog } from "./add-supplier-dialog";
+import { ADD_SUPPLIER_HREF, supplierDeletable, SupplierDialog } from "./add-supplier-dialog";
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
 import type { SupplierDraft } from "./settings-logic";
 
@@ -31,6 +31,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         columns={supplierColumns}
         searchText={contactSearch}
         noun="suppliers"
+        deletable={supplierDeletable}
         footnote="Suppliers appear in the dropdown when a new order is created."
         action={
           <Button asChild size="header" className={actionClass}>

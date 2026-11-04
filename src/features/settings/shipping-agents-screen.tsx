@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { ShippingAgentRow } from "@/lib/api/types";
 
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
-import { ADD_SHIPPING_AGENT_HREF, ShippingAgentDialog } from "./shipping-agents-dialog";
+import { ADD_SHIPPING_AGENT_HREF, shippingAgentDeletable, ShippingAgentDialog } from "./shipping-agents-dialog";
 
 const shippingColumns: ColumnDef<ShippingAgentRow>[] = [
   { accessorKey: "name", header: "Shipping agent", meta: bold },
@@ -28,6 +28,7 @@ export function ShippingAgentsScreen({ rows }: { rows: ShippingAgentRow[] }) {
         columns={shippingColumns}
         searchText={contactSearch}
         noun="shipping agents"
+        deletable={shippingAgentDeletable}
         footnote="The shipping agent looks after the container from China to the Indian port. The agent does not log in."
         action={
           <Button asChild size="header" className={actionClass}>

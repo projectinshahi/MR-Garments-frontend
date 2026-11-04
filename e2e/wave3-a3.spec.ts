@@ -54,7 +54,7 @@ test("adds, edits and deactivates an office or warehouse", async ({ page }) => {
   await expect(page).toHaveURL(/\/settings\/offices$/);
   await expect(page.getByText("Office or warehouse added", { exact: true })).toBeVisible();
   // The server sets the country from the type.
-  await expect(row(page, name).getByRole("cell")).toHaveText([name, "China office", "China", "1 Test Road, Yiwu", "", "Active", "Edit"]);
+  await expect(row(page, name).getByRole("cell")).toHaveText([name, "China office", "China", "1 Test Road, Yiwu", "", "Active", "EditDelete"]);
 
   // A name already used, in another capitalisation.
   await page.getByRole("link", { name: "+ Add office or warehouse" }).click();
@@ -96,7 +96,7 @@ test("adds, renames and deactivates a team", async ({ page }) => {
   await save.click();
   await expect(add).toBeHidden();
   await expect(page.getByText("Team added", { exact: true })).toBeVisible();
-  await expect(row(page, `${name} draft`).getByRole("cell")).toHaveText([`${name} draft`, "0", "₹0", "–", "Active", "Edit"]);
+  await expect(row(page, `${name} draft`).getByRole("cell")).toHaveText([`${name} draft`, "0", "₹0", "–", "Active", "EditDelete"]);
 
   // Renaming onto a seeded team's name is refused.
   await page.getByRole("link", { name: `Edit ${name} draft` }).click();

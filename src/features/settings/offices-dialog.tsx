@@ -12,7 +12,18 @@ import { apiClient } from "@/lib/api/client";
 import type { CreateLocationBody, LocationResponse, LocationRow, OfficeType, UpdateLocationBody } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import {
+  DeactivateConfirm,
+  type Deletable,
+  fieldClass,
+  labelClass,
+  listFact,
+  orDash,
+  setApiErrors,
+  SettingsDialog,
+  SettingsDialogFooter,
+  useSettingsDialog,
+} from "./settings-dialog";
 
 // No reference design: built from the shared dialog in the style of 53_17.4_Add_supplier_(pop-up).jpeg.
 
@@ -27,6 +38,23 @@ export const OFFICE_TEXT = {
   saved: "Office or warehouse saved",
   deactivate: "An inactive office or warehouse no longer appears when recording receipts or assigning users. Users already there keep it.",
 };
+
+/** The office or warehouse as its Delete sees it: the edit dialog's and the table row's. */
+export const officeDeletable = (row: LocationRow): Deletable => ({
+  path: `/locations/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "office or warehouse",
+  active: row.status === "Active",
+  deactivateNote: OFFICE_TEXT.deactivate,
+  usedBy: "users, China receipts, trips or warehouse receipts",
+  details: [
+    ["Office type", row.type],
+    ["Country", row.country],
+    ["Address", orDash(row.address)],
+    ["Staff", listFact(row.staff)],
+  ],
+});
 
 const officeSchema = z.object({
   name: z.string().trim().min(1, OFFICE_TEXT.nameEmpty),
@@ -128,7 +156,7 @@ function OfficeForm({ row, onCancel, onSaved }: { row?: LocationRow; onCancel: (
         submitLabel="Save office or warehouse"
         submitting={isSubmitting}
         remove={
-          row && { path: `/locations/${row.id}`, name: row.name, noun: "office or warehouse", active: row.status === "Active", deactivateNote: OFFICE_TEXT.deactivate }
+          row && officeDeletable(row)
         }
       />
       <DeactivateConfirm

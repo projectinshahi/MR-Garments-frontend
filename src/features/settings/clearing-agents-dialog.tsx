@@ -10,11 +10,40 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { ClearingAgentResponse, ClearingAgentRow, CreateClearingAgentBody, UpdateClearingAgentBody } from "@/lib/api/types";
+import { formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import { addHref, DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import {
+  addHref,
+  DeactivateConfirm,
+  type Deletable,
+  fieldClass,
+  labelClass,
+  orDash,
+  setApiErrors,
+  SettingsDialog,
+  SettingsDialogFooter,
+  useSettingsDialog,
+} from "./settings-dialog";
 
 const DEACTIVATE_NOTE = "It won’t be offered on new clearings. Clearings that already use it keep it.";
+
+/** The clearing agent as its Delete sees it: the edit dialog's and the table row's. */
+export const clearingAgentDeletable = (row: ClearingAgentRow): Deletable => ({
+  path: `/clearing-agents/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "clearing agent",
+  active: row.status === "Active",
+  deactivateNote: DEACTIVATE_NOTE,
+  usedBy: "container clearings",
+  details: [
+    ["Contact person", orDash(row.contactPerson)],
+    ["Phone", orDash(row.phone)],
+    ["Port", orDash(row.port)],
+    ["Containers cleared", formatNumber(row.containersCleared)],
+  ],
+});
 
 // No reference design: built from the Add supplier dialog (53_17.4) and the shared Settings dialog shell.
 
@@ -132,7 +161,7 @@ function ClearingAgentForm({ row, onCancel, onSaved }: { row?: ClearingAgentRow;
         submitLabel="Save clearing agent"
         submitting={formState.isSubmitting}
         remove={
-          editing && { path: `/clearing-agents/${editing.id}`, name: editing.name, noun: "clearing agent", active: editing.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+          editing && clearingAgentDeletable(editing)
         }
       />
       {editing ? (

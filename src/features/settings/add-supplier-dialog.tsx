@@ -11,15 +11,17 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreateSupplierBody, SupplierResponse, SupplierRow, UpdateSupplierBody } from "@/lib/api/types";
 import { SUCCESS } from "@/lib/feedback";
-import { CURRENCY_NAME } from "@/lib/formatters";
+import { CURRENCY_NAME, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { CURRENCIES } from "@/types/domain";
 
 import {
   addHref,
   DeactivateConfirm,
+  type Deletable,
   fieldClass,
   labelClass,
+  orDash,
   setApiErrors,
   SettingsDialog,
   SettingsDialogFooter,
@@ -31,6 +33,24 @@ const PATH = "/settings/suppliers";
 export const ADD_SUPPLIER_HREF = addHref(PATH);
 export const SUPPLIER_SAVED = "Supplier saved";
 const DEACTIVATE_NOTE = "It won't appear when a new order is created. Orders that already use it keep it.";
+
+/** The supplier as its Delete sees it: the edit dialog's and the table row's. */
+export const supplierDeletable = (row: SupplierRow): Deletable => ({
+  path: `/suppliers/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "supplier",
+  active: row.status === "Active",
+  deactivateNote: DEACTIVATE_NOTE,
+  usedBy: "orders",
+  details: [
+    ["Contact person", orDash(row.contactPerson)],
+    ["Phone / WeChat", orDash(row.phone)],
+    ["City", orDash(row.city)],
+    ["Currency", CURRENCY_NAME[row.currency]],
+    ["Open orders", formatNumber(row.openOrders)],
+  ],
+});
 
 const STATUSES = ["Active", "Inactive"] as const;
 const formSchema = supplierSchema.extend({ status: z.enum(STATUSES) });
@@ -169,7 +189,7 @@ function SupplierForm({
           submitLabel="Save supplier"
           submitting={formState.isSubmitting}
           remove={
-            supplier && { path: `/suppliers/${supplier.id}`, name: supplier.name, noun: "supplier", active: supplier.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+            supplier && supplierDeletable(supplier)
           }
         />
       </form>

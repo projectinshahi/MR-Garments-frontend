@@ -26,7 +26,7 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
 
   await expect(page.getByText("Item added")).toBeVisible();
   await expect(add).toBeHidden();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Pieces", "24", "", "Active", "Edit"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Pieces", "24", "", "Active", "EditDelete"]);
 
   // Switch to a bundle label; the item is on no order, so its unit can still change.
   await page.getByRole("link", { name: `Edit ${NAME}` }).click();
@@ -41,7 +41,7 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
   await expect(edit).toBeHidden();
 
   await page.reload();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Active", "Edit"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Active", "EditDelete"]);
 
   // Deactivating asks first; Cancel saves nothing.
   await page.getByRole("link", { name: `Edit ${NAME}` }).click();
@@ -59,5 +59,5 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
 
   await expect(rowOf(page)).toHaveCount(0);
   await page.getByRole("group", { name: "Status" }).getByRole("button", { name: "Inactive" }).click();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Inactive", "Edit"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Inactive", "EditDelete"]);
 });

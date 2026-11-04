@@ -10,13 +10,16 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreateShippingAgentBody, ShippingAgentResponse, ShippingAgentRow, UpdateShippingAgentBody } from "@/lib/api/types";
+import { formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import {
   addHref,
   DeactivateConfirm,
+  type Deletable,
   fieldClass,
   labelClass,
+  orDash,
   setApiErrors,
   SettingsDialog,
   SettingsDialogFooter,
@@ -24,6 +27,23 @@ import {
 } from "./settings-dialog";
 
 const DEACTIVATE_NOTE = "It won't appear when a container is loaded. Containers that already use it keep it.";
+
+/** The shipping agent as its Delete sees it: the edit dialog's and the table row's. */
+export const shippingAgentDeletable = (row: ShippingAgentRow): Deletable => ({
+  path: `/shipping-agents/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "shipping agent",
+  active: row.status === "Active",
+  deactivateNote: DEACTIVATE_NOTE,
+  usedBy: "containers or agent payments",
+  details: [
+    ["Contact person", orDash(row.contactPerson)],
+    ["Phone", orDash(row.phone)],
+    ["Office city", orDash(row.officeCity)],
+    ["Active containers", formatNumber(row.activeContainers)],
+  ],
+});
 
 const PATH = "/settings/shipping-agents";
 export const ADD_SHIPPING_AGENT_HREF = addHref(PATH);
@@ -133,7 +153,7 @@ function ShippingAgentForm({ agent, onCancel, onSaved }: { agent?: ShippingAgent
           submitLabel="Save shipping agent"
           submitting={formState.isSubmitting}
           remove={
-            agent && { path: `/shipping-agents/${agent.id}`, name: agent.name, noun: "shipping agent", active: agent.status === "Active", deactivateNote: DEACTIVATE_NOTE }
+            agent && shippingAgentDeletable(agent)
           }
         />
       </form>

@@ -62,7 +62,7 @@ for (const tab of TABS) {
     await expect(page.getByText(`${Noun} added`)).toBeVisible();
     await expect(add).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`${tab.path}$`));
-    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(tab.fields), "0", "Active", "Edit"]);
+    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(tab.fields), "0", "Active", "EditDelete"]);
 
     // A seeded name in another capitalisation: the API's 409 under the name field.
     await page.getByRole("link", { name: `+ Add ${tab.noun}` }).click();
@@ -82,9 +82,9 @@ for (const tab of TABS) {
     await expect(page.getByText(`${Noun} saved`)).toBeVisible();
     await expect(edit).toBeHidden();
     const changed = tab.fields.map(([label, value]) => [label, label === tab.change[0] ? tab.change[1] : value] as const);
-    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Active", "Edit"]);
+    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Active", "EditDelete"]);
     await page.reload();
-    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Active", "Edit"]);
+    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Active", "EditDelete"]);
 
     // Deactivate: asks first; Cancel saves nothing, Deactivate does.
     await page.getByRole("link", { name: `Edit ${tab.name}` }).click();
@@ -106,6 +106,6 @@ for (const tab of TABS) {
     await page.reload();
     await expect(rowOf(page)).toHaveCount(0);
     await page.getByRole("group", { name: "Status" }).getByRole("button", { name: "Inactive" }).click();
-    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Inactive", "Edit"]);
+    await expect(rowOf(page).getByRole("cell")).toHaveText([tab.name, ...values(changed), "0", "Inactive", "EditDelete"]);
   });
 }
