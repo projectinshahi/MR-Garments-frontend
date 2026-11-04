@@ -24,7 +24,8 @@ export const ACTIONS_COLUMN_CLASS = `${PLAIN_ACTIONS_COLUMN_CLASS} [&:is(th)]:bg
  * nothing. The API decides: what still depends on the record is refused (409 `in_use`) and the same dialog explains why
  * with Close only. Its own 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
  * dialog open, so confirming again retries. Done: a toast and a refresh, so the order's figures and stage follow.
- * Proposed wording.
+ * `opened`: mounted already asking, without its own button (a menu picked the record); `onClosed` runs when the dialog
+ * closes, whichever way. Proposed wording.
  */
 export function DeleteRecordButton({
   path,
@@ -32,6 +33,8 @@ export function DeleteRecordButton({
   label,
   title,
   description,
+  opened = false,
+  onClosed,
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
@@ -40,14 +43,20 @@ export function DeleteRecordButton({
   label: string;
   title: string;
   description: React.ReactNode;
+  opened?: boolean;
+  onClosed?: () => void;
 }) {
   const router = useRouter();
   // null: closed. "ask": the confirmation. An object: the API's reason the record can't be deleted.
-  const [step, setStep] = useState<null | "ask" | { inUse: string }>(null);
+  const [step, setStep] = useState<null | "ask" | { inUse: string }>(opened ? "ask" : null);
   const Noun = `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 
-  function done(message: string) {
+  function close() {
     setStep(null);
+    onClosed?.();
+  }
+  function done(message: string) {
+    close();
     notifySuccess(message);
     router.refresh();
   }
@@ -73,10 +82,12 @@ export function DeleteRecordButton({
 
   return (
     <>
-      <button type="button" aria-label={label} className={cn(rowActionClass, "text-danger")} onClick={() => setStep("ask")}>
-        Delete
-      </button>
-      <ConfirmDialog open={step !== null} onCancel={() => setStep(null)} {...dialog} />
+      {opened ? null : (
+        <button type="button" aria-label={label} className={cn(rowActionClass, "text-danger")} onClick={() => setStep("ask")}>
+          Delete
+        </button>
+      )}
+      <ConfirmDialog open={step !== null} onCancel={close} {...dialog} />
     </>
   );
 }

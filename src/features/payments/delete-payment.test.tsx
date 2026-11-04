@@ -44,11 +44,12 @@ describe("Delete deposits and payments (PAY-3)", () => {
     const page = renderPage(false);
     expect(screen.queryByRole("button", { name: /^Delete (deposit|payment)/ })).toBeNull();
     page.unmount();
-    renderPage(true);
+    const withDelete = renderPage(true);
     expect(screen.getAllByRole("button", { name: /^Delete (deposit|payment)/ }).map((b) => b.getAttribute("aria-label"))).toEqual([
       "Delete deposit of 1 Oct 2026, ¥5,000",
       "Delete payment of 12 Nov 2026, ¥15,000",
     ]);
+    withDelete.unmount();
 
     const tabNone = renderTab(false);
     expect(screen.queryByRole("columnheader", { name: "Actions" })).toBeNull();
@@ -128,5 +129,91 @@ describe("Delete deposits and payments (PAY-3)", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(dialog).toBeInTheDocument();
     expect(router.refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Payments by order: Actions (PAY-3)", () => {
+  const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash" } as const;
+  const byOrder: PaymentsResponse = {
+    orders: [
+      { orderId: "o1", po: "PO-3001", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 9_000, paidCny: 0, paidInr: 0, balanceCny: 9_000, nextDue: null },
+      api.orders[0]!,
+      { orderId: "o3", po: "PO-3003", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 4_000, paidCny: 2_000, paidInr: 24_000, balanceCny: 2_000, nextDue: null },
+    ],
+    payments: [{ ...paid3, orderId: "o3", po: "PO-3003", currency: "CNY" }, ...api.payments],
+  };
+  const renderList = (canDelete: boolean) =>
+    render(<PaymentsScreen data={{ ...toPaymentsData(byOrder, "2026-11-10"), agents: null, linkPo: false, canDelete }} />);
+  const table = () => screen.getAllByRole("table")[0]!;
+  const trigger = (po: string) => screen.getByRole("button", { name: `Delete a payment of ${po}` });
+  const pick = async (user: ReturnType<typeof userEvent.setup>, po: string, choice: string) => {
+    await user.click(trigger(po));
+    await user.click(await screen.findByRole("menuitem", { name: choice }));
+  };
+
+  it("puts Actions last for payments Full only, with Delete on each order that has payments", () => {
+    const accounts = renderList(false);
+    expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Delete a payment of/ })).toBeNull();
+    accounts.unmount();
+
+    renderList(true);
+    expect(within(table()).getAllByRole("columnheader").map((th) => th.textContent).at(-1)).toBe("Actions");
+    // PO-3001 has no payments, so nothing to delete.
+    expect(screen.getAllByRole("button", { name: /^Delete a payment of/ }).map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Delete a payment of PO-3002",
+      "Delete a payment of PO-3003",
+    ]);
+  });
+
+  it("lists the order's payments, oldest first; the one picked opens its usual dialog; Cancel and Escape send nothing", async () => {
+    const user = userEvent.setup();
+    renderList(true);
+    await user.click(trigger("PO-3002"));
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Deposit · 1 Oct 2026 · ¥5,000", "Balance · due 12 Nov 2026 · ¥15,000"]);
+    await user.click(screen.getByRole("menuitem", { name: "Deposit · 1 Oct 2026 · ¥5,000" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete Deposit?" });
+    expect(dialog).toHaveTextContent(`TypeDepositReference${deposit.id}OrderPO-3002 · Hangzhou SilkPaid toHangzhou Silk`);
+    expect(dialog).toHaveTextContent("Amount¥5,000 · ₹60,000 at");
+    expect(dialog).toHaveTextContent("Paid so far for PO-3002 goes from ¥5,000 to ¥0, and the balance to pay from ¥15,000 to ¥20,000.");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+
+    await pick(user, "PO-3002", "Balance · due 12 Nov 2026 · ¥15,000");
+    expect(await screen.findByRole("alertdialog", { name: "Delete Payment?" })).toHaveTextContent("StatusDue");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("sends one DELETE for the picked payment and refreshes; the selected order doesn't change", async () => {
+    remove.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderList(true);
+    // PO-3002 is selected on load (the first order with payments); deleting from PO-3003's row leaves it selected.
+    expect(screen.getByRole("heading", { level: 2, name: "PO-3002 payments" })).toBeInTheDocument();
+    await pick(user, "PO-3003", "Balance · 20 Oct 2026 · ¥2,000");
+    await user.dblClick(within(await screen.findByRole("alertdialog", { name: "Delete Payment?" })).getByRole("button", { name: "Delete payment" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Payment deleted"));
+    expect(remove).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith(`/payments/${paid3.id}`);
+    expect(router.refresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole("heading", { level: 2, name: "PO-3002 payments" })).toBeInTheDocument();
+    // The page is usable again: a row click still selects an order.
+    await user.click(screen.getByRole("button", { name: "PO-3001" }));
+    expect(screen.getByRole("heading", { level: 2, name: "PO-3001 payments" })).toBeInTheDocument();
+  });
+
+  it("an API error is shown and the dialog stays open to try again", async () => {
+    remove.mockRejectedValueOnce(new ApiError(403, "forbidden", "You don't have access to this."));
+    const user = userEvent.setup();
+    renderList(true);
+    await pick(user, "PO-3002", "Deposit · 1 Oct 2026 · ¥5,000");
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete Deposit?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete deposit" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Delete deposit" })).toBeEnabled();
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 });

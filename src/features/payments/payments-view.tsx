@@ -9,11 +9,13 @@ import { DataTable } from "@/components/shared/data-table";
 import { SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
+import { PLAIN_ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
 import type { OrderOptions } from "@/lib/api/types";
 import { CURRENCY_SYMBOL, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
+import { DeletePaymentMenu } from "./delete-payment";
 import { filterOrders } from "./filter-orders";
 import { PaymentDetailCard } from "./payment-detail";
 import { RecordPaymentDialog } from "./record-payment-dialog";
@@ -25,9 +27,10 @@ const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</
 
 /**
  * `currency`: the one currency every order is in, shown in the headers as in the reference ("Order value (¥)"); null
- * when orders are in different currencies, and each amount then shows its own symbol.
+ * when orders are in different currencies, and each amount then shows its own symbol. `actions`: the Actions column's
+ * cell (PAY-3, payments Full; the table has no Status, so it comes last), or null without it.
  */
-const columns = (currency: Currency | null): ColumnDef<OrderPaymentRow>[] => {
+const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => React.ReactNode) | null): ColumnDef<OrderPaymentRow>[] => {
   const label = (text: string) => head(currency ? `${text} (${CURRENCY_SYMBOL[currency]})` : text);
   const amount = (value: number, row: OrderPaymentRow) => (currency ? formatNumber(value) : formatMoney(value, row.currency));
   return [
@@ -82,6 +85,16 @@ const columns = (currency: Currency | null): ColumnDef<OrderPaymentRow>[] => {
       return nextDueTone ? <StatusPill tone={nextDueTone}>{formatShortDate(nextDue)}</StatusPill> : formatShortDate(nextDue);
     },
   },
+  ...(actions
+    ? [
+        {
+          id: "actions",
+          header: () => head("Actions"),
+          meta: { className: `${PAD} w-[84px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
+          cell: ({ row }) => actions(row.original),
+        } satisfies ColumnDef<OrderPaymentRow>,
+      ]
+    : []),
   ];
 };
 
@@ -148,7 +161,18 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
             className="min-w-0 pt-3.5 pb-[18px]"
           >
             <DataTable
-              columns={columns(single)}
+              columns={columns(
+                single,
+                canDelete
+                  ? (row) => (
+                      <DeletePaymentMenu
+                        // Oldest first, as the order's payment card numbers them.
+                        payments={payments.filter((p) => p.po === row.po).toReversed()}
+                        order={{ po: row.po, supplier: row.supplier, currency: row.currency, paidCny: row.paid, balanceCny: row.balance }}
+                      />
+                    )
+                  : null,
+              )}
               data={visible}
               getRowId={(row) => row.po}
               density="tall"
