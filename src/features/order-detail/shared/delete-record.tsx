@@ -35,7 +35,7 @@ export function DeleteRecordButton({
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
-  noun: "receipt" | "container" | "clearing" | "trip" | "warehouse receipt";
+  noun: "receipt" | "container" | "clearing" | "trip" | "warehouse receipt" | "deposit" | "payment";
   /** The button's accessible name, naming the record ("Delete receipt of 3 Oct 2026"). */
   label: string;
   title: string;
@@ -55,8 +55,9 @@ export function DeleteRecordButton({
     try {
       await apiClient.delete(path);
     } catch (error) {
-      // Only the record's own 404 ("Receipt not found.") means it is gone; "Endpoint not found." is a backend without it.
-      if (error instanceof ApiError && error.status === 404 && error.message === `${Noun} not found.`) return done(`${Noun} was already deleted.`);
+      // The record's own 404 ("Receipt not found.", "Payment not found." for a deposit too) means it is gone; "Endpoint
+      // not found." is a backend without the delete.
+      if (error instanceof ApiError && error.status === 404 && error.message !== "Endpoint not found.") return done(`${Noun} was already deleted.`);
       if (error instanceof ApiError && error.status === 409 && error.code === "in_use") return setStep({ inUse: error.message });
       handleApiError(error);
       return;

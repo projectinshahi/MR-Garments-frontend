@@ -29,9 +29,10 @@ test("Deposits & payments: KPIs, every payment at its own rate, totals and the I
   await expect(kpi(page, "Balance to pay")).toContainText("¥4,500");
 
   await expect(rows(page)).toHaveCount(4);
-  await expect(rows(page).nth(1).getByRole("cell")).toHaveText([longDate(today(-5)), "Deposit", "Foshan Fabrics", "¥2,000", "12.00", "₹24,000"]);
-  await expect(rows(page).nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Sino Freight", "¥1,500", "12.50", "₹18,750"]);
-  await expect(rows(page).nth(3).getByRole("cell")).toHaveText(["Total paid", "", "", "¥3,500", "", "₹42,750"]);
+  // Management (payments Full) also has the Actions column's Delete; the totals row leaves it empty.
+  await expect(rows(page).nth(1).getByRole("cell")).toHaveText([longDate(today(-5)), "Deposit", "Foshan Fabrics", "¥2,000", "12.00", "₹24,000", "Delete"]);
+  await expect(rows(page).nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Sino Freight", "¥1,500", "12.50", "₹18,750", "Delete"]);
+  await expect(rows(page).nth(3).getByRole("cell")).toHaveText(["Total paid", "", "", "¥3,500", "", "₹42,750", ""]);
 
   await expect(kv(page, "¥2,000 × 12.00")).toHaveText("₹24,000");
   await expect(kv(page, "¥1,500 × 12.50")).toHaveText("₹18,750");
