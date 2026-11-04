@@ -178,11 +178,14 @@ describe("Payments by order: Actions (PAY-3)", () => {
     expect(dialog).toHaveTextContent("Paid so far for PO-3002 goes from ¥5,000 to ¥0, and the balance to pay from ¥15,000 to ¥20,000.");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    // Focus goes back to the menu's trigger, not to the page.
+    await waitFor(() => expect(trigger("PO-3002")).toHaveFocus());
 
     await pick(user, "PO-3002", "Balance · due 12 Nov 2026 · ¥15,000");
     expect(await screen.findByRole("alertdialog", { name: "Delete Payment?" })).toHaveTextContent("StatusDue");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(trigger("PO-3002")).toHaveFocus());
     expect(remove).not.toHaveBeenCalled();
   });
 

@@ -39,6 +39,8 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
       paidInr,
       amountCell(balance.replace("¥", "")),
       "Not yet due",
+      // Every viewer here is Management (payments Full): the Actions column's Delete menu.
+      "Delete",
     ]);
     await viewer.goto(`/orders/${po}/payments`);
     await expect(kpi(viewer, "Order value")).toContainText("¥4,000");
@@ -117,9 +119,10 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     expect(order.payments).toHaveLength(2);
     expect(order.payments![1]).toMatchObject({ kind: "Balance", payee: "Dragon Cargo", payeeRole: "agent", amountCny: 500, rateInr: 12.5, mode: "Wire" });
     await expectMoney(page, "¥1,500", "₹18,250", "¥2,500", 2);
+    // Management (payments Full): each payment has the Actions column's Delete.
     const rows = page.getByRole("table").getByRole("row");
-    await expect(rows.nth(1).getByRole("cell")).toHaveText([longDate(today()), "Deposit", "Shenzhen Apparel", "¥1,000", "12.00", "₹12,000"]);
-    await expect(rows.nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Dragon Cargo", "¥500", "12.50", "₹6,250"]);
+    await expect(rows.nth(1).getByRole("cell")).toHaveText([longDate(today()), "Deposit", "Shenzhen Apparel", "¥1,000", "12.00", "₹12,000", "Delete"]);
+    await expect(rows.nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Dragon Cargo", "¥500", "12.50", "₹6,250", "Delete"]);
   });
 
   await test.step("China staff record a short receipt with a remark (stage 1 to 2)", async () => {

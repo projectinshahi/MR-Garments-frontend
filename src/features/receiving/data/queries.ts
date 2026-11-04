@@ -16,6 +16,7 @@ export type ReceiptState = "partly" | "complete";
 export type ReceiptRow = {
   id: string;
   receivedOn: string;
+  orderId: string;
   po: string;
   supplier: string;
   item: string;
@@ -30,6 +31,10 @@ export type ReceiptRow = {
   receivedBy: string;
   state: ReceiptState;
   statusLabel: string;
+  /** What this receipt brought in: "60 pcs Denim jeans, 20 pcs Track pants" (the main line alone on an older backend). */
+  received: string;
+  /** Containers holding goods only this receipt covers, so it can't be deleted while any; null: not known. */
+  containers: string[] | null;
 };
 
 export type ReceiptLine = {
@@ -53,7 +58,8 @@ const nullOn403 = (error: unknown): null => {
 
 /**
  * Receiving (China) list: REC-1 rows, KPIs from them (and REC-2's waiting orders), filter options from the rows, and
- * what the signed-in user may do: record receipts (receiving >= Enter) and open orders from the PO.
+ * what the signed-in user may do: record receipts (receiving >= Enter), delete them (receiving Full: Management, REC-4)
+ * and open orders from the PO.
  */
 export async function getReceivingList() {
   const [items, options, me] = await Promise.all([
@@ -67,6 +73,7 @@ export async function getReceivingList() {
     offices: uniqueSorted(items.map((r) => r.office)),
     suppliers: uniqueSorted(items.map((r) => r.supplier)),
     canRecord: !!me && hasAccess(me, "receiving", "Enter"),
+    canDelete: !!me && hasAccess(me, "receiving", "Full"),
     linkPos: !!me && canOpen(me, "/orders"),
   };
 }

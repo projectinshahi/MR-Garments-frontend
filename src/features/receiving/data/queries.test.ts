@@ -50,7 +50,22 @@ describe("getReceivingList", () => {
     expect(data.offices).toEqual(["Guangzhou office", "Yiwu office"]);
     expect(data.suppliers).toEqual(["Foshan Fabrics", "Shenzhen Apparel"]);
     expect(data.kpis.waitingToBeReceived).toBe(0);
-    expect(data).toMatchObject({ canRecord: true, linkPos: true });
+    // Receiving Enter records receipts but doesn't delete them (REC-4 is receiving Full).
+    expect(data).toMatchObject({ canRecord: true, canDelete: false, linkPos: true });
+  });
+
+  it("offers Delete with receiving Full (Management), with what each receipt brought in and its containers", async () => {
+    getMe.mockResolvedValue({ ...manager, permissions: { receiving: "Full", ordersView: "View" } });
+    const lines = [
+      { item: "Men's jackets", unit: "pcs", quantity: 1200 },
+      { item: "Cotton fabric", unit: "m", quantity: 40 },
+    ] as const;
+    answer({ "/receipts": [{ ...row, lines, containers: ["TCLU6000001"] }, { ...row, id: "r0" }], "/receipts/options": options });
+    const data = await getReceivingList();
+    expect(data.canDelete).toBe(true);
+    expect(data.receipts[0]).toMatchObject({ orderId: "o35", received: "1,200 pcs Men's jackets, 40 m Cotton fabric", containers: ["TCLU6000001"] });
+    // A backend without the fields: the main line, containers unknown.
+    expect(data.receipts[1]).toMatchObject({ received: "1,200 pcs Men's jackets", containers: null });
   });
 
   it("hides Record receipt and PO links from a viewer without Enter or Orders access", async () => {

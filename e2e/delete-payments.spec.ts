@@ -63,6 +63,8 @@ test("Management deletes a payment from the Payments by order menu; the row and 
   await expect(ask).toContainText(`Paid so far for ${po} goes from ¥500 to ¥200`);
   await page.keyboard.press("Escape");
   await expect(ask).toBeHidden();
+  // Focus is back on the menu's trigger.
+  await expect(menu).toBeFocused();
 
   const deletes: string[] = [];
   page.on("request", (request) => {

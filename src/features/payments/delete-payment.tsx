@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { OrderPayment } from "@/features/order-detail/data/queries";
@@ -96,10 +96,12 @@ export const paymentChoice = (payment: OrderPayment, currency: Currency) => {
 /**
  * An order row's Delete (Payments by order): a menu of that order's payments; the one picked opens its usual PAY-3
  * confirmation (DeletePaymentButton, mounted already asking). None without payments. The menu isn't modal, so the
- * dialog it opens takes over cleanly; clicks never reach the row (which would select the order).
+ * dialog it opens takes over cleanly; clicks never reach the row (which would select the order). The dialog opens once
+ * the menu has closed and focus is back on the trigger, so closing the dialog returns focus there.
  */
 export function DeletePaymentMenu({ payments, order }: { payments: OrderPayment[]; order: PaymentOrderFacts }) {
   const [picked, setPicked] = useState<string | null>(null);
+  const chosen = useRef<string | null>(null);
   const payment = payments.find((p) => p.id === picked);
   if (payments.length === 0) return null;
   return (
@@ -111,9 +113,17 @@ export function DeletePaymentMenu({ payments, order }: { payments: OrderPayment[
             <ChevronDownIcon aria-hidden className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto min-w-56">
+        <DropdownMenuContent
+          align="end"
+          className="w-auto min-w-56"
+          // Runs as the menu closes, before Radix focuses the trigger; the dialog then mounts with the trigger as its opener.
+          onCloseAutoFocus={() => {
+            if (chosen.current) setPicked(chosen.current);
+            chosen.current = null;
+          }}
+        >
           {payments.map((p) => (
-            <DropdownMenuItem key={p.id} onSelect={() => setPicked(p.id)}>
+            <DropdownMenuItem key={p.id} onSelect={() => (chosen.current = p.id)}>
               {paymentChoice(p, order.currency)}
             </DropdownMenuItem>
           ))}
