@@ -33,6 +33,7 @@ export function toReceiptRow(r: ReceiptListItem): ReceiptRow {
   return {
     id: r.id,
     receivedOn: r.receivedOn,
+    orderId: r.orderId,
     po: r.po,
     supplier: r.supplier,
     item: r.item,
@@ -46,6 +47,8 @@ export function toReceiptRow(r: ReceiptListItem): ReceiptRow {
     receivedBy: r.receivedBy,
     state: complete ? "complete" : "partly",
     statusLabel: complete ? "Complete" : "Partly received",
+    received: (r.lines ?? [{ item: r.item, unit: r.unit, quantity: r.thisReceipt }]).map((l) => `${formatQty(l.quantity, l.unit)} ${l.item}`).join(", "),
+    containers: r.containers ?? null,
   };
 }
 

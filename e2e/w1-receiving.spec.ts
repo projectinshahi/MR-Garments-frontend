@@ -41,10 +41,12 @@ test("the list shows each receipt with its totals, filters by search, office, su
   await search(page).fill(partly.po);
   await expect(rowOf(page, partly.po).getByRole("cell")).toHaveText([
     shortDate(today()), partly.po, "Hangzhou Knits", "Ladies kurtis", "200 pcs", "120", "120", "–", "4", "Suresh Menon", "Partly received",
+    // Management (receiving Full): the Actions column's Delete.
+    "Delete",
   ]);
   await search(page).fill("shenzhen apparel");
   await expect(rowOf(page, complete.po).getByRole("cell")).toHaveText([
-    shortDate(today()), complete.po, "Shenzhen Apparel", "Track pants", "90 pcs", "90", "90", "0", "3", "Suresh Menon", "Complete",
+    shortDate(today()), complete.po, "Shenzhen Apparel", "Track pants", "90 pcs", "90", "90", "0", "3", "Suresh Menon", "Complete", "Delete",
   ]);
   await search(page).fill("no such receipt zzz");
   await expect(page.getByText(EMPTY)).toBeVisible();

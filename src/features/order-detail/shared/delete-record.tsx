@@ -25,7 +25,8 @@ export const ACTIONS_COLUMN_CLASS = `${PLAIN_ACTIONS_COLUMN_CLASS} [&:is(th)]:bg
  * with Close only. Its own 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
  * dialog open, so confirming again retries. Done: a toast and a refresh, so the order's figures and stage follow.
  * `opened`: mounted already asking, without its own button (a menu picked the record); `onClosed` runs when the dialog
- * closes, whichever way. Proposed wording.
+ * closes, whichever way. `refused`: the page already knows what depends on the record, so Delete opens that "Can't
+ * delete" explanation (Close only) instead of a confirmation the API would refuse. Proposed wording.
  */
 export function DeleteRecordButton({
   path,
@@ -35,6 +36,7 @@ export function DeleteRecordButton({
   description,
   opened = false,
   onClosed,
+  refused,
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
@@ -45,10 +47,11 @@ export function DeleteRecordButton({
   description: React.ReactNode;
   opened?: boolean;
   onClosed?: () => void;
+  refused?: React.ReactNode;
 }) {
   const router = useRouter();
-  // null: closed. "ask": the confirmation. An object: the API's reason the record can't be deleted.
-  const [step, setStep] = useState<null | "ask" | { inUse: string }>(opened ? "ask" : null);
+  // null: closed. "ask": the confirmation. An object: why the record can't be deleted (the API's reason or `refused`).
+  const [step, setStep] = useState<null | "ask" | { inUse: React.ReactNode }>(opened ? "ask" : null);
   const Noun = `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 
   function close() {
@@ -67,23 +70,27 @@ export function DeleteRecordButton({
       // The record's own 404 ("Receipt not found.", "Payment not found." for a deposit too) means it is gone; "Endpoint
       // not found." is a backend without the delete.
       if (error instanceof ApiError && error.status === 404 && error.message !== "Endpoint not found.") return done(`${Noun} was already deleted.`);
-      if (error instanceof ApiError && error.status === 409 && error.code === "in_use") return setStep({ inUse: error.message });
+      if (error instanceof ApiError && error.status === 409 && error.code === "in_use") return setStep({ inUse: <p>{error.message}</p> });
       handleApiError(error);
       return;
     }
     done(`${Noun} deleted`);
   }
 
-  const inUse = typeof step === "object" && step !== null ? step.inUse : null;
   const dialog =
-    inUse === null
-      ? { tone: "danger" as const, title, description, confirmLabel: `Delete ${noun}`, pendingLabel: "Deleting…", onConfirm: remove }
-      : { title: `Can't delete ${noun}`, description: <p>{inUse}</p> };
+    typeof step === "object" && step !== null
+      ? { title: `Can't delete ${noun}`, description: step.inUse }
+      : { tone: "danger" as const, title, description, confirmLabel: `Delete ${noun}`, pendingLabel: "Deleting…", onConfirm: remove };
 
   return (
     <>
       {opened ? null : (
-        <button type="button" aria-label={label} className={cn(rowActionClass, "text-danger")} onClick={() => setStep("ask")}>
+        <button
+          type="button"
+          aria-label={label}
+          className={cn(rowActionClass, "text-danger")}
+          onClick={() => setStep(refused ? { inUse: refused } : "ask")}
+        >
           Delete
         </button>
       )}

@@ -267,6 +267,10 @@ export type ReceiptListItem = {
   totalSoFar: number;
   bundles: number;
   receivedBy: string;
+  /** This receipt's lines (none received as 0). Optional: a backend before 2026-11-04 leaves it and `containers` out. */
+  lines?: { item: string; unit: Unit; quantity: number }[];
+  /** Containers holding goods only this receipt covers: REC-4 refuses while there is any. */
+  containers?: string[];
 };
 
 /** REC-2 GET /api/v1/receipts/options. The money fields are null for users without payments View (China staff). */
