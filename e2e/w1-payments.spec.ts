@@ -20,7 +20,8 @@ const paymentsOf = async (api: Api, orderId: string) =>
 /** Selects an order's row (the header search narrows the table to it). */
 async function openOrder(page: Page, po: string) {
   await search(page).fill(po);
-  await rowOf(page, po).getByRole("button", { name: po }).click();
+  // exact: Management also has "Delete a payment of PO-x" in the row (Actions).
+  await rowOf(page, po).getByRole("button", { name: po, exact: true }).click();
   await expect(page.getByRole("heading", { name: `${po} payments` })).toBeVisible();
 }
 
@@ -40,7 +41,7 @@ test("KPIs, the order's row and its payments card, with search and its empty sta
   await expect(kpi(page, "Due in next 30 days")).toContainText("0 payments");
 
   await openOrder(page, order.po);
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Hangzhou Knits`, amountCell("8,000"), amountCell("2,000"), "₹24,000", amountCell("6,000"), "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Hangzhou Knits`, amountCell("8,000"), amountCell("2,000"), "₹24,000", amountCell("6,000"), "Not yet due", "Delete"]);
   const detail = card(page, order.po);
   await expect(detail).toContainText("Hangzhou Knits");
   await expect(detail.getByRole("heading", { name: "1. Deposit" })).toBeVisible();
@@ -114,7 +115,7 @@ test("Record payment: opens, cancels, checks every field, and saves a payment th
   await expect(toast(page, `Payment recorded for ${order.po}`)).toBeVisible();
   await expect(dialog(page)).toHaveCount(0);
   await openOrder(page, order.po);
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Yiwu Trims Ltd.`, amountCell("5,000"), amountCell("1,500"), "₹18,750", amountCell("3,500"), "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Yiwu Trims Ltd.`, amountCell("5,000"), amountCell("1,500"), "₹18,750", amountCell("3,500"), "Not yet due", "Delete"]);
   await expect(card(page, order.po).getByRole("heading", { name: "1. Deposit" })).toBeVisible();
   await expect(card(page, order.po)).toContainText("UPI");
 
@@ -148,7 +149,7 @@ test("the card's button records a payment to a shipping agent for that order", a
   // Numbered oldest first, as in reference 16.
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(["1. Deposit", "2. Balance"]);
   await expect(detail).toContainText("¥ 500 × 12.25");
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("1,500"), `₹${num(12_000 + 6125)}`, amountCell("1,500"), "Not yet due"]);
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("1,500"), `₹${num(12_000 + 6125)}`, amountCell("1,500"), "Not yet due", "Delete"]);
   // PAY-1 lists payments newest first.
   expect((await paymentsOf(api, order.id)).map((p) => [p.kind, p.payee, p.payeeRole])).toEqual([
     ["Balance", "Dragon Cargo", "agent"],
@@ -233,7 +234,7 @@ test.describe("Accounts (payments Enter)", () => {
     const management = settled(await browser.newPage({ storageState: MANAGEMENT_STATE, viewport: { width: 1440, height: 900 } }));
     await management.goto("/payments");
     await openOrder(management, order.po);
-    await expect(rowOf(management, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("3,000"), "₹36,000", amountCell("0"), "Not yet due"]);
+    await expect(rowOf(management, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("3,000"), "₹36,000", amountCell("0"), "Not yet due", "Delete"]);
     await management.close();
   });
 });

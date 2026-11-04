@@ -45,6 +45,43 @@ test("Management deletes a deposit on the order's tab and a payment on Deposits 
   expect((await api.order(po)).payments).toEqual([]);
 });
 
+test("Management deletes a payment from the Payments by order menu; the row and the order follow", async ({ page, api }) => {
+  const { id, po } = await api.createOrder({ deposits: [{ amountCny: 300, rateInr: 12 }] });
+  await api.pay(id, { amountCny: 200, rateInr: 12.5 });
+  await page.goto("/payments");
+  await page.getByRole("searchbox", { name: "Search PO or supplier" }).fill(po);
+  const table = page.getByRole("table").first();
+  expect((await table.getByRole("columnheader").allTextContents()).at(-1)).toBe("Actions");
+  const row = table.getByRole("row").filter({ hasText: po });
+  await expect(row).toContainText("₹6,100");
+  const menu = page.getByRole("button", { name: `Delete a payment of ${po}` });
+  const ask = page.getByRole("alertdialog", { name: "Delete Deposit?" });
+
+  // Escape sends nothing.
+  await menu.click();
+  await page.getByRole("menuitem", { name: /^Deposit · / }).click();
+  await expect(ask).toContainText(`Paid so far for ${po} goes from ¥500 to ¥200`);
+  await page.keyboard.press("Escape");
+  await expect(ask).toBeHidden();
+
+  const deletes: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "DELETE") deletes.push(new URL(request.url()).pathname);
+  });
+  await menu.click();
+  await page.getByRole("menuitem", { name: /^Deposit · / }).click();
+  await ask.getByRole("button", { name: "Delete deposit" }).dblclick();
+  await expect(toast(page, "Deposit deleted").first()).toBeVisible();
+  expect(deletes).toHaveLength(1);
+  // The row and the order follow; the menu now lists only the balance payment.
+  await expect(row).toContainText("₹2,500");
+  expect(await api.order(po)).toMatchObject({ paidCny: 200, paidInr: 2500, balanceCny: 800 });
+  await menu.click();
+  await expect(page.getByRole("menuitem")).toHaveCount(1);
+  await expect(page.getByRole("menuitem")).toContainText("Balance · ");
+  await page.keyboard.press("Escape");
+});
+
 test.describe("Accounts (payments Enter)", () => {
   test.use({ storageState: freshSignIn(ANITA) });
 
@@ -58,5 +95,8 @@ test.describe("Accounts (payments Enter)", () => {
     await page.getByRole("button", { name: po, exact: true }).click();
     await expect(page.getByRole("button", { name: `+ Record payment for ${po}` })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Delete (deposit|payment)/ })).toHaveCount(0);
+    // Nor in the Payments by order table.
+    await expect(page.getByRole("table").first().getByRole("columnheader", { name: "Actions" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Delete a payment of/ })).toHaveCount(0);
   });
 });
