@@ -23,8 +23,8 @@ const api: PaymentsResponse = {
     { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer" },
   ],
 };
-type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean };
-const renderScreen = (response = api, access: Access = { agents: null, linkPo: false }) =>
+type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean; canDelete: boolean };
+const renderScreen = (response = api, access: Access = { agents: null, linkPo: false, canDelete: false }) =>
   render(<PaymentsScreen data={{ ...toPaymentsData(response, "2026-11-10"), ...access }} />);
 
 describe("PaymentsScreen", () => {
@@ -72,7 +72,7 @@ describe("PaymentsScreen", () => {
     expect(screen.queryByRole("link", { name: "PO-3002" })).not.toBeInTheDocument();
     cleanup();
 
-    renderScreen(api, { agents: [], linkPo: true });
+    renderScreen(api, { agents: [], linkPo: true, canDelete: false });
     expect(screen.getByRole("button", { name: "+ Record payment" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "+ Record payment for PO-3002" }));
     expect(screen.getByRole("heading", { name: "Record payment for PO-3002" })).toBeInTheDocument();

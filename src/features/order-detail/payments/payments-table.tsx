@@ -4,6 +4,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/shared/data-table";
 import type { OrderPayment } from "@/features/order-detail/data/queries";
+import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
+import { DeletePaymentButton, type PaymentOrderFacts } from "@/features/payments/delete-payment";
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
@@ -12,7 +14,8 @@ type Totals = { paidCny: number; paidInr: number; currency: Currency };
 /** A payment with its INR value at its own rate; null for a payment not made yet (no rate). */
 export type PaymentRow = OrderPayment & { inr: number | null };
 
-function columns(totals: Totals): ColumnDef<PaymentRow>[] {
+/** `remove`: the order's figures for PAY-3's Actions column (payments Full), or null without it. */
+function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<PaymentRow>[] {
   return [
     {
       id: "date",
@@ -45,13 +48,24 @@ function columns(totals: Totals): ColumnDef<PaymentRow>[] {
       footer: () => formatINR(totals.paidInr),
       meta: { align: "right", className: "font-bold" },
     },
+    // The table has no Status column, so Actions comes last.
+    ...(remove
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            meta: { className: `w-[72px] ${ACTIONS_COLUMN_CLASS}` },
+            cell: ({ row }) => <DeletePaymentButton payment={row.original} order={remove} />,
+          } satisfies ColumnDef<PaymentRow>,
+        ]
+      : []),
   ];
 }
 
-export function PaymentsTable({ rows, totals }: { rows: PaymentRow[]; totals: Totals }) {
+export function PaymentsTable({ rows, totals, remove = null }: { rows: PaymentRow[]; totals: Totals; remove?: PaymentOrderFacts | null }) {
   return (
     <DataTable
-      columns={columns(totals)}
+      columns={columns(totals, remove)}
       data={rows}
       getRowId={(payment) => payment.id}
       density="snug"

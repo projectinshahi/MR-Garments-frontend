@@ -95,13 +95,15 @@ type PaymentsViewProps = {
   agents: OrderOptions["agents"] | null;
   /** POs link to their order page (canOpen(me, "/orders")). */
   linkPo: boolean;
+  /** Each payment of the selected order has Delete (PAY-3, payments Full). */
+  canDelete?: boolean;
 };
 
 /**
  * Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server
  * slot. The selected order's card shows only while its row does, and comes back when the search clears.
  */
-export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo }: PaymentsViewProps) {
+export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo, canDelete = false }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedPo, setSelectedPo] = useState(defaultPo);
   const visible = filterOrders(orders, query);
@@ -164,6 +166,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
               payments={payments.filter((p) => p.po === selected.po).toReversed()}
               agents={agents}
               linkPo={linkPo}
+              canDelete={canDelete}
             />
           ) : null}
         </div>

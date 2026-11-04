@@ -110,7 +110,12 @@ async function getAccess() {
           (): OrderOptions["agents"] => [],
         )
       : null;
-  return { agents, linkPo: !!me && canOpen(me, "/orders") };
+  return {
+    agents,
+    linkPo: !!me && canOpen(me, "/orders"),
+    // PAY-3 needs payments Full (Management); the API refuses anyone else too.
+    canDelete: !!me && hasAccess(me, "payments", "Full"),
+  };
 }
 
 /** PAY-1 GET /api/v1/payments. Today is read after the API call (Cache Components). */

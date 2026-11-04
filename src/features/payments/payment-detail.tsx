@@ -7,6 +7,7 @@ import { formatDate, formatINR, formatMoney, formatRate, formatShortDate } from 
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
+import { DeletePaymentButton, type PaymentOrderFacts } from "./delete-payment";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
 const spacedMoney = (value: number, currency: Currency) => formatMoney(value, currency, { spaced: true });
@@ -21,11 +22,14 @@ type PaymentDetailCardProps = {
   agents: OrderOptions["agents"] | null;
   /** The PO links to its order page (canOpen(me, "/orders")). */
   linkPo: boolean;
+  /** Each payment has Delete (PAY-3, payments Full). */
+  canDelete?: boolean;
 };
 
 /** Right card: the selected order's payments, each paid one at its own rate, and the totals. Records only. */
-export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDetailCardProps) {
+export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete = false }: PaymentDetailCardProps) {
   const { po, supplier, currency } = order;
+  const facts: PaymentOrderFacts = { po, supplier, currency, paidCny: order.paid, balanceCny: order.balance };
   const totalCny = payments.reduce((sum, p) => sum + p.amountCny, 0);
   // A due payment has no rate yet (PAY-1 gives one only once paid), so the INR total covers paid payments only.
   const totalInr = payments.reduce((sum, p) => sum + inrOf(p), 0);
@@ -49,7 +53,7 @@ export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDe
           <ol className="mt-3.5 flex flex-col gap-3">
             {payments.map((payment, index) => (
               <li key={payment.id}>
-                <PaymentBlock number={index + 1} payment={payment} currency={currency} />
+                <PaymentBlock number={index + 1} payment={payment} currency={currency} remove={canDelete ? <DeletePaymentButton payment={payment} order={facts} /> : null} />
               </li>
             ))}
           </ol>
@@ -82,7 +86,7 @@ export function PaymentDetailCard({ order, payments, agents, linkPo }: PaymentDe
   );
 }
 
-function PaymentBlock({ number, payment, currency }: { number: number; payment: Payment; currency: Currency }) {
+function PaymentBlock({ number, payment, currency, remove }: { number: number; payment: Payment; currency: Currency; remove: React.ReactNode }) {
   const paid = payment.status === "paid";
   const facts = paid
     ? [
@@ -102,11 +106,14 @@ function PaymentBlock({ number, payment, currency }: { number: number; payment: 
         <h3 className="text-[14.5px] leading-[17px] font-bold">
           {number}. {payment.kind}
         </h3>
-        {paid ? (
-          <StatusPill tone="success">Paid</StatusPill>
-        ) : (
-          <StatusPill tone="warning">{payment.dueDate ? `Due ${formatShortDate(payment.dueDate)}` : "Due"}</StatusPill>
-        )}
+        <div className="flex items-center gap-3">
+          {paid ? (
+            <StatusPill tone="success">Paid</StatusPill>
+          ) : (
+            <StatusPill tone="warning">{payment.dueDate ? `Due ${formatShortDate(payment.dueDate)}` : "Due"}</StatusPill>
+          )}
+          {remove}
+        </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3.5 gap-y-2.5">
         {facts.map((fact) => (

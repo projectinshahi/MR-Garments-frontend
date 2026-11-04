@@ -11,7 +11,7 @@ import { PaymentsTable, type PaymentRow } from "./payments-table";
  * Order detail, tab c (08_3.1.c_Deposits_&_payments.jpeg) from ORD-4: KPIs, the order's payments (oldest first) and
  * the INR working. The "Balance rule" card is left out: no approved rule reduces a balance yet.
  */
-export function PaymentsScreen({ order, payments }: { order: OrderView; payments: OrderPayment[] }) {
+export function PaymentsScreen({ order, payments, canDelete = false }: { order: OrderView; payments: OrderPayment[]; canDelete?: boolean }) {
   // INR is amountCny * rateInr rounded to 2 decimals, per payment (contracts, Conventions).
   const rows: PaymentRow[] = payments.map((p) => ({ ...p, inr: p.rateInr === null ? null : Math.round(p.amountCny * p.rateInr * 100) / 100 }));
   const paid = rows.filter((p) => p.status === "paid");
@@ -28,7 +28,16 @@ export function PaymentsScreen({ order, payments }: { order: OrderView; payments
 
       <div className="grid gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <SectionCard title="Deposits and payments" bottomGap="tight" className="min-w-0">
-          <PaymentsTable rows={rows} totals={{ paidCny: order.paidCny, paidInr: order.paidInr, currency: order.currency }} />
+          <PaymentsTable
+            rows={rows}
+            totals={{ paidCny: order.paidCny, paidInr: order.paidInr, currency: order.currency }}
+            // PAY-3: each payment's Delete, with the figures it changes.
+            remove={
+              canDelete
+                ? { po: order.po, supplier: order.supplier.name, currency: order.currency, paidCny: order.paidCny, balanceCny: order.balanceCny }
+                : null
+            }
+          />
         </SectionCard>
 
         <div className="flex min-w-0 flex-col gap-(--page-gap)">
