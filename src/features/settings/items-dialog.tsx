@@ -12,9 +12,26 @@ import { apiClient } from "@/lib/api/client";
 import type { ItemResponse, ItemRow } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { DeactivateConfirm, type Deletable, fieldClass, labelClass, listFact, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { perBundleText } from "./settings-logic";
 
 const DEACTIVATE_NOTE = "An inactive item no longer appears on new orders. Orders that already have it keep it.";
+
+/** The item as its Delete sees it: the edit dialog's and the table row's. */
+export const itemDeletable = (row: ItemRow): Deletable => ({
+  path: `/items/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "item",
+  active: row.status === "Active",
+  deactivateNote: DEACTIVATE_NOTE,
+  usedBy: "orders",
+  details: [
+    ["Counted in", row.countedIn],
+    ["Pieces per bundle", perBundleText(row)],
+    ["Used in orders", listFact(row.usedInOrders)],
+  ],
+});
 
 // Add or edit item: no reference design, so it is built like Add supplier (53). The checks mirror the API's, with
 // its messages (backend master-data/items.routes.ts MESSAGES), so both sides say the same thing.
@@ -174,7 +191,7 @@ function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => v
         onCancel={onCancel}
         submitLabel="Save item"
         submitting={formState.isSubmitting}
-        remove={row && { path: `/items/${row.id}`, name: row.name, noun: "item", active: row.status === "Active", deactivateNote: DEACTIVATE_NOTE }}
+        remove={row && itemDeletable(row)}
       />
       <DeactivateConfirm
         open={!!deactivating}

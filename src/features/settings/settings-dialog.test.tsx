@@ -141,7 +141,16 @@ describe("ConfirmDialog", () => {
 
 describe("Delete (the edit dialogs' footer)", () => {
   const NOTE = "It won't appear when a new order is created. Orders that already use it keep it.";
-  const ABC: Deletable = { path: "/suppliers/s-1", name: "ABC Supplier", noun: "supplier", active: true, deactivateNote: NOTE };
+  const ABC: Deletable = {
+    path: "/suppliers/s-1",
+    id: "s-1",
+    name: "ABC Supplier",
+    noun: "supplier",
+    active: true,
+    deactivateNote: NOTE,
+    usedBy: "orders",
+    details: [["City", "Guangzhou"]],
+  };
   const IN_USE = new ApiError(409, "in_use", "This supplier is used by 3 orders, so it can't be deleted. Deactivate it instead.");
 
   function footer(record = ABC) {

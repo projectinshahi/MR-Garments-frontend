@@ -124,9 +124,9 @@ describe("Delete team", () => {
     const { user } = open("dialog=edit&id=t-1");
     await user.click(screen.getByRole("button", { name: "Delete" }));
     const confirm = await screen.findByRole("alertdialog", { name: DELETE });
-    expect(confirm).toHaveTextContent(
-      "Are you sure you want to delete Retail team? This can't be undone. If the team is already used on any record, it can't be deleted.",
-    );
+    expect(confirm).toHaveTextContent("Are you sure you want to delete Retail team? This can't be undone.");
+    expect(confirm).toHaveTextContent("TypeTeamNameRetail teamReferencet-1Pieces in stock");
+    expect(confirm).toHaveTextContent("If it is used by any warehouse receipts, it can't be deleted and you'll be offered to deactivate it instead");
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(remove).not.toHaveBeenCalled();

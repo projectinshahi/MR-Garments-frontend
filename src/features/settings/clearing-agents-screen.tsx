@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { ClearingAgentRow } from "@/lib/api/types";
 
-import { ADD_CLEARING_AGENT_HREF, CLEARING_AGENTS_PATH, ClearingAgentDialogs } from "./clearing-agents-dialog";
+import { ADD_CLEARING_AGENT_HREF, CLEARING_AGENTS_PATH, ClearingAgentDialogs, clearingAgentDeletable } from "./clearing-agents-dialog";
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
 
 const clearingColumns: ColumnDef<ClearingAgentRow>[] = [
@@ -28,6 +28,7 @@ export function ClearingAgentsScreen({ rows }: { rows: ClearingAgentRow[] }) {
         columns={clearingColumns}
         searchText={contactSearch}
         noun="clearing agents"
+        deletable={clearingAgentDeletable}
         footnote="Clearing agents do not log in. Staff enter their figures from the agent’s papers."
         action={
           <Button asChild size="header" className={actionClass}>

@@ -11,7 +11,9 @@ import { FilterChips, SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { RecordStatus } from "@/types/domain";
 
-import { editHref } from "./settings-dialog";
+import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
+
+import { type Deletable, DeleteSettingsRecord, editHref } from "./settings-dialog";
 import { filterRecords, type StatusFilter } from "./settings-logic";
 
 export const SETTINGS_TABS: RouteTab[] = [
@@ -40,7 +42,7 @@ export const contactSearch = (row: { name: string; contactPerson: string; phone:
 
 type SettingsRecord = { id: string; name: string; status: RecordStatus };
 
-function trailingColumns<T extends SettingsRecord>(path: string): ColumnDef<T>[] {
+function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row: T) => Deletable): ColumnDef<T>[] {
   return [
     {
       id: "status",
@@ -52,16 +54,21 @@ function trailingColumns<T extends SettingsRecord>(path: string): ColumnDef<T>[]
     {
       id: "edit",
       header: () => <span className="sr-only">Actions</span>,
+      // Below lg the table scrolls inside its card: the actions stay pinned at the right, as in the other lists.
+      meta: { className: ACTIONS_COLUMN_CLASS },
       cell: ({ row }) => (
-        <Link
-          href={editHref(path, row.original.id)}
-          replace
-          scroll={false}
-          aria-label={`Edit ${row.original.name}`}
-          className="inline-block rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          Edit
-        </Link>
+        <span className="inline-flex items-center gap-3">
+          <Link
+            href={editHref(path, row.original.id)}
+            replace
+            scroll={false}
+            aria-label={`Edit ${row.original.name}`}
+            className="inline-block rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            Edit
+          </Link>
+          <DeleteSettingsRecord record={deletable(row.original)} variant="link" />
+        </span>
       ),
     },
   ];
@@ -69,7 +76,8 @@ function trailingColumns<T extends SettingsRecord>(path: string): ColumnDef<T>[]
 
 /**
  * One Settings tab (40–46): header with the tab's add action, the 1–7 tab bar, search and status chips, the
- * table (status pill and Edit appended) and the tab's footnote.
+ * table (status pill, then Edit and Delete appended) and the tab's footnote. Settings is Management's (admin Full),
+ * so whoever sees the table may edit and delete; the API checks the same.
  */
 export function SettingsList<T extends SettingsRecord>({
   path,
@@ -79,9 +87,12 @@ export function SettingsList<T extends SettingsRecord>({
   action,
   footnote,
   noun,
+  deletable,
 }: {
   /** The tab's own path; Edit opens ?dialog=edit&id=<id> on it. */
   path: string;
+  /** The row as its Delete sees it (the same the edit dialog's Delete uses). */
+  deletable: (row: T) => Deletable;
   rows: T[];
   /** The tab's own columns; Status and Edit are appended. */
   columns: ColumnDef<T>[];
@@ -94,7 +105,7 @@ export function SettingsList<T extends SettingsRecord>({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("Active");
-  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>(path)], [columns, path]);
+  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>(path, deletable)], [columns, path, deletable]);
   const visible = filterRecords(rows, { query, status }, searchText);
 
   return (

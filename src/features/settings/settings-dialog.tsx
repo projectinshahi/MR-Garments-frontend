@@ -7,6 +7,8 @@ import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 import { ConfirmDialog, dialogFooterButtonClass } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { rowActionClass } from "@/features/orders/delete-order";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
@@ -98,10 +100,26 @@ export function SettingsDialog({
 }
 
 /**
- * The record an edit dialog can delete: its API path (`/teams/<id>`), its name, its noun in lower case, whether it is
- * Active, and the tab's deactivate note (what deactivating changes), offered when the API refuses the delete.
+ * A Settings record that can be deleted (its edit dialog and its table row): its API path (`/teams/<id>`), id, name,
+ * noun in lower case, whether it is Active, the tab's deactivate note (what deactivating changes, offered when the API
+ * refuses the delete), what can use it (`usedBy`: "orders"; the API checks every one) and the row's details shown in
+ * the confirmation. Each tab builds it once (`supplierDeletable`, ...) for both places.
  */
-export type Deletable = { path: string; name: string; noun: string; active: boolean; deactivateNote: string };
+export type Deletable = {
+  path: string;
+  id: string;
+  name: string;
+  noun: string;
+  active: boolean;
+  deactivateNote: string;
+  usedBy: string;
+  details: [string, React.ReactNode][];
+};
+/** An empty text field in the confirmation's facts. */
+export const orDash = (value: string) => value.trim() || "–";
+/** A list in the confirmation's facts: "None", or the first five and how many more, so the dialog stays short. */
+export const listFact = (values: string[]) =>
+  values.length === 0 ? "None" : values.length <= 5 ? values.join(", ") : `${values.slice(0, 5).join(", ")} and ${values.length - 5} more`;
 
 const capitalised = (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 export const DELETE_TEXT = {
@@ -129,7 +147,7 @@ export function SettingsDialogFooter({
 }) {
   return (
     <DialogFooter className="mt-5 pt-4">
-      {remove ? <DeleteButton record={remove} disabled={submitting} /> : null}
+      {remove ? <DeleteSettingsRecord record={remove} disabled={submitting} /> : null}
       <Button type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel}>
         Cancel
       </Button>
@@ -141,13 +159,15 @@ export function SettingsDialogFooter({
 }
 
 /**
- * Delete asks first ("Delete supplier?"); Cancel calls nothing. The API decides (BR-06): a record in use is refused
- * (409 `in_use`), and the same dialog turns into "Deactivate supplier instead?" with the API's reason and the tab's
- * deactivate note, or, for a record already inactive, explains and only closes. Any other failure toasts
- * (handleApiError) and keeps the dialog open, so confirming again retries. Success closes and reloads like a save.
+ * Delete asks first ("Delete supplier?", with the record's type, name, reference, details and what stops a delete);
+ * Cancel calls nothing. The API decides (BR-06): a record in use is refused (409 `in_use`, naming what uses it), and
+ * the same dialog turns into "Deactivate supplier instead?" with the API's reason and the tab's deactivate note, or,
+ * for a record already inactive, explains and only closes. Any other failure toasts (handleApiError) and keeps the
+ * dialog open, so confirming again retries. Success toasts and reloads the list (and closes an open edit dialog).
+ * `variant`: the edit dialog's footer button, or the red Delete link in the table row's actions.
  */
-function DeleteButton({ record, disabled }: { record: Deletable; disabled: boolean }) {
-  // The dialog is open, so the current path is the tab's own: deleting closes and reloads like a save.
+export function DeleteSettingsRecord({ record, disabled = false, variant = "button" }: { record: Deletable; disabled?: boolean; variant?: "button" | "link" }) {
+  // The current path is the tab's own (the edit dialog or the row is on it): deleting reloads like a save.
   const { saved } = useSettingsDialog(usePathname());
   // null: closed. "ask": the delete confirmation. A string: the API's reason the record can't be deleted.
   const [step, setStep] = useState<null | "ask" | { inUse: string }>(null);
@@ -178,10 +198,24 @@ function DeleteButton({ record, disabled }: { record: Deletable; disabled: boole
           tone: "danger" as const,
           title: `Delete ${noun}?`,
           description: (
-            <p>
-              Are you sure you want to delete <strong className="text-foreground">{name}</strong>? This can&apos;t be undone. If the {noun} is
-              already used on any record, it can&apos;t be deleted.
-            </p>
+            <>
+              <p>
+                Are you sure you want to delete <strong className="text-foreground">{name}</strong>? This can&apos;t be undone.
+              </p>
+              <RecordFacts
+                facts={[
+                  ["Type", capitalised(noun)],
+                  ["Name", name],
+                  ["Reference", <span key="id" className="font-normal break-all">{record.id}</span>],
+                  ...record.details,
+                  ["Status", record.active ? "Active" : "Inactive"],
+                ]}
+              />
+              <p>
+                If it is used by any {record.usedBy}, it can&apos;t be deleted and you&apos;ll be offered to deactivate it instead, so those
+                records keep it. Nothing else is deleted with it.
+              </p>
+            </>
           ),
           confirmLabel: `Delete ${noun}`,
           pendingLabel: "Deleting…",
@@ -212,9 +246,15 @@ function DeleteButton({ record, disabled }: { record: Deletable; disabled: boole
 
   return (
     <>
-      <Button type="button" variant="destructive" className={cn(footerButtonClass, "sm:mr-auto")} onClick={() => setStep("ask")} disabled={disabled}>
-        Delete
-      </Button>
+      {variant === "link" ? (
+        <button type="button" aria-label={`Delete ${name}`} className={cn(rowActionClass, "text-danger")} onClick={() => setStep("ask")}>
+          Delete
+        </button>
+      ) : (
+        <Button type="button" variant="destructive" className={cn(footerButtonClass, "sm:mr-auto")} onClick={() => setStep("ask")} disabled={disabled}>
+          Delete
+        </Button>
+      )}
       <ConfirmDialog open={step !== null} onCancel={() => setStep(null)} {...ask} />
     </>
   );

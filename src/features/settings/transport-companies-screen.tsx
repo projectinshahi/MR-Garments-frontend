@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { TransportCompanyRow } from "@/lib/api/types";
 
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
-import { ADD_TRANSPORT_COMPANY_HREF, TRANSPORT_COMPANIES_PATH, TransportCompanyDialogs } from "./transport-companies-dialog";
+import { ADD_TRANSPORT_COMPANY_HREF, TRANSPORT_COMPANIES_PATH, TransportCompanyDialogs, transportCompanyDeletable } from "./transport-companies-dialog";
 
 // As drawn in 43: the phone column is right-aligned and "Trips so far" left-aligned.
 const transportColumns: ColumnDef<TransportCompanyRow>[] = [
@@ -28,6 +28,7 @@ export function TransportCompaniesScreen({ rows }: { rows: TransportCompanyRow[]
         columns={transportColumns}
         searchText={contactSearch}
         noun="transport companies"
+        deletable={transportCompanyDeletable}
         footnote="Transport companies do not log in."
         action={
           <Button asChild size="header" className={actionClass}>

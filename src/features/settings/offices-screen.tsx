@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { LocationRow } from "@/lib/api/types";
 
-import { OfficeDialog, OFFICES_PATH } from "./offices-dialog";
+import { OfficeDialog, officeDeletable, OFFICES_PATH } from "./offices-dialog";
 import { addHref } from "./settings-dialog";
 import { actionClass, bold, SettingsList } from "./settings-list";
 
@@ -29,6 +29,7 @@ export function OfficesScreen({ rows }: { rows: LocationRow[] }) {
         columns={locationColumns}
         searchText={(row) => [row.name, row.address, ...row.staff]}
         noun="offices or warehouses"
+        deletable={officeDeletable}
         footnote="Offices are used in Receiving (China). Warehouses are used when goods are received in India."
         action={
           <Button asChild size="header" className={actionClass}>

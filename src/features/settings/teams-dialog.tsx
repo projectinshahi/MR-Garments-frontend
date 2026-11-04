@@ -10,9 +10,10 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import type { CreateTeamBody, TeamResponse, TeamRow, UpdateTeamBody } from "@/lib/api/types";
+import { formatINR, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import { DeactivateConfirm, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
+import { DeactivateConfirm, type Deletable, fieldClass, labelClass, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
 
 // No reference design: built from the shared dialog in the style of 53_17.4_Add_supplier_(pop-up).jpeg.
 
@@ -25,6 +26,21 @@ export const TEAM_TEXT = {
   saved: "Team saved",
   deactivate: "An inactive team no longer appears when goods are split in the warehouse. The stock it already holds stays with it.",
 };
+
+/** The team as its Delete sees it: the edit dialog's and the table row's. */
+export const teamDeletable = (row: TeamRow): Deletable => ({
+  path: `/teams/${row.id}`,
+  id: row.id,
+  name: row.name,
+  noun: "team",
+  active: row.status === "Active",
+  deactivateNote: TEAM_TEXT.deactivate,
+  usedBy: "warehouse receipts",
+  details: [
+    ["Pieces in stock", formatNumber(row.piecesInStock)],
+    ["Landed cost of stock", formatINR(row.landedCostOfStockInr)],
+  ],
+});
 
 const teamSchema = z.object({ name: z.string().trim().min(1, TEAM_TEXT.nameEmpty), status: z.enum(["Active", "Inactive"]) });
 type TeamValues = z.infer<typeof teamSchema>;
@@ -94,7 +110,7 @@ function TeamForm({ row, onCancel, onSaved }: { row?: TeamRow; onCancel: () => v
         onCancel={onCancel}
         submitLabel="Save team"
         submitting={isSubmitting}
-        remove={row && { path: `/teams/${row.id}`, name: row.name, noun: "team", active: row.status === "Active", deactivateNote: TEAM_TEXT.deactivate }}
+        remove={row && teamDeletable(row)}
       />
       <DeactivateConfirm
         open={!!confirming}

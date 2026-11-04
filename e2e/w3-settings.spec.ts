@@ -35,7 +35,7 @@ test("the settings redirect and tab links reach all seven tabs", async ({ page }
 
   // Team stock comes from stocked warehouse receipts (wave 3, 6.3); the average is "–" while a team holds nothing.
   await tabs.getByRole("link", { name: "Teams" }).click();
-  await expect(page.getByRole("row", { name: /Retail team/ }).getByRole("cell")).toHaveText(["Retail team", /^\d+$/, /^₹/, /^(–|₹.*)$/, "Active", "Edit"]);
+  await expect(page.getByRole("row", { name: /Retail team/ }).getByRole("cell")).toHaveText(["Retail team", /^\d+$/, /^₹/, /^(–|₹.*)$/, "Active", "EditDelete"]);
 });
 
 test("search and status chips filter the table on the client", async ({ page }) => {

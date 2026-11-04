@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { ItemRow } from "@/lib/api/types";
 
-import { ItemDialog, ITEMS_PATH } from "./items-dialog";
+import { ItemDialog, itemDeletable, ITEMS_PATH } from "./items-dialog";
 import { addHref } from "./settings-dialog";
 import { actionClass, right, SettingsList } from "./settings-list";
 import { perBundleText } from "./settings-logic";
@@ -41,6 +41,7 @@ export function ItemsScreen({ rows }: { rows: ItemRow[] }) {
         columns={itemColumns}
         searchText={(row) => [row.name, ...row.usedInOrders]}
         noun="items"
+        deletable={itemDeletable}
         footnote="Items picked here appear on every new order, so names stay the same everywhere."
         action={
           <Button asChild size="header" className={actionClass}>

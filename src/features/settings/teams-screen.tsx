@@ -11,7 +11,7 @@ import { formatINR, formatNumber } from "@/lib/formatters";
 import { addHref } from "./settings-dialog";
 import { actionClass, bold, right, SettingsList } from "./settings-list";
 import { averagePerPieceText } from "./settings-logic";
-import { TeamDialog, TEAMS_PATH } from "./teams-dialog";
+import { TeamDialog, teamDeletable, TEAMS_PATH } from "./teams-dialog";
 
 const teamColumns: ColumnDef<TeamRow>[] = [
   { accessorKey: "name", header: "Team", meta: bold },
@@ -40,6 +40,7 @@ export function TeamsScreen({ rows }: { rows: TeamRow[] }) {
         columns={teamColumns}
         searchText={(row) => [row.name]}
         noun="teams"
+        deletable={teamDeletable}
         footnote="Goods are split between these teams when they are received in the warehouse. Team names here are examples."
         action={
           <Button asChild size="header" className={actionClass}>
