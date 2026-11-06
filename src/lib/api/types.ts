@@ -181,6 +181,8 @@ export type PayeeRole = "supplier" | "agent";
 
 /** ORD-3 POST /api/v1/orders body; answers 201 `{ order: { id, po } }`. */
 export type CreateOrderBody = {
+  /** The PO number: the offered `nextPo`, or what the user changed it to (`PO-<digits>`, unused; else 422 on `po`). */
+  po: string;
   supplierId: string;
   currency: Currency;
   orderDate: string;

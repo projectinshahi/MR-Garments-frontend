@@ -50,10 +50,10 @@ async function fillOrder({ user, field }: ReturnType<typeof open>) {
 beforeEach(() => vi.clearAllMocks());
 
 describe("NewOrderScreen", () => {
-  it("shows the next PO read-only, today as the order date, and fills the supplier's contact on selection", async () => {
+  it("offers the next PO (editable), today as the order date, and fills the supplier's contact on selection", async () => {
     const ui = open();
     expect(ui.field("Purchase order no.")).toHaveValue("PO-2050");
-    expect(ui.field("Purchase order no.")).toHaveAttribute("readonly");
+    expect(ui.field("Purchase order no.")).not.toHaveAttribute("readonly");
     expect(ui.field("Order date")).toHaveValue(TODAY);
     expect(ui.field("Contact person")).toHaveValue("");
 
@@ -93,6 +93,7 @@ describe("NewOrderScreen", () => {
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/orders", {
+      po: "PO-2050",
       supplierId: "s-foshan",
       currency: "CNY",
       orderDate: TODAY,
@@ -128,6 +129,34 @@ describe("NewOrderScreen", () => {
     answer({ order: { id: "o-1", po: "PO-2050" } });
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/PO-2050"));
   });
+
+  it("sends the PO number the user typed, refusing a blank or odd one itself, and shows a 422 'already used' under it", async () => {
+    const taken = "This PO number is already used by another order.";
+    post.mockRejectedValueOnce(new ApiError(422, "validation_failed", "Some fields need attention.", { po: taken }));
+    post.mockResolvedValueOnce({ order: { id: "o-4", po: "PO-3000" } });
+    const ui = open();
+    await fillOrder(ui);
+    await ui.user.clear(ui.field("Purchase order no."));
+    await ui.user.click(ui.place);
+    expect(await screen.findByText("Enter the PO number.")).toBeVisible();
+    await ui.user.type(ui.field("Purchase order no."), "3000");
+    await ui.user.click(ui.place);
+    expect(await screen.findByText("Enter a PO number like PO-2050.")).toBeVisible();
+    expect(post).not.toHaveBeenCalled();
+
+    await ui.user.clear(ui.field("Purchase order no."));
+    await ui.user.type(ui.field("Purchase order no."), " po-3000 ");
+    await ui.user.click(ui.place);
+    expect(await screen.findByText(taken)).toBeVisible();
+    expect(ui.field("Purchase order no.")).toHaveAttribute("aria-invalid", "true");
+    expect(post).toHaveBeenCalledWith("/orders", expect.objectContaining({ po: "PO-3000" }));
+    expect(router.push).not.toHaveBeenCalled();
+
+    // Placed again (say, after the other order was renumbered): the server's PO names the toast and the page.
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/PO-3000"));
+    expect(toast.success).toHaveBeenCalledWith("Order PO-3000 placed");
+  }, 30_000);
 
   it("shows a 422 field error under its field and keeps the values", async () => {
     const message = "The delivery date can't be before the order date.";
