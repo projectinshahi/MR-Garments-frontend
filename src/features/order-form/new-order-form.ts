@@ -40,6 +40,8 @@ const depositSchema = z
 
 export const newOrderSchema = z
   .object({
+    // Offered by ORD-2 (nextPo); the user may change it. The shape check matches ORD-3's; "already used" is its 422.
+    po: z.string().trim().min(1, "Enter the PO number.").regex(/^PO-\d{1,9}$/i, "Enter a PO number like PO-2050."),
     supplierId: z.string().min(1, "Choose a supplier."),
     currency: z.enum(CURRENCIES),
     orderDate: z.string().min(1, "Choose the order date."),
@@ -77,6 +79,7 @@ export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOpt
   const supplierName = options.suppliers.find((s) => s.id === values.supplierId)?.name ?? "";
   const inr = values.currency === "INR";
   return {
+    po: values.po.trim().toUpperCase(),
     supplierId: values.supplierId,
     currency: values.currency,
     orderDate: values.orderDate,

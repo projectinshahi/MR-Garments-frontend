@@ -17,7 +17,9 @@ strict Zod bodies via `parse()`, same-site check, `requirePermission`).
 
 ## Business rules (approved defaults)
 
-- **PO number:** `PO-` + (highest existing number + 1). The first order is `PO-2050`. Assigned by the server.
+- **PO number:** `PO-` + (highest existing number + 1). The first order is `PO-2050`. Offered by the server (ORD-2
+  `nextPo`); the new-order form sends it back as ORD-3 `po`, where the user may have changed it (2026-11-06). A typed
+  number keeps the `PO-<digits>` shape and must be unused, else 422 on `po`.
 - **Order status** (computed by the frontend from the facts below, with today in India):
   stage 4 "In clearing", stage 5 "On the road", stage 6 "Received"; stage 3 with `received < quantity`
   "Short by N <unit>"; otherwise by `deliveryDate`: before today and stage <= 2 "Late N day(s)"; today to 7 days ahead
@@ -54,9 +56,10 @@ backend returns exactly those shapes. Summary:
 - **ORD-2** `OrderOptions`: `nextPo`, active `suppliers {id, name, contactPerson, phone, city}[]`, active
   `items {id, name, unit}[]`, active shipping `agents {id, name}[]` (deposit payees). Readable by anyone who can open
   Orders, so Procurement doesn't need Settings access.
-- **ORD-3** body `CreateOrderBody`: `supplierId, orderDate, deliveryDate, lines {itemId, quantity, rateCny}[]` (1-50),
+- **ORD-3** body `CreateOrderBody`: `po` (see "Business rules"), `supplierId, orderDate, deliveryDate, lines {itemId, quantity, rateCny}[]` (1-50),
   `deposits {payee, payeeRole, amountCny, paidOn, rateInr, mode}[]` (0-10, saved as `Deposit` payments, status `paid`).
-  201 `{ order: { id, po } }`. 422 `validation_failed` with fields `supplierId`, `orderDate`, `deliveryDate`
+  201 `{ order: { id, po } }`. 422 `validation_failed` with fields `po` ("Enter a PO number like PO-2050." / "This PO
+  number is already used by another order."), `supplierId`, `orderDate`, `deliveryDate`
   ("The delivery date can't be before the order date."), `lines`, `deposits`. Inactive or unknown supplier/item: 422 on
   that field. One transaction.
 - **CAL-1** `DeliveryItem[]` (due date, oldest first): orders at stage 1-2: `orderId, po, supplier` (name), `item,

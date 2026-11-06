@@ -41,7 +41,15 @@ const messages = (...errors: ({ message?: string } | undefined)[]) => errors.fil
 /** New order, Stage 1: order and deposit (15_4_New_order.jpeg). Places the order with ORD-3. */
 export function NewOrderScreen({ data: { options, today } }: { data: NewOrderData }) {
   const router = useRouter();
-  const defaultValues: NewOrderValues = { supplierId: "", currency: "CNY", orderDate: today, deliveryDate: "", lines: [emptyLine()], deposits: [] };
+  const defaultValues: NewOrderValues = {
+    po: options.nextPo,
+    supplierId: "",
+    currency: "CNY",
+    orderDate: today,
+    deliveryDate: "",
+    lines: [emptyLine()],
+    deposits: [],
+  };
   const { register, control, handleSubmit, setError, setValue, reset, formState } = useForm<NewOrderValues>({
     resolver: zodResolver(newOrderSchema),
     defaultValues,
@@ -108,12 +116,13 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <SectionCard title="Order details" titleGap="none" bottomGap="form">
               <FieldGroup className="mt-[11px] grid gap-x-4 gap-y-[14px] sm:grid-cols-3">
-                <Field className={fieldClass}>
+                <Field className={fieldClass} data-invalid={!!errors.po}>
                   <FieldLabel htmlFor="po-number" className={labelClass}>
                     Purchase order no.
                   </FieldLabel>
-                  {/* Assigned by the server when the order is placed. */}
-                  <Input id="po-number" readOnly value={options.nextPo} size="sm" />
+                  {/* The next number (ORD-2), which the user may change; ORD-3 refuses one another order already uses. */}
+                  <Input id="po-number" required aria-invalid={!!errors.po} size="sm" {...register("po")} />
+                  <FieldError errors={[errors.po]} />
                 </Field>
                 <Field className={fieldClass} data-invalid={!!errors.orderDate}>
                   <FieldLabel htmlFor="order-date" className={labelClass}>
