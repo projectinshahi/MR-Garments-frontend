@@ -94,13 +94,24 @@ describe("RecordReceiptScreen", () => {
     expect(screen.getByText("¥ 72,000")).toBeInTheDocument();
   });
 
-  it("blocks over-receipt in the browser", async () => {
+  it("takes more than was ordered: Short shows 0, no remark is needed, and the quantity is sent as typed", async () => {
     const user = userEvent.setup();
+    post.mockResolvedValue({ receipt: { id: "r9" } });
     render(<RecordReceiptScreen data={data} />);
-    await fillPo2035(user, "501");
+    await fillPo2035(user, "949");
+    const jackets = screen.getByText("Men's jackets", { selector: "td" }).closest("tr")!;
+    expect(within(jackets).getAllByRole("cell").at(-1)).toHaveTextContent(/^0$/);
+    expect(screen.queryByText(/left to receive/)).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Short remark/ })).toHaveAttribute("aria-required", "false");
     await user.click(screen.getByRole("button", { name: "Save receipt" }));
-    expect(await screen.findByText("Only 500 pcs left to receive.")).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0]![1]).toMatchObject({
+      shortRemark: "",
+      lines: [
+        { orderLineId: "l1", quantity: 949 },
+        { orderLineId: "l2", quantity: 500 },
+      ],
+    });
   });
 
   it("asks for at least one quantity", async () => {

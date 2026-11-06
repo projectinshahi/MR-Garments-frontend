@@ -26,7 +26,7 @@ export function ReceivingScreen({ order, receipts, canDelete = false }: { order:
     );
   }
 
-  const short = order.quantity - order.received;
+  const short = Math.max(0, order.quantity - order.received);
   const bundles = receipts.reduce((sum, r) => sum + r.bundles, 0);
   const fields = [
     { id: "receipt-received-on", label: "Received on", value: formatDate(latest.receivedOn) },

@@ -8,7 +8,7 @@ import type { OrderView } from "@/features/order-detail/data/queries";
 import { formatNumber, formatQty } from "@/lib/formatters";
 
 type Line = OrderView["lines"][number];
-const short = (line: Line) => line.quantity - line.received;
+const short = (line: Line) => Math.max(0, line.quantity - line.received);
 
 // Every receipt so far, per order line (lines can be counted in different units).
 const columns: ColumnDef<Line>[] = [
