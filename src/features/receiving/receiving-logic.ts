@@ -126,7 +126,7 @@ export const SHORT_REMARK = "Add a remark about the short items.";
 export const remarkRequired = (order: ReceiptOptions["orders"][number] | undefined, lines: { orderLineId: string; quantity: string }[]) =>
   !!order?.lines.some((l) => l.receivedEarlier + (Number(lines.find((v) => v.orderLineId === l.orderLineId)?.quantity) || 0) < l.ordered);
 
-/** Client checks mirroring REC-3: whole numbers >= 0, at least one line > 0, no over-receipt, not after today, remark when short. */
+/** Client checks mirroring REC-3: whole numbers >= 0, at least one line > 0, not after today, remark when short. More than ordered is fine. */
 export function receiptSchema(options: ReceiptOptions, today: string) {
   return z
     .object({
@@ -143,13 +143,6 @@ export function receiptSchema(options: ReceiptOptions, today: string) {
     })
     .superRefine((values, ctx) => {
       const order = options.orders.find((o) => o.orderId === values.orderId);
-      values.lines.forEach((line, index) => {
-        const orderLine = order?.lines.find((l) => l.orderLineId === line.orderLineId);
-        const left = orderLine ? orderLine.ordered - orderLine.receivedEarlier : 0;
-        if (orderLine && Number(line.quantity) > left) {
-          ctx.addIssue({ code: "custom", path: ["lines", index, "quantity"], message: `Only ${formatQty(left, orderLine.unit)} left to receive.` });
-        }
-      });
       if (values.lines.every((line) => !Number(line.quantity))) {
         ctx.addIssue({ code: "custom", path: ["lines"], message: "Enter what was received for at least one item." });
       }

@@ -102,6 +102,17 @@ describe("short and balance", () => {
     });
     expect(lineShort({ ...jackets, receivedNow: 600 })).toBe(0);
   });
+
+  it("is never negative when more arrives than was ordered (360 m)", () => {
+    const fabric: ReceiptLine = { item: "Cotton fabric", unit: "m", ordered: 360, receivedEarlier: 0, receivedNow: 0, unitPrice: 3 };
+    expect([360, 300, 400, 949].map((receivedNow) => lineShort({ ...fabric, receivedNow }))).toEqual([0, 60, 0, 0]);
+    expect(lineShort({ ...fabric, receivedEarlier: 300, receivedNow: 100 })).toBe(0);
+    expect(paymentEffect({ orderValue: 1080, depositsPaid: 0 }, [{ ...fabric, receivedNow: 949 }])).toEqual({
+      balanceBefore: 1080,
+      deductions: [{ unit: "m", short: 0, unitPrice: 3, amount: 0 }],
+      balanceNow: 1080,
+    });
+  });
 });
 
 describe("deliveryEvents", () => {
@@ -132,8 +143,15 @@ describe("receiptSchema", () => {
     expect(schema.safeParse(valid).success).toBe(true);
   });
 
-  it("blocks over-receipt, no quantity, decimals and a future date", () => {
-    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "501" }] })).toEqual([["lines.0.quantity", "Only 500 pcs left to receive."]]);
+  it("accepts more than was ordered, in one receipt or on top of earlier ones", () => {
+    expect(schema.safeParse({ ...valid, lines: [{ orderLineId: "l1", quantity: "501" }] }).success).toBe(true);
+    expect(schema.safeParse({ ...valid, lines: [{ orderLineId: "l1", quantity: "949" }] }).success).toBe(true);
+    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "949" }] })).toBeUndefined();
+  });
+
+  it("blocks no quantity, decimals, negatives, text and a future date", () => {
+    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "-1" }], shortRemark: "x" })).toEqual([["lines.0.quantity", "Enter a whole number."]]);
+    expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "12a" }], shortRemark: "x" })).toContainEqual(["lines.0.quantity", "Enter a whole number."]);
     expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "" }], shortRemark: "x" })).toEqual([["lines", "Enter what was received for at least one item."]]);
     expect(issues({ ...valid, lines: [{ orderLineId: "l1", quantity: "1.5" }], bundles: "-1", shortRemark: "x" })).toEqual([
       ["bundles", "Enter a whole number."],

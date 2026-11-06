@@ -134,7 +134,7 @@ test("Record receipt: every client check, and nothing is saved", async ({ page, 
   await receivedNow(page, "Polo shirts").fill("201");
   await save(page).click();
   await expect(page.getByText("The date can't be after today.")).toBeVisible();
-  await expect(page.getByText("Only 200 pcs left to receive.")).toBeVisible();
+  await expect(page.getByText(/left to receive/)).toHaveCount(0); // more than ordered is no complaint
 
   await field(page, "Received on").fill(today());
   await receivedNow(page, "Polo shirts").fill("150");
@@ -148,18 +148,35 @@ test("Record receipt: every client check, and nothing is saved", async ({ page, 
   expect(await receiptsOf(api, order.po)).toHaveLength(0);
 });
 
-test("Record receipt: the API's 422 and 409 show; a failed or lost request keeps the values", async ({ page, api }) => {
+test("Record receipt: more than ordered is accepted and listed as complete", async ({ page, api }) => {
+  const order = await api.createOrder({ lines: [{ item: "Cotton fabric", quantity: 360, rateCny: 3 }] });
+  await openForm(page, order.po);
+  await page.getByRole("textbox", { name: "Bundles received now" }).fill("12");
+  await receivedNow(page, "Cotton fabric").fill("949");
+  const fabric = page.getByRole("row").filter({ hasText: "Cotton fabric" });
+  await expect(fabric.getByRole("cell").last()).toHaveText("0");
+  await expect(page.getByRole("textbox", { name: "Short remark" })).toHaveAttribute("aria-required", "false");
+  await save(page).click();
+  await expect(toast(page, "Receipt saved")).toBeVisible();
+  await expect(page).toHaveURL("/receiving");
+
+  // The list keeps the actual quantity: 949 of 360 m, short 0, complete.
+  await search(page).fill(order.po);
+  const cells = rowOf(page, order.po).getByRole("cell");
+  await expect(cells.nth(4)).toHaveText("360 m");
+  await expect(cells.nth(5)).toHaveText("949");
+  await expect(cells.nth(6)).toHaveText("949");
+  await expect(cells.nth(7)).toHaveText("0");
+  await expect(rowOf(page, order.po)).toContainText("Complete");
+  expect((await api.order(order.po)).lines).toMatchObject([{ quantity: 360, received: 949 }]);
+});
+
+test("Record receipt: the API's 409 shows; a failed or lost request keeps the values", async ({ page, api }) => {
   const order = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }] });
   await openForm(page, order.po);
   await page.getByRole("textbox", { name: "Bundles received now" }).fill("2");
   await receivedNow(page, "Denim jeans").fill("80");
   await page.getByRole("textbox", { name: "Short remark" }).fill("20 to follow");
-
-  // Someone else receives 30 meanwhile: 80 more would over-receive (REC-3 422 on lines).
-  await api.receive(order.po, { "Denim jeans": 30 });
-  await save(page).click();
-  await expect(page.getByText("Denim jeans: only 70 pcs left to receive.")).toBeVisible();
-  await expect(receivedNow(page, "Denim jeans")).toHaveValue("80");
 
   // 500, then a lost request.
   await receivedNow(page, "Denim jeans").fill("50");
@@ -176,7 +193,8 @@ test("Record receipt: the API's 422 and 409 show; a failed or lost request keeps
   await expect(page.getByRole("textbox", { name: "Short remark" })).toHaveValue("20 to follow");
   await page.unroute("**/api/v1/receipts");
 
-  // The order is loaded into a container meanwhile (stage 3): REC-3 refuses with 409 and its own message.
+  // Someone else receives 30 and loads them meanwhile (stage 3): REC-3 refuses with 409 and its own message.
+  await api.receive(order.po, { "Denim jeans": 30 });
   await api.load([{ po: order.po, item: "Denim jeans", quantity: 30 }]);
   await save(page).click();
   await expect(toast(page, "This order is past receiving and can't take more receipts.")).toBeVisible();
