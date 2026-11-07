@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/components/shared/filters";
-import { PoLink } from "@/components/shared/po-link";
+import { orderHref, PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
@@ -81,7 +81,7 @@ function actionsColumn(canEdit: boolean, canDelete: boolean): ColumnDef<OrderRow
         // The row opens the order. Stop these clicks, and the confirmation's (React bubbles them out of its portal).
         <span className="flex gap-3" onClick={(event) => event.stopPropagation()}>
           {canEdit && isEditableStage(order.stage) ? (
-            <Link href={`/orders/${order.po}?edit=1`} aria-label={`Edit ${order.po}`} className={rowActionClass}>
+            <Link href={`${orderHref(order.po)}?edit=1`} aria-label={`Edit ${order.po}`} className={rowActionClass}>
               Edit
             </Link>
           ) : null}
@@ -154,7 +154,7 @@ export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }
         density="tall"
         size="sm"
         header="tall"
-        onRowClick={(order) => navigate(`/orders/${order.po}`)}
+        onRowClick={(order) => navigate(orderHref(order.po))}
         emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
         pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
       />

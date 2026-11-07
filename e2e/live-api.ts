@@ -65,7 +65,7 @@ export class Api {
   patch = (path: string, data: unknown) => this.request.patch(`/api/v1${path}`, { data });
 
   options = () => this.get<OrderOptions>("/orders/options");
-  order = (po: string) => this.get<OrderDetail>(`/orders/${po}`);
+  order = (po: string) => this.get<OrderDetail>(`/orders/${encodeURIComponent(po)}`);
 
   /** ORD-3 with defaults: Foshan Fabrics, 100 pcs Denim jeans at ¥10, ordered today, due in 30 days. */
   async createOrder(input: OrderInput = {}): Promise<CreatedOrder> {

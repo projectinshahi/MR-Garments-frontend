@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import type { OrderDetail } from "@/lib/api/types";
 import { todayInIndia } from "@/lib/today";
+import { decodePath } from "@/lib/utils";
 
 // Order detail (06-10) reads ORD-4. The call reads the session cookie, so the frame and tabs render inside Suspense;
 // failures other than 404 throw to error.tsx.
@@ -21,7 +22,8 @@ export type OrderContainer = NonNullable<OrderDetail["containers"]>[number];
 export const getOrderDetail = cache(async (po: string): Promise<OrderView | null> => {
   let order: OrderDetail;
   try {
-    order = await apiGet<OrderDetail>(`/orders/${encodeURIComponent(po)}`);
+    // Next hands the [po] segment still percent-encoded (MR%2F2026%2F001 for MR/2026/001): decode it before encoding for the API.
+    order = await apiGet<OrderDetail>(`/orders/${encodeURIComponent(decodePath(po))}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;

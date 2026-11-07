@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { ItemRow } from "@/lib/api/types";
+import type { ItemRow, UnitRow } from "@/lib/api/types";
 
 import { ItemDialog, itemDeletable, ITEMS_PATH } from "./items-dialog";
 import { addHref } from "./settings-dialog";
@@ -32,7 +32,7 @@ const itemColumns: ColumnDef<ItemRow>[] = [
 ];
 
 /** 46_15.7_Item_list.jpeg, plus the Add and Edit item dialogs at ?dialog=add and ?dialog=edit&id=. */
-export function ItemsScreen({ rows }: { rows: ItemRow[] }) {
+export function ItemsScreen({ rows, units }: { rows: ItemRow[]; units: UnitRow[] }) {
   return (
     <>
       <SettingsList
@@ -52,7 +52,7 @@ export function ItemsScreen({ rows }: { rows: ItemRow[] }) {
         }
       />
       <Suspense fallback={null}>
-        <ItemDialog rows={rows} />
+        <ItemDialog rows={rows} units={units} />
       </Suspense>
     </>
   );

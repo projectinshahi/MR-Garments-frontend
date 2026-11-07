@@ -24,6 +24,7 @@ export const SETTINGS_TABS: RouteTab[] = [
   { href: "/settings/offices", label: "Offices & warehouses", chip: "5" },
   { href: "/settings/teams", label: "Teams", chip: "6" },
   { href: "/settings/items", label: "Item list", chip: "7" },
+  { href: "/settings/units", label: "Units", chip: "8" },
 ];
 
 const STATUS_OPTIONS = [
@@ -75,7 +76,7 @@ function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row
 }
 
 /**
- * One Settings tab (40–46): header with the tab's add action, the 1–7 tab bar, search and status chips, the
+ * One Settings tab (40–46, and Units): header with the tab's add action, the 1–8 tab bar, search and status chips, the
  * table (status pill, then Edit and Delete appended) and the tab's footnote. Settings is Management's (admin Full),
  * so whoever sees the table may edit and delete; the API checks the same.
  */

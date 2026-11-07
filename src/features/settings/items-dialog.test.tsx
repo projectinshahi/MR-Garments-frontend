@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
-import type { ItemRow } from "@/lib/api/types";
+import type { ItemRow, UnitRow } from "@/lib/api/types";
 
 import { ItemDialog, itemSchema, MESSAGES } from "./items-dialog";
 
@@ -31,12 +31,16 @@ const JEANS: ItemRow = {
   status: "Active",
 };
 const FABRIC: ItemRow = { id: "i-8", name: "Cotton fabric", countedIn: "Metres", perBundle: null, bundleLabel: "Roll", usedInOrders: [], status: "Active" };
+const YARN: ItemRow = { id: "i-9", name: "Yarn", countedIn: "Kilograms", perBundle: null, bundleLabel: "Bag", usedInOrders: [], status: "Active" };
+const unit = (id: string, name: string, symbol: string, status: UnitRow["status"] = "Active"): UnitRow => ({ id, name, symbol, usedByItems: [], status });
+// Kilograms is inactive: offered to no new item, kept by Yarn.
+const UNITS = [unit("u-1", "Pieces", "pcs"), unit("u-2", "Metres", "m"), unit("u-3", "Kilograms", "kg", "Inactive"), unit("u-4", "Rolls", "")];
 const saved = { item: JEANS };
 
 function open(query: string) {
   nav.query = query;
   const user = userEvent.setup();
-  render(<ItemDialog rows={[JEANS, FABRIC]} />);
+  render(<ItemDialog rows={[JEANS, FABRIC, YARN]} units={UNITS} />);
   // Prefix match: required labels are followed by the required mark.
   const field = (label: string) => screen.getByLabelText(new RegExp(`^${label}`));
   const save = () => screen.getByRole("button", { name: "Save item" });
@@ -46,11 +50,12 @@ function open(query: string) {
 beforeEach(() => vi.clearAllMocks());
 
 describe("Add item", () => {
-  it("opens empty with no unit chosen and no Status", () => {
+  it("opens empty with no unit chosen and no Status, offering the active units from Settings", () => {
     const { field } = open("dialog=add");
     expect(screen.getByRole("dialog", { name: "Add item" })).toBeVisible();
     for (const label of ["Item name", "Counted in", "Pieces per bundle", "Bundle label"]) expect(field(label)).toHaveValue("");
     expect(field("Counted in")).toBeEnabled();
+    expect([...(field("Counted in") as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(["Select unit", "Pieces", "Metres", "Rolls"]);
     expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
   });
 
@@ -149,6 +154,18 @@ describe("Edit item", () => {
     await waitFor(() => expect(nav.router.refresh).toHaveBeenCalledOnce());
     expect(patch).toHaveBeenCalledWith("/items/i-1", { name: "Denim jeans", perBundle: null, bundleLabel: "Bale", status: "Active" });
     expect(toast.success).toHaveBeenCalledWith("Item saved");
+  });
+
+  it("keeps an item's unit that has since been deactivated, still selected and offered", async () => {
+    patch.mockResolvedValue({ item: YARN });
+    const { user, field, save } = open("dialog=edit&id=i-9");
+    expect(field("Counted in")).toHaveValue("Kilograms");
+    expect([...(field("Counted in") as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(["Pieces", "Metres", "Rolls", "Kilograms"]);
+    await user.clear(field("Bundle label"));
+    await user.type(field("Bundle label"), "Sack");
+    await user.click(save());
+    await waitFor(() => expect(patch).toHaveBeenCalledOnce());
+    expect(patch).toHaveBeenCalledWith("/items/i-9", { name: "Yarn", countedIn: "Kilograms", perBundle: null, bundleLabel: "Sack", status: "Active" });
   });
 
   it("lets the unit of an item on no order change", async () => {

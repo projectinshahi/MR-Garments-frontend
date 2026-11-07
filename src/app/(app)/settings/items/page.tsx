@@ -1,6 +1,7 @@
-import { getItems } from "@/features/settings/data/queries";
+import { getItems, getUnits } from "@/features/settings/data/queries";
 import { ItemsScreen } from "@/features/settings/items-screen";
 
 export default async function ItemsSettingsPage() {
-  return <ItemsScreen rows={await getItems()} />;
+  const [rows, units] = await Promise.all([getItems(), getUnits()]);
+  return <ItemsScreen rows={rows} units={units} />;
 }

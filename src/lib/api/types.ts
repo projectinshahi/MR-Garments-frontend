@@ -79,7 +79,8 @@ export type TeamRow = {
 export type ItemRow = {
   id: string;
   name: string;
-  countedIn: "Pieces" | "Metres";
+  /** The name of a unit (GET /api/v1/units). */
+  countedIn: string;
   perBundle: number | null;
   bundleLabel: string | null;
   usedInOrders: string[];
@@ -128,6 +129,14 @@ export type CreateTeamBody = { name: string };
 export type UpdateTeamBody = Editable<CreateTeamBody>;
 export type TeamResponse = { team: TeamRow };
 
+/** GET /api/v1/units (Settings, Units). `usedByItems`: the names of the items counted in it. */
+export type UnitRow = { id: string; name: string; symbol: string; usedByItems: string[]; status: RecordStatus };
+/** POST /api/v1/units. `symbol` (optional) shows after quantities; without one the name does. */
+export type CreateUnitBody = { name: string; symbol?: string };
+/** PATCH /api/v1/units/:id. A rename reaches every item counted in it. */
+export type UpdateUnitBody = Editable<CreateUnitBody>;
+export type UnitResponse = { unit: UnitRow };
+
 /** POST /api/v1/items. Exactly one of `perBundle` (whole number 1-100000) and `bundleLabel` is set, the other null. */
 export type CreateItemBody = { name: string; countedIn: ItemRow["countedIn"]; perBundle: number | null; bundleLabel: string | null };
 /** PATCH /api/v1/items/:id. `countedIn` can't change once the item is on an order (409 `item_in_use`). */
@@ -145,7 +154,8 @@ export type { RecordStatus, Role };
 // order's currency"); rateInr is INR per 1 unit of it (1 for INR orders); quantities are whole numbers.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type Unit = "m" | "pcs";
+/** An item's unit as shown after quantities: its unit's symbol ("pcs", "m", "kg"), or the unit's name when it has none. */
+export type Unit = string;
 export type OrderStage = 1 | 2 | 3 | 4 | 5 | 6;
 type Named = { id: string; name: string };
 
@@ -181,7 +191,7 @@ export type PayeeRole = "supplier" | "agent";
 
 /** ORD-3 POST /api/v1/orders body; answers 201 `{ order: { id, po } }`. */
 export type CreateOrderBody = {
-  /** The PO number: the offered `nextPo`, or what the user changed it to (`PO-<digits>`, unused; else 422 on `po`). */
+  /** The PO number: the offered `nextPo`, or what the user changed it to (any format, up to 50 characters, trimmed; one another order uses in any letter case is a 422 on `po`). */
   po: string;
   supplierId: string;
   currency: Currency;

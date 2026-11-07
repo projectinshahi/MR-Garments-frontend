@@ -9,6 +9,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
+import { orderHref } from "@/components/shared/po-link";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -85,7 +86,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     // The route stays mounted (Activity): empty the form so a later visit starts fresh.
     reset();
     notifySuccess(`Order ${created.order.po} placed`);
-    router.push(`/orders/${created.order.po}`);
+    router.push(orderHref(created.order.po));
     router.refresh();
   }
 
@@ -120,8 +121,8 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   <FieldLabel htmlFor="po-number" className={labelClass}>
                     Purchase order no.
                   </FieldLabel>
-                  {/* The next number (ORD-2), which the user may change; ORD-3 refuses one another order already uses. */}
-                  <Input id="po-number" required aria-invalid={!!errors.po} size="sm" {...register("po")} />
+                  {/* The next number (ORD-2), which the user may change to any format; ORD-3 refuses one another order already uses. */}
+                  <Input id="po-number" required maxLength={50} aria-invalid={!!errors.po} size="sm" {...register("po")} />
                   <FieldError errors={[errors.po]} />
                 </Field>
                 <Field className={fieldClass} data-invalid={!!errors.orderDate}>

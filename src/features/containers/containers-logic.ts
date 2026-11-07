@@ -111,7 +111,7 @@ const lineSchema = z.object({
   orderLineId: z.string(),
   po: z.string(),
   item: z.string(),
-  unit: z.enum(["m", "pcs"]),
+  unit: z.string(),
   received: z.number(),
   loaded: z.number(),
   bundles: z.string(),

@@ -14,6 +14,7 @@ const TABS = [
   { tab: "/settings/offices", api: "/locations", key: "location", noun: "office or warehouse", body: { type: "Warehouse" } },
   { tab: "/settings/teams", api: "/teams", key: "team", noun: "team", body: {} },
   { tab: "/settings/items", api: "/items", key: "item", noun: "item", body: { countedIn: "Pieces", perBundle: 10 } },
+  { tab: "/settings/units", api: "/units", key: "unit", noun: "unit", body: {} },
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -43,7 +44,7 @@ const deleteRecord204 = async (api: Api, path: string) => expect((await api.requ
 /** Removes an order the test made, its payments first (PAY-3, then ORD-6), so its supplier or agent can go too. */
 async function removeOrder(api: Api, po: string) {
   for (const payment of (await api.order(po)).payments ?? []) await deleteRecord204(api, `/payments/${payment.id}`);
-  await deleteRecord204(api, `/orders/${po}`);
+  await deleteRecord204(api, `/orders/${encodeURIComponent(po)}`);
 }
 
 test.describe("Management", () => {

@@ -6,7 +6,7 @@ import { LinkPending } from "@/components/layout/navigation-progress";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn, decodePath } from "@/lib/utils";
 
 export type RouteTab = { href: string; label: string; /** Letter or number chip: "a", "1". */ chip: string };
 
@@ -31,7 +31,8 @@ function ActiveTabs({ tabs }: { tabs: RouteTab[] }) {
 
 function Tabs({ tabs, pathname }: { tabs: RouteTab[]; pathname: string | null }) {
   return tabs.map((tab) => {
-    const active = pathname === tab.href.split("?")[0];
+    // Compared decoded: an order's tabs carry its PO encoded (MR%2F2026%2F001), the pathname may or may not.
+    const active = pathname !== null && decodePath(pathname) === decodePath(tab.href.split("?")[0] ?? tab.href);
     return (
       <Link
         key={tab.href}

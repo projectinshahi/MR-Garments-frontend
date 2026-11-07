@@ -87,7 +87,7 @@ export type Team = {
 export type ItemMaster = {
   id: string;
   name: string;
-  countedIn: "Pieces" | "Metres";
+  countedIn: string;
   /** Number of pieces, or a unit label such as "Roll". */
   perBundle: number | string;
   usedInOrders: string[];

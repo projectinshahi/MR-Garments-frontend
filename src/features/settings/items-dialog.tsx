@@ -9,7 +9,7 @@ import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
-import type { ItemResponse, ItemRow } from "@/lib/api/types";
+import type { ItemResponse, ItemRow, UnitRow } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 import { DeactivateConfirm, type Deletable, fieldClass, labelClass, listFact, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
@@ -41,7 +41,7 @@ export const ITEMS_PATH = "/settings/items";
 export const MESSAGES = {
   name: "Enter the item name.",
   nameTooLong: "Use 200 characters or fewer.",
-  countedIn: "Choose Pieces or Metres.",
+  countedIn: "Choose a unit from the list.",
   bundle: "Enter the pieces per bundle or a bundle label.",
   perBundle: "Enter a whole number of pieces from 1 to 100000.",
   bundleLabelTooLong: "Use 200 characters or fewer.",
@@ -53,8 +53,8 @@ const M = MESSAGES;
 export const itemSchema = z
   .object({
     name: z.string().trim().min(1, M.name).max(200, M.nameTooLong),
-    // Undefined while the unit is locked (the item is on an order), so the edit doesn't send it.
-    countedIn: z.string().pipe(z.enum(["Pieces", "Metres"], { error: M.countedIn })).optional(),
+    // A unit's name (Settings, Units). Undefined while the unit is locked (the item is on an order), so the edit doesn't send it.
+    countedIn: z.string().min(1, M.countedIn).optional(),
     perBundle: z
       .string()
       .trim()
@@ -84,7 +84,7 @@ const toInput = (row?: ItemRow): ItemInput => ({
  * Add item (?dialog=add) or edit one row (?dialog=edit&id=), read with useSearchParams, so render it inside
  * <Suspense>. An id not in the list opens nothing. Saving toasts, closes and reloads the list from the server.
  */
-export function ItemDialog({ rows }: { rows: ItemRow[] }) {
+export function ItemDialog({ rows, units }: { rows: ItemRow[]; units: UnitRow[] }) {
   const { open, id, close, saved } = useSettingsDialog(ITEMS_PATH);
   const row = open === "edit" ? rows.find((item) => item.id === id) : undefined;
   return (
@@ -94,14 +94,16 @@ export function ItemDialog({ rows }: { rows: ItemRow[] }) {
       title={row ? "Edit item" : "Add item"}
       description={row ? "Changes show wherever this item is used." : "Add a new item so you can pick it on an order."}
     >
-      <ItemForm row={row} onCancel={close} onSaved={saved} />
+      <ItemForm row={row} units={units} onCancel={close} onSaved={saved} />
     </SettingsDialog>
   );
 }
 
-function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => void; onSaved: (message: string) => void }) {
+function ItemForm({ row, units, onCancel, onSaved }: { row?: ItemRow; units: UnitRow[]; onCancel: () => void; onSaved: (message: string) => void }) {
   // The unit can't change once the item is on an order (409 item_in_use).
   const locked = !!row && row.usedInOrders.length > 0;
+  // The active units, plus the item's own when it has since been deactivated, so the edit still shows it.
+  const choices = [...new Set([...units.filter((unit) => unit.status === "Active").map((unit) => unit.name), ...(row ? [row.countedIn] : [])])];
   const { register, handleSubmit, setError, formState } = useForm<ItemInput, unknown, ItemValues>({
     resolver: zodResolver(itemSchema),
     defaultValues: toInput(row),
@@ -150,8 +152,11 @@ function ItemForm({ row, onCancel, onSaved }: { row?: ItemRow; onCancel: () => v
             {...register("countedIn", { disabled: locked })}
           >
             {row ? null : <option value="">Select unit</option>}
-            <option value="Pieces">Pieces</option>
-            <option value="Metres">Metres</option>
+            {choices.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
           </NativeSelect>
           {locked ? (
             <FieldDescription id="item-counted-in-hint" className="text-[12.5px] leading-4">

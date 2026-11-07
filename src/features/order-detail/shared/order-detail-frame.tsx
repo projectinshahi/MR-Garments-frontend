@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { RouteTabs, type RouteTab } from "@/components/layout/route-tabs";
+import { orderHref } from "@/components/shared/po-link";
 import { LoadingState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { getOrderDetail, type OrderView } from "@/features/order-detail/data/queries";
@@ -36,7 +37,7 @@ export async function OrderDetailFrame({ params, children }: { params: Promise<{
   const items = canEdit ? await getActiveItems() : [];
   const { stage, orderDate, deliveryDate, paidCny, lines } = order;
   const tabs: RouteTab[] = TABS.filter((tab) => !tab.section || order[tab.section] !== null).map((tab) => ({
-    href: `/orders/${order.po}${tab.segment}`,
+    href: `${orderHref(order.po)}${tab.segment}`,
     label: tab.label,
     chip: tab.chip,
   }));

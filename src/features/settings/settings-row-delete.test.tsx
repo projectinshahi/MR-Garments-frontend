@@ -155,7 +155,7 @@ describe("Settings: Delete on each table row", () => {
       "item",
       "/settings/items",
       () => (
-        <ItemsScreen rows={[{ id: "i-1", name: "Polo shirts", countedIn: "Pieces", perBundle: 50, bundleLabel: null, usedInOrders: [], ...active } satisfies ItemRow]} />
+        <ItemsScreen rows={[{ id: "i-1", name: "Polo shirts", countedIn: "Pieces", perBundle: 50, bundleLabel: null, usedInOrders: [], ...active } satisfies ItemRow]} units={[]} />
       ),
       "/items/i-1",
       "orders",
@@ -166,7 +166,7 @@ describe("Settings: Delete on each table row", () => {
     nav.path = "/settings/items";
     const user = userEvent.setup();
     const pos = Array.from({ length: 7 }, (_, i) => `PO-${2050 + i}`);
-    render(<ItemsScreen rows={[{ id: "i-2", name: "Denim jeans", countedIn: "Pieces", perBundle: 50, bundleLabel: null, usedInOrders: pos, status: "Active" }]} />);
+    render(<ItemsScreen rows={[{ id: "i-2", name: "Denim jeans", countedIn: "Pieces", perBundle: 50, bundleLabel: null, usedInOrders: pos, status: "Active" }]} units={[]} />);
     await user.click(screen.getByRole("button", { name: "Delete Denim jeans" }));
     expect(screen.getByRole("alertdialog", { name: "Delete item?" })).toHaveTextContent("Used in ordersPO-2050, PO-2051, PO-2052, PO-2053, PO-2054 and 2 more");
   });

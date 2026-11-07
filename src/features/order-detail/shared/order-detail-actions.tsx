@@ -3,9 +3,11 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { orderHref } from "@/components/shared/po-link";
 import { Button } from "@/components/ui/button";
 import { DeleteOrderButton } from "@/features/orders/delete-order";
 import { EditOrderDialog, type EditableOrder, type ItemOption } from "@/features/orders/edit-order-dialog";
+import { decodePath } from "@/lib/utils";
 
 /**
  * The order page's header actions: Delete and Edit order, as the server decided (D1, stage below 6 for Edit). Print
@@ -28,9 +30,11 @@ export function OrderDetailActions({
   const pathname = usePathname();
   const params = useSearchParams();
   const [editing, setEditing] = useState(false);
-  // Only this order's own pages count: Activity keeps other visited orders mounted, hidden.
-  const base = `/orders/${order.po}`;
-  const here = pathname === base || pathname.startsWith(`${base}/`);
+  // Only this order's own pages count: Activity keeps other visited orders mounted, hidden. Compared decoded, as the
+  // pathname may carry the PO encoded (MR%2F2026%2F001).
+  const base = decodePath(orderHref(order.po));
+  const path = decodePath(pathname);
+  const here = path === base || path.startsWith(`${base}/`);
   const linked = here && params.get("edit") === "1";
 
   function closeEdit() {

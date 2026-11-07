@@ -7,6 +7,7 @@ import type {
   SupplierRow,
   TeamRow,
   TransportCompanyRow,
+  UnitRow,
 } from "@/lib/api/types";
 
 import { supplierDraft } from "./fixtures";
@@ -24,3 +25,4 @@ export const getTransportCompanies = () => apiGet<TransportCompanyRow[]>("/trans
 export const getLocations = () => apiGet<LocationRow[]>("/locations");
 export const getTeams = () => apiGet<TeamRow[]>("/teams");
 export const getItems = () => apiGet<ItemRow[]>("/items");
+export const getUnits = () => apiGet<UnitRow[]>("/units");

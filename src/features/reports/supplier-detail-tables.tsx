@@ -7,7 +7,7 @@ import { createContext, use, useState, useTransition } from "react";
 import { useNavigate, useReportPending } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
 import { type FilterOption, FilterSelect } from "@/components/shared/filters";
-import { PoLink } from "@/components/shared/po-link";
+import { orderHref, PoLink } from "@/components/shared/po-link";
 import { EmptyState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
@@ -189,7 +189,7 @@ export function SupplierOrdersList({ list, linkPos, today, empty }: { list: List
       itemLabel="orders"
       empty={empty}
       getRowId={(row) => row.id}
-      onRowClick={linkPos ? (order) => navigate(`/orders/${order.po}`) : undefined}
+      onRowClick={linkPos ? (order) => navigate(orderHref(order.po)) : undefined}
     />
   );
 }

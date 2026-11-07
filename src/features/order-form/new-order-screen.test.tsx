@@ -130,32 +130,29 @@ describe("NewOrderScreen", () => {
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/PO-2050"));
   });
 
-  it("sends the PO number the user typed, refusing a blank or odd one itself, and shows a 422 'already used' under it", async () => {
+  it("sends the PO number the user typed in any format, refusing a blank one itself, and shows a 422 'already used' under it", async () => {
     const taken = "This PO number is already used by another order.";
     post.mockRejectedValueOnce(new ApiError(422, "validation_failed", "Some fields need attention.", { po: taken }));
-    post.mockResolvedValueOnce({ order: { id: "o-4", po: "PO-3000" } });
+    post.mockResolvedValueOnce({ order: { id: "o-4", po: "MR/2026/001" } });
     const ui = open();
     await fillOrder(ui);
     await ui.user.clear(ui.field("Purchase order no."));
     await ui.user.click(ui.place);
     expect(await screen.findByText("Enter the PO number.")).toBeVisible();
-    await ui.user.type(ui.field("Purchase order no."), "3000");
-    await ui.user.click(ui.place);
-    expect(await screen.findByText("Enter a PO number like PO-2050.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();
 
-    await ui.user.clear(ui.field("Purchase order no."));
-    await ui.user.type(ui.field("Purchase order no."), " po-3000 ");
+    // Trimmed, otherwise as typed: no PO- prefix or letter case is forced.
+    await ui.user.type(ui.field("Purchase order no."), " mr/2026/001 ");
     await ui.user.click(ui.place);
     expect(await screen.findByText(taken)).toBeVisible();
     expect(ui.field("Purchase order no.")).toHaveAttribute("aria-invalid", "true");
-    expect(post).toHaveBeenCalledWith("/orders", expect.objectContaining({ po: "PO-3000" }));
+    expect(post).toHaveBeenCalledWith("/orders", expect.objectContaining({ po: "mr/2026/001" }));
     expect(router.push).not.toHaveBeenCalled();
 
-    // Placed again (say, after the other order was renumbered): the server's PO names the toast and the page.
+    // Placed again (say, after the other order was renumbered): the server's PO names the toast and, encoded, the page.
     await ui.user.click(ui.place);
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/PO-3000"));
-    expect(toast.success).toHaveBeenCalledWith("Order PO-3000 placed");
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/orders/MR%2F2026%2F001"));
+    expect(toast.success).toHaveBeenCalledWith("Order MR/2026/001 placed");
   }, 30_000);
 
   it("shows a 422 field error under its field and keeps the values", async () => {

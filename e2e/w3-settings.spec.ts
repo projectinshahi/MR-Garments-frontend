@@ -15,9 +15,10 @@ const TABS = [
   { name: "Offices & warehouses", path: "/settings/offices", action: "+ Add office or warehouse", record: "Guangzhou office", rows: 3 },
   { name: "Teams", path: "/settings/teams", action: "+ Add team", record: "Retail team", rows: 3 },
   { name: "Item list", path: "/settings/items", action: "+ Add item", record: "Cotton fabric", rows: 8 },
+  { name: "Units", path: "/settings/units", action: "+ Add unit", record: "Pieces", rows: null },
 ];
 
-test("the settings redirect and tab links reach all seven tabs", async ({ page }) => {
+test("the settings redirect and tab links reach all eight tabs", async ({ page }) => {
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
