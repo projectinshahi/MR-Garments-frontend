@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
+import { statementHref } from "@/features/deposits/deposits-logic";
+import { rowActionClass } from "@/features/orders/delete-order";
 import type { SupplierRow } from "@/lib/api/types";
 import { CURRENCY_SYMBOL } from "@/lib/formatters";
 
@@ -19,6 +21,17 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "city", header: "City" },
   { accessorKey: "currency", header: "Currency", cell: ({ row }) => CURRENCY_SYMBOL[row.original.currency] },
   { accessorKey: "openOrders", header: "Open orders", meta: right },
+  {
+    id: "deposits",
+    header: () => <span className="sr-only">Deposits</span>,
+    meta: { className: "w-px whitespace-nowrap" },
+    // The supplier's deposit statement (docs/phase2-contracts.md 3.3), as a text link like Edit.
+    cell: ({ row }) => (
+      <Link href={statementHref(row.original.id)} aria-label={`Deposits of ${row.original.name}`} className={rowActionClass}>
+        Deposits
+      </Link>
+    ),
+  },
 ];
 
 /** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */

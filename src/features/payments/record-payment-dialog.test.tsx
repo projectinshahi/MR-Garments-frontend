@@ -78,6 +78,16 @@ describe("RecordPaymentDialog", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("sends the reference and notes when typed (trimmed), and leaves them out when empty", async () => {
+    post.mockResolvedValue({ payment: { id: "p1" } });
+    const form = await open();
+    await fill(form);
+    await form.user.type(form.field("Reference"), " UTR 123 ");
+    await form.user.type(form.field("Notes"), "Second half");
+    await form.user.click(form.submit);
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/payments", { ...BODY, reference: "UTR 123", notes: "Second half" }));
+  });
+
   it("pays a shipping agent", async () => {
     post.mockResolvedValue({ payment: { id: "p1" } });
     const form = await open();

@@ -1,0 +1,165 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import type { DepositsResponse, SupplierStatement } from "@/lib/api/deposits-types";
+
+import type { DepositsData, StatementData } from "./data/queries";
+import { toRows } from "./deposits-logic";
+import { DepositsScreen } from "./deposits-screen";
+import { StatementScreen } from "./statement-screen";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/deposits",
+  useSearchParams: () => new URLSearchParams(),
+  notFound: vi.fn(),
+}));
+vi.mock("@/lib/api/server", () => ({ apiGet: vi.fn() }));
+vi.mock("@/lib/session", () => ({ getMe: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), delete: vi.fn() } }));
+
+const api: DepositsResponse = {
+  orderDeposits: [
+    { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half", },
+  ],
+  supplierDeposits: [
+    { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
+    { id: "d1", supplierId: "s2", supplier: "Hangzhou Knits", direction: "give", currency: "USD", amount: 1000, settled: 0, pending: 1000, status: "open", openedOn: "2026-10-01", reference: "", notes: "", transactions: 0 },
+  ],
+  suppliers: [
+    { id: "s1", name: "Foshan Fabrics" },
+    { id: "s2", name: "Hangzhou Knits" },
+  ],
+};
+const data = (access: Partial<DepositsData> = {}): DepositsData => ({ rows: toRows(api), suppliers: api.suppliers, today: "2026-11-10", canEnter: false, canDelete: false, linkPo: true, ...access });
+// The KPI tile's label is a <p>; a deposit block's fact labels ("Received") are <dt>s.
+const kpi = (label: string) => screen.getByText(label, { selector: "p" }).nextSibling;
+const rowsOf = (table: HTMLElement) => within(table).getAllByRole("row").slice(1);
+
+describe("DepositsScreen", () => {
+  it("All: both lists in one table with kinds, pills and links, and the cards per currency from the rows shown", () => {
+    render(<DepositsScreen data={data()} view="all" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Deposits" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Deposits views" }).querySelector("[aria-current=page]")).toHaveTextContent("All deposits");
+    const rows = rowsOf(screen.getByRole("table"));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent("Order deposit");
+    expect(within(rows[0]!).getByRole("link", { name: "PO-3001" })).toHaveAttribute("href", "/orders/PO-3001");
+    expect(within(rows[0]!).getByText("Paid")).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent("To receive");
+    expect(within(rows[1]!).getByText("Partly settled")).toBeInTheDocument();
+    expect(within(rows[1]!).getByRole("link", { name: "Details" })).toHaveAttribute("href", "/deposits/suppliers/s1");
+    expect(rows[2]).toHaveTextContent("To give");
+    // ¥300 + ¥500 and $1,000; paid ¥300 + ¥100; pending ¥400 and $1,000.
+    expect(kpi("Total deposits")).toHaveTextContent("¥800 · $1,000");
+    expect(kpi("Total paid / settled")).toHaveTextContent("¥400");
+    expect(kpi("Total pending")).toHaveTextContent("¥400 · $1,000");
+    expect(kpi("Deposit count")).toHaveTextContent("3");
+    expect(screen.getByRole("button", { name: "Export Excel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+  });
+
+  it("Pending and Paid keep their rows; filters narrow the table and the cards follow", async () => {
+    const user = userEvent.setup();
+    const pending = render(<DepositsScreen data={data()} view="pending" />);
+    expect(rowsOf(screen.getByRole("table")).map((row) => row.textContent)).toEqual([expect.stringContaining("To receive"), expect.stringContaining("To give")]);
+    expect(kpi("Total pending")).toHaveTextContent("¥400 · $1,000");
+    pending.unmount();
+
+    render(<DepositsScreen data={data()} view="paid" />);
+    expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
+    expect(screen.getByRole("table")).toHaveTextContent("PO-3001");
+    await user.type(screen.getByRole("searchbox", { name: "Search PO" }), "9999");
+    expect(screen.getByText("No deposits match these filters.")).toBeInTheDocument();
+    expect(kpi("Deposit count")).toHaveTextContent("0");
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
+  });
+
+  it("Suppliers: one line per supplier with the six figures apart, linking to the statement", () => {
+    render(<DepositsScreen data={data()} view="suppliers" />);
+    const rows = rowsOf(screen.getByRole("table"));
+    expect(rows).toHaveLength(2);
+    const cells = (row: HTMLElement) => within(row).getAllByRole("cell").map((cell) => cell.textContent);
+    expect(cells(rows[0]!)).toEqual(["Foshan Fabrics", "–", "–", "–", "¥500", "¥100", "¥400", "Statement"]);
+    expect(cells(rows[1]!)).toEqual(["Hangzhou Knits", "$1,000", "$0", "$1,000", "–", "–", "–", "Statement"]);
+    expect(within(rows[0]!).getByRole("link", { name: "Statement of Foshan Fabrics" })).toHaveAttribute("href", "/deposits/suppliers/s1");
+    expect(kpi("Deposit count")).toHaveTextContent("2");
+    expect(screen.queryByRole("searchbox", { name: "Search PO" })).not.toBeInTheDocument();
+  });
+
+  it("says there are none yet when the API returns nothing", () => {
+    render(<DepositsScreen data={data({ rows: [] })} view="all" />);
+    expect(screen.getByText("No deposits yet.")).toBeInTheDocument();
+    expect(kpi("Total deposits")).toHaveTextContent("¥0");
+  });
+});
+
+const statement: SupplierStatement = {
+  supplier: { id: "s1", name: "Foshan Fabrics", contactPerson: "Mr. Chen Hao", phone: "+86 137", city: "Foshan", currency: "CNY", status: "Active" },
+  summary: [
+    { currency: "CNY", direction: "give", amount: 1000, settled: 300, pending: 700 },
+    { currency: "CNY", direction: "receive", amount: 500, settled: 500, pending: 0 },
+  ],
+  deposits: [
+    {
+      id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 500, pending: 0, status: "settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: [
+        { id: "t3", paidOn: "2026-10-12", amount: 500, mode: "Cash", reference: "", notes: "" },
+      ],
+    },
+    {
+      id: "d1", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "CNY", amount: 1000, settled: 300, pending: 700, status: "partly settled", openedOn: "2026-10-01", reference: "", notes: "Tooling", transactions: [
+        { id: "t2", paidOn: "2026-10-20", amount: 100, mode: "Cash", reference: "", notes: "" },
+        { id: "t1", paidOn: "2026-10-05", amount: 200, mode: "Bank transfer", reference: "TXN 1", notes: "" },
+      ],
+    },
+  ],
+};
+const statementData = (access: Partial<StatementData> = {}): StatementData => ({ statement, today: "2026-11-10", canEnter: false, canDelete: false, linkPo: true, ...access });
+
+describe("StatementScreen", () => {
+  it("shows the six figures apart, each deposit with its transactions oldest first, and no actions below Enter", () => {
+    render(<StatementScreen data={statementData()} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Foshan Fabrics" })).toBeInTheDocument();
+    expect(kpi("To give")).toHaveTextContent("¥1,000");
+    expect(kpi("Given")).toHaveTextContent("¥300");
+    expect(kpi("Pending to give")).toHaveTextContent("¥700");
+    expect(kpi("To receive")).toHaveTextContent("¥500");
+    expect(kpi("Received")).toHaveTextContent("¥500");
+    expect(kpi("Pending to receive")).toHaveTextContent("¥0");
+    const blocks = screen.getAllByRole("article");
+    expect(blocks.map((block) => within(block).getByRole("heading", { level: 3 }).textContent)).toEqual(["To receive · ¥500", "To give · ¥1,000"]);
+    expect(within(blocks[1]!).getByRole("list", { name: "Payments" })).toHaveTextContent("1. 5 Oct 2026 · ¥200 · Bank transfer · TXN 12. 20 Oct 2026 · ¥100 · Cash");
+    expect(within(blocks[0]!).getByRole("list", { name: "Receipts" })).toHaveTextContent("1. 12 Oct 2026 · ¥500 · Cash");
+    expect(screen.queryByRole("button", { name: "+ New deposit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Record (payment|receipt)$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+  });
+
+  it("offers New deposit and Record payment on open deposits with Enter, and Delete with Full", async () => {
+    const user = userEvent.setup();
+    render(<StatementScreen data={statementData({ canEnter: true, canDelete: true })} />);
+    expect(screen.getByRole("button", { name: "+ New deposit" })).toBeInTheDocument();
+    // Only the deposit with something pending can be settled.
+    expect(screen.getAllByRole("button", { name: /^Record (payment|receipt)$/ }).map((b) => b.textContent)).toEqual(["Record payment"]);
+    expect(screen.getAllByRole("button", { name: /^Delete / }).map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Delete deposit of 10 Oct 2026, ¥500",
+      "Delete receipt of 12 Oct 2026, ¥500",
+      "Delete deposit of 1 Oct 2026, ¥1,000",
+      "Delete payment of 5 Oct 2026, ¥200",
+      "Delete payment of 20 Oct 2026, ¥100",
+    ]);
+    // A deposit with transactions can't go: Delete explains instead of asking.
+    await user.click(screen.getByRole("button", { name: "Delete deposit of 1 Oct 2026, ¥1,000" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Can't delete deposit" });
+    expect(dialog).toHaveTextContent("This deposit has 2 transactions, so it can't be deleted.");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    // A payment's confirmation names what changes.
+    await user.click(screen.getByRole("button", { name: "Delete payment of 5 Oct 2026, ¥200" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Delete Payment?" });
+    expect(ask).toHaveTextContent("Settled goes from ¥300 to ¥100, and pending from ¥700 to ¥900.");
+  });
+});

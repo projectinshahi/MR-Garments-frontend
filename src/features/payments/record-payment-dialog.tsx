@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import type { CreatePaymentResponse, OrderOptions } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
@@ -194,6 +195,21 @@ function RecordPaymentForm({
           </FieldLabel>
           <Input id="payment-mode" required maxLength={100} size="sm" aria-invalid={!!errors.mode} {...register("mode")} />
           <FieldError errors={[errors.mode]} />
+        </Field>
+        {/* Optional (migration 0008): the bank's or supplier's transaction number, and anything worth noting. */}
+        <Field className={fieldClass} data-invalid={!!errors.reference}>
+          <FieldLabel htmlFor="payment-reference" className={labelClass}>
+            Reference
+          </FieldLabel>
+          <Input id="payment-reference" maxLength={100} size="sm" placeholder="Transaction number" aria-invalid={!!errors.reference} {...register("reference")} />
+          <FieldError errors={[errors.reference]} />
+        </Field>
+        <Field className={cn(fieldClass, "sm:col-span-2")} data-invalid={!!errors.notes}>
+          <FieldLabel htmlFor="payment-notes" className={labelClass}>
+            Notes
+          </FieldLabel>
+          <Textarea id="payment-notes" maxLength={1000} className="min-h-[60px] text-sm" aria-invalid={!!errors.notes} {...register("notes")} />
+          <FieldError errors={[errors.notes]} />
         </Field>
       </div>
       <div className="mt-[14px] flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
