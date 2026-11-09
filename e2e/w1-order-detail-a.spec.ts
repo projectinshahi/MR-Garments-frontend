@@ -49,7 +49,7 @@ test("Overview: header, tabs, facts, journey and money", async ({ page, api }) =
   await expect(journey.getByRole("listitem").first()).toContainText(shortDate(today()));
   await expect(journey.getByRole("listitem").nth(1)).toHaveText("2. Receiving in China");
 
-  await expect(kv(page, "Goods, paid ¥3,000")).toHaveText("₹36,300");
+  await expect(kv(page, "Paid to supplier ¥3,000")).toHaveText("₹36,300");
 
   // The breadcrumb goes back to Orders.
   await page.getByRole("banner").getByRole("link", { name: "Orders", exact: true }).click();

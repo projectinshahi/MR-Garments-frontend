@@ -24,33 +24,35 @@ test("Deposits & payments: KPIs, every payment at its own rate, totals and the I
   await expect(page.getByText("Polo shirts · Foshan Fabrics · Order value ¥8,000")).toBeVisible();
 
   await expect(kpi(page, "Order value")).toContainText("¥8,000");
-  await expect(kpi(page, "Paid so far")).toContainText("¥3,500");
-  await expect(kpi(page, "Paid so far")).toContainText("2 payments");
-  await expect(kpi(page, "Balance to pay")).toContainText("¥4,500");
+  // Paid to supplier counts the deposit only; the agent's ¥1,500 is sea freight, shown apart (phase 2 fixes, 1).
+  await expect(kpi(page, "Paid to supplier")).toContainText("¥2,000");
+  await expect(kpi(page, "Paid to supplier")).toContainText("1 payment · agents ¥1,500");
+  await expect(kpi(page, "Balance to supplier")).toContainText("¥6,000");
 
   await expect(rows(page)).toHaveCount(4);
   // Management (payments Full) also has the Actions column's Delete; the totals row leaves it empty.
   await expect(rows(page).nth(1).getByRole("cell")).toHaveText([longDate(today(-5)), "Deposit", "Foshan Fabrics", "¥2,000", "12.00", "₹24,000", "Delete"]);
   await expect(rows(page).nth(2).getByRole("cell")).toHaveText([longDate(today()), "Balance", "Sino Freight", "¥1,500", "12.50", "₹18,750", "Delete"]);
-  await expect(rows(page).nth(3).getByRole("cell")).toHaveText(["Total paid", "", "", "¥3,500", "", "₹42,750", ""]);
+  await expect(rows(page).nth(3).getByRole("cell")).toHaveText(["Total paid (all payees)", "", "", "¥3,500", "", "₹42,750", ""]);
 
   await expect(kv(page, "¥2,000 × 12.00")).toHaveText("₹24,000");
-  await expect(kv(page, "¥1,500 × 12.50")).toHaveText("₹18,750");
-  await expect(kv(page, "Goods cost in INR")).toHaveText("₹42,750");
+  await expect(kv(page, "Paid to supplier in INR")).toHaveText("₹24,000");
+  await expect(kv(page, "¥1,500 × 12.50 · Sino Freight")).toHaveText("₹18,750");
+  await expect(kv(page, "Paid to agents (sea freight) in INR")).toHaveText("₹18,750");
 });
 
 test("Deposits & payments: no payments yet, and a fully paid order", async ({ page, api }) => {
   const unpaid = await api.createOrder({ lines: [{ item: "Polo shirts", quantity: 10, rateCny: 100 }] });
   await page.goto(`/orders/${unpaid.po}/payments`);
   await expect(page.getByText("No payments recorded yet.")).toBeVisible();
-  await expect(kpi(page, "Paid so far")).toContainText("0 payments");
-  await expect(kpi(page, "Balance to pay")).toContainText("¥1,000");
+  await expect(kpi(page, "Paid to supplier")).toContainText("0 payments");
+  await expect(kpi(page, "Balance to supplier")).toContainText("¥1,000");
 
   await api.pay(unpaid.id, { amountCny: 1000, rateInr: 12 });
   await page.reload();
-  await expect(kpi(page, "Paid so far")).toContainText("1 payment");
-  await expect(kpi(page, "Balance to pay")).toContainText("¥0");
-  await expect(kpi(page, "Balance to pay")).toContainText("Fully paid");
+  await expect(kpi(page, "Paid to supplier")).toContainText("1 payment");
+  await expect(kpi(page, "Balance to supplier")).toContainText("¥0");
+  await expect(kpi(page, "Balance to supplier")).toContainText("Fully paid");
 });
 
 test("Receiving: empty, then each receipt with its totals, remark and history", async ({ page, api }) => {

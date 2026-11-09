@@ -47,7 +47,7 @@ test("KPIs, the order's row and its payments card, with search and its empty sta
   await expect(detail.getByRole("heading", { name: "1. Deposit" })).toBeVisible();
   await expect(detail).toContainText("Paid");
   await expect(detail).toContainText("¥ 2,000 × 12.00");
-  await expect(detail).toContainText("Total for this order");
+  await expect(detail).toContainText("Balance to supplier");
   await expect(detail).toContainText("Bank transfer");
 
   // Search by supplier, then one that matches nothing: the card hides until the search clears.
@@ -149,7 +149,8 @@ test("the card's button records a payment to a shipping agent for that order", a
   // Numbered oldest first, as in reference 16.
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(["1. Deposit", "2. Balance"]);
   await expect(detail).toContainText("¥ 500 × 12.25");
-  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("1,500"), `₹${num(12_000 + 6125)}`, amountCell("1,500"), "Not yet due", "Delete"]);
+  // Paid to supplier and the balance to supplier leave the agent's ¥500 out; Paid (INR) counts every payee.
+  await expect(rowOf(page, order.po).getByRole("cell")).toHaveText([`${order.po}Foshan Fabrics`, amountCell("3,000"), amountCell("1,000"), `₹${num(12_000 + 6125)}`, amountCell("2,000"), "Not yet due", "Delete"]);
   // PAY-1 lists payments newest first.
   expect((await paymentsOf(api, order.id)).map((p) => [p.kind, p.payee, p.payeeRole])).toEqual([
     ["Balance", "Dragon Cargo", "agent"],

@@ -17,7 +17,7 @@ test("Management deletes a deposit on the order's tab and a payment on Deposits 
   const deposit = page.getByRole("button", { name: /^Delete deposit of / });
   const ask = page.getByRole("alertdialog", { name: "Delete Deposit?" });
   await deposit.click();
-  await expect(ask).toContainText(`Paid so far for ${po} goes from ¥500 to ¥200, and the balance to pay from ¥500 to ¥800.`);
+  await expect(ask).toContainText(`Paid to supplier for ${po} goes from ¥500 to ¥200, and the balance to supplier from ¥500 to ¥800.`);
   await ask.getByRole("button", { name: "Cancel" }).click();
   await expect(ask).toBeHidden();
   const deletes: string[] = [];
@@ -60,7 +60,7 @@ test("Management deletes a payment from the Payments by order menu; the row and 
   // Escape sends nothing.
   await menu.click();
   await page.getByRole("menuitem", { name: /^Deposit · / }).click();
-  await expect(ask).toContainText(`Paid so far for ${po} goes from ¥500 to ¥200`);
+  await expect(ask).toContainText(`Paid to supplier for ${po} goes from ¥500 to ¥200`);
   await page.keyboard.press("Escape");
   await expect(ask).toBeHidden();
   // Focus is back on the menu's trigger.

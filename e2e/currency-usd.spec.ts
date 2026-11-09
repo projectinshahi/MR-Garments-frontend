@@ -76,9 +76,9 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
   await test.step("The order's payments tab: dollars, each payment changed to INR at its own rate", async () => {
     await page.goto(`/orders/${po}/payments`);
     await expect(kpi(page, "Order value")).toContainText("$1,000");
-    await expect(kpi(page, "Paid so far")).toContainText("$1,000");
-    await expect(kpi(page, "Balance to pay")).toContainText("Fully paid");
-    await expect(kv(page, "Goods cost in INR")).toHaveText("₹88,350");
+    await expect(kpi(page, "Paid to supplier")).toContainText("$1,000");
+    await expect(kpi(page, "Balance to supplier")).toContainText("Fully paid");
+    await expect(kv(page, "Paid to supplier in INR")).toHaveText("₹88,350");
   });
 
   await test.step("Payments per supplier: a USD row of its own, never added to the yuan figures", async () => {
