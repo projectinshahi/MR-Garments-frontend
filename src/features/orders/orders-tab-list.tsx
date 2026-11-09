@@ -19,7 +19,7 @@ import { rowActionClass } from "./delete-order";
 import { balanceCny, closedOrders, filterTabOrders, paymentStatus, pendingOrders, pendingQty, type TabFilters } from "./filter-orders";
 import { closedOrdersFile, describeFilters, pendingOrdersFile, rangeLabel } from "./order-files";
 import { stageLabel } from "./order-status";
-import { OrdersFrame } from "./orders-frame";
+import { ClosedOrdersFrame, OrdersFrame } from "./orders-frame";
 import { PoCell } from "./orders-list";
 
 // Phase 2 §5: the Pending (stage 1) and Closed (`closed`) tabs. Every order is loaded once (ORD-1, as the All tab);
@@ -125,7 +125,9 @@ function DateRange({ label, from, to, onFrom, onTo }: { label: string; from: str
   );
 }
 
-function TabList({ spec, orders, supplierNames, canEdit }: { spec: Spec; canEdit: boolean } & Omit<OrdersListData, "counts">) {
+type Frame = "orders" | "closed-orders";
+
+function TabList({ spec, orders, supplierNames, canEdit, frame = "orders" }: { spec: Spec; canEdit: boolean; frame?: Frame } & Omit<OrdersListData, "counts">) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [supplier, setSupplier] = useState(ALL);
@@ -143,36 +145,35 @@ function TabList({ spec, orders, supplierNames, canEdit }: { spec: Spec; canEdit
       todayInIndia(),
     );
 
-  return (
-    <OrdersFrame canEdit={canEdit} file={file}>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput
-            label="Search PO, item or supplier"
-            placeholder="Search PO, item or supplier"
-            value={query}
-            onValueChange={setQuery}
-            className="w-full sm:w-auto sm:max-w-[290px] sm:flex-[1_1_200px]"
-          />
-          <FilterSelect label="Supplier" showLabel size="sm" value={supplier} options={supplierOptions} onValueChange={setSupplier} />
-          <DateRange label={spec.dateLabel} from={from} to={to} onFrom={setFrom} onTo={setTo} />
-        </div>
-        <DataTable
-          // Remount on a filter change so the pager returns to page 1.
-          key={JSON.stringify(filters)}
-          columns={spec.columns}
-          data={rows}
-          getRowId={(order) => order.po}
-          density="tall"
-          size="sm"
-          header="tall"
-          onRowClick={(order) => navigate(orderHref(order.po))}
-          emptyState={orders.length === 0 ? "No orders yet." : members.length === 0 ? spec.empty : "No orders match these filters."}
-          pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
+  const body = (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchInput
+          label="Search PO, item or supplier"
+          placeholder="Search PO, item or supplier"
+          value={query}
+          onValueChange={setQuery}
+          className="w-full sm:w-auto sm:max-w-[290px] sm:flex-[1_1_200px]"
         />
+        <FilterSelect label="Supplier" showLabel size="sm" value={supplier} options={supplierOptions} onValueChange={setSupplier} />
+        <DateRange label={spec.dateLabel} from={from} to={to} onFrom={setFrom} onTo={setTo} />
       </div>
-    </OrdersFrame>
+      <DataTable
+        // Remount on a filter change so the pager returns to page 1.
+        key={JSON.stringify(filters)}
+        columns={spec.columns}
+        data={rows}
+        getRowId={(order) => order.po}
+        density="tall"
+        size="sm"
+        header="tall"
+        onRowClick={(order) => navigate(orderHref(order.po))}
+        emptyState={orders.length === 0 ? "No orders yet." : members.length === 0 ? spec.empty : "No orders match these filters."}
+        pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
+      />
+    </div>
   );
+  return frame === "closed-orders" ? <ClosedOrdersFrame file={file}>{body}</ClosedOrdersFrame> : <OrdersFrame canEdit={canEdit} file={file}>{body}</OrdersFrame>;
 }
 
 type ListProps = Omit<OrdersListData, "counts"> & { canEdit: boolean };
@@ -181,3 +182,5 @@ type ListProps = Omit<OrdersListData, "counts"> & { canEdit: boolean };
 export const PendingList = (props: ListProps) => <TabList spec={PENDING} {...props} />;
 /** /orders/closed: orders whose goods are all stocked in India; each row also links to its report. */
 export const ClosedList = (props: ListProps) => <TabList spec={CLOSED} {...props} />;
+/** /closed-orders (sidebar, after Warehouse): the same Closed list as its own page, without the Orders tab bar. */
+export const ClosedOrdersPageList = (props: ListProps) => <TabList spec={CLOSED} frame="closed-orders" {...props} />;

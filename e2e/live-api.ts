@@ -213,4 +213,58 @@ export const test = base.extend<{ api: Api }>({
   },
 });
 
+/**
+ * One order (100 Denim jeans) taken through China receiving, a container, clearing, an unloaded trip and a stocked
+ * warehouse receipt, so it is closed (phase 2 §5). Returns its PO and container number.
+ */
+export async function closedOrder(api: Api) {
+  const { po } = await api.createOrder();
+  await api.receive(po, { "Denim jeans": 100 });
+  const container = await api.load([{ po, item: "Denim jeans", quantity: 100, bundles: 4 }], { loadedOn: today(-10), eta: today(-2) });
+  await api.updateContainer(container.id, { status: "sea", sailedOn: today(-9) });
+  await api.updateContainer(container.id, { status: "arrived" });
+  const clearing = await api.get<{ agents: { id: string }[] }>(`/clearings/${container.id}`);
+  const cleared = await api.request.put(`/api/v1/clearings/${container.id}`, {
+    data: { clearingAgentId: clearing.agents[0]!.id, arrivedOn: today(-3), handedOn: today(-3), billOfEntry: "BE-CLOSED", dutyPaidOn: today(-2), clearedOn: today(-1), goodsValueInr: null, customsDutyInr: 1000, otherDutiesInr: 0, agentChargesInr: 0, portChargesInr: 0, complete: true },
+  });
+  expect(cleared.status(), await cleared.text()).toBe(200);
+  const form = await api.get<{ companies: { id: string }[]; warehouses: { id: string }[] }>(`/transports/${container.id}`);
+  const trip = await api.request.put(`/api/v1/transports/${container.id}`, {
+    data: {
+      transportCompanyId: form.companies[0]!.id,
+      destinationId: form.warehouses[0]!.id,
+      lrNumber: `LR-${container.number.slice(-7)}`,
+      vehicleNumber: "KL 07 CL 1",
+      driverName: "",
+      driverPhone: "+91 90000 00000",
+      bundlesLoaded: 4,
+      loadedOn: today(),
+      loadedFrom: "",
+      loadedBy: "",
+      unloadedOn: today(),
+      bundlesReceived: 4,
+      receivedBy: "Joseph M",
+      shortRemark: "",
+      freightInr: 500,
+      handlingInr: 100,
+      complete: true,
+    },
+  });
+  expect(trip.status(), await trip.text()).toBe(200);
+  const tripId = ((await trip.json()) as { trip: { id: string } }).trip.id;
+  const receiving = await api.get<{ lines: { orderLineId: string }[]; teams: { id: string; name: string }[]; warehouses: { id: string }[] }>(`/warehouse-receipts/${tripId}`);
+  const stocked = await api.request.put(`/api/v1/warehouse-receipts/${tripId}`, {
+    data: {
+      locationId: receiving.warehouses[0]!.id,
+      receivedOn: today(),
+      receivedBy: "Joseph M",
+      bundlesReceived: 4,
+      lines: [{ orderLineId: receiving.lines[0]!.orderLineId, teamId: receiving.teams.find((t) => t.name === "Retail team")!.id, quantity: 100 }],
+      complete: true,
+    },
+  });
+  expect(stocked.status(), await stocked.text()).toBe(200);
+  return { po, number: container.number };
+}
+
 export { expect };

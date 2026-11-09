@@ -134,7 +134,7 @@ const ROLES = [
     detail: "Procurement",
     landing: "/",
     heading: "Dashboard",
-    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Delivery Calendar", "Receiving (China)"],
+    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Delivery Calendar", "Receiving (China)", "Closed Orders"],
     blocked: "/users",
   },
   {
@@ -145,7 +145,7 @@ const ROLES = [
     detail: "Accounts",
     landing: "/",
     heading: "Dashboard",
-    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits"],
+    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Closed Orders"],
     blocked: "/settings/suppliers",
   },
   {

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { OrderRow } from "./data/queries";
-import { ClosedList, PendingList } from "./orders-tab-list";
+import { ClosedList, ClosedOrdersPageList, PendingList } from "./orders-tab-list";
 
 // Phase 2 §5: the Pending and Closed tabs over one ORD-1 load, inside the shared header and tab bar.
 
@@ -105,5 +105,22 @@ describe("Closed tab", () => {
     unmount();
     render(<ClosedList orders={[orders[0]!, orders[3]!]} supplierNames={[]} canEdit={false} />);
     expect(screen.getByText("No closed orders yet.")).toBeVisible();
+  });
+});
+
+describe("Closed Orders page", () => {
+  it("is the Closed list under its own header: same rows, filters and exports, no Orders tab bar and no + New order", () => {
+    render(<ClosedOrdersPageList orders={orders} supplierNames={["Foshan Fabrics"]} canEdit />);
+    expect(screen.getByRole("heading", { level: 1, name: "Closed Orders" })).toBeVisible();
+    expect(screen.queryByRole("navigation", { name: "Orders lists" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "+ New order" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Export Excel" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    // Only the closed order: not the pending one, not the stage-2 one, not the stage-6 order with nothing of its own stocked.
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    expect(cells("PO-2040")).toEqual(["PO-2040", "Foshan Fabrics", "¥1,000.00", "100 pcs", "100 pcs", "¥600.00", "¥400.00", "20 Oct 2026", "Report"]);
+    expect(screen.getByLabelText("Search PO, item or supplier")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Closed date to"), { target: { value: "2026-10-19" } });
+    expect(screen.getByText("No orders match these filters.")).toBeVisible();
   });
 });

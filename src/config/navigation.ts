@@ -28,6 +28,10 @@ export const MANAGEMENT_NAV: NavSection[] = [
     ],
   },
   {
+    // Right after the last stage, not a stage itself: the orders whose goods are all stocked (phase 2 §5 `closed`).
+    items: [{ title: "Closed Orders", href: "/closed-orders" }],
+  },
+  {
     label: "Management",
     items: [
       { title: "Landed Cost", href: "/landed-cost" },
@@ -67,6 +71,7 @@ const SIGNED_IN_PATHS = ["/profile", "/notifications"];
 /** The capability a page needs (View or better), by route prefix. Longest prefix wins. */
 const ROUTE_CAPABILITY: [string, Capability][] = [
   ["/orders", "ordersView"],
+  ["/closed-orders", "ordersView"],
   ["/payments", "payments"],
   ["/deposits", "payments"],
   ["/calendar", "calendar"],

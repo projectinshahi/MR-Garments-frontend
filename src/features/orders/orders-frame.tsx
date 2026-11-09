@@ -41,3 +41,13 @@ export function OrdersFrame({ canEdit, file, children }: { canEdit: boolean; fil
     </>
   );
 }
+
+/** "Closed Orders" (sidebar, after Warehouse): the Closed list on its own page, with the same Excel/PDF export and no tab bar. */
+export function ClosedOrdersFrame({ file, children }: { file: () => ReportFile; children: React.ReactNode }) {
+  return (
+    <>
+      <PageHeader title="Closed Orders" actions={<ExportActions file={file} formats={["xlsx", "pdf"]} size="header" />} />
+      <PageContainer>{children}</PageContainer>
+    </>
+  );
+}
