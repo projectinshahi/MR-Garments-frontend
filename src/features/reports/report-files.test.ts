@@ -144,6 +144,41 @@ describe("Excel file", () => {
     expect(sheet).toContain('<c r="B6" s="2"><v>46295</v></c>'); // 30 Sep 2026
     expect(sheet).toContain('<c r="C6" s="3"><v>1500.5</v></c>');
     expect(sheet).toContain('<row r="9"><c r="A9" t="inlineStr"><is><t xml:space="preserve">No rows</t></is></c></row>');
+    // Excel's filter arrows over the sheet's first table (header row 5, one data row).
+    expect(sheet).toContain('</sheetData><autoFilter ref="A5:C6"/></worksheet>');
+  });
+
+  it("puts tables on the worksheets they name, each with the title block and its own headings, and keeps sheet names legal", () => {
+    const report: ReportFile = {
+      ...file,
+      title: "Order report: MR/2026/001",
+      sections: [
+        { title: "Overview", columns: [{ header: "Field" }, { header: "Value" }], rows: [["PO", "MR/2026/001"]] },
+        { sheet: "Items", title: "Lines", columns: [{ header: "Item" }, { header: "Ordered" }], rows: [["Denim jeans", 100]] },
+        { sheet: "Items", columns: [{ header: "Unit" }, { header: "Total" }], rows: [["pcs", 100]] },
+        { sheet: "Payments [2026]", columns: [{ header: "Paid (CNY)", currency: "CNY" }], rows: [] },
+      ],
+    };
+    const parts = unzip(toXlsx(report, "Generated"));
+    expect(Object.keys(parts).filter((name) => name.startsWith("xl/worksheets/"))).toEqual(["xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml"]);
+    for (const xml of Object.values(parts)) expect(parseErrors(xml)).toBe(0);
+    expect(parts["xl/workbook.xml"]).toContain(
+      '<sheet name="Order report  MR 2026 001" sheetId="1" r:id="rId1"/><sheet name="Items" sheetId="2" r:id="rId2"/><sheet name="Payments  2026" sheetId="3" r:id="rId3"/>',
+    );
+    expect(parts["xl/_rels/workbook.xml.rels"]).toContain('<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>');
+    expect(parts["[Content_Types].xml"]).toContain('<Override PartName="/xl/worksheets/sheet3.xml"');
+    // Every sheet starts with the title block; a table's heading is a bold row above its header; the first sheet's filter spans its first table.
+    const items = parts["xl/worksheets/sheet2.xml"];
+    expect(items).toContain('<c r="A1" t="inlineStr" s="1"><is><t xml:space="preserve">Order report: MR/2026/001</t></is></c>');
+    expect(items).toContain('<row r="5"><c r="A5" t="inlineStr" s="1"><is><t xml:space="preserve">Lines</t></is></c></row>');
+    expect(items).toContain('<row r="6"><c r="A6" t="inlineStr" s="1"><is><t xml:space="preserve">Item</t></is></c><c r="B6" t="inlineStr" s="1"><is><t xml:space="preserve">Ordered</t></is></c></row>');
+    expect(items).toContain('<autoFilter ref="A6:B7"/>');
+    expect(parts["xl/worksheets/sheet1.xml"]).toContain('<autoFilter ref="A6:B7"/>');
+    // An empty table gets no filter.
+    expect(parts["xl/worksheets/sheet3.xml"]).not.toContain("autoFilter");
+    // The CSV and PDF carry the headings too.
+    expect(csvRows(report)[0]).toEqual(["Overview"]);
+    expect(pdf(toPdf(report, "Generated"))).toContain("(Lines) Tj");
   });
 });
 

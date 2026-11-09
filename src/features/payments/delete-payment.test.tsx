@@ -19,9 +19,9 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 vi.mock("@/lib/api/client", () => ({ apiClient: { delete: vi.fn() } }));
 const remove = vi.mocked(apiClient.delete);
 
-const deposit = { id: "6f1c2b9e-0000-4000-8000-000000000001", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer" } as const;
-const due = { id: "6f1c2b9e-0000-4000-8000-000000000002", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null } as const;
-const freight = { id: "6f1c2b9e-0000-4000-8000-000000000003", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash" } as const;
+const deposit = { id: "6f1c2b9e-0000-4000-8000-000000000001", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "" } as const;
+const due = { id: "6f1c2b9e-0000-4000-8000-000000000002", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "" } as const;
+const freight = { id: "6f1c2b9e-0000-4000-8000-000000000003", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "" } as const;
 const api: PaymentsResponse = {
   orders: [{ orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12" }],
   payments: [
@@ -133,7 +133,7 @@ describe("Delete deposits and payments (PAY-3)", () => {
 });
 
 describe("Payments by order: Actions (PAY-3)", () => {
-  const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash" } as const;
+  const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash", reference: "", notes: "" } as const;
   const byOrder: PaymentsResponse = {
     orders: [
       { orderId: "o1", po: "PO-3001", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 9_000, paidCny: 0, paidInr: 0, balanceCny: 9_000, nextDue: null },

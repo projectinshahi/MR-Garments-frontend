@@ -21,8 +21,12 @@ import { monthLabel } from "./report-logic";
 export type Cell = CsvCell;
 /** `date`: the cells are YYYY-MM-DD. `currency`: the cells are amounts in that currency. */
 export type Column = { header: string; date?: true; currency?: Currency };
-/** One table: the header, the rows and an optional total row. */
-export type Section = { columns: Column[]; rows: Cell[][]; total?: Cell[] };
+/**
+ * One table: the header, the rows and an optional total row. `title`: a heading above the table (and its own line in
+ * the files). `sheet`: the Excel worksheet the table goes on (tables sharing a name share the sheet; without one, the
+ * first sheet, named after the report); the PDF and CSV ignore it.
+ */
+export type Section = { title?: string; sheet?: string; columns: Column[]; rows: Cell[][]; total?: Cell[] };
 export type ReportFile = { title: string; filename: string; filters: string; sections: Section[] };
 export type FileFormat = "csv" | "xlsx" | "pdf";
 
@@ -134,9 +138,15 @@ export function reportFile<N extends ReportName>(name: N, data: Reports[N], toda
   };
 }
 
-/** CSV lines: each table's header, rows (or "No rows") and total, with an empty line between tables. */
+/** CSV lines: each table's title (when it has one), header, rows (or "No rows") and total, with an empty line between tables. */
 export const csvRows = (file: ReportFile): Cell[][] =>
-  file.sections.flatMap((s, index) => [...(index ? [[]] : []), s.columns.map((c) => c.header), ...(s.rows.length ? s.rows : [[NO_ROWS]]), ...(s.total ? [s.total] : [])]);
+  file.sections.flatMap((s, index) => [
+    ...(index ? [[]] : []),
+    ...(s.title ? [[s.title]] : []),
+    s.columns.map((c) => c.header),
+    ...(s.rows.length ? s.rows : [[NO_ROWS]]),
+    ...(s.total ? [s.total] : []),
+  ]);
 
 const TYPES: Record<FileFormat, string> = {
   csv: "text/csv;charset=utf-8",

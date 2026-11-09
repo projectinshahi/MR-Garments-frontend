@@ -13,6 +13,7 @@ export const MANAGEMENT_NAV: NavSection[] = [
       { title: "Dashboard", href: "/" },
       { title: "Orders", href: "/orders" },
       { title: "Deposits & Payments", href: "/payments" },
+      { title: "Deposits", href: "/deposits" },
       { title: "Delivery Calendar", href: "/calendar" },
     ],
   },
@@ -67,6 +68,7 @@ const SIGNED_IN_PATHS = ["/profile", "/notifications"];
 const ROUTE_CAPABILITY: [string, Capability][] = [
   ["/orders", "ordersView"],
   ["/payments", "payments"],
+  ["/deposits", "payments"],
   ["/calendar", "calendar"],
   ["/receiving", "receiving"],
   ["/containers", "containers"],

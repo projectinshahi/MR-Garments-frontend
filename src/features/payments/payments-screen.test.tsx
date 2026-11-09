@@ -19,8 +19,8 @@ const api: PaymentsResponse = {
   ],
   // PAY-1 order: newest first by coalesce(paidOn, dueDate).
   payments: [
-    { id: "p2", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null },
-    { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer" },
+    { id: "p2", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "" },
+    { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "" },
   ],
 };
 type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean; canDelete: boolean };

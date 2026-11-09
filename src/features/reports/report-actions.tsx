@@ -28,20 +28,31 @@ function useDownload(make: () => Promise<ReportFile>) {
   return { pending, download };
 }
 
-/** Header actions on every report (33–38): the report's tables, as the page shows them, as CSV, Excel or PDF. */
-export function ExportActions({ file }: { file: ReportFile }) {
-  const { pending, download } = useDownload(async () => file);
+const FORMAT_LABEL: Record<FileFormat, string> = { csv: "Export CSV", xlsx: "Export Excel", pdf: "Export PDF" };
+const ALL_FORMATS: FileFormat[] = ["csv", "xlsx", "pdf"];
+
+/**
+ * Header actions on every report (33–38): the report's tables, as the page shows them, as CSV, Excel or PDF. `file`
+ * may be a function, built only when a button is clicked (a list's current filtered rows). `formats` narrows the
+ * buttons (the orders, deposits and order-report pages offer Excel and PDF); `size` matches the page header's buttons.
+ */
+export function ExportActions({
+  file,
+  formats = ALL_FORMATS,
+  size,
+}: {
+  file: ReportFile | (() => ReportFile | Promise<ReportFile>);
+  formats?: FileFormat[];
+  size?: React.ComponentProps<typeof Button>["size"];
+}) {
+  const { pending, download } = useDownload(async () => (typeof file === "function" ? file() : file));
   return (
     <>
-      <Button type="button" variant="outline" disabled={pending} onClick={() => download("csv")}>
-        Export CSV
-      </Button>
-      <Button type="button" variant="outline" disabled={pending} onClick={() => download("xlsx")}>
-        Export Excel
-      </Button>
-      <Button type="button" variant="outline" disabled={pending} onClick={() => download("pdf")}>
-        Export PDF
-      </Button>
+      {formats.map((format) => (
+        <Button key={format} type="button" variant="outline" size={size} disabled={pending} onClick={() => download(format)}>
+          {FORMAT_LABEL[format]}
+        </Button>
+      ))}
     </>
   );
 }

@@ -38,6 +38,8 @@ const due = (id: string, po: string, dueDate: string, amountCny: number): Paymen
   dueDate,
   rateInr: null,
   mode: null,
+  reference: "",
+  notes: "",
 });
 const paid = (id: string, po: string): Payment => ({
   ...due(id, po, "2026-11-12", 4_000),

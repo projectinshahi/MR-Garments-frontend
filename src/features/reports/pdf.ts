@@ -2,8 +2,8 @@ import { formatDate, formatNumber } from "@/lib/formatters";
 
 import { type Cell, type Column, NO_ROWS, type ReportFile } from "./report-files";
 
-// The PDF of a report: the title, filters and generation time, then each table (long text wrapped, the header repeated
-// on every page), on A4 landscape pages numbered in the footer. Written directly (no library) in Helvetica, a PDF
+// The PDF of a report: the title, filters and generation time, then each table (its heading when it has one; long text
+// wrapped, the header repeated on every page), on A4 landscape pages numbered in the footer. Written directly (no library) in Helvetica, a PDF
 // standard font every reader has. It draws Western European text (WinAnsi) only, so amounts show their currency code in
 // the header, never ₹ or ¥, and a character it lacks prints as "?".
 
@@ -96,6 +96,12 @@ export function toPdf(file: ReportFile, generated: string) {
 
   for (const section of file.sections) {
     const { columns } = section;
+    if (section.title) {
+      // The heading and at least the table's header stay on one page.
+      if (y - 14 - 2 * (6 + LINE) < MARGIN) newPage();
+      ops.push(text(MARGIN, y - 10, encode(section.title), 10, true));
+      y -= 16;
+    }
     const right = columns.map((_, index) => section.rows.some((row) => typeof row[index] === "number"));
     const cells = (row: Cell[]) => row.map((value, index) => encode(show(value, columns[index])));
     const header = columns.map((column) => encode(column.header));

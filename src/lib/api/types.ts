@@ -159,7 +159,11 @@ export type Unit = string;
 export type OrderStage = 1 | 2 | 3 | 4 | 5 | 6;
 type Named = { id: string; name: string };
 
-/** ORD-1 GET /api/v1/orders. Item, quantity and received are the main line's (position 0). */
+/**
+ * ORD-1 GET /api/v1/orders. Item, quantity, received and stocked are the main line's (position 0). `closed` (backend
+ * docs/phase2-contracts.md section 1): stage 6 and every container carrying the order has a stocked warehouse receipt;
+ * `closedOn` is the day of the last of those receipts, null while open. Pending orders are stage 1.
+ */
 export type OrderListItem = {
   id: string;
   po: string;
@@ -172,6 +176,10 @@ export type OrderListItem = {
   quantity: number;
   unit: Unit;
   received: number;
+  /** Quantity on stocked warehouse receipts. */
+  stocked: number;
+  closed: boolean;
+  closedOn: string | null;
   orderValueCny: number;
   paidCny: number;
   paidInr: number;
@@ -198,8 +206,8 @@ export type CreateOrderBody = {
   orderDate: string;
   deliveryDate: string;
   lines: { itemId: string; quantity: number; rateCny: number }[];
-  /** `rateInr` is left out for an INR order (the server stores 1). */
-  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string }[];
+  /** `rateInr` is left out for an INR order (the server stores 1). `reference` (transaction number, up to 100) and `notes` (up to 1,000) are optional. */
+  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
 };
 export type CreateOrderResponse = { order: { id: string; po: string } };
 
@@ -260,6 +268,9 @@ export type PaymentsResponse = {
     dueDate: string | null;
     rateInr: number | null;
     mode: string | null;
+    /** Transaction or receipt number and notes; "" when none (migration 0008). */
+    reference: string;
+    notes: string;
   }[];
 };
 
@@ -423,6 +434,9 @@ export type CreatePaymentBody = {
   /** Left out for an INR order (the server stores 1). */
   rateInr?: number;
   mode: string;
+  /** Transaction or receipt number (up to 100) and notes (up to 1,000); optional, stored as "" when left out. */
+  reference?: string;
+  notes?: string;
 };
 export type CreatePaymentResponse = { payment: { id: string } };
 
