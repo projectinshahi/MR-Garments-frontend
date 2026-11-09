@@ -38,7 +38,7 @@ export const money = (header: string, currency: Currency): Column => ({ header: 
  * Rows in order currencies, one table per currency (CNY, USD, INR) so each amount column's header (`money`) names its
  * currency and no total adds two currencies. No rows: one CNY table, as before.
  */
-function perCurrency<T extends { currency: Currency }>(rows: T[]): [Currency, T[]][] {
+export function perCurrency<T extends { currency: Currency }>(rows: T[]): [Currency, T[]][] {
   const tables = CURRENCIES.map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]).filter(([, list]) => list.length);
   return tables.length ? tables : [["CNY", []]];
 }

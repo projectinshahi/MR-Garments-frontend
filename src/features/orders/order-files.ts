@@ -1,6 +1,5 @@
-import { type Column, money, type ReportFile, type Section } from "@/features/reports/report-files";
+import { type Column, money, perCurrency, type ReportFile, type Section } from "@/features/reports/report-files";
 import { formatDate } from "@/lib/formatters";
-import { type Currency, CURRENCIES } from "@/types/domain";
 
 import type { OrderRow } from "./data/queries";
 import { balanceCny, paymentStatus, pendingQty } from "./filter-orders";
@@ -12,12 +11,6 @@ import { stageLabel } from "./order-status";
 
 const text = (header: string): Column => ({ header });
 const date = (header: string): Column => ({ header, date: true });
-
-/** One table per currency the rows use (CNY, USD, INR order); no rows: one CNY table. report-files.ts keeps the same unexported. */
-function perCurrency(rows: OrderRow[]): [Currency, OrderRow[]][] {
-  const tables = CURRENCIES.map((currency): [Currency, OrderRow[]] => [currency, rows.filter((row) => row.currency === currency)]).filter(([, list]) => list.length);
-  return tables.length ? tables : [["CNY", []]];
-}
 
 /** The filters in force joined with " · " (false, null and "" parts left out); "No filters" when none. */
 export const describeFilters = (parts: (string | null | false)[]) => parts.filter(Boolean).join(" · ") || "No filters";
