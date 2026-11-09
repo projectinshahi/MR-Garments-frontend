@@ -34,7 +34,7 @@ const list = [
   order("PO-2053", { deliveryDate: "2026-10-27" }),
   order("PO-2052", { deliveryDate: "2026-10-23", stage: 2, supplier: { id: "s-9", name: "Old Supplier" } }),
   order("PO-2051", { stage: 3, received: 2000 }),
-  order("PO-2050", {}),
+  order("PO-2050", { stage: 6, received: 2400, stocked: 2400, closed: true, closedOn: "2026-10-20" }),
 ];
 const options: OrderOptions = {
   nextPo: "PO-2054",
@@ -57,7 +57,7 @@ describe("getOrdersList", () => {
       ["PO-2053", "Foshan Fabrics", "Due today", "warning"],
       ["PO-2052", "Old Supplier", "Late 4 days", "danger"],
       ["PO-2051", "Foshan Fabrics", "Short by 400 m", "warning"],
-      ["PO-2050", "Foshan Fabrics", "On track", "success"],
+      ["PO-2050", "Foshan Fabrics", "Closed", "success"],
     ]);
     expect(orders[0]!.paidInr).toBe(232000);
     expect(counts).toEqual({ all: 4, late: 1, dueSoon: 1, shortReceived: 1 });
