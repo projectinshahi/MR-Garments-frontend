@@ -202,7 +202,7 @@ export function OrderReportScreen({ report, today }: { report: OrderReport; toda
                 { label: "Paid in INR", value: formatINR(payments.paidInr) },
                 { label: "Of which deposits", value: money(payments.depositsPaidCny), muted: true },
                 // The deposit the supplier asked for (0009), only when one was agreed.
-                ...(payments.depositRequiredCny === null
+                ...(payments.depositRequiredCny == null
                   ? []
                   : [
                       { label: "Deposit required", value: money(payments.depositRequiredCny), muted: true },

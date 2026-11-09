@@ -20,8 +20,8 @@ const api: PaymentsResponse = {
   ],
   // PAY-1 order: newest first by coalesce(paidOn, dueDate).
   payments: [
-    { id: "p2", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "" },
-    { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "" },
+    { id: "p2", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "", amountInr: null },
+    { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "", amountInr: 60_000 },
   ],
 };
 type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean; canDelete: boolean };
@@ -96,7 +96,7 @@ describe("PaymentsScreen", () => {
 
   it("shows the supplier's figures with the agents' sea freight apart, and the deposit the supplier asked for", () => {
     // ¥500 sea freight to an agent (phase 2 fixes, 1): in Paid (INR) and nowhere else; the supplier asked for ¥8,000 of deposit, ¥5,000 paid.
-    const freight: PaymentsResponse["payments"][number] = { id: "p3", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "" };
+    const freight: PaymentsResponse["payments"][number] = { id: "p3", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "", amountInr: 6_250 };
     const order = { ...api.orders[1]!, paidCny: 5_500, paidInr: 66_250, depositRequiredCny: 8_000, depositPaidCny: 5_000, depositPendingCny: 3_000, depositStatus: "partly" as const };
     renderScreen({ orders: [api.orders[0]!, order], payments: [freight, ...api.payments] });
     const table = screen.getByRole("table");

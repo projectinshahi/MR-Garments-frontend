@@ -158,6 +158,14 @@ describe("order report file", () => {
     const none = csvRows(orderReportFile({ ...report, payments: { ...report.payments!, depositRequiredCny: null, depositPendingCny: null, depositStatus: "none" } }, TODAY));
     expect(none.filter((row) => String(row[0]).startsWith("Deposit "))).toEqual([]);
     expect(none).toContainEqual(["Deposits paid (CNY)", 300]);
+    // An older RPT-O1 without the deposit fields: no deposit rows, nothing thrown.
+    const older: Partial<NonNullable<OrderReport["payments"]>> = { ...report.payments! };
+    delete older.depositRequiredCny;
+    delete older.depositPendingCny;
+    delete older.depositStatus;
+    const legacy = csvRows(orderReportFile({ ...report, payments: older as OrderReport["payments"] }, TODAY));
+    expect(legacy.filter((row) => String(row[0]).startsWith("Deposit "))).toEqual([]);
+    expect(legacy).toContainEqual(["Deposits paid (CNY)", 300]);
   });
 
   it("leaves out the sections the API nulled", () => {

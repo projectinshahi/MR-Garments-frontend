@@ -43,7 +43,7 @@ function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<Or
       // The API's figure at the payment's own rate (ORD-4 `amountInr`); null while due.
       accessorKey: "amountInr",
       header: "In INR",
-      cell: ({ row }) => (row.original.amountInr === null ? "–" : formatINR(row.original.amountInr)),
+      cell: ({ row }) => (row.original.amountInr == null ? "–" : formatINR(row.original.amountInr)),
       footer: () => formatINR(totals.paidInr),
       meta: { align: "right", className: "font-bold" },
     },

@@ -9,12 +9,10 @@ import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { DeletePaymentButton, type PaymentOrderFacts } from "./delete-payment";
-import { agentPaid, DepositStatusPill } from "./money";
+import { agentPaid, DepositStatusPill, moneyOrDash } from "./money";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
 const spacedMoney = (value: number, currency: Currency) => formatMoney(value, currency, { spaced: true });
-/** A paid payment in INR: amount × its rate, rounded to the paisa per payment, as the API does (DEF-13). */
-const inrOf = (payment: Payment) => Math.round(payment.amountCny * (payment.rateInr ?? 0) * 100) / 100;
 const date = (value: string | null) => (value ? formatDate(value) : "–");
 
 type PaymentDetailCardProps = {
@@ -36,7 +34,7 @@ type PaymentDetailCardProps = {
 export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete = false }: PaymentDetailCardProps) {
   const { po, supplier, currency } = order;
   const facts: PaymentOrderFacts = { po, supplier, currency, supplierPaidCny: order.supplierPaid, balanceCny: order.balance };
-  const money = (value: number) => spacedMoney(value, currency);
+  const money = (value: number | null) => moneyOrDash(value, (v) => spacedMoney(v, currency));
   const toAgents = agentPaid(order.paid, order.supplierPaid);
 
   return (
@@ -74,12 +72,12 @@ export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete =
         boldValues
         items={[
           { label: "Paid to supplier", value: money(order.supplierPaid) },
-          ...(toAgents > 0 ? [{ label: "Paid to agents (sea freight)", value: money(toAgents), muted: true }] : []),
+          ...(toAgents !== null && toAgents > 0 ? [{ label: "Paid to agents (sea freight)", value: money(toAgents), muted: true }] : []),
           { label: "Paid (INR), all payees", value: formatINR(order.paidInr) },
         ]}
         total={{ label: "Balance to supplier", value: money(order.balance) }}
       />
-      {order.depositRequired === null ? null : (
+      {order.depositRequired == null ? null : (
         <KeyValueList
           size="sm"
           className="mt-3"
@@ -164,7 +162,8 @@ function PaymentBlock({ number, payment, currency, remove }: { number: number; p
           <span className="text-[13.5px] text-label">
             {spacedMoney(payment.amountCny, currency)} × {formatRate(payment.rateInr)}
           </span>
-          <span className="text-[16.5px] font-bold">{formatINR(inrOf(payment))}</span>
+          {/* The API's INR, rounded in SQL like every total (phase 2 final fixes, 2); an older API shows a dash. */}
+          <span className="text-[16.5px] font-bold">{moneyOrDash(payment.amountInr, formatINR)}</span>
         </div>
       )}
     </article>

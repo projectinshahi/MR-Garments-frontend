@@ -44,6 +44,14 @@ describe("OverviewScreen Money", () => {
     expect(value("Deposit pending ¥3,000")).toHaveTextContent("Deposit partly paid");
   });
 
+  it("shows what was paid under 'all payees' when an older API sends no supplier split, and no deposit line", () => {
+    const legacy = { ...order, supplierPaidCny: undefined, supplierPaidInr: undefined, depositRequiredCny: undefined, depositPendingCny: undefined, depositStatus: undefined } as unknown as OrderView;
+    render(<OverviewScreen order={legacy} />);
+    expect(value("Paid (all payees) ¥5,000")).toHaveTextContent("₹60,000");
+    expect(screen.queryByText(/Paid to supplier/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Deposit pending/)).not.toBeInTheDocument();
+  });
+
   it("leaves the deposit out once it is paid", () => {
     render(<OverviewScreen order={{ ...order, depositRequiredCny: 8_000, depositPaidCny: 8_000, depositPendingCny: 0, depositStatus: "paid" }} />);
     expect(screen.queryByText(/Deposit pending/)).not.toBeInTheDocument();

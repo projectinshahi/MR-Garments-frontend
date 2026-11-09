@@ -11,15 +11,15 @@ import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
 
-import { round2 } from "./money";
+import { DASH, round2 } from "./money";
 
 /**
  * The order the payment belongs to, with the figures a delete changes (all in its currency): paid to the supplier and
  * the balance the supplier is still owed (phase 2 fixes, 1).
  */
-export type PaymentOrderFacts = { po: string; supplier: string; currency: Currency; supplierPaidCny: number; balanceCny: number };
-/** A PAY-1 or ORD-4 payment: the ORD-4 `amountInr` isn't needed (the dialog prices the payment from its own rate). */
-export type DeletablePayment = Omit<OrderPayment, "amountInr">;
+export type PaymentOrderFacts = { po: string; supplier: string; currency: Currency; supplierPaidCny: number | null; balanceCny: number | null };
+/** A PAY-1 or ORD-4 payment, with the API's `amountInr` (null while due, or from an older API). */
+export type DeletablePayment = OrderPayment;
 
 /**
  * PAY-3: a deposit or a balance payment, paid or due, with its confirmation (Deposits & Payments, the order's payments
@@ -44,7 +44,7 @@ export function DeletePaymentButton({
   const money = (value: number) => formatMoney(value, order.currency);
   const amount = money(payment.amountCny);
   const date = paid ? payment.paidOn : payment.dueDate;
-  const inr = paid && payment.rateInr !== null ? round2(payment.amountCny * payment.rateInr) : null;
+  const inr = paid ? (payment.amountInr ?? null) : null;
   const agent = payment.payeeRole === "agent";
 
   return (
@@ -76,9 +76,11 @@ export function DeletePaymentButton({
           <p className="font-bold text-foreground">
             {!paid
               ? `Nothing paid changes: ${amount} due ${date ? formatDate(date) : ""} leaves the order's next due date and the due totals.`
-              : agent
-                ? `Paid to supplier for ${order.po} stays at ${money(order.supplierPaidCny)} and the balance to supplier at ${money(order.balanceCny)}.`
-                : `Paid to supplier for ${order.po} goes from ${money(order.supplierPaidCny)} to ${money(round2(order.supplierPaidCny - payment.amountCny))}, and the balance to supplier from ${money(order.balanceCny)} to ${money(round2(order.balanceCny + payment.amountCny))}.`}
+              : order.supplierPaidCny == null || order.balanceCny == null
+                ? `The supplier's paid and balance figures for ${order.po} follow (${DASH}: not sent by this API yet).`
+                : agent
+                  ? `Paid to supplier for ${order.po} stays at ${money(order.supplierPaidCny)} and the balance to supplier at ${money(order.balanceCny)}.`
+                  : `Paid to supplier for ${order.po} goes from ${money(order.supplierPaidCny)} to ${money(round2(order.supplierPaidCny - payment.amountCny))}, and the balance to supplier from ${money(order.balanceCny)} to ${money(round2(order.balanceCny + payment.amountCny))}.`}
           </p>
           <p>
             {paid

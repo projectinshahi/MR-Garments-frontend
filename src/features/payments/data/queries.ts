@@ -24,11 +24,11 @@ export type OrderPaymentRow = {
   paid: number;
   /** INR, each payment at the rate of its own date; every payee. */
   paidInr: number;
-  /** Paid to the supplier only (phase 2 fixes, 1): the balance is the order value less this. */
-  supplierPaid: number;
-  supplierPaidInr: number;
-  /** What the supplier is still owed. */
-  balance: number;
+  /** Paid to the supplier only (phase 2 fixes, 1): the balance is the order value less this. Null when the API did not send it (older backend): shown as "–". */
+  supplierPaid: number | null;
+  supplierPaidInr: number | null;
+  /** What the supplier is still owed; null with an older API, whose balance counted every payee. */
+  balance: number | null;
   /** The deposit the supplier asked for (0009): null when none was agreed; pending = max(0, required - paid). */
   depositRequired: number | null;
   depositPaid: number;
@@ -86,13 +86,14 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
       orderValue: o.orderValueCny,
       paid: o.paidCny,
       paidInr: o.paidInr,
-      supplierPaid: o.supplierPaidCny,
-      supplierPaidInr: o.supplierPaidInr,
-      balance: o.balanceCny,
-      depositRequired: o.depositRequiredCny,
-      depositPaid: o.depositPaidCny,
-      depositPending: o.depositPendingCny,
-      depositStatus: o.depositStatus,
+      // Fields an older backend leaves out are null here, never a different figure under the new label.
+      supplierPaid: o.supplierPaidCny ?? null,
+      supplierPaidInr: o.supplierPaidInr ?? null,
+      balance: o.supplierPaidCny == null ? null : o.balanceCny,
+      depositRequired: o.depositRequiredCny ?? null,
+      depositPaid: o.depositPaidCny ?? 0,
+      depositPending: o.depositPendingCny ?? null,
+      depositStatus: o.depositStatus ?? "none",
       nextDue: o.nextDue,
       nextDueTone: dueTone(o.nextDue, today),
     }),

@@ -52,13 +52,16 @@ export type DepositRow = {
   href: string | null;
   /** An obligation row's paid deposit payments, shown as "N payments"; absent on other rows. */
   payments?: number;
+  /** Who an order deposit payment went to; an agent's (sea freight) is shown apart from the supplier's requirement. Absent on other rows. */
+  payeeRole?: "supplier" | "agent";
 };
 
 /**
  * Every deposit as the table shows it, in DEP-1's order: order obligations first (newest first), then the deposit
  * payments of orders without a requirement (latest first), then supplier deposits (newest first).
  */
-export function toRows({ orderDeposits, orderObligations, supplierDeposits }: DepositsResponse, linkPo = true): DepositRow[] {
+export function toRows({ orderDeposits, orderObligations = [], supplierDeposits }: DepositsResponse, linkPo = true): DepositRow[] {
+  // An older API sends no obligations: every deposit payment is then listed as before.
   const withRequirement = new Set(orderObligations.map((o) => o.orderId));
   return [
     ...orderObligations.map(
@@ -82,8 +85,10 @@ export function toRows({ orderDeposits, orderObligations, supplierDeposits }: De
         payments: o.payments,
       }),
     ),
+    // Payments to the supplier of an order with a requirement are inside its obligation row; an agent's deposit (sea
+    // freight) is not part of that requirement, so it keeps its own row, marked as the agent's (phase 2 final fixes, 4).
     ...orderDeposits
-      .filter((d) => !withRequirement.has(d.orderId))
+      .filter((d) => !withRequirement.has(d.orderId) || d.payeeRole !== "supplier")
       .map(
         (d): DepositRow => ({
           id: d.id,
@@ -102,6 +107,7 @@ export function toRows({ orderDeposits, orderObligations, supplierDeposits }: De
           notes: d.notes,
           status: d.status,
           href: linkPo ? orderHref(d.po) : null,
+          payeeRole: d.payeeRole,
         }),
       ),
     ...supplierDeposits.map(

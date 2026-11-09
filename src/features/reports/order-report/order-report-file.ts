@@ -88,12 +88,12 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
           [`Balance (${cur})`, payments.balanceCny],
           [`Deposits paid (${cur})`, payments.depositsPaidCny],
           // The deposit the supplier asked for (0009), only when one was agreed.
-          ...(payments.depositRequiredCny === null
+          ...(payments.depositRequiredCny == null
             ? []
             : [
                 [`Deposit required (${cur})`, payments.depositRequiredCny],
-                [`Deposit pending (${cur})`, payments.depositPendingCny],
-                ["Deposit status", DEPOSIT_STATUS[payments.depositStatus].label],
+                [`Deposit pending (${cur})`, payments.depositPendingCny ?? null],
+                ["Deposit status", DEPOSIT_STATUS[payments.depositStatus]?.label ?? ""],
               ]),
           [`Due (${cur})`, payments.dueCny],
         ],

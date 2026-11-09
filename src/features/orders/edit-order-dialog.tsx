@@ -15,10 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DEPOSIT_REQUIRED_MESSAGE, isDepositRequired } from "@/features/order-form/new-order-form";
 import { lineAmount, orderTotals, parseNumber } from "@/features/order-form/order-totals";
+import { moneyOrDash } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
 import type { OrderDetail, OrderOptions, UpdateOrderBody, UpdateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatCNY, formatNumber, formatQty } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, formatMoney, formatNumber, formatQty } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
 // Edit order (ORD-5, D2). No reference design: the Settings dialog frame (53) with the New order lines table (15).
@@ -27,7 +29,7 @@ import { cn } from "@/lib/utils";
 
 /** What the dialog needs from ORD-4. */
 /** What the dialog needs from ORD-4. `supplierPaidCny`: the ORD-5 guard counts supplier payments only (agent payments are sea freight). */
-export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "supplierPaidCny" | "depositRequiredCny" | "lines">;
+export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "supplierPaidCny" | "depositRequiredCny" | "lines">;
 /** ORD-2's active items. */
 export type ItemOption = OrderOptions["items"][number];
 
@@ -35,7 +37,7 @@ export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
   linesEditable: "Change the dates or the items. The supplier can't change, and the order total can't be less than what's already paid to the supplier.",
   receivedOnly: "Goods have been received for this order, so only the delivery date and the deposit required can change.",
-  belowPaid: (paid: number) => `The order total can't be less than the ${formatCNY(paid, { decimals: 2 })} already paid to the supplier.`,
+  belowPaid: (paid: number, currency: Currency) => `The order total can't be less than the ${formatMoney(paid, currency, { decimals: 2 })} already paid to the supplier.`,
 };
 
 const MAX_LINES = 50;
@@ -59,7 +61,7 @@ type LineValues = z.infer<typeof lineSchema>;
 const totalOf = (lines: Pick<LineValues, "rateCny" | "quantity">[]) =>
   orderTotals(lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) })), []).orderTotal;
 
-const editSchema = (paid: number, linesEditable: boolean) =>
+const editSchema = (paid: number, linesEditable: boolean, currency: Currency) =>
   z
     .object({
       orderDate: z.string().min(1, "Choose the order date."),
@@ -72,7 +74,7 @@ const editSchema = (paid: number, linesEditable: boolean) =>
       path: ["deliveryDate"],
       message: "The delivery date can't be before the order date.",
     })
-    .refine((order) => !linesEditable || totalOf(order.lines) >= paid, { path: ["lines"], message: EDIT_ORDER_TEXT.belowPaid(paid) });
+    .refine((order) => !linesEditable || totalOf(order.lines) >= paid, { path: ["lines"], message: EDIT_ORDER_TEXT.belowPaid(paid, currency) });
 type EditValues = z.infer<ReturnType<typeof editSchema>>;
 
 /** The ORD-5 body: only the keys that changed; `lines` is the whole list (kept rows with their id) when any row changed. */
@@ -130,11 +132,12 @@ export function EditOrderDialog({ order, items, open, onClose }: { order: Editab
 function EditOrderForm({ order, items, linesEditable, onClose }: { order: EditableOrder; items: ItemOption[]; linesEditable: boolean; onClose: () => void }) {
   const router = useRouter();
   const { register, control, handleSubmit, setError, formState } = useForm<EditValues>({
-    resolver: zodResolver(editSchema(order.supplierPaidCny, linesEditable)),
+    resolver: zodResolver(editSchema(order.supplierPaidCny ?? 0, linesEditable, order.currency)),
     defaultValues: {
       orderDate: order.orderDate,
       deliveryDate: order.deliveryDate,
-      depositRequiredCny: order.depositRequiredCny === null ? "" : String(order.depositRequiredCny),
+      // Kept exactly as saved, in the order's currency; empty when none was agreed (or an older API left it out).
+      depositRequiredCny: order.depositRequiredCny == null ? "" : String(order.depositRequiredCny),
       // Stages 2-5 show the lines read-only, straight from the order.
       lines: linesEditable
         ? order.lines.map((line) => ({ lineId: line.id, itemId: line.item.id, rateCny: String(line.rateCny), quantity: String(line.quantity) }))
@@ -145,6 +148,8 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
   const lines = useWatch({ control, name: "lines" });
   const { errors, isSubmitting } = formState;
   const total = linesEditable ? totalOf(lines) : orderTotals(order.lines.map((l) => ({ rate: l.rateCny, quantity: l.quantity })), []).orderTotal;
+  // Money in the dialog is in the order's currency (phase 2 final fixes, 5), the deposit required included.
+  const symbol = CURRENCY_SYMBOL[order.currency];
 
   async function save(values: EditValues) {
     const body = toUpdateOrderBody(values, order, linesEditable);
@@ -192,7 +197,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.depositRequiredCny}>
           <FieldLabel htmlFor="edit-deposit-required" className={labelClass}>
-            Deposit required
+            Deposit required ({symbol})
           </FieldLabel>
           <Input
             id="edit-deposit-required"
@@ -211,9 +216,9 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
         <TableHeader>
           <TableRow className="bg-table-head hover:bg-table-head">
             <TableHead className={headClass}>Item</TableHead>
-            <TableHead className={cn(headClass, "w-[100px]")}>Rate (¥)</TableHead>
+            <TableHead className={cn(headClass, "w-[100px]")}>Rate ({symbol})</TableHead>
             <TableHead className={cn(headClass, "w-[136px]")}>Quantity</TableHead>
-            <TableHead className={cn(headClass, "w-[116px] text-right")}>Amount (¥)</TableHead>
+            <TableHead className={cn(headClass, "w-[116px] text-right")}>Amount ({symbol})</TableHead>
             {linesEditable ? (
               <TableHead className={cn(headClass, "w-11")}>
                 <span className="sr-only">Remove</span>
@@ -320,10 +325,10 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
-        <span className="text-sm leading-4 text-muted-foreground">Paid to supplier {formatCNY(order.supplierPaidCny, { decimals: 2, spaced: true })}</span>
+        <span className="text-sm leading-4 text-muted-foreground">Paid to supplier {moneyOrDash(order.supplierPaidCny, (v) => formatMoney(v, order.currency, { decimals: 2, spaced: true }))}</span>
         <span className="text-[15px] leading-4">Order total</span>
         <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
-          {formatCNY(total, { decimals: 2, spaced: true })}
+          {formatMoney(total, order.currency, { decimals: 2, spaced: true })}
         </output>
       </div>
 

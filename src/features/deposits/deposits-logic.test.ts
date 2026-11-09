@@ -55,6 +55,7 @@ describe("toRows", () => {
       notes: "Half\nsecond line",
       status: "paid",
       href: "/orders/PO-3001",
+      payeeRole: "agent",
     });
     // A due order deposit is pending in full; a supplier deposit's paid is what was settled; a deposit to give is paid to the supplier.
     expect(rows[0]).toMatchObject({ kind: "order", payee: "Hangzhou Knits", paid: 0, pending: 200, date: "2026-11-30", mode: "", status: "due" });
@@ -241,5 +242,27 @@ describe("money text", () => {
     expect(amountList([{ currency: "USD", amount: 0 }])).toBe("$0");
     expect(amountList([])).toBe("¥0");
     expect(amountList([], "INR")).toBe("₹0");
+  });
+});
+
+describe("agent deposits and older APIs (phase 2 final fixes, 1 and 4)", () => {
+  it("keeps a shipping agent's deposit on an order with a requirement as its own row, marked as the agent's, outside the obligation", () => {
+    // PO-3003's ¥300 supplier deposit is inside its obligation; a ¥120 agent deposit (sea freight) on the same order stays listed.
+    const freight: OrderDeposit = { ...p3, id: "p4", payee: "Sino Freight", payeeRole: "agent", amountCny: 120, amountInr: 1440, paidOn: "2026-11-03" };
+    const rows = toRows({ ...api, orderDeposits: [freight, p3, ...api.orderDeposits], orderObligations: [obligation] });
+    expect(ids(rows)).toEqual(["o3", "p4", "p2", "p1", "d3", "d2", "d1"]);
+    expect(rows[0]).toMatchObject({ amount: 1000, paid: 300, pending: 700, payments: 1 });
+    expect(rows[0]!.payeeRole).toBeUndefined();
+    expect(rows[1]).toMatchObject({ kind: "order", po: "PO-3003", payee: "Sino Freight", payeeRole: "agent", amount: 120, paid: 120, pending: 0, status: "paid", href: "/orders/PO-3003" });
+    expect(rows.find((r) => r.id === "p3")).toBeUndefined();
+    expect(rows.find((r) => r.id === "p2")!.payeeRole).toBe("supplier");
+    // The cards: the agent's ¥120 is paid once, and the obligation's ¥300 paid / ¥700 pending are not changed by it.
+    expect(totals(rows).pay.paid).toContainEqual({ currency: "CNY", amount: 720 });
+    expect(totals(rows).pay.pending).toContainEqual({ currency: "CNY", amount: 1900 });
+  });
+
+  it("lists every deposit payment as before when an older API sends no orderObligations", () => {
+    const rows = toRows({ ...api, orderDeposits: [p3, ...api.orderDeposits], orderObligations: undefined } as unknown as DepositsResponse);
+    expect(ids(rows)).toEqual(["p3", "p2", "p1", "d3", "d2", "d1"]);
   });
 });

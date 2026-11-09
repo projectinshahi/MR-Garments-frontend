@@ -120,7 +120,7 @@ describe("Orders list actions", () => {
   });
 });
 
-const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", supplierPaidCny: 0, depositRequiredCny: null, lines: [] };
+const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", currency: "CNY", supplierPaidCny: 0, depositRequiredCny: null, lines: [] };
 
 function renderHeader(permissions: { canEdit: boolean; canDelete: boolean }) {
   render(<OrderDetailActions order={ORDER} supplier="Foshan Fabrics" items={[]} {...permissions} />);

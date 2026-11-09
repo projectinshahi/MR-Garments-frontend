@@ -43,6 +43,7 @@ const due = (id: string, po: string, dueDate: string, amountCny: number): Paymen
   paidOn: null,
   dueDate,
   rateInr: null,
+  amountInr: null,
   mode: null,
   reference: "",
   notes: "",
@@ -143,6 +144,14 @@ describe("toPaymentsData", () => {
       today,
     );
     expect(orders[0]).toMatchObject({ paid: 4_500, paidInr: 54_000, supplierPaid: 4_000, supplierPaidInr: 48_000, balance: 6_000, depositRequired: 1_000, depositPaid: 400, depositPending: 600, depositStatus: "partly" });
+  });
+
+  it("maps an older PAY-1 response, without the supplier split or the deposit fields, to nulls (shown as dashes), never to every payee's figures", () => {
+    // A backend from before phase 2: its balanceCny counted every payee, so it must not appear as the supplier's balance.
+    const legacy = { orderId: "o-PO-3001", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 4_500, paidInr: 54_000, balanceCny: 5_500, nextDue: null } as unknown as Order;
+    const { orders, kpis } = toPaymentsData({ orders: [legacy], payments: [] }, today);
+    expect(orders[0]).toMatchObject({ paid: 4_500, paidInr: 54_000, supplierPaid: null, supplierPaidInr: null, balance: null, depositRequired: null, depositPaid: 0, depositPending: null, depositStatus: "none" });
+    expect(kpis.paidSoFarInr).toBe(54_000);
   });
 
   it("selects the first order that has payments, else the first order, else none", () => {

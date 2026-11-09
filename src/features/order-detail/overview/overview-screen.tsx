@@ -23,7 +23,7 @@ export function OverviewScreen({ order }: { order: OrderView }) {
   // Phase 2 fixes, 1 and 2: supplier payments apart from the agents' sea freight; the deposit only while something is pending.
   const money = (value: number) => formatMoney(value, order.currency);
   const agentsCny = agentPaid(order.paidCny, order.supplierPaidCny);
-  const pendingDeposit = order.depositRequiredCny !== null && order.depositPendingCny !== null && order.depositPendingCny > 0 ? order.depositPendingCny : null;
+  const pendingDeposit = order.depositRequiredCny != null && order.depositPendingCny != null && order.depositPendingCny > 0 ? order.depositPendingCny : null;
 
   return (
     <PageContainer>
@@ -62,8 +62,13 @@ export function OverviewScreen({ order }: { order: OrderView }) {
             size="sm"
             className="mt-3"
             items={[
-              { label: `Paid to supplier ${money(order.supplierPaidCny)}`, value: formatINR(order.supplierPaidInr) },
-              ...(agentsCny > 0 ? [{ label: `Paid to agents (sea freight) ${money(agentsCny)}`, value: formatINR(agentPaid(order.paidInr, order.supplierPaidInr)) }] : []),
+              // An older API without the supplier split shows the all-payee figure under its honest label.
+              ...(order.supplierPaidCny == null || order.supplierPaidInr == null
+                ? [{ label: `Paid (all payees) ${money(order.paidCny)}`, value: formatINR(order.paidInr) }]
+                : [
+                    { label: `Paid to supplier ${money(order.supplierPaidCny)}`, value: formatINR(order.supplierPaidInr) },
+                    ...(agentsCny !== null && agentsCny > 0 ? [{ label: `Paid to agents (sea freight) ${money(agentsCny)}`, value: formatINR(agentPaid(order.paidInr, order.supplierPaidInr) ?? 0) }] : []),
+                  ]),
               ...(pendingDeposit === null ? [] : [{ label: `Deposit pending ${money(pendingDeposit)}`, value: <DepositStatusPill status={order.depositStatus} /> }]),
             ]}
           />

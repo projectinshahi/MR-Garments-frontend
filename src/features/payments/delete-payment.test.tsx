@@ -20,9 +20,9 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 vi.mock("@/lib/api/client", () => ({ apiClient: { delete: vi.fn() } }));
 const remove = vi.mocked(apiClient.delete);
 
-const deposit = { id: "6f1c2b9e-0000-4000-8000-000000000001", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "" } as const;
-const due = { id: "6f1c2b9e-0000-4000-8000-000000000002", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "" } as const;
-const freight = { id: "6f1c2b9e-0000-4000-8000-000000000003", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "" } as const;
+const deposit = { id: "6f1c2b9e-0000-4000-8000-000000000001", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "", amountInr: 60_000 } as const;
+const due = { id: "6f1c2b9e-0000-4000-8000-000000000002", kind: "Balance", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 15_000, status: "due", paidOn: null, dueDate: "2026-11-12", rateInr: null, mode: null, reference: "", notes: "", amountInr: null } as const;
+const freight = { id: "6f1c2b9e-0000-4000-8000-000000000003", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "", amountInr: 6_250 } as const;
 const noDeposit = { depositRequiredCny: null, depositPaidCny: 0, depositPendingCny: null, depositStatus: "none" } as const;
 const api: PaymentsResponse = {
   orders: [{ orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit }],
@@ -34,15 +34,22 @@ const api: PaymentsResponse = {
 const renderPage = (canDelete: boolean) => render(<PaymentsScreen data={{ ...toPaymentsData(api, "2026-11-10"), agents: null, linkPo: false, canDelete }} />);
 // The balance counts supplier payments only (phase 2 fixes, 1): the agent's ¥500 leaves it at ¥15,000.
 const facts = { po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY" as const, supplierPaidCny: 5_000, balanceCny: 15_000 };
-const rows: OrderPayment[] = [
-  { ...deposit, amountInr: 60_000 },
-  { ...freight, amountInr: 6_250 },
-];
+const rows: OrderPayment[] = [deposit, freight];
 const renderTab = (canDelete: boolean) => render(<PaymentsTable rows={rows} totals={{ paidCny: 5_500, paidInr: 66_250, currency: "CNY" }} remove={canDelete ? facts : null} />);
 
 beforeEach(() => vi.clearAllMocks());
 
 describe("Delete deposits and payments (PAY-3)", () => {
+  it("with an older API that sent no supplier figures, the confirmation says so instead of guessing them", async () => {
+    const user = userEvent.setup();
+    render(<PaymentsTable rows={rows} totals={{ paidCny: 5_500, paidInr: 66_250, currency: "CNY" }} remove={{ ...facts, supplierPaidCny: null, balanceCny: null }} />);
+    await user.click(screen.getAllByRole("button", { name: /^Delete deposit/ })[0]!);
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete Deposit?" });
+    expect(dialog).toHaveTextContent("The supplier's paid and balance figures for PO-3002 follow (–: not sent by this API yet).");
+    expect(dialog).not.toHaveTextContent("goes from");
+  });
+
+
   it("offers Delete on each payment only with payments Full, on Deposits & Payments and the order's tab", () => {
     const page = renderPage(false);
     expect(screen.queryByRole("button", { name: /^Delete (deposit|payment)/ })).toBeNull();
@@ -136,7 +143,7 @@ describe("Delete deposits and payments (PAY-3)", () => {
 });
 
 describe("Payments by order: Actions (PAY-3)", () => {
-  const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash", reference: "", notes: "" } as const;
+  const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash", reference: "", notes: "", amountInr: 24_000 } as const;
   const byOrder: PaymentsResponse = {
     orders: [
       { orderId: "o1", po: "PO-3001", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 9_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 9_000, nextDue: null, ...noDeposit },

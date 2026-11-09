@@ -81,11 +81,12 @@ function depositColumns(linkPo: boolean): ColumnDef<DepositRow>[] {
     {
       accessorKey: "kind",
       header: "Kind",
-      // An obligation row says how many deposit payments it sums.
+      // An obligation row says how many deposit payments it sums; a shipping agent's deposit says it isn't the supplier's.
       cell: ({ row }) => (
         <>
           {KIND_LABEL[row.original.kind]}
           {row.original.payments === undefined ? null : <span className="block text-xs text-muted-foreground">{plural(row.original.payments, "payment")}</span>}
+          {row.original.payeeRole === "agent" ? <span className="block text-xs text-muted-foreground">to shipping agent</span> : null}
         </>
       ),
     },

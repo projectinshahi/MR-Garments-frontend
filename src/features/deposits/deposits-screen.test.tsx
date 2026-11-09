@@ -109,6 +109,19 @@ describe("DepositsScreen", () => {
     expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
   });
 
+  it("All: a shipping agent's deposit on an order with a requirement is listed as the agent's, next to the obligation row", () => {
+    // PO-3001 asked for ¥1,000 and paid the supplier nothing yet; its ¥300 deposit went to Sino Freight (sea freight), so it stays listed.
+    const obligation: DepositsResponse["orderObligations"][number] = { orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", requiredCny: 1000, paidCny: 0, pendingCny: 1000, status: "due", lastPaidOn: null, payments: 0 };
+    render(<DepositsScreen data={data({ rows: toRows({ ...api, orderObligations: [obligation] }) })} view="all" />);
+    const rows = rowsOf(screen.getByRole("table"));
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toHaveTextContent("Order deposit0 payments");
+    expect(within(rows[0]!).getByText("Due")).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent("Order depositto shipping agent");
+    expect(rows[1]).toHaveTextContent("Sino Freight");
+    expect(within(rows[1]!).getByText("Paid")).toBeInTheDocument();
+  });
+
   it("Suppliers: one line per supplier with the six figures apart, linking to the statement", () => {
     render(<DepositsScreen data={data()} view="suppliers" />);
     const rows = rowsOf(screen.getByRole("table"));

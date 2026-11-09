@@ -15,6 +15,7 @@ import { CURRENCY_SYMBOL, formatINR, formatMoney, formatNumber, formatShortDate 
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
+import { DASH } from "./money";
 import { DeletePaymentMenu } from "./delete-payment";
 import { filterOrders } from "./filter-orders";
 import { PaymentDetailCard } from "./payment-detail";
@@ -32,7 +33,7 @@ const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</
  */
 const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => React.ReactNode) | null): ColumnDef<OrderPaymentRow>[] => {
   const label = (text: string) => head(currency ? `${text} (${CURRENCY_SYMBOL[currency]})` : text);
-  const amount = (value: number, row: OrderPaymentRow) => (currency ? formatNumber(value) : formatMoney(value, row.currency));
+  const amount = (value: number | null, row: OrderPaymentRow) => (value == null ? DASH : currency ? formatNumber(value) : formatMoney(value, row.currency));
   return [
   {
     accessorKey: "po",

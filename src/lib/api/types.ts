@@ -298,6 +298,8 @@ export type PaymentsResponse = {
     /** Transaction or receipt number and notes; "" when none (migration 0008). */
     reference: string;
     notes: string;
+    /** INR at the payment's own rate, rounded in SQL like every total (the same paisa as ORD-4); null while due. */
+    amountInr: number | null;
   }[];
 };
 
@@ -410,8 +412,8 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
     received: number;
     loaded: number;
   }[];
-  /** In the order's `currency`. `amountInr`: at the payment's own rate, rounded in SQL like every total; null while due. */
-  payments: (Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency"> & { amountInr: number | null })[] | null;
+  /** In the order's `currency`, with each payment's SQL `amountInr` as PAY-1 gives it. */
+  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency">[] | null;
   receipts:
     | {
         id: string;

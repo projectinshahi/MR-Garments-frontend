@@ -41,6 +41,7 @@ const payment = (patch: Partial<Payment>): Payment => ({
   mode: "Bank transfer",
   reference: "",
   notes: "",
+  amountInr: 60_000,
   ...patch,
 });
 const value = (label: string) => screen.getByText(label).nextSibling;
@@ -91,5 +92,26 @@ describe("PaymentDetailCard", () => {
       expect(screen.getByText(pill, { selector: "span" })).toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe("PaymentDetailCard with the API's figures (phase 2 final fixes, 1 and 2)", () => {
+  it("shows each payment's INR as the API rounded it in SQL, never amount × rate recomputed here", () => {
+    // ¥100 × 11.75 would be ₹1,175 here; the API says ₹1,176: its paisa rounding is the one every total uses.
+    render(<PaymentDetailCard order={order} payments={[payment({ amountCny: 100, rateInr: 11.75, amountInr: 1_176 })]} agents={null} linkPo={false} />);
+    expect(screen.getByText("₹1,176")).toBeInTheDocument();
+    expect(screen.queryByText("₹1,175")).not.toBeInTheDocument();
+  });
+
+  it("shows dashes, not every payee's figures, when an older API sends no supplier split, deposit fields or amountInr", () => {
+    const legacy: OrderPaymentRow = { ...order, supplierPaid: null, supplierPaidInr: null, balance: null };
+    const old = { ...payment({}), amountInr: undefined } as unknown as Payment;
+    render(<PaymentDetailCard order={legacy} payments={[old]} agents={null} linkPo={false} />);
+    expect(value("Paid to supplier")).toHaveTextContent("–");
+    expect(value("Balance to supplier")).toHaveTextContent("–");
+    expect(value("Paid (INR), all payees")).toHaveTextContent("₹60,000");
+    expect(screen.queryByText("Paid to agents (sea freight)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Deposit required")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹60,000", { selector: "span" })).not.toBeInTheDocument();
   });
 });

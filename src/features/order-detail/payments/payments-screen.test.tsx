@@ -83,6 +83,26 @@ describe("PaymentsScreen (order detail)", () => {
     expect(screen.queryByText("Paid to agents (sea freight) in INR")).not.toBeInTheDocument();
   });
 
+  it("shows dashes for the supplier's figures, no Deposit KPI and no INR per row when an older API left them out, and never crashes", () => {
+    // ORD-4 from before the migrated backend: no supplierPaid*, deposit* or per-payment amountInr; its balanceCny counted every payee.
+    const legacy = { po: "PO-3002", currency: "CNY", supplier: { id: "s1", name: "Hangzhou Silk" }, orderValueCny: 20_000, paidCny: 5_500, paidInr: 66_250, balanceCny: 14_500 } as unknown as OrderView;
+    const old = payments.map((p) => ({ ...p, amountInr: undefined })) as unknown as OrderPayment[];
+    render(<PaymentsScreen order={legacy} payments={old} />);
+    expect(kpi("Paid to supplier")).toHaveTextContent("–1 payment");
+    expect(kpi("Balance to supplier")).toHaveTextContent("–");
+    expect(kpi("Balance to supplier")).not.toHaveTextContent("14,500");
+    expect(screen.queryByText("Deposit", { selector: "p" })).not.toBeInTheDocument();
+    expect(value("Paid to supplier in INR")).toHaveTextContent("–");
+    expect(value("¥5,000 × 12.00")).toHaveTextContent("–");
+    expect(value("Paid to agents (sea freight) in INR")).toHaveTextContent("–");
+  });
+
+  it("renders the Deposit KPI without a pill for a status it doesn't know, rather than throwing", () => {
+    render(<PaymentsScreen order={{ ...order, depositRequiredCny: 8_000, depositPaidCny: 5_000, depositPendingCny: 3_000, depositStatus: "odd" as DepositStatus }} payments={payments} />);
+    expect(kpi("Deposit")).toHaveTextContent("¥3,000¥5,000 of ¥8,000");
+    expect(screen.queryByText(/^Deposit (due|partly paid|paid)$/)).not.toBeInTheDocument();
+  });
+
   it("adds a Deposit KPI only when the supplier asked for one, with what is pending and its standing", () => {
     const cases: [DepositStatus, number, number, string, string][] = [
       ["due", 0, 8_000, "¥8,000¥0 of ¥8,000", "Deposit due"],

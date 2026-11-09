@@ -51,7 +51,7 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
         text("Payments"),
       ],
       // Payments: how many deposit payments an obligation row sums; blank on other rows.
-      rows: list.map((r) => [r.supplier, r.po ?? "", KIND_LABEL[r.kind], r.payee, r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status], r.payments ?? ""]),
+      rows: list.map((r) => [r.supplier, r.po ?? "", r.payeeRole === "agent" ? `${KIND_LABEL[r.kind]} (to shipping agent)` : KIND_LABEL[r.kind], r.payee, r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status], r.payments ?? ""]),
     })),
   };
 }

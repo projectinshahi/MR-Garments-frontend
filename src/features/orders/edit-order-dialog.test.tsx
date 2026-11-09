@@ -36,6 +36,7 @@ const ORDER: EditableOrder = {
   stage: 1,
   orderDate: "2026-10-01",
   deliveryDate: "2026-11-15",
+  currency: "CNY",
   supplierPaidCny: 1000,
   depositRequiredCny: null,
   lines: [line("l-1", { id: "i-1", name: "Denim jeans" }, 100, 10), line("l-2", { id: "i-9", name: "Silk scarves" }, 50, 20)],
@@ -138,18 +139,43 @@ describe("Edit order at stage 1", () => {
   });
 });
 
+describe("Money in the order's currency (phase 2 final fixes, 5)", () => {
+  it("labels the deposit required, the rates, the amounts, the total and what's paid in the order's currency, keeping the saved requirement", async () => {
+    const { user, box, save } = open({ ...ORDER, currency: "USD", supplierPaidCny: 250, depositRequiredCny: 1500.5 });
+    expect(box("Deposit required ($)")).toHaveValue("1500.5");
+    expect(screen.getByText("Paid to supplier $ 250.00")).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Rate ($)" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Amount ($)" })).toBeInTheDocument();
+    expect(screen.getByText("$ 2,000.00")).toBeVisible();
+    expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
+    // The "below what's paid" message names the same currency.
+    await user.click(screen.getByRole("button", { name: "Remove line 2" }));
+    await user.clear(box("Quantity, line 1"));
+    await user.type(box("Quantity, line 1"), "1");
+    await user.click(save);
+    expect(await screen.findByText("The order total can't be less than the $250.00 already paid to the supplier.")).toBeVisible();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("shows a dash for what's paid when an older API left it out, and still opens", () => {
+    open({ ...ORDER, supplierPaidCny: undefined as unknown as number, depositRequiredCny: undefined as unknown as null });
+    expect(screen.getByText("Paid to supplier –")).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Deposit required (¥)" })).toHaveValue("");
+  });
+});
+
 describe("Deposit required (0009)", () => {
   it("is blank without a requirement and sends the amount only when set", async () => {
     patch.mockResolvedValue({});
     const { user, box, save } = open();
-    expect(box("Deposit required")).toHaveValue("");
-    await user.type(box("Deposit required"), "1.234");
+    expect(box("Deposit required (¥)")).toHaveValue("");
+    await user.type(box("Deposit required (¥)"), "1.234");
     await user.click(save);
     expect(await screen.findByText(DEPOSIT_MESSAGE)).toBeVisible();
     expect(patch).not.toHaveBeenCalled();
 
-    await user.clear(box("Deposit required"));
-    await user.type(box("Deposit required"), "2,500.50");
+    await user.clear(box("Deposit required (¥)"));
+    await user.type(box("Deposit required (¥)"), "2,500.50");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { depositRequiredCny: 2500.5 }));
   });
@@ -157,12 +183,12 @@ describe("Deposit required (0009)", () => {
   it("is prefilled from the order, left out of the body when unchanged, and cleared with null", async () => {
     patch.mockResolvedValue({});
     const { user, box, setDate, save } = open({ ...ORDER, depositRequiredCny: 500 });
-    expect(box("Deposit required")).toHaveValue("500");
+    expect(box("Deposit required (¥)")).toHaveValue("500");
     setDate(/^Delivery date/, "2026-11-20");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-11-20" }));
 
-    await user.clear(box("Deposit required"));
+    await user.clear(box("Deposit required (¥)"));
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenLastCalledWith("/orders/PO-2051", { deliveryDate: "2026-11-20", depositRequiredCny: null }));
   });
@@ -170,10 +196,10 @@ describe("Deposit required (0009)", () => {
   it("shows the API's 422 under the field", async () => {
     patch.mockRejectedValue(new ApiError(422, "validation_failed", "Check the highlighted fields.", { depositRequiredCny: DEPOSIT_MESSAGE }));
     const { user, box, save } = open();
-    await user.type(box("Deposit required"), "10");
+    await user.type(box("Deposit required (¥)"), "10");
     await user.click(save);
     expect(await screen.findByText(DEPOSIT_MESSAGE)).toBeVisible();
-    expect(box("Deposit required")).toHaveAttribute("aria-invalid", "true");
+    expect(box("Deposit required (¥)")).toHaveAttribute("aria-invalid", "true");
   });
 });
 
@@ -187,12 +213,12 @@ describe("Edit order at stages 2-5", () => {
     expect(date(/^Order date/)).toHaveAttribute("readonly");
     expect(screen.getByText("Silk scarves")).toBeVisible();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getAllByRole("textbox")).toEqual([box("Deposit required")]);
+    expect(screen.getAllByRole("textbox")).toEqual([box("Deposit required (¥)")]);
     expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Remove line/ })).toBeNull();
 
     setDate(/^Delivery date/, "2026-12-01");
-    await user.type(box("Deposit required"), "300");
+    await user.type(box("Deposit required (¥)"), "300");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-12-01", depositRequiredCny: 300 }));
   });

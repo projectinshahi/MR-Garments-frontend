@@ -3,7 +3,7 @@ import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards
 import { KeyValueList } from "@/components/shared/key-value-list";
 import type { OrderPayment, OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
-import { agentPaid, DepositStatusPill } from "@/features/payments/money";
+import { agentPaid, DepositStatusPill, moneyOrDash } from "@/features/payments/money";
 import { formatINR, formatMoney, formatRate } from "@/lib/formatters";
 
 import { PaymentsTable } from "./payments-table";
@@ -18,20 +18,24 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
   const paid = payments.filter((p) => p.status === "paid");
   const toSupplier = paid.filter((p) => p.payeeRole === "supplier");
   const toAgents = paid.filter((p) => p.payeeRole === "agent");
-  const agentsCny = agentPaid(order.paidCny, order.supplierPaidCny);
-  const money = (value: number) => formatMoney(value, order.currency);
+  // An older API (before the migrated backend) sends none of the supplier figures: they show as a dash, never as the
+  // all-payee numbers under the new labels.
+  const supplierPaid = order.supplierPaidCny ?? null;
+  const balance = supplierPaid == null ? null : order.balanceCny;
+  const agentsCny = agentPaid(order.paidCny, supplierPaid);
+  const money = (value: number | null) => moneyOrDash(value, (v) => formatMoney(v, order.currency));
   const count = (n: number) => `${n} ${n === 1 ? "payment" : "payments"}`;
   // INR per payment is the API's `amountInr` (rounded in SQL like every total), never recomputed here.
-  const working = (p: OrderPayment) => ({ label: `${money(p.amountCny)} × ${formatRate(p.rateInr ?? 0)}`, value: formatINR(p.amountInr ?? 0) });
+  const working = (p: OrderPayment) => ({ label: `${money(p.amountCny)} × ${formatRate(p.rateInr ?? 0)}`, value: moneyOrDash(p.amountInr, formatINR) });
 
   return (
     <PageContainer>
       <OrderContextStrip order={order} fact={`Order value ${money(order.orderValueCny)}`} />
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Order value" value={money(order.orderValueCny)} />
-        <KpiCard size="xs" label="Paid to supplier" value={money(order.supplierPaidCny)} sub={`${count(toSupplier.length)}${agentsCny > 0 ? ` · agents ${money(agentsCny)}` : ""}`} />
-        <KpiCard size="xs" label="Balance to supplier" value={money(order.balanceCny)} sub={order.balanceCny <= 0 ? "Fully paid" : undefined} />
-        {order.depositRequiredCny === null ? null : (
+        <KpiCard size="xs" label="Paid to supplier" value={money(supplierPaid)} sub={`${count(toSupplier.length)}${agentsCny !== null && agentsCny > 0 ? ` · agents ${money(agentsCny)}` : ""}`} />
+        <KpiCard size="xs" label="Balance to supplier" value={money(balance)} sub={balance !== null && balance <= 0 ? "Fully paid" : undefined} />
+        {order.depositRequiredCny == null ? null : (
           <KpiCard
             size="xs"
             label="Deposit"
@@ -53,7 +57,7 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
             // PAY-3: each payment's Delete, with the figures it changes.
             remove={
               canDelete
-                ? { po: order.po, supplier: order.supplier.name, currency: order.currency, supplierPaidCny: order.supplierPaidCny, balanceCny: order.balanceCny }
+                ? { po: order.po, supplier: order.supplier.name, currency: order.currency, supplierPaidCny: supplierPaid, balanceCny: balance }
                 : null
             }
           />
@@ -65,14 +69,14 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
               Each payment is changed to INR at the rate on the day it was paid. A later change in rate does not change an
               old payment.
             </Callout>
-            <KeyValueList size="sm" className="mt-3" boldValues items={toSupplier.map(working)} total={{ label: "Paid to supplier in INR", value: formatINR(order.supplierPaidInr) }} />
+            <KeyValueList size="sm" className="mt-3" boldValues items={toSupplier.map(working)} total={{ label: "Paid to supplier in INR", value: moneyOrDash(order.supplierPaidInr, formatINR) }} />
             {toAgents.length ? (
               <KeyValueList
                 size="sm"
                 className="mt-3"
                 boldValues
                 items={toAgents.map((p) => ({ ...working(p), label: `${working(p).label} · ${p.payee}` }))}
-                total={{ label: "Paid to agents (sea freight) in INR", value: formatINR(agentPaid(order.paidInr, order.supplierPaidInr)) }}
+                total={{ label: "Paid to agents (sea freight) in INR", value: moneyOrDash(agentPaid(order.paidInr, order.supplierPaidInr), formatINR) }}
               />
             ) : null}
           </SectionCard>
