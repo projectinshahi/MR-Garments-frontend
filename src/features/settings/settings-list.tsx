@@ -43,7 +43,7 @@ export const contactSearch = (row: { name: string; contactPerson: string; phone:
 
 type SettingsRecord = { id: string; name: string; status: RecordStatus };
 
-function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row: T) => Deletable): ColumnDef<T>[] {
+function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row: T) => Deletable, extraActions?: (row: T) => React.ReactNode): ColumnDef<T>[] {
   return [
     {
       id: "status",
@@ -59,6 +59,7 @@ function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row
       meta: { className: ACTIONS_COLUMN_CLASS },
       cell: ({ row }) => (
         <span className="inline-flex items-center gap-3">
+          {extraActions?.(row.original)}
           <Link
             href={editHref(path, row.original.id)}
             replace
@@ -89,11 +90,14 @@ export function SettingsList<T extends SettingsRecord>({
   footnote,
   noun,
   deletable,
+  extraActions,
 }: {
   /** The tab's own path; Edit opens ?dialog=edit&id=<id> on it. */
   path: string;
   /** The row as its Delete sees it (the same the edit dialog's Delete uses). */
   deletable: (row: T) => Deletable;
+  /** A tab's own text actions, rendered before Edit in the actions cell (Suppliers: "Deposits"). */
+  extraActions?: (row: T) => React.ReactNode;
   rows: T[];
   /** The tab's own columns; Status and Edit are appended. */
   columns: ColumnDef<T>[];
@@ -106,7 +110,7 @@ export function SettingsList<T extends SettingsRecord>({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("Active");
-  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>(path, deletable)], [columns, path, deletable]);
+  const allColumns = useMemo(() => [...columns, ...trailingColumns<T>(path, deletable, extraActions)], [columns, path, deletable, extraActions]);
   const visible = filterRecords(rows, { query, status }, searchText);
 
   return (

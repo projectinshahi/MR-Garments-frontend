@@ -20,6 +20,8 @@ export const MESSAGES = {
   rateInr: "Enter an INR rate above 0.",
   mode: "Enter the payment mode.",
   modeTooLong: "Use 100 characters or fewer for the mode.",
+  referenceTooLong: "Use 100 characters or fewer for the reference.",
+  notesTooLong: "Use 1,000 characters or fewer for the notes.",
 };
 const M = MESSAGES;
 
@@ -48,6 +50,9 @@ export const recordPaymentSchema = (today: string, currency: Currency = "CNY") =
     paidOn: z.iso.date({ error: M.paidOn }).refine((day) => day <= today, M.paidOnFuture),
     rateInr: currency === "INR" ? z.string().transform(() => undefined) : decimal(M.rateInr, 0.0001, 99_999_999),
     mode: z.string().trim().min(1, M.mode).max(100, M.modeTooLong),
+    // Transaction or receipt number and notes (migration 0008), optional: left out of the body when empty.
+    reference: z.string().trim().max(100, M.referenceTooLong).optional(),
+    notes: z.string().trim().max(1000, M.notesTooLong).optional(),
   });
 export type RecordPaymentInput = z.input<ReturnType<typeof recordPaymentSchema>>;
 export type RecordPaymentValues = z.output<ReturnType<typeof recordPaymentSchema>>;
@@ -60,11 +65,21 @@ export const emptyPayment = (orderId: string, today: string): RecordPaymentInput
   paidOn: today,
   rateInr: "",
   mode: "",
+  reference: "",
+  notes: "",
 });
 
-export function toCreatePaymentBody({ payee, rateInr, ...values }: RecordPaymentValues): CreatePaymentBody {
+/** Empty reference and notes are left out (the API stores ""), so an older API that doesn't know them is fine too. */
+export function toCreatePaymentBody({ payee, rateInr, reference, notes, ...values }: RecordPaymentValues): CreatePaymentBody {
   const supplier = payee === SUPPLIER_PAYEE;
-  return { ...values, ...(rateInr === undefined ? {} : { rateInr }), payeeRole: supplier ? "supplier" : "agent", agentId: supplier ? null : payee };
+  return {
+    ...values,
+    ...(rateInr === undefined ? {} : { rateInr }),
+    payeeRole: supplier ? "supplier" : "agent",
+    agentId: supplier ? null : payee,
+    ...(reference ? { reference } : {}),
+    ...(notes ? { notes } : {}),
+  };
 }
 
 /** PAY-2 422 field → the form field it belongs under. Fields the form doesn't have are shown as a toast instead. */
@@ -77,4 +92,6 @@ export const FORM_FIELD: Record<string, keyof RecordPaymentInput> = {
   paidOn: "paidOn",
   rateInr: "rateInr",
   mode: "mode",
+  reference: "reference",
+  notes: "notes",
 };

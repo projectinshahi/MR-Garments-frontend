@@ -99,6 +99,11 @@ function PaymentBlock({ number, payment, currency, remove }: { number: number; p
         { label: "Due date", value: date(payment.dueDate) },
         { label: "Amount", value: spacedMoney(payment.amountCny, currency) },
       ];
+  // Reference and notes (migration 0008) show only when recorded; the notes take the whole row.
+  const extras = [
+    ...(payment.reference ? [{ label: "Reference", value: payment.reference, wide: false }] : []),
+    ...(payment.notes ? [{ label: "Notes", value: payment.notes, wide: true }] : []),
+  ];
 
   return (
     <article className="rounded-[10px] border bg-input-background px-4 py-[13px]">
@@ -120,6 +125,12 @@ function PaymentBlock({ number, payment, currency, remove }: { number: number; p
           <div key={fact.label}>
             <dt className="text-[12.5px] leading-[15px] text-muted-foreground">{fact.label}</dt>
             <dd className="text-[14.5px] leading-[17px] font-bold">{fact.value}</dd>
+          </div>
+        ))}
+        {extras.map((fact) => (
+          <div key={fact.label} className={fact.wide ? "col-span-2" : undefined}>
+            <dt className="text-[12.5px] leading-[15px] text-muted-foreground">{fact.label}</dt>
+            <dd className="text-[14.5px] leading-[17px] font-bold [overflow-wrap:anywhere]">{fact.value}</dd>
           </div>
         ))}
       </dl>

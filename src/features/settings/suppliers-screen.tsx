@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
+import { statementHref } from "@/features/deposits/deposits-logic";
+import { rowActionClass } from "@/features/orders/delete-order";
 import type { SupplierRow } from "@/lib/api/types";
 import { CURRENCY_SYMBOL } from "@/lib/formatters";
 
@@ -21,6 +23,13 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "openOrders", header: "Open orders", meta: right },
 ];
 
+/** The supplier's deposit statement (docs/phase2-contracts.md 3.3): a text action before Edit, as Edit is drawn. */
+const depositsLink = (row: SupplierRow) => (
+  <Link href={statementHref(row.id)} aria-label={`Deposits of ${row.name}`} className={rowActionClass}>
+    Deposits
+  </Link>
+);
+
 /** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */
 export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
   return (
@@ -32,6 +41,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         searchText={contactSearch}
         noun="suppliers"
         deletable={supplierDeletable}
+        extraActions={depositsLink}
         footnote="Suppliers appear in the dropdown when a new order is created."
         action={
           <Button asChild size="header" className={actionClass}>

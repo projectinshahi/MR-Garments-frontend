@@ -57,7 +57,8 @@ test.describe("Management", () => {
       const name = unique(tab.key);
       const id = await add(api, tab, name);
       const row = await open(page, tab.tab, name);
-      await expect(row.getByRole("cell").last()).toHaveText("EditDelete");
+      // Edit and Delete end the actions cell; Suppliers puts its Deposits link before them (phase 2).
+      await expect(row.getByRole("cell").last()).toHaveText(/EditDelete$/);
       const ask = page.getByRole("alertdialog", { name: `Delete ${tab.noun}?` });
 
       await row.getByRole("button", { name: `Delete ${name}` }).click();
