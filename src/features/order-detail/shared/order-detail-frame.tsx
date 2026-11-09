@@ -37,7 +37,7 @@ export async function OrderDetailFrame({ params, children }: { params: Promise<{
   const canEdit = permissions.canEdit && isEditableStage(order.stage);
   // Only an editor needs the item choices (ORD-2).
   const items = canEdit ? await getActiveItems() : [];
-  const { stage, orderDate, deliveryDate, paidCny, lines } = order;
+  const { stage, orderDate, deliveryDate, supplierPaidCny, depositRequiredCny, lines } = order;
   const tabs: RouteTab[] = TABS.filter((tab) => !tab.section || order[tab.section] !== null).map((tab) => ({
     href: `${orderHref(order.po)}${tab.segment}`,
     label: tab.label,
@@ -51,7 +51,7 @@ export async function OrderDetailFrame({ params, children }: { params: Promise<{
         parent={{ label: "Orders", href: "/orders" }}
         actions={
           <OrderDetailActions
-            order={{ po: order.po, stage, orderDate, deliveryDate, paidCny, lines }}
+            order={{ po: order.po, stage, orderDate, deliveryDate, supplierPaidCny, depositRequiredCny, lines }}
             supplier={order.supplier.name}
             items={items}
             canEdit={canEdit}

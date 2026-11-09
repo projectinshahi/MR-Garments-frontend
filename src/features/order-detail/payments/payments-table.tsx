@@ -9,13 +9,11 @@ import { DeletePaymentButton, type PaymentOrderFacts } from "@/features/payments
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
-/** `currency`: the order's, which its payments are in. */
+/** `currency`: the order's, which its payments are in. Paid totals count every payee (ORD-4 `paidCny`/`paidInr`). */
 type Totals = { paidCny: number; paidInr: number; currency: Currency };
-/** A payment with its INR value at its own rate; null for a payment not made yet (no rate). */
-export type PaymentRow = OrderPayment & { inr: number | null };
 
 /** `remove`: the order's figures for PAY-3's Actions column (payments Full), or null without it. */
-function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<PaymentRow>[] {
+function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<OrderPayment>[] {
   return [
     {
       id: "date",
@@ -24,7 +22,7 @@ function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<Pa
         const date = row.original.paidOn ?? row.original.dueDate;
         return date ? formatDate(date) : "–";
       },
-      footer: "Total paid",
+      footer: "Total paid (all payees)",
     },
     { accessorKey: "kind", header: "Type" },
     { accessorKey: "payee", header: "Paid to" },
@@ -42,9 +40,10 @@ function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<Pa
       meta: { align: "right" },
     },
     {
-      id: "inr",
+      // The API's figure at the payment's own rate (ORD-4 `amountInr`); null while due.
+      accessorKey: "amountInr",
       header: "In INR",
-      cell: ({ row }) => (row.original.inr === null ? "–" : formatINR(row.original.inr)),
+      cell: ({ row }) => (row.original.amountInr === null ? "–" : formatINR(row.original.amountInr)),
       footer: () => formatINR(totals.paidInr),
       meta: { align: "right", className: "font-bold" },
     },
@@ -56,13 +55,13 @@ function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<Pa
             header: "Actions",
             meta: { className: `w-[72px] ${ACTIONS_COLUMN_CLASS}` },
             cell: ({ row }) => <DeletePaymentButton payment={row.original} order={remove} />,
-          } satisfies ColumnDef<PaymentRow>,
+          } satisfies ColumnDef<OrderPayment>,
         ]
       : []),
   ];
 }
 
-export function PaymentsTable({ rows, totals, remove = null }: { rows: PaymentRow[]; totals: Totals; remove?: PaymentOrderFacts | null }) {
+export function PaymentsTable({ rows, totals, remove = null }: { rows: OrderPayment[]; totals: Totals; remove?: PaymentOrderFacts | null }) {
   return (
     <DataTable
       columns={columns(totals, remove)}

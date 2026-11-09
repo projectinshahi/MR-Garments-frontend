@@ -3,22 +3,25 @@ import type { DepositDirection, DepositsResponse, SupplierStatement } from "@/li
 import { formatMoney, sumByCurrency } from "@/lib/formatters";
 import { type Currency, CURRENCIES, type MoneyTotal, type Tone } from "@/types/domain";
 
-// Deposits pages (docs/phase2-contracts.md 3.3): DEP-1's two lists as one table. An order deposit is a `payments` row
-// (paid or due); a supplier deposit is settled by its transactions (give: paid to the supplier; receive: received
-// from it). Payables (order deposits, deposits to give) and receivables (deposits to receive) are never netted, and
-// amounts in different currencies are never added together.
+// Deposits pages (docs/phase2-contracts.md 3.3, docs/phase2-fixes.md 2): DEP-1's lists as one table. An order whose
+// supplier asked for a deposit is one obligation row (required / paid / pending, from DEP-1 `orderObligations`); its
+// deposit payments stay on the order's Payments tab and are not listed here again, so nothing is counted twice. An
+// order without a requirement lists each deposit payment (a `payments` row, paid or due) as before. A supplier deposit
+// is settled by its transactions (give: paid to the supplier; receive: received from it). Payables (order deposits,
+// deposits to give) and receivables (deposits to receive) are never netted, and amounts in different currencies are
+// never added together.
 
 export type DepositKind = "order" | DepositDirection;
-export type DepositStatus = "paid" | "due" | "open" | "partly settled" | "settled";
+export type DepositStatus = "paid" | "partly paid" | "due" | "open" | "partly settled" | "settled";
 export type DepositView = "all" | "pending" | "paid";
 
 export const KIND_LABEL: Record<DepositKind, string> = { order: "Order deposit", give: "To give", receive: "To receive" };
-export const STATUS_LABEL: Record<DepositStatus, string> = { paid: "Paid", due: "Due", open: "Open", "partly settled": "Partly settled", settled: "Settled" };
-export const STATUS_TONE: Record<DepositStatus, Tone> = { paid: "success", due: "warning", open: "warning", "partly settled": "info", settled: "success" };
+export const STATUS_LABEL: Record<DepositStatus, string> = { paid: "Paid", "partly paid": "Partly paid", due: "Due", open: "Open", "partly settled": "Partly settled", settled: "Settled" };
+export const STATUS_TONE: Record<DepositStatus, Tone> = { paid: "success", "partly paid": "info", due: "warning", open: "warning", "partly settled": "info", settled: "success" };
 /** The statuses a tab's rows can have (the Status filter offers these). */
 export const VIEW_STATUSES: Record<DepositView, DepositStatus[]> = {
-  all: ["paid", "due", "open", "partly settled", "settled"],
-  pending: ["due", "open", "partly settled"],
+  all: ["due", "partly paid", "paid", "open", "partly settled", "settled"],
+  pending: ["due", "partly paid", "open", "partly settled"],
   paid: ["paid", "settled"],
 };
 
@@ -31,7 +34,7 @@ export type DepositRow = {
   supplierId: string;
   /** The order's supplier, or the deposit's. */
   supplier: string;
-  /** Who was paid: the order deposit's payee (the supplier or a shipping agent), the supplier for a deposit to give; "" for one to receive. */
+  /** Who was paid: the order deposit's payee (the supplier or a shipping agent), the supplier for an obligation or a deposit to give; "" for one to receive. */
   payee: string;
   /** The order's PO; null for a supplier deposit. */
   po: string | null;
@@ -39,39 +42,68 @@ export type DepositRow = {
   amount: number;
   paid: number;
   pending: number;
-  /** Paid on, due on, or the day the supplier deposit was agreed (YYYY-MM-DD). */
+  /** Last paid on (an obligation; "" while nothing is paid), paid on, due on, or the day the supplier deposit was agreed (YYYY-MM-DD). */
   date: string;
   mode: string;
   reference: string;
   notes: string;
   status: DepositStatus;
-  /** The order (null when the user can't open orders), or the supplier's statement. */
+  /** The order (its Payments tab for an obligation; null when the user can't open orders), or the supplier's statement. */
   href: string | null;
+  /** An obligation row's paid deposit payments, shown as "N payments"; absent on other rows. */
+  payments?: number;
 };
 
-/** Every deposit as the table shows it, in DEP-1's order: order deposits first (latest first), then supplier deposits (newest first). */
-export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse, linkPo = true): DepositRow[] {
+/**
+ * Every deposit as the table shows it, in DEP-1's order: order obligations first (newest first), then the deposit
+ * payments of orders without a requirement (latest first), then supplier deposits (newest first).
+ */
+export function toRows({ orderDeposits, orderObligations, supplierDeposits }: DepositsResponse, linkPo = true): DepositRow[] {
+  const withRequirement = new Set(orderObligations.map((o) => o.orderId));
   return [
-    ...orderDeposits.map(
-      (d): DepositRow => ({
-        id: d.id,
+    ...orderObligations.map(
+      (o): DepositRow => ({
+        id: o.orderId,
         kind: "order",
-        supplierId: d.supplierId,
-        supplier: d.supplier,
-        payee: d.payee,
-        po: d.po,
-        currency: d.currency,
-        amount: d.amountCny,
-        paid: d.status === "paid" ? d.amountCny : 0,
-        pending: d.status === "due" ? d.amountCny : 0,
-        date: d.paidOn ?? d.dueDate ?? "",
-        mode: d.mode ?? "",
-        reference: d.reference,
-        notes: d.notes,
-        status: d.status,
-        href: linkPo ? orderHref(d.po) : null,
+        supplierId: o.supplierId,
+        supplier: o.supplier,
+        payee: o.supplier,
+        po: o.po,
+        currency: o.currency,
+        amount: o.requiredCny,
+        paid: o.paidCny,
+        pending: o.pendingCny,
+        date: o.lastPaidOn ?? "",
+        mode: "",
+        reference: "",
+        notes: "",
+        status: o.status === "partly" ? "partly paid" : o.status,
+        href: linkPo ? `${orderHref(o.po)}/payments` : null,
+        payments: o.payments,
       }),
     ),
+    ...orderDeposits
+      .filter((d) => !withRequirement.has(d.orderId))
+      .map(
+        (d): DepositRow => ({
+          id: d.id,
+          kind: "order",
+          supplierId: d.supplierId,
+          supplier: d.supplier,
+          payee: d.payee,
+          po: d.po,
+          currency: d.currency,
+          amount: d.amountCny,
+          paid: d.status === "paid" ? d.amountCny : 0,
+          pending: d.status === "due" ? d.amountCny : 0,
+          date: d.paidOn ?? d.dueDate ?? "",
+          mode: d.mode ?? "",
+          reference: d.reference,
+          notes: d.notes,
+          status: d.status,
+          href: linkPo ? orderHref(d.po) : null,
+        }),
+      ),
     ...supplierDeposits.map(
       (d): DepositRow => ({
         id: d.id,
@@ -95,7 +127,7 @@ export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse, li
   ];
 }
 
-/** Pending: due order deposits and supplier deposits with something left; Paid: paid order deposits and settled ones. */
+/** Pending: obligations, due order deposits and supplier deposits with something left; Paid: paid obligations and order deposits, and settled ones. */
 export const inView = (row: DepositRow, view: DepositView) =>
   view === "all" || (view === "pending" ? row.pending > 0 : row.status === "paid" || row.status === "settled");
 

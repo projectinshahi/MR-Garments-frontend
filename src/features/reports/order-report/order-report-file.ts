@@ -1,5 +1,6 @@
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { stageLabel } from "@/features/orders/order-status";
+import { DEPOSIT_STATUS } from "@/features/payments/money";
 import type { OrderReport, OrderTimelineStep } from "@/lib/api/reports-types";
 import { formatDate } from "@/lib/formatters";
 
@@ -86,6 +87,14 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
           ["Paid (INR)", payments.paidInr],
           [`Balance (${cur})`, payments.balanceCny],
           [`Deposits paid (${cur})`, payments.depositsPaidCny],
+          // The deposit the supplier asked for (0009), only when one was agreed.
+          ...(payments.depositRequiredCny === null
+            ? []
+            : [
+                [`Deposit required (${cur})`, payments.depositRequiredCny],
+                [`Deposit pending (${cur})`, payments.depositPendingCny],
+                ["Deposit status", DEPOSIT_STATUS[payments.depositStatus].label],
+              ]),
           [`Due (${cur})`, payments.dueCny],
         ],
       },

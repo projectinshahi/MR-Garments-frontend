@@ -1,5 +1,7 @@
 import type { Currency, RecordStatus } from "@/types/domain";
 
+import type { DepositStatus } from "./types";
+
 // Deposits (backend docs/phase2-contracts.md section 3 and 8.D): DEP-1 GET /deposits, SD-1 .. SD-5. Amounts are in
 // the deposit's currency as JSON numbers; a supplier deposit has no INR figure (no rate exists for it).
 
@@ -46,9 +48,30 @@ export type SupplierDepositRow = {
   transactions: number;
 };
 
-/** DEP-1 GET /api/v1/deposits. Order deposits latest first; supplier deposits newest first; suppliers for the filter. */
+/**
+ * An order with a deposit the supplier asked for (0009): the obligation the Pending tab tracks. `paidCny` is the paid
+ * supplier deposits of the order, `pendingCny` = max(0, required - paid); `status` never "none" here.
+ */
+export type OrderDepositObligation = {
+  orderId: string;
+  po: string;
+  supplierId: string;
+  supplier: string;
+  currency: Currency;
+  requiredCny: number;
+  paidCny: number;
+  pendingCny: number;
+  status: Exclude<DepositStatus, "none">;
+  /** The latest paid supplier deposit's date, or null. */
+  lastPaidOn: string | null;
+  /** How many paid supplier deposits the order has. */
+  payments: number;
+};
+
+/** DEP-1 GET /api/v1/deposits. Order deposits latest first; obligations and supplier deposits newest first; suppliers for the filter. */
 export type DepositsResponse = {
   orderDeposits: OrderDeposit[];
+  orderObligations: OrderDepositObligation[];
   supplierDeposits: SupplierDepositRow[];
   suppliers: { id: string; name: string }[];
 };

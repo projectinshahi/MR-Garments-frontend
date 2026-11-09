@@ -24,6 +24,7 @@ const api: DepositsResponse = {
   orderDeposits: [
     { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", payeeRole: "agent", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half" },
   ],
+  orderObligations: [],
   supplierDeposits: [
     { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
     { id: "d1", supplierId: "s2", supplier: "Hangzhou Knits", direction: "give", currency: "USD", amount: 1000, settled: 0, pending: 1000, status: "open", openedOn: "2026-10-01", reference: "", notes: "", transactions: 0 },
@@ -83,6 +84,28 @@ describe("DepositsScreen", () => {
     expect(kpi("Deposits to pay")).toHaveTextContent("¥0");
     expect(kpi("Deposits to pay")!.nextSibling).toHaveTextContent("0 deposits");
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
+  });
+
+  it("Pending: an order's deposit requirement is one Partly paid row with its pending figure and payment count, linking to the order's Payments tab", async () => {
+    const user = userEvent.setup();
+    // PO-3001 asked for ¥1,000 and has the ¥300 payment above: the obligation stands for it, the payment is not listed again.
+    const obligation: DepositsResponse["orderObligations"][number] = { orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", requiredCny: 1000, paidCny: 300, pendingCny: 700, status: "partly", lastPaidOn: "2026-10-21", payments: 1 };
+    render(<DepositsScreen data={data({ rows: toRows({ ...api, orderObligations: [obligation] }) })} view="pending" />);
+    const rows = rowsOf(screen.getByRole("table"));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent("Order deposit1 payment");
+    expect(within(rows[0]!).getAllByRole("cell").slice(4, 9).map((cell) => cell.textContent)).toEqual(["¥1,000", "CNY", "¥300", "¥700", "21 Oct"]);
+    expect(within(rows[0]!).getByText("Partly paid")).toBeInTheDocument();
+    expect(within(rows[0]!).getByRole("link", { name: "Details" })).toHaveAttribute("href", "/orders/PO-3001/payments");
+    // Counted once: ¥1,000 to pay and $1,000 to give; ¥300 paid; ¥700 and $1,000 pending.
+    expect(kpi("Deposits to pay")).toHaveTextContent("¥1,000 · $1,000");
+    expect(kpi("Paid")).toHaveTextContent("¥300");
+    expect(kpi("Pending to pay")).toHaveTextContent("¥700 · $1,000");
+    // The Status filter offers Pending's statuses, Partly paid among them.
+    await user.click(screen.getByRole("button", { name: "Status: All statuses" }));
+    expect(screen.getAllByRole("menuitemradio").map((option) => option.textContent)).toEqual(["All statuses", "Due", "Partly paid", "Open", "Partly settled"]);
+    await user.click(screen.getByRole("menuitemradio", { name: "Partly paid" }));
     expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
   });
 

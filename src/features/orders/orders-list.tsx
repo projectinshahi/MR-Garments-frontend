@@ -30,7 +30,7 @@ const STAGE_OPTIONS: FilterOption[] = [
   ...STAGES.map((_, index) => ({ value: String(index + 1), label: stageLabel(index + 1) })),
 ];
 // The chips without their counts, for the export filters line.
-const CHIP_TITLE: Record<OrderChip, string> = { all: "All", late: "Late", dueSoon: "Due soon", shortReceived: "Short received", completed: "Completed" };
+const CHIP_TITLE: Record<OrderChip, string> = { all: "All", late: "Late", dueSoon: "Due soon", shortReceived: "Short received", closed: "Closed" };
 
 // The row opens the order too; the link keeps it keyboard-reachable. Stopping its click avoids a second navigation.
 export function PoCell({ order }: { order: OrderRow }) {
@@ -115,7 +115,7 @@ export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }
     { value: "late", label: `Late ${counts.late}`, tone: "danger" },
     { value: "dueSoon", label: `Due soon ${counts.dueSoon}` },
     { value: "shortReceived", label: `Short received ${counts.shortReceived}` },
-    { value: "completed", label: "Completed" },
+    { value: "closed", label: "Closed" },
   ] satisfies (FilterOption & { value: OrderChip })[];
   const supplierOptions: FilterOption[] = [{ value: ALL, label: "All suppliers" }, ...supplierNames.map((name) => ({ value: name, label: name }))];
 

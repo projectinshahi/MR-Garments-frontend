@@ -48,7 +48,7 @@ export const toast = (page: Page, text: string | RegExp) => page.locator("[data-
 
 type LineInput = { item: string; quantity: number; rateCny: number };
 type DepositInput = { payee?: string; payeeRole?: "supplier" | "agent"; amountCny: number; paidOn?: string; rateInr: number; mode?: string };
-export type OrderInput = { supplier?: string; orderDate?: string; deliveryDate?: string; lines?: LineInput[]; deposits?: DepositInput[] };
+export type OrderInput = { supplier?: string; orderDate?: string; deliveryDate?: string; lines?: LineInput[]; deposits?: DepositInput[]; depositRequiredCny?: number };
 export type CreatedOrder = { id: string; po: string };
 
 async function json<T>(response: APIResponse, status: number): Promise<T> {
@@ -87,7 +87,7 @@ export class Api {
       rateInr: d.rateInr,
       mode: d.mode ?? "Bank transfer",
     }));
-    const body = { supplierId: supplier!.id, orderDate, deliveryDate: input.deliveryDate ?? addDays(orderDate, 30), lines, deposits };
+    const body = { supplierId: supplier!.id, orderDate, deliveryDate: input.deliveryDate ?? addDays(orderDate, 30), lines, deposits, depositRequiredCny: input.depositRequiredCny };
     const { order } = await json<{ order: CreatedOrder }>(await this.post("/orders", body), 201);
     return order;
   }

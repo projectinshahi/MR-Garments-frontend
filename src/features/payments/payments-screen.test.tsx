@@ -12,10 +12,11 @@ vi.mock("@/lib/session", () => ({ getMe: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }));
 
+const noDeposit = { depositRequiredCny: null, depositPaidCny: 0, depositPendingCny: null, depositStatus: "none" } as const;
 const api: PaymentsResponse = {
   orders: [
-    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 0, paidInr: 0, balanceCny: 10_000, nextDue: null },
-    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12" },
+    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 10_000, nextDue: null, ...noDeposit },
+    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit },
   ],
   // PAY-1 order: newest first by coalesce(paidOn, dueDate).
   payments: [
@@ -34,7 +35,7 @@ describe("PaymentsScreen", () => {
     expect(within(table).getByRole("row", { name: /PO-3001/ })).toHaveTextContent("Not yet due");
     expect(within(table).getByRole("row", { name: /PO-3002/ })).toHaveTextContent("₹60,000");
     expect(screen.getByText("Paid so far (INR)").nextSibling).toHaveTextContent("₹60,000");
-    expect(screen.getByText("across 1 order")).toBeInTheDocument(); // the orders the paid total comes from
+    expect(screen.getByText("across 1 order · all payees")).toBeInTheDocument(); // the orders the paid total comes from
     expect(screen.getByText("1 payment · PO-3002 on 12 Nov")).toBeInTheDocument();
     expect(screen.getAllByText("¥15,000")).toHaveLength(2); // due in 7 and 30 days, in CNY
 
@@ -43,7 +44,7 @@ describe("PaymentsScreen", () => {
     expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["1. Deposit", "2. Balance"]);
     expect(screen.getByText("Bank transfer")).toBeInTheDocument();
     expect(screen.getByText("Due 12 Nov")).toBeInTheDocument();
-    expect(screen.getByText(/INR covers paid payments only/)).toBeInTheDocument();
+    expect(screen.getByText("Balance to supplier").nextSibling).toHaveTextContent("¥ 15,000");
 
     for (const fixture of ["PO-2041", "PO-2049", "Foshan Fabrics", "₹25,15,000"]) {
       expect(screen.queryByText(new RegExp(fixture))).not.toBeInTheDocument();
@@ -84,13 +85,35 @@ describe("PaymentsScreen", () => {
     renderScreen();
     expect(screen.getByText("Order value (¥)")).toBeInTheDocument();
     cleanup();
-    const usd = { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, orderValueCny: 1_200, paidCny: 200, paidInr: 17_600, balanceCny: 1_000, nextDue: null };
+    const usd = { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, orderValueCny: 1_200, paidCny: 200, paidInr: 17_600, supplierPaidCny: 200, supplierPaidInr: 17_600, balanceCny: 1_000, nextDue: null, ...noDeposit };
     renderScreen({ ...api, orders: [...api.orders, usd] });
     expect(screen.getByText("Order value")).toBeInTheDocument();
     expect(screen.queryByText("Order value (¥)")).not.toBeInTheDocument();
     expect(screen.getByText("$1,200")).toBeInTheDocument();
     expect(screen.getAllByText("¥20,000").length).toBeGreaterThan(0);
     expect(screen.getByText("Amounts in each order's currency and INR")).toBeInTheDocument();
+  });
+
+  it("shows the supplier's figures with the agents' sea freight apart, and the deposit the supplier asked for", () => {
+    // ¥500 sea freight to an agent (phase 2 fixes, 1): in Paid (INR) and nowhere else; the supplier asked for ¥8,000 of deposit, ¥5,000 paid.
+    const freight: PaymentsResponse["payments"][number] = { id: "p3", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "" };
+    const order = { ...api.orders[1]!, paidCny: 5_500, paidInr: 66_250, depositRequiredCny: 8_000, depositPaidCny: 5_000, depositPendingCny: 3_000, depositStatus: "partly" as const };
+    renderScreen({ orders: [api.orders[0]!, order], payments: [freight, ...api.payments] });
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((th) => th.textContent)).toEqual(["PO / Supplier", "Order value (¥)", "Paid to supplier (¥)", "Paid (INR)all payees", "Balance to supplier (¥)", "Next due"]);
+    expect(within(table).getByRole("row", { name: /PO-3002/ })).toHaveTextContent("20,0005,000₹66,25015,000");
+    expect(screen.getByText("Balance is what the supplier is still owed; agent payments are sea freight and count only in the INR total.")).toBeInTheDocument();
+    expect(screen.getByText("Paid so far (INR)").nextSibling).toHaveTextContent("₹66,250");
+
+    const value = (label: string) => screen.getByText(label).nextSibling;
+    expect(value("Paid to supplier")).toHaveTextContent("¥ 5,000");
+    expect(value("Paid to agents (sea freight)")).toHaveTextContent("¥ 500");
+    expect(value("Paid (INR), all payees")).toHaveTextContent("₹66,250");
+    expect(value("Balance to supplier")).toHaveTextContent("¥ 15,000");
+    expect(value("Deposit required")).toHaveTextContent("¥ 8,000");
+    expect(value("Deposit paid")).toHaveTextContent("¥ 5,000");
+    expect(value("Deposit pending")).toHaveTextContent("¥ 3,000");
+    expect(screen.getByText("Deposit partly paid")).toBeInTheDocument();
   });
 
   it("says so when the API has no orders", () => {

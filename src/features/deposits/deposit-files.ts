@@ -48,8 +48,10 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
         text("Reference"),
         text("Notes"),
         text("Status"),
+        text("Payments"),
       ],
-      rows: list.map((r) => [r.supplier, r.po ?? "", KIND_LABEL[r.kind], r.payee, r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status]]),
+      // Payments: how many deposit payments an obligation row sums; blank on other rows.
+      rows: list.map((r) => [r.supplier, r.po ?? "", KIND_LABEL[r.kind], r.payee, r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status], r.payments ?? ""]),
     })),
   };
 }

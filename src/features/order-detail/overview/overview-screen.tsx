@@ -4,6 +4,7 @@ import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Journey } from "@/components/shared/timeline";
 import type { OrderView } from "@/features/order-detail/data/queries";
+import { agentPaid, DepositStatusPill } from "@/features/payments/money";
 import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
 
 import { journeySteps } from "./journey";
@@ -19,6 +20,10 @@ export function OverviewScreen({ order }: { order: OrderView }) {
     { label: "Quantity", value: formatQty(order.quantity, order.unit) },
   ];
   const contact = order.supplier.contactPerson;
+  // Phase 2 fixes, 1 and 2: supplier payments apart from the agents' sea freight; the deposit only while something is pending.
+  const money = (value: number) => formatMoney(value, order.currency);
+  const agentsCny = agentPaid(order.paidCny, order.supplierPaidCny);
+  const pendingDeposit = order.depositRequiredCny !== null && order.depositPendingCny !== null && order.depositPendingCny > 0 ? order.depositPendingCny : null;
 
   return (
     <PageContainer>
@@ -56,7 +61,11 @@ export function OverviewScreen({ order }: { order: OrderView }) {
           <KeyValueList
             size="sm"
             className="mt-3"
-            items={[{ label: `Goods, paid ${formatMoney(order.paidCny, order.currency)}`, value: formatINR(order.paidInr) }]}
+            items={[
+              { label: `Paid to supplier ${money(order.supplierPaidCny)}`, value: formatINR(order.supplierPaidInr) },
+              ...(agentsCny > 0 ? [{ label: `Paid to agents (sea freight) ${money(agentsCny)}`, value: formatINR(agentPaid(order.paidInr, order.supplierPaidInr)) }] : []),
+              ...(pendingDeposit === null ? [] : [{ label: `Deposit pending ${money(pendingDeposit)}`, value: <DepositStatusPill status={order.depositStatus} /> }]),
+            ]}
           />
         </SectionCard>
       </div>

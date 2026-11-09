@@ -150,6 +150,7 @@ test("placing an order goes to its detail page, saves it, and the next visit sta
   const po = await nextPo(api);
   await page.goto("/orders/new");
   await fillValid(page);
+  await box(page, "Deposit required (¥)").fill("1,500");
   await page.getByRole("button", { name: "+ Add deposit" }).click();
   await box(page, "Amount (¥), deposit 1").fill("1000");
   await field(page, "Rate to INR").fill("12.2");
@@ -162,6 +163,8 @@ test("placing an order goes to its detail page, saves it, and the next visit sta
 
   const saved = await api.order(po);
   expect(saved).toMatchObject({ stage: 1, supplier: { name: "Foshan Fabrics" }, orderDate: today(), deliveryDate: today(20), orderValueCny: 2500, paidCny: 1000, paidInr: 12_200 });
+  // The deposit required (0009) against the deposit paid.
+  expect(saved).toMatchObject({ depositRequiredCny: 1500, depositPaidCny: 1000, depositPendingCny: 500, depositStatus: "partly" });
   expect(saved.lines).toMatchObject([{ item: { name: "Denim jeans" }, quantity: 200, rateCny: 12.5 }]);
   expect(saved.payments).toMatchObject([{ kind: "Deposit", payee: "Foshan Fabrics", payeeRole: "supplier", amountCny: 1000, rateInr: 12.2, mode: "Wire", status: "paid" }]);
 
@@ -172,6 +175,7 @@ test("placing an order goes to its detail page, saves it, and the next visit sta
   await expect(box(page, "Purchase order no.")).toHaveValue(`PO-${poNumber(po) + 1}`);
   await expect(combo(page, "Supplier")).toHaveValue("");
   await expect(box(page, "Rate (¥), line 1")).toHaveValue("");
+  await expect(box(page, "Deposit required (¥)")).toHaveValue("");
   await expect(page.getByRole("combobox", { name: "Paid to, deposit 1" })).toHaveCount(0);
 });
 

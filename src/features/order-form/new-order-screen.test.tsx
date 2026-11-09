@@ -88,6 +88,7 @@ describe("NewOrderScreen", () => {
     await ui.user.type(screen.getAllByLabelText("Rate to INR")[1]!, "11.6");
     await ui.user.type(screen.getAllByLabelText("Mode")[1]!, "Bank transfer");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 47,900.00");
+    await ui.user.type(ui.field("Deposit required (¥)"), "25,000");
 
     await ui.user.click(ui.place);
 
@@ -98,6 +99,7 @@ describe("NewOrderScreen", () => {
       currency: "CNY",
       orderDate: TODAY,
       deliveryDate: "2026-11-25",
+      depositRequiredCny: 25000,
       lines: [
         { itemId: "i-denim", quantity: 2400, rateCny: 18.5 },
         { itemId: "i-buttons", quantity: 10000, rateCny: 0.35 },
@@ -113,6 +115,7 @@ describe("NewOrderScreen", () => {
     // The route stays mounted, so the next visit must not show this order again.
     expect(ui.field("Supplier")).toHaveValue("");
     expect(ui.field("Delivery date")).toHaveValue("");
+    expect(ui.field("Deposit required (¥)")).toHaveValue("");
     expect(screen.queryByLabelText(/^Item, line 2/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Amount \(¥\), deposit 1/)).not.toBeInTheDocument();
   }, 30_000);
@@ -181,6 +184,26 @@ describe("NewOrderScreen", () => {
     await ui.user.click(ui.place);
     expect(await screen.findByText("Line 1: Enter the rate.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it("the deposit required is optional, checked before the API, and follows the currency", async () => {
+    post.mockResolvedValue({ order: { id: "o-5", po: "PO-2050" } });
+    const ui = open();
+    await fillOrder(ui);
+    expect(ui.field("Deposit required (¥)")).toHaveValue("");
+    await ui.user.type(ui.field("Deposit required (¥)"), "1.234");
+    await ui.user.click(ui.place);
+    expect(await screen.findByText("Enter the deposit the supplier asked for: above 0, with at most 2 decimals.")).toBeVisible();
+    expect(ui.field("Deposit required (¥)")).toHaveAttribute("aria-invalid", "true");
+    expect(post).not.toHaveBeenCalled();
+
+    await ui.user.clear(ui.field("Deposit required (¥)"));
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("depositRequiredCny");
+
+    await ui.user.selectOptions(ui.field("Currency"), "USD");
+    expect(screen.getByLabelText("Deposit required ($)")).toBeVisible();
   });
 
   it("shows a 422 on the items under the table, and toasts a field the form doesn't show", async () => {

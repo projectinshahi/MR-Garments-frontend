@@ -3,7 +3,7 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import type { OrderListItem } from "@/lib/api/types";
 import { STAGES, type Tone } from "@/types/domain";
 
-/** The chip an order counts under (Completed is stage 6, checked separately). */
+/** The chip an order counts under (Closed is the closure flag, checked separately). */
 export type StatusChip = "late" | "dueSoon" | "shortReceived" | null;
 export type OrderStatus = { label: string; tone: Tone; chip: StatusChip };
 

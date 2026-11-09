@@ -50,6 +50,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     deliveryDate: "",
     lines: [emptyLine()],
     deposits: [],
+    depositRequiredCny: "",
   };
   const { register, control, handleSubmit, setError, setValue, reset, formState } = useForm<NewOrderValues>({
     resolver: zodResolver(newOrderSchema),
@@ -291,6 +292,22 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
 
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
             <SectionCard title="Deposits paid against this order" titleGap="none">
+              {/* Optional (0009): what the supplier asked for, in the order's currency; the Payments tab tracks paid and pending against it. */}
+              <Field className={cn(fieldClass, "mt-3")} data-invalid={!!errors.depositRequiredCny}>
+                <FieldLabel htmlFor="deposit-required" className={labelClass}>
+                  Deposit required ({symbol})
+                </FieldLabel>
+                <Input
+                  id="deposit-required"
+                  inputMode="decimal"
+                  placeholder="None agreed"
+                  aria-invalid={!!errors.depositRequiredCny}
+                  size="sm"
+                  className="text-right"
+                  {...register("depositRequiredCny")}
+                />
+                <FieldError errors={[errors.depositRequiredCny]} />
+              </Field>
               {depositRows.fields.length > 0 ? (
                 <div className="mt-3 flex flex-col gap-2.5">
                   {depositRows.fields.map((field, i) => {

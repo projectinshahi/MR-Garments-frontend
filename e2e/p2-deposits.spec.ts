@@ -1,11 +1,21 @@
+import type { Page } from "@playwright/test";
+
 import { type Api, cny, expect, kpi, longDate, test, today } from "./live-api";
 
-// Deposits (docs/phase2-contracts.md section 3), against the live API as Management. Scenario 6: an order deposit on
-// the Deposits page. Scenario 7: a supplier's deposits to give and to receive, partly settled, kept apart; the
-// statement's export downloads. Role/label locators only (hidden <Activity> routes stay in the DOM); each test makes
-// its own records and finds them by PO or by a supplier of its own.
+// Deposits (docs/phase2-contracts.md section 3, docs/phase2-fixes.md section 2), against the live API as Management.
+// Scenario 6: an order's deposit requirement on the Deposits page, pending until it is paid. Scenario 7: a supplier's
+// deposits to give and to receive, partly settled, kept apart; the statement's export downloads. Role/label locators
+// only (hidden <Activity> routes stay in the DOM); each test makes its own records and finds them by PO or by a
+// supplier of its own.
 
 test.use({ viewport: { width: 1440, height: 900 } });
+
+/** Filters the table to this PO until `shown` holds, typing again if hydration reset the box (the list is long on a shared database). */
+const searchPo = (page: Page, po: string, shown: () => Promise<void>) =>
+  expect(async () => {
+    await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
+    await shown();
+  }).toPass({ timeout: 20_000 });
 
 /** A supplier of this test's own (MD-2), so its statement holds only what the test records. */
 async function newSupplier(api: Api) {
@@ -16,35 +26,42 @@ async function newSupplier(api: Api) {
   return supplier;
 }
 
-test("Scenario 6: an order's partial deposit shows as Paid on the Deposits page, under All and Paid, not under Pending", async ({ page, api }) => {
-  // ¥1,000 order with a ¥300 deposit, so the deposit is partial against the order value.
-  const { po } = await api.createOrder({ deposits: [{ amountCny: 300, rateInr: 12 }] });
-
-  await page.goto("/deposits");
-  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
+test("Scenario 6: an order's deposit requirement is Partly paid under Pending until the rest is paid, then under Paid", async ({ page, api }) => {
+  // ¥1,000 order whose supplier asked for a ¥1,000 deposit, ¥300 of it paid with the order.
+  const { id: orderId, po } = await api.createOrder({ depositRequiredCny: 1000, deposits: [{ amountCny: 300, rateInr: 12 }] });
   const row = page.getByRole("table").getByRole("row").filter({ hasText: po });
-  // Typed again if hydration reset the box (the list is long on a shared database and hydrates after the HTML).
-  await expect(async () => {
-    await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
-    await expect(row).toHaveCount(1, { timeout: 2_000 });
-  }).toPass({ timeout: 20_000 });
+  const oneRow = () => expect(row).toHaveCount(1, { timeout: 2_000 });
+
+  await page.goto("/deposits/pending");
+  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
+  await searchPo(page, po, oneRow);
+  // One obligation row, not the ¥300 payment itself: ¥1,000 asked, ¥300 paid in one payment, ¥700 pending.
   await expect(row).toContainText("Order deposit");
-  await expect(row).toContainText(cny(300));
-  await expect(row.getByText("Paid", { exact: true })).toBeVisible();
-  // Payables only: the ¥300 deposit is paid, nothing pending, nothing to receive.
-  await expect(kpi(page, "Deposits to pay")).toContainText(`${cny(300)}1 deposit`);
+  await expect(row).toContainText("1 payment");
+  await expect(row).toContainText(cny(1000));
+  await expect(row).toContainText(cny(700));
+  await expect(row.getByText("Partly paid", { exact: true })).toBeVisible();
+  await expect(row.getByRole("link", { name: "Details" })).toHaveAttribute("href", `/orders/${encodeURIComponent(po)}/payments`);
+  // Payables only, the obligation counted once: ¥1,000 to pay, ¥300 paid, ¥700 pending, nothing to receive.
+  await expect(kpi(page, "Deposits to pay")).toContainText(`${cny(1000)}1 deposit`);
   await expect(kpi(page, "Paid")).toContainText(cny(300));
-  await expect(kpi(page, "Pending to pay")).toContainText(cny(0));
+  await expect(kpi(page, "Pending to pay")).toContainText(cny(700));
   await expect(kpi(page, "To receive")).toContainText("0 deposits");
 
-  await page.getByRole("link", { name: "Paid" }).click();
-  await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
-  await expect(page.getByRole("table").getByRole("row").filter({ hasText: po })).toHaveCount(1);
-
-  await page.getByRole("link", { name: "Pending" }).click();
-  await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
+  // The remaining ¥700 is paid (PAY-2, kind Deposit): the order leaves Pending ...
+  await api.pay(orderId, { kind: "Deposit", amountCny: 700, rateInr: 12 });
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
   // Nothing pending at all on a fresh database, or nothing matching once other specs have left pending rows.
-  await expect(page.getByText(/^No (pending deposits|deposits match these filters)\.$/)).toBeVisible();
+  await searchPo(page, po, () => expect(page.getByText(/^No (pending deposits|deposits match these filters)\.$/)).toBeVisible({ timeout: 2_000 }));
+
+  // ... and shows under Paid, in full, with both payments.
+  await page.getByRole("link", { name: "Paid" }).click();
+  await searchPo(page, po, oneRow);
+  await expect(row).toContainText("2 payments");
+  await expect(row).toContainText(cny(1000));
+  await expect(row.getByText("Paid", { exact: true })).toBeVisible();
+  await expect(kpi(page, "Pending to pay")).toContainText(cny(0));
 });
 
 test("Scenario 7: a deposit to give with a partial payment and one to receive with a partial receipt stay apart; the statement exports", async ({ page, api }) => {

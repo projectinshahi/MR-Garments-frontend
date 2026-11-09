@@ -10,6 +10,7 @@ import { type DepositRow, EMPTY_FILTERS, supplierSummaries } from "./deposits-lo
 
 const TODAY = "2026-11-10";
 const rows: DepositRow[] = [
+  { id: "o2", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: "PO-3002", currency: "CNY", amount: 1000, paid: 300, pending: 700, date: "2026-11-02", mode: "", reference: "", notes: "", status: "partly paid", href: "/orders/PO-3002/payments", payments: 1 },
   { id: "p1", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", po: "PO-3001", currency: "CNY", amount: 300, paid: 300, pending: 0, date: "2026-10-21", mode: "Bank transfer", reference: "UTR 9", notes: "Half", status: "paid", href: "/orders/PO-3001" },
   { id: "d1", kind: "give", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: null, currency: "USD", amount: 200, paid: 50, pending: 150, date: "2026-10-05", mode: "", reference: "", notes: "", status: "partly settled", href: "/deposits/suppliers/s1" },
   { id: "d2", kind: "receive", supplierId: "s1", supplier: "Foshan Fabrics", payee: "", po: null, currency: "CNY", amount: 500, paid: 0, pending: 500, date: "2026-10-10", mode: "", reference: "Mould", notes: "", status: "open", href: "/deposits/suppliers/s1" },
@@ -21,12 +22,14 @@ describe("depositsFile", () => {
     const file = depositsFile("pending", rows, "All deposits", TODAY);
     expect(file).toMatchObject({ title: "Pending deposits", filename: `deposits-pending-${TODAY}`, filters: "All deposits" });
     expect(file.sections).toHaveLength(2);
-    expect(file.sections[0]!.columns.map((c) => c.header)).toEqual(["Supplier", "PO", "Kind", "Paid to", "Amount (CNY)", "Paid / settled (CNY)", "Pending (CNY)", "Date", "Mode", "Reference", "Notes", "Status"]);
+    expect(file.sections[0]!.columns.map((c) => c.header)).toEqual(["Supplier", "PO", "Kind", "Paid to", "Amount (CNY)", "Paid / settled (CNY)", "Pending (CNY)", "Date", "Mode", "Reference", "Notes", "Status", "Payments"]);
+    // Payments: the obligation row's count; blank on the others.
     expect(file.sections[0]!.rows).toEqual([
-      ["Foshan Fabrics", "PO-3001", "Order deposit", "Sino Freight", 300, 300, 0, "2026-10-21", "Bank transfer", "UTR 9", "Half", "Paid"],
-      ["Foshan Fabrics", "", "To receive", "", 500, 0, 500, "2026-10-10", "", "Mould", "", "Open"],
+      ["Foshan Fabrics", "PO-3002", "Order deposit", "Foshan Fabrics", 1000, 300, 700, "2026-11-02", "", "", "", "Partly paid", 1],
+      ["Foshan Fabrics", "PO-3001", "Order deposit", "Sino Freight", 300, 300, 0, "2026-10-21", "Bank transfer", "UTR 9", "Half", "Paid", ""],
+      ["Foshan Fabrics", "", "To receive", "", 500, 0, 500, "2026-10-10", "", "Mould", "", "Open", ""],
     ]);
-    expect(file.sections[1]!.rows).toEqual([["Foshan Fabrics", "", "To give", "Foshan Fabrics", 200, 50, 150, "2026-10-05", "", "", "", "Partly settled"]]);
+    expect(file.sections[1]!.rows).toEqual([["Foshan Fabrics", "", "To give", "Foshan Fabrics", 200, 50, 150, "2026-10-05", "", "", "", "Partly settled", ""]]);
     // Nothing shown: one empty CNY table, written as "No rows".
     expect(csvRows(depositsFile("all", [], "All deposits", TODAY)).at(-1)).toEqual(["No rows"]);
   });

@@ -1,4 +1,5 @@
 import { Callout, CardNote, SectionCard } from "@/components/shared/cards";
+import { KeyValueList } from "@/components/shared/key-value-list";
 import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { DeletePaymentButton, type PaymentOrderFacts } from "./delete-payment";
+import { agentPaid, DepositStatusPill } from "./money";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
 const spacedMoney = (value: number, currency: Currency) => formatMoney(value, currency, { spaced: true });
@@ -26,14 +28,16 @@ type PaymentDetailCardProps = {
   canDelete?: boolean;
 };
 
-/** Right card: the selected order's payments, each paid one at its own rate, and the totals. Records only. */
+/**
+ * Right card: the selected order's payments, each paid one at its own rate, then the order's figures (PAY-1, phase 2
+ * fixes 1 and 2): paid to the supplier, to agents (sea freight, only when any), in INR for every payee, the balance
+ * the supplier is still owed, and the deposit against what the supplier asked for when one was agreed. Records only.
+ */
 export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete = false }: PaymentDetailCardProps) {
   const { po, supplier, currency } = order;
-  const facts: PaymentOrderFacts = { po, supplier, currency, paidCny: order.paid, balanceCny: order.balance };
-  const totalCny = payments.reduce((sum, p) => sum + p.amountCny, 0);
-  // A due payment has no rate yet (PAY-1 gives one only once paid), so the INR total covers paid payments only.
-  const totalInr = payments.reduce((sum, p) => sum + inrOf(p), 0);
-  const allPriced = payments.every((p) => p.rateInr !== null);
+  const facts: PaymentOrderFacts = { po, supplier, currency, supplierPaidCny: order.supplierPaid, balanceCny: order.balance };
+  const money = (value: number) => spacedMoney(value, currency);
+  const toAgents = agentPaid(order.paid, order.supplierPaid);
 
   return (
     <SectionCard
@@ -58,21 +62,41 @@ export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete =
             ))}
           </ol>
 
-          <div className="mt-3 flex items-start justify-between gap-4 border-t-2 border-navy pt-2.5">
-            <div>
-              <p className="text-[15px] leading-5 font-bold">Total for this order</p>
-              <p className="text-[12.5px] leading-4 text-muted-foreground">
-                {spacedMoney(totalCny, currency)}
-                {allPriced ? null : " · INR covers paid payments only"}
-              </p>
-            </div>
-            <p className="text-[15.5px] leading-5 font-bold">{formatINR(totalInr)}</p>
-          </div>
-
           <Callout size="sm" className="mt-[13px]">
             Each payment is changed to INR at the rate of its own date, then added up.
           </Callout>
         </>
+      )}
+
+      <KeyValueList
+        size="sm"
+        className="mt-3"
+        boldValues
+        items={[
+          { label: "Paid to supplier", value: money(order.supplierPaid) },
+          ...(toAgents > 0 ? [{ label: "Paid to agents (sea freight)", value: money(toAgents), muted: true }] : []),
+          { label: "Paid (INR), all payees", value: formatINR(order.paidInr) },
+        ]}
+        total={{ label: "Balance to supplier", value: money(order.balance) }}
+      />
+      {order.depositRequired === null ? null : (
+        <KeyValueList
+          size="sm"
+          className="mt-3"
+          boldValues
+          items={[
+            { label: "Deposit required", value: money(order.depositRequired) },
+            { label: "Deposit paid", value: money(order.depositPaid) },
+            {
+              label: (
+                <>
+                  Deposit pending <DepositStatusPill status={order.depositStatus} className="ml-1 align-middle" />
+                </>
+              ),
+              value: money(order.depositPending ?? 0),
+            },
+          ]}
+        />
       )}
 
       {agents ? (

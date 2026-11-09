@@ -28,7 +28,12 @@ const order = (po: string, patch: Partial<OrderListItem>): OrderListItem => ({
   orderValueCny: 44400,
   paidCny: 20000,
   supplierPaidCny: 20000,
+  supplierPaidInr: 232000,
   paidInr: 232000,
+  depositRequiredCny: null,
+  depositPaidCny: 0,
+  depositPendingCny: null,
+  depositStatus: "none",
   ...patch,
 });
 const list = [

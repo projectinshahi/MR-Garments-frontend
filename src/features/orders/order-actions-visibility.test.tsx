@@ -64,7 +64,12 @@ const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   orderValueCny: 1000,
   paidCny: 0,
   supplierPaidCny: 0,
+  supplierPaidInr: 0,
   paidInr: 0,
+  depositRequiredCny: null,
+  depositPaidCny: 0,
+  depositPendingCny: null,
+  depositStatus: "none",
   status: "On track",
   tone: "success",
   chip: null,
@@ -115,7 +120,7 @@ describe("Orders list actions", () => {
   });
 });
 
-const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", paidCny: 0, lines: [] };
+const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", supplierPaidCny: 0, depositRequiredCny: null, lines: [] };
 
 function renderHeader(permissions: { canEdit: boolean; canDelete: boolean }) {
   render(<OrderDetailActions order={ORDER} supplier="Foshan Fabrics" items={[]} {...permissions} />);

@@ -1,6 +1,6 @@
 import type { Currency, MoneyTotal, RecordStatus } from "@/types/domain";
 
-import type { ContainerState, ContainerTerms, OrderStage, PaymentKind, Unit } from "./types";
+import type { ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, Unit } from "./types";
 
 // Landed cost and Reports (backend docs/wave3-contracts.md sections 6.4, 7 and 8). Owner: A6. INR amounts have 2
 // decimals; dates are YYYY-MM-DD; months YYYY-MM. Order-currency amounts (...Cny) come with their `currency`, and their
@@ -315,7 +315,18 @@ export type OrderReport = {
   /** excess = max(0, received - ordered), short = max(0, ordered - received). */
   lines: { id: string; position: number; item: string; unit: Unit; ordered: number; received: number; excess: number; short: number; loaded: number; stocked: number; rateCny: number; valueCny: number }[];
   /** Paid, balance, deposits and due count supplier payments only; `list` is every payment, oldest first. */
-  payments: { paidCny: number; paidInr: number; balanceCny: number; depositsPaidCny: number; dueCny: number; list: OrderReportPayment[] } | null;
+  payments: {
+    paidCny: number;
+    paidInr: number;
+    balanceCny: number;
+    depositsPaidCny: number;
+    dueCny: number;
+    /** The deposit the supplier asked for (0009) and what is still pending against it; null / "none" when none was agreed. */
+    depositRequiredCny: number | null;
+    depositPendingCny: number | null;
+    depositStatus: DepositStatus;
+    list: OrderReportPayment[];
+  } | null;
   logistics: OrderReportContainer[] | null;
   /** Every warehouse receipt (draft or stocked) of a trip carrying the order's goods, with this order's pieces per team. */
   warehouse: { receiptId: string; transportId: string; container: string; warehouse: string; receivedOn: string; receivedBy: string; status: "draft" | "stocked"; bundlesReceived: number; lines: { item: string; unit: Unit; team: string; quantity: number }[] }[] | null;

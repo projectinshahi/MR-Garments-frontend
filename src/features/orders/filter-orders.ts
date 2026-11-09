@@ -2,7 +2,7 @@ import type { Tone } from "@/types/domain";
 
 import type { OrderRow } from "./data/queries";
 
-export type OrderChip = "all" | "late" | "dueSoon" | "shortReceived" | "completed";
+export type OrderChip = "all" | "late" | "dueSoon" | "shortReceived" | "closed";
 
 export type OrderFilters = {
   query: string;
@@ -12,8 +12,8 @@ export type OrderFilters = {
   chip: OrderChip;
 };
 
-const chipMatch = (order: OrderRow, chip: OrderChip) =>
-  chip === "all" || (chip === "completed" ? order.stage === 6 : order.chip === chip);
+// Phase 2 fixes §4: "Closed" is the closure flag (every carrier stocked), not stage 6 alone.
+const chipMatch = (order: OrderRow, chip: OrderChip) => chip === "all" || (chip === "closed" ? order.closed : order.chip === chip);
 
 /** Search over PO, item and supplier; `q` is already trimmed and lower-cased. */
 const matchesSearch = (order: OrderRow, q: string) => !q || [order.po, order.item, order.supplier].some((field) => field.toLowerCase().includes(q));

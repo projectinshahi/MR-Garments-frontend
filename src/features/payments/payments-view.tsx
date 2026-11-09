@@ -58,21 +58,27 @@ const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => 
     cell: ({ row }) => amount(row.original.orderValue, row.original),
   },
   {
-    accessorKey: "paid",
-    header: () => label("Paid"),
-    meta: { align: "right", className: `${PAD} w-[70px]` },
-    cell: ({ row }) => amount(row.original.paid, row.original),
+    accessorKey: "supplierPaid",
+    header: () => label("Paid to supplier"),
+    meta: { align: "right", className: `${PAD} w-[118px]` },
+    cell: ({ row }) => amount(row.original.supplierPaid, row.original),
   },
   {
     accessorKey: "paidInr",
-    header: () => head("Paid (INR)"),
+    // Every payee: agent payments (sea freight) count here and nowhere else in the row.
+    header: () => (
+      <span className="block text-xs leading-4">
+        Paid (INR)
+        <span className="block text-[11px] font-normal">all payees</span>
+      </span>
+    ),
     meta: { align: "right", className: `${PAD} w-[98.5px]` },
     cell: ({ row }) => formatINR(row.original.paidInr),
   },
   {
     accessorKey: "balance",
-    header: () => label("Balance"),
-    meta: { align: "right", className: `${PAD} w-[92.5px]` },
+    header: () => label("Balance to supplier"),
+    meta: { align: "right", className: `${PAD} w-[132px]` },
     cell: ({ row }) => amount(row.original.balance, row.original),
   },
   {
@@ -168,7 +174,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
                       <DeletePaymentMenu
                         // Oldest first, as the order's payment card numbers them.
                         payments={payments.filter((p) => p.po === row.po).toReversed()}
-                        order={{ po: row.po, supplier: row.supplier, currency: row.currency, paidCny: row.paid, balanceCny: row.balance }}
+                        order={{ po: row.po, supplier: row.supplier, currency: row.currency, supplierPaidCny: row.supplierPaid, balanceCny: row.balance }}
                       />
                     )
                   : null,
@@ -182,6 +188,10 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
               emptyState={orders.length ? "No orders match your search." : "No orders yet."}
               className="mt-2.5"
             />
+            {/* Phase 2 fixes, 1: the balance counts supplier payments only. Proposed wording. */}
+            <CardNote size="sm" className="mt-3 block">
+              Balance is what the supplier is still owed; agent payments are sea freight and count only in the INR total.
+            </CardNote>
           </SectionCard>
           {selected ? (
             <PaymentDetailCard

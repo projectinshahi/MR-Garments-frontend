@@ -5,6 +5,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Timeline } from "@/components/shared/timeline";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
+import { DepositStatusPill } from "@/features/payments/money";
 import { ExportActions } from "@/features/reports/report-actions";
 import type { OrderReport, OrderReportContainer } from "@/lib/api/reports-types";
 import { CURRENCY_NAME, formatDate, formatINR, formatMoney, formatNumber, formatQty, formatRate } from "@/lib/formatters";
@@ -200,6 +201,21 @@ export function OrderReportScreen({ report, today }: { report: OrderReport; toda
                 { label: "Paid to supplier", value: money(payments.paidCny) },
                 { label: "Paid in INR", value: formatINR(payments.paidInr) },
                 { label: "Of which deposits", value: money(payments.depositsPaidCny), muted: true },
+                // The deposit the supplier asked for (0009), only when one was agreed.
+                ...(payments.depositRequiredCny === null
+                  ? []
+                  : [
+                      { label: "Deposit required", value: money(payments.depositRequiredCny), muted: true },
+                      {
+                        label: "Deposit pending",
+                        value: (
+                          <>
+                            {money(payments.depositPendingCny ?? 0)} <DepositStatusPill status={payments.depositStatus} className="ml-1 align-middle" />
+                          </>
+                        ),
+                        muted: true,
+                      },
+                    ]),
                 { label: "Due", value: money(payments.dueCny), muted: true },
               ]}
               total={{ label: "Balance to supplier", value: money(payments.balanceCny) }}

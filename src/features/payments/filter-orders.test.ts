@@ -11,7 +11,13 @@ const row = (po: string, supplier: string): OrderPaymentRow => ({
   orderValue: 0,
   paid: 0,
   paidInr: 0,
+  supplierPaid: 0,
+  supplierPaidInr: 0,
   balance: 0,
+  depositRequired: null,
+  depositPaid: 0,
+  depositPending: null,
+  depositStatus: "none",
   nextDue: null,
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { DepositsResponse, SupplierStatement } from "@/lib/api/deposits-types";
+import type { DepositsResponse, OrderDeposit, OrderDepositObligation, SupplierStatement } from "@/lib/api/deposits-types";
 
 import {
   amountList,
@@ -21,6 +21,7 @@ const api: DepositsResponse = {
     { id: "p2", orderId: "o2", po: "PO-3002", supplierId: "s2", supplier: "Hangzhou Knits", payee: "Hangzhou Knits", payeeRole: "supplier", currency: "CNY", amountCny: 200, status: "due", paidOn: null, dueDate: "2026-11-30", rateInr: null, amountInr: null, mode: null, reference: "", notes: "" },
     { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", payeeRole: "agent", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half\nsecond line" },
   ],
+  orderObligations: [],
   supplierDeposits: [
     { id: "d3", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
     { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "USD", amount: 200, settled: 200, pending: 0, status: "settled", openedOn: "2026-10-05", reference: "", notes: "", transactions: 2 },
@@ -68,15 +69,76 @@ describe("toRows", () => {
   });
 });
 
+// PO-3003 asked for ¥1,000 and has one ¥300 deposit payment (p3): one obligation row stands for it.
+const obligation: OrderDepositObligation = { orderId: "o3", po: "PO-3003", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", requiredCny: 1000, paidCny: 300, pendingCny: 700, status: "partly", lastPaidOn: "2026-11-02", payments: 1 };
+const p3: OrderDeposit = { ...api.orderDeposits[1]!, id: "p3", orderId: "o3", po: "PO-3003", payee: "Foshan Fabrics", payeeRole: "supplier", paidOn: "2026-11-02" };
+const withObligation = (changes: Partial<OrderDepositObligation> = {}, linkPo = true) =>
+  toRows({ ...api, orderDeposits: [p3, ...api.orderDeposits], orderObligations: [{ ...obligation, ...changes }] }, linkPo);
+
+describe("order obligations", () => {
+  it("lists an order with a requirement once, as its obligation (required / paid / pending), never as its payments too", () => {
+    const rows = withObligation();
+    expect(ids(rows)).toEqual(["o3", "p2", "p1", "d3", "d2", "d1"]);
+    expect(rows[0]).toEqual({
+      id: "o3",
+      kind: "order",
+      supplierId: "s1",
+      supplier: "Foshan Fabrics",
+      payee: "Foshan Fabrics",
+      po: "PO-3003",
+      currency: "CNY",
+      amount: 1000,
+      paid: 300,
+      pending: 700,
+      date: "2026-11-02",
+      mode: "",
+      reference: "",
+      notes: "",
+      status: "partly paid",
+      href: "/orders/PO-3003/payments",
+      payments: 1,
+    });
+    // Nothing paid yet: due, with no date. Everything paid: paid. Without Orders access, no link.
+    expect(withObligation({ paidCny: 0, pendingCny: 1000, status: "due", lastPaidOn: null, payments: 0 })[0]).toMatchObject({ status: "due", date: "", paid: 0, pending: 1000, payments: 0 });
+    expect(withObligation({ paidCny: 1000, pendingCny: 0, status: "paid", payments: 2 })[0]).toMatchObject({ status: "paid", paid: 1000, pending: 0, payments: 2 });
+    expect(withObligation({}, false)[0]!.href).toBeNull();
+  });
+
+  it("is pending while something is left and paid once settled; the cards count it once, not its payments again", () => {
+    const partly = withObligation();
+    expect(ids(partly.filter((r) => inView(r, "pending")))).toEqual(["o3", "p2", "d3", "d1"]);
+    expect(ids(partly.filter((r) => inView(r, "paid")))).toEqual(["p1", "d2"]);
+    const paid = withObligation({ paidCny: 1000, pendingCny: 0, status: "paid", payments: 2 });
+    expect(ids(paid.filter((r) => inView(r, "pending")))).toEqual(["p2", "d3", "d1"]);
+    expect(ids(paid.filter((r) => inView(r, "paid")))).toEqual(["o3", "p1", "d2"]);
+    // ¥1,000 asked (¥300 paid, ¥700 pending) on top of the base rows' ¥1,500 / ¥300 / ¥1,200; p3's ¥300 is not added again.
+    expect(totals(partly).pay).toEqual({
+      amount: [
+        { currency: "CNY", amount: 2500 },
+        { currency: "USD", amount: 200 },
+      ],
+      paid: [
+        { currency: "CNY", amount: 600 },
+        { currency: "USD", amount: 200 },
+      ],
+      pending: [
+        { currency: "CNY", amount: 1900 },
+        { currency: "USD", amount: 0 },
+      ],
+      count: 5,
+    });
+  });
+});
+
 describe("inView", () => {
   it("Pending: due order deposits and supplier deposits with something left; Paid: paid and settled ones; All: everything", () => {
     expect(ids(rows.filter((r) => inView(r, "pending")))).toEqual(["p2", "d3", "d1"]);
     expect(ids(rows.filter((r) => inView(r, "paid")))).toEqual(["p1", "d2"]);
     expect(rows.filter((r) => inView(r, "all"))).toHaveLength(5);
     // The Status filter offers each tab only the statuses its rows can have.
-    expect(VIEW_STATUSES.pending).toEqual(["due", "open", "partly settled"]);
+    expect(VIEW_STATUSES.pending).toEqual(["due", "partly paid", "open", "partly settled"]);
     expect(VIEW_STATUSES.paid).toEqual(["paid", "settled"]);
-    expect(VIEW_STATUSES.all).toHaveLength(5);
+    expect(VIEW_STATUSES.all).toEqual(["due", "partly paid", "paid", "open", "partly settled", "settled"]);
   });
 });
 

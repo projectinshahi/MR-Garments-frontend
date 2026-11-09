@@ -11,15 +11,21 @@ import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
 
-/** The order the payment belongs to, with the figures a delete changes (all in its currency). */
-export type PaymentOrderFacts = { po: string; supplier: string; currency: Currency; paidCny: number; balanceCny: number };
+import { round2 } from "./money";
 
-const round2 = (value: number) => Math.round(value * 100) / 100;
+/**
+ * The order the payment belongs to, with the figures a delete changes (all in its currency): paid to the supplier and
+ * the balance the supplier is still owed (phase 2 fixes, 1).
+ */
+export type PaymentOrderFacts = { po: string; supplier: string; currency: Currency; supplierPaidCny: number; balanceCny: number };
+/** A PAY-1 or ORD-4 payment: the ORD-4 `amountInr` isn't needed (the dialog prices the payment from its own rate). */
+export type DeletablePayment = Omit<OrderPayment, "amountInr">;
 
 /**
  * PAY-3: a deposit or a balance payment, paid or due, with its confirmation (Deposits & Payments, the order's payments
- * tab). The dialog names the record and what changes: a paid one lowers "paid so far" and raises the balance by its
- * amount (the supplier's or the sea-freight figures follow); a due one changes nothing paid. Proposed wording.
+ * tab). The dialog names the record and what changes: a paid supplier payment lowers "paid to supplier" and raises the
+ * balance by its amount; a paid agent payment moves only the sea freight and the INR total; a due one changes nothing
+ * paid. Proposed wording.
  */
 export function DeletePaymentButton({
   payment,
@@ -27,7 +33,7 @@ export function DeletePaymentButton({
   opened,
   onClosed,
 }: {
-  payment: OrderPayment;
+  payment: DeletablePayment;
   order: PaymentOrderFacts;
   /** Mounted already asking, without its own button (DeletePaymentMenu picked it); `onClosed` when the dialog closes. */
   opened?: boolean;
@@ -68,14 +74,16 @@ export function DeletePaymentButton({
             ]}
           />
           <p className="font-bold text-foreground">
-            {paid
-              ? `Paid so far for ${order.po} goes from ${money(order.paidCny)} to ${money(round2(order.paidCny - payment.amountCny))}, and the balance to pay from ${money(order.balanceCny)} to ${money(round2(order.balanceCny + payment.amountCny))}.`
-              : `Nothing paid changes: ${amount} due ${date ? formatDate(date) : ""} leaves the order's next due date and the due totals.`}
+            {!paid
+              ? `Nothing paid changes: ${amount} due ${date ? formatDate(date) : ""} leaves the order's next due date and the due totals.`
+              : agent
+                ? `Paid to supplier for ${order.po} stays at ${money(order.supplierPaidCny)} and the balance to supplier at ${money(order.balanceCny)}.`
+                : `Paid to supplier for ${order.po} goes from ${money(order.supplierPaidCny)} to ${money(round2(order.supplierPaidCny - payment.amountCny))}, and the balance to supplier from ${money(order.balanceCny)} to ${money(round2(order.balanceCny + payment.amountCny))}.`}
           </p>
           <p>
             {paid
               ? agent
-                ? "The order's sea freight cost follows; the supplier's paid and outstanding figures don't change. "
+                ? "The order's sea freight cost and the INR total paid follow; the supplier's paid and outstanding figures don't change. "
                 : "The supplier's paid and outstanding figures and the order's goods cost in INR follow. "
               : ""}
             The order and its other payments stay; other payments keep their own rates.
@@ -87,7 +95,7 @@ export function DeletePaymentButton({
 }
 
 /** "Deposit · 4 Nov 2026 · ¥300", "Balance · due 12 Nov 2026 · ¥15,000": one payment in DeletePaymentMenu. */
-export const paymentChoice = (payment: OrderPayment, currency: Currency) => {
+export const paymentChoice = (payment: DeletablePayment, currency: Currency) => {
   const paid = payment.status === "paid";
   const date = paid ? payment.paidOn : payment.dueDate;
   return `${payment.kind} · ${paid ? "" : "due "}${date ? formatDate(date) : "no date"} · ${formatMoney(payment.amountCny, currency)}`;
@@ -99,7 +107,7 @@ export const paymentChoice = (payment: OrderPayment, currency: Currency) => {
  * dialog it opens takes over cleanly; clicks never reach the row (which would select the order). The dialog opens once
  * the menu has closed and focus is back on the trigger, so closing the dialog returns focus there.
  */
-export function DeletePaymentMenu({ payments, order }: { payments: OrderPayment[]; order: PaymentOrderFacts }) {
+export function DeletePaymentMenu({ payments, order }: { payments: DeletablePayment[]; order: PaymentOrderFacts }) {
   const [picked, setPicked] = useState<string | null>(null);
   const chosen = useRef<string | null>(null);
   const payment = payments.find((p) => p.id === picked);

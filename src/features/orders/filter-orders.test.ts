@@ -32,7 +32,12 @@ const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"
   orderValueCny: 0,
   paidCny: 0,
   supplierPaidCny: 0,
+  supplierPaidInr: 0,
   paidInr: 0,
+  depositRequiredCny: null,
+  depositPaidCny: 0,
+  depositPendingCny: null,
+  depositStatus: "none",
   status: "",
   tone: "success",
   chip,
@@ -70,7 +75,9 @@ describe("filterOrders", () => {
     expect(pos({ chip: "late" })).toEqual(["PO-2052"]);
     expect(pos({ chip: "dueSoon" })).toEqual(["PO-2053"]);
     expect(pos({ chip: "shortReceived" })).toEqual(["PO-2051"]);
-    expect(pos({ chip: "completed" })).toEqual(["PO-2050"]);
+    expect(pos({ chip: "closed" })).toEqual(["PO-2050"]);
+    // Closed is the closure flag, not stage 6 alone.
+    expect(filterOrders([row("PO-1", "x", "y", 6, null)], { ...none, chip: "closed" })).toEqual([]);
     expect(isFiltered({ ...none, chip: "late" })).toBe(true);
   });
 });

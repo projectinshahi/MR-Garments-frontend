@@ -34,6 +34,9 @@ const report: OrderReport = {
     balanceCny: 600,
     depositsPaidCny: 300,
     dueCny: 200,
+    depositRequiredCny: 500,
+    depositPendingCny: 200,
+    depositStatus: "partly",
     list: [
       { id: "p1", kind: "Deposit", payee: "Guangzhou Textile Co.", payeeRole: "supplier", amountCny: 300, amountInr: 3600, status: "paid", paidOn: "2026-10-11", dueDate: null, rateInr: 12, mode: "Bank", reference: "TXN-1", notes: "" },
       { id: "p2", kind: "Balance", payee: "Guangzhou Textile Co.", payeeRole: "supplier", amountCny: 200, amountInr: null, status: "due", paidOn: null, dueDate: "2026-11-19", rateInr: null, mode: null, reference: "", notes: "" },
@@ -145,6 +148,16 @@ describe("order report file", () => {
       ["On the road", "2026-11-03", "TCLU6000000 · KL 07 CD 4821 · LR LR-1"],
       ["Order closed", "2026-11-05", "Every container stocked"],
     ]);
+  });
+
+  it("adds the deposit the supplier asked for, with its standing, only when one was agreed (0009)", () => {
+    const rows = csvRows(file);
+    expect(rows).toContainEqual(["Deposit required (CNY)", 500]);
+    expect(rows).toContainEqual(["Deposit pending (CNY)", 200]);
+    expect(rows).toContainEqual(["Deposit status", "Deposit partly paid"]);
+    const none = csvRows(orderReportFile({ ...report, payments: { ...report.payments!, depositRequiredCny: null, depositPendingCny: null, depositStatus: "none" } }, TODAY));
+    expect(none.filter((row) => String(row[0]).startsWith("Deposit "))).toEqual([]);
+    expect(none).toContainEqual(["Deposits paid (CNY)", 300]);
   });
 
   it("leaves out the sections the API nulled", () => {

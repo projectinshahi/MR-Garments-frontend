@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { orderHref } from "@/components/shared/po-link";
 
-import { emptyLine, newOrderSchema, toCreateOrderBody } from "./new-order-form";
+import { DEPOSIT_REQUIRED_MESSAGE, emptyLine, newOrderSchema, toCreateOrderBody } from "./new-order-form";
 
 const valid = {
   po: "PO-2050",
@@ -12,8 +12,30 @@ const valid = {
   deliveryDate: "2026-11-20",
   lines: [{ itemId: "i-1", rateCny: "12.5", quantity: "200" }, emptyLine()],
   deposits: [],
+  depositRequiredCny: "",
 };
 const poError = (po: string) => newOrderSchema.safeParse({ ...valid, po }).error?.issues.find((issue) => issue.path[0] === "po")?.message;
+
+describe("Deposit required (0009)", () => {
+  const error = (text: string) =>
+    newOrderSchema.safeParse({ ...valid, depositRequiredCny: text }).error?.issues.find((issue) => issue.path[0] === "depositRequiredCny")?.message;
+  const body = (text: string) => toCreateOrderBody({ ...valid, depositRequiredCny: text }, { suppliers: [], agents: [] });
+
+  it("is optional: blank is valid and leaves the key out of the body", () => {
+    expect(error("")).toBeUndefined();
+    expect(error("  ")).toBeUndefined();
+    expect(body("")).not.toHaveProperty("depositRequiredCny");
+  });
+
+  it("takes an amount above 0 with at most 2 decimals, commas allowed, and sends it as a number", () => {
+    for (const text of ["0.01", "1500", "1,500.50", "999999999999"]) expect(error(text), text).toBeUndefined();
+    expect(body("1,500.50").depositRequiredCny).toBe(1500.5);
+  });
+
+  it("refuses 0, negatives, more than 2 decimals, text and more than 999,999,999,999", () => {
+    for (const text of ["0", "-5", "1.234", "abc", "1000000000000"]) expect(error(text), text).toBe(DEPOSIT_REQUIRED_MESSAGE);
+  });
+});
 
 describe("PO number", () => {
   it("takes any format, trimmed and kept as typed", () => {

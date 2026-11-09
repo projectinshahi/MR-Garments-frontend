@@ -78,7 +78,17 @@ function depositColumns(linkPo: boolean): ColumnDef<DepositRow>[] {
           "–"
         ),
     },
-    { accessorKey: "kind", header: "Kind", cell: ({ row }) => KIND_LABEL[row.original.kind] },
+    {
+      accessorKey: "kind",
+      header: "Kind",
+      // An obligation row says how many deposit payments it sums.
+      cell: ({ row }) => (
+        <>
+          {KIND_LABEL[row.original.kind]}
+          {row.original.payments === undefined ? null : <span className="block text-xs text-muted-foreground">{plural(row.original.payments, "payment")}</span>}
+        </>
+      ),
+    },
     { accessorKey: "payee", header: "Paid to", cell: ({ row }) => row.original.payee || "–" },
     { accessorKey: "amount", header: "Amount", meta: { align: "right" }, cell: money((r) => r.amount) },
     { accessorKey: "currency", header: "Currency" },

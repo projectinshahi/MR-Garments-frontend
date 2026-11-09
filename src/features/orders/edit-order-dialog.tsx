@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DEPOSIT_REQUIRED_MESSAGE, isDepositRequired } from "@/features/order-form/new-order-form";
 import { lineAmount, orderTotals, parseNumber } from "@/features/order-form/order-totals";
 import { apiClient } from "@/lib/api/client";
 import type { OrderDetail, OrderOptions, UpdateOrderBody, UpdateOrderResponse } from "@/lib/api/types";
@@ -21,19 +22,20 @@ import { formatCNY, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 // Edit order (ORD-5, D2). No reference design: the Settings dialog frame (53) with the New order lines table (15).
-// Stage 1: both dates and the lines; stages 2-5: the delivery date only. Messages are proposed wording, the field
-// checks the same as New order's.
+// Stage 1: both dates, the deposit required and the lines; stages 2-5: the delivery date and the deposit required only.
+// Messages are proposed wording, the field checks the same as New order's.
 
 /** What the dialog needs from ORD-4. */
-export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "paidCny" | "lines">;
+/** What the dialog needs from ORD-4. `supplierPaidCny`: the ORD-5 guard counts supplier payments only (agent payments are sea freight). */
+export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "supplierPaidCny" | "depositRequiredCny" | "lines">;
 /** ORD-2's active items. */
 export type ItemOption = OrderOptions["items"][number];
 
 export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
-  linesEditable: "Change the dates or the items. The supplier can't change, and the order total can't be less than what's already paid.",
-  receivedOnly: "Goods have been received for this order, so only the delivery date can change.",
-  belowPaid: (paid: number) => `The order total can't be less than the ${formatCNY(paid, { decimals: 2 })} already paid.`,
+  linesEditable: "Change the dates or the items. The supplier can't change, and the order total can't be less than what's already paid to the supplier.",
+  receivedOnly: "Goods have been received for this order, so only the delivery date and the deposit required can change.",
+  belowPaid: (paid: number) => `The order total can't be less than the ${formatCNY(paid, { decimals: 2 })} already paid to the supplier.`,
 };
 
 const MAX_LINES = 50;
@@ -62,6 +64,8 @@ const editSchema = (paid: number, linesEditable: boolean) =>
     .object({
       orderDate: z.string().min(1, "Choose the order date."),
       deliveryDate: z.string().min(1, "Choose the delivery date."),
+      /** The deposit the supplier asked for; blank clears it. */
+      depositRequiredCny: z.string().refine((text) => !text.trim() || isDepositRequired(text), DEPOSIT_REQUIRED_MESSAGE),
       lines: z.array(lineSchema).max(MAX_LINES, "Add at most 50 items."),
     })
     .refine((order) => !order.orderDate || !order.deliveryDate || order.deliveryDate >= order.orderDate, {
@@ -75,6 +79,8 @@ type EditValues = z.infer<ReturnType<typeof editSchema>>;
 function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditable: boolean): UpdateOrderBody {
   const body: UpdateOrderBody = {};
   if (values.deliveryDate !== order.deliveryDate) body.deliveryDate = values.deliveryDate;
+  const depositRequired = values.depositRequiredCny.trim() ? parseNumber(values.depositRequiredCny) : null;
+  if (depositRequired !== order.depositRequiredCny) body.depositRequiredCny = depositRequired;
   if (!linesEditable) return body;
   if (values.orderDate !== order.orderDate) body.orderDate = values.orderDate;
   const lines = values.lines.map(({ lineId, itemId, rateCny, quantity }) => ({
@@ -124,10 +130,11 @@ export function EditOrderDialog({ order, items, open, onClose }: { order: Editab
 function EditOrderForm({ order, items, linesEditable, onClose }: { order: EditableOrder; items: ItemOption[]; linesEditable: boolean; onClose: () => void }) {
   const router = useRouter();
   const { register, control, handleSubmit, setError, formState } = useForm<EditValues>({
-    resolver: zodResolver(editSchema(order.paidCny, linesEditable)),
+    resolver: zodResolver(editSchema(order.supplierPaidCny, linesEditable)),
     defaultValues: {
       orderDate: order.orderDate,
       deliveryDate: order.deliveryDate,
+      depositRequiredCny: order.depositRequiredCny === null ? "" : String(order.depositRequiredCny),
       // Stages 2-5 show the lines read-only, straight from the order.
       lines: linesEditable
         ? order.lines.map((line) => ({ lineId: line.id, itemId: line.item.id, rateCny: String(line.rateCny), quantity: String(line.quantity) }))
@@ -149,7 +156,8 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       // 422: under its field, the first focused; a field this form doesn't show is toasted, never dropped. Anything
       // else (409 without fields, 5xx, network) toasts in handleApiError, and the dialog keeps the values.
       Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) => {
-        if (field === "orderDate" || field === "deliveryDate" || field === "lines") setError(field, { message }, { shouldFocus: index === 0 });
+        if (field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
+          setError(field, { message }, { shouldFocus: index === 0 });
         else notifyError(message);
       });
       return;
@@ -181,6 +189,21 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
           </FieldLabel>
           <Input id="edit-delivery-date" type="date" size="sm" required aria-invalid={!!errors.deliveryDate} {...register("deliveryDate")} />
           <FieldError errors={[errors.deliveryDate]} />
+        </Field>
+        <Field className={fieldClass} data-invalid={!!errors.depositRequiredCny}>
+          <FieldLabel htmlFor="edit-deposit-required" className={labelClass}>
+            Deposit required
+          </FieldLabel>
+          <Input
+            id="edit-deposit-required"
+            size="sm"
+            inputMode="decimal"
+            placeholder="None agreed"
+            className="text-right"
+            aria-invalid={!!errors.depositRequiredCny}
+            {...register("depositRequiredCny")}
+          />
+          <FieldError errors={[errors.depositRequiredCny]} />
         </Field>
       </div>
 
@@ -297,7 +320,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
-        <span className="text-sm leading-4 text-muted-foreground">Paid so far {formatCNY(order.paidCny, { decimals: 2, spaced: true })}</span>
+        <span className="text-sm leading-4 text-muted-foreground">Paid to supplier {formatCNY(order.supplierPaidCny, { decimals: 2, spaced: true })}</span>
         <span className="text-[15px] leading-4">Order total</span>
         <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
           {formatCNY(total, { decimals: 2, spaced: true })}

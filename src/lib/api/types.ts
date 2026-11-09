@@ -183,10 +183,21 @@ export type OrderListItem = {
   orderValueCny: number;
   /** Every paid payment, agent (sea freight) ones included. */
   paidCny: number;
-  /** Paid payments to the supplier only: the Pending tab's payment status and the Closed tab's balance to the supplier read this. */
+  /** Paid payments to the supplier only: balances, payment status and deposit figures read these (phase 2 fixes, 1). */
   supplierPaidCny: number;
+  supplierPaidInr: number;
   paidInr: number;
+  /** The deposit the supplier asked for (0009), in the order's currency; null when none was agreed. */
+  depositRequiredCny: number | null;
+  /** Paid supplier deposits (kind Deposit, payee the supplier). */
+  depositPaidCny: number;
+  /** max(0, required - paid); null without a requirement. */
+  depositPendingCny: number | null;
+  depositStatus: DepositStatus;
 };
+
+/** The order's deposit against what the supplier asked for: none agreed, nothing paid yet, partly paid, or paid in full (more is kept as paid). */
+export type DepositStatus = "none" | "due" | "partly" | "paid";
 
 /** ORD-2 GET /api/v1/orders/options */
 export type OrderOptions = {
@@ -209,6 +220,8 @@ export type CreateOrderBody = {
   orderDate: string;
   deliveryDate: string;
   lines: { itemId: string; quantity: number; rateCny: number }[];
+  /** The deposit the supplier asked for, 0.01 to 999,999,999,999 with at most 2 decimals; left out, none. */
+  depositRequiredCny?: number;
   /** `rateInr` is left out for an INR order (the server stores 1). `reference` (transaction number, up to 100) and `notes` (up to 1,000) are optional. */
   deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
 };
@@ -223,6 +236,8 @@ export type UpdateOrderBody = {
   orderDate?: string;
   deliveryDate?: string;
   lines?: { id?: string; itemId: string; quantity: number; rateCny: number }[];
+  /** The deposit the supplier asked for; null clears it. Allowed until the warehouse (stage 6), like the delivery date. */
+  depositRequiredCny?: number | null;
 };
 export type UpdateOrderResponse = { order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string } };
 // ORD-6 DELETE /api/v1/orders/:po (admin Full) and USR-5 DELETE /api/v1/users/:id (admin Full) answer 204 with no body;
@@ -250,9 +265,18 @@ export type PaymentsResponse = {
     supplier: string;
     currency: Currency;
     orderValueCny: number;
+    /** Every paid payment, agents (sea freight) included. */
     paidCny: number;
     paidInr: number;
+    /** Paid to the supplier only. */
+    supplierPaidCny: number;
+    supplierPaidInr: number;
+    /** What the supplier is still owed: order value less supplier payments (phase 2 fixes, 1). */
     balanceCny: number;
+    depositRequiredCny: number | null;
+    depositPaidCny: number;
+    depositPendingCny: number | null;
+    depositStatus: DepositStatus;
     /** Earliest due payment, or null ("Not yet due"). */
     nextDue: string | null;
   }[];
@@ -386,8 +410,8 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
     received: number;
     loaded: number;
   }[];
-  /** In the order's `currency`. */
-  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency">[] | null;
+  /** In the order's `currency`. `amountInr`: at the payment's own rate, rounded in SQL like every total; null while due. */
+  payments: (Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency"> & { amountInr: number | null })[] | null;
   receipts:
     | {
         id: string;
@@ -461,7 +485,8 @@ export type UpdateContainerResponse = { container: { id: string; status: Contain
 // Notifications (docs/notifications-contract.md, NTF-1 to NTF-4): only ever the caller's own.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type NotificationKind = "short-receipt" | "payment-recorded" | "container-loaded" | "container-sailed" | "container-arrived";
+/** "warehouse-receipt-deleted" (0009): the audit trail of a deleted warehouse receipt, the only way a received order reopens. */
+export type NotificationKind = "short-receipt" | "payment-recorded" | "container-loaded" | "container-sailed" | "container-arrived" | "warehouse-receipt-deleted";
 
 export type Notification = {
   id: string;

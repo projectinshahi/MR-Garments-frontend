@@ -88,7 +88,7 @@ test("search, stage and supplier filters narrow the rows, with an empty state", 
   await expect(rowOf(page, order.po)).toBeVisible();
 });
 
-test("status chips: Late, Due soon, Short received and Completed, with their counts", async ({ page, api }) => {
+test("status chips: Late, Due soon, Short received and Closed, with their counts", async ({ page, api }) => {
   const late = await api.createOrder({ orderDate: today(-20), deliveryDate: today(-3) });
   const dueSoon = await api.createOrder({ deliveryDate: today(3) });
   const dueToday = await api.createOrder({ deliveryDate: today() });
@@ -130,13 +130,13 @@ test("status chips: Late, Due soon, Short received and Completed, with their cou
     await search(page).fill("");
   }
 
-  // Nothing reaches stage 6 (India warehouse) in this batch.
-  await chips(page).getByRole("button", { name: "Completed" }).click();
+  // Nothing is closed (every carrier stocked in India) in this batch.
+  await chips(page).getByRole("button", { name: "Closed" }).click();
   await expect(table(page).getByText(EMPTY)).toBeVisible();
   const all = chips(page).getByRole("button", { name: /^All \d+$/ });
   await all.click();
   await expect(all).toHaveAttribute("aria-pressed", "true");
-  await expect(chips(page).getByRole("button", { name: "Completed" })).toHaveAttribute("aria-pressed", "false");
+  await expect(chips(page).getByRole("button", { name: "Closed" })).toHaveAttribute("aria-pressed", "false");
 });
 
 test("the pager shows 10 orders a page, with page, previous and next buttons", async ({ page, api }) => {

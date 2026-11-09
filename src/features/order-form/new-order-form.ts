@@ -15,6 +15,9 @@ export const SUPPLIER_PAYEE = "supplier";
 
 const isWhole = (text: string) => Number.isInteger(parseNumber(text)) && parseNumber(text) > 0;
 const isPositive = (text: string) => parseNumber(text) > 0;
+/** ORD-3/ORD-5's deposit requirement: above 0, up to 999,999,999,999, at most 2 decimals (commas allowed as typed). */
+export const isDepositRequired = (text: string) => /^\d{1,12}(\.\d{1,2})?$/.test(text.replace(/,/g, "").trim()) && isPositive(text);
+export const DEPOSIT_REQUIRED_MESSAGE = "Enter the deposit the supplier asked for: above 0, with at most 2 decimals.";
 const issue = (ctx: z.RefinementCtx, path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
 
 export const isBlankLine = (line: { itemId: string; rateCny: string; quantity: string }) =>
@@ -52,6 +55,8 @@ export const newOrderSchema = z
       .refine((lines) => lines.some((line) => !isBlankLine(line)), "Add at least one item.")
       .refine((lines) => lines.filter((line) => !isBlankLine(line)).length <= 50, "Add at most 50 items."),
     deposits: z.array(depositSchema).refine((deposits) => deposits.filter((d) => !isBlankDeposit(d)).length <= 10, "Add at most 10 deposits."),
+    /** The deposit the supplier asked for, in the order's currency; blank when none was agreed. */
+    depositRequiredCny: z.string().refine((text) => !text.trim() || isDepositRequired(text), DEPOSIT_REQUIRED_MESSAGE),
   })
   .refine((order) => !order.orderDate || !order.deliveryDate || order.deliveryDate >= order.orderDate, {
     path: ["deliveryDate"],
@@ -85,6 +90,7 @@ export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOpt
     currency: values.currency,
     orderDate: values.orderDate,
     deliveryDate: values.deliveryDate,
+    ...(values.depositRequiredCny.trim() ? { depositRequiredCny: parseNumber(values.depositRequiredCny) } : {}),
     lines: values.lines
       .filter((line) => !isBlankLine(line))
       .map((line) => ({ itemId: line.itemId, quantity: parseNumber(line.quantity), rateCny: parseNumber(line.rateCny) })),

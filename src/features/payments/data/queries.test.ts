@@ -20,7 +20,13 @@ const order = (po: string, over: Partial<Order> = {}): Order => ({
   orderValueCny: 10_000,
   paidCny: 4_000,
   paidInr: 48_000,
+  supplierPaidCny: 4_000,
+  supplierPaidInr: 48_000,
   balanceCny: 6_000,
+  depositRequiredCny: null,
+  depositPaidCny: 0,
+  depositPendingCny: null,
+  depositStatus: "none",
   nextDue: null,
   ...over,
 });
@@ -118,11 +124,25 @@ describe("toPaymentsData", () => {
       orderValue: 10_000,
       paid: 4_000,
       paidInr: 48_000,
+      supplierPaid: 4_000,
+      supplierPaidInr: 48_000,
       balance: 6_000,
+      depositRequired: null,
+      depositPaid: 0,
+      depositPending: null,
+      depositStatus: "none",
       nextDue: "2026-11-09",
       nextDueTone: "danger",
     });
     expect(orders.map((o) => o.nextDueTone)).toEqual(["danger", "warning", undefined, undefined]);
+  });
+
+  it("keeps the supplier's figures apart from every payee's, and the deposit the supplier asked for", () => {
+    const { orders } = toPaymentsData(
+      { orders: [order("PO-3001", { paidCny: 4_500, paidInr: 54_000, depositRequiredCny: 1_000, depositPaidCny: 400, depositPendingCny: 600, depositStatus: "partly" })], payments: [] },
+      today,
+    );
+    expect(orders[0]).toMatchObject({ paid: 4_500, paidInr: 54_000, supplierPaid: 4_000, supplierPaidInr: 48_000, balance: 6_000, depositRequired: 1_000, depositPaid: 400, depositPending: 600, depositStatus: "partly" });
   });
 
   it("selects the first order that has payments, else the first order, else none", () => {

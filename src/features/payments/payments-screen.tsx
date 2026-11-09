@@ -25,7 +25,8 @@ export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
             size="xs"
             label="Paid so far (INR)"
             value={formatINR(kpis.paidSoFarInr)}
-            sub={`across ${plural(kpis.paidOrders, "order")}`}
+            // Every payee (phase 2 fixes, 1): agent payments are sea freight, but they left the company for the order.
+            sub={`across ${plural(kpis.paidOrders, "order")} · all payees`}
           />
           {/* Due payments have no INR rate until paid (PAY-1): each currency's amount, never added together. */}
           <KpiCard size="xs" label="Due in next 7 days" value={formatMoneyList(kpis.dueNext7.amounts)} sub={dueSub(kpis.dueNext7)} />

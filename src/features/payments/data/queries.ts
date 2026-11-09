@@ -2,7 +2,7 @@ import { addDays, format, parseISO } from "date-fns";
 
 import { canOpen, hasAccess } from "@/config/navigation";
 import { apiGet } from "@/lib/api/server";
-import type { OrderOptions, PaymentsResponse } from "@/lib/api/types";
+import type { DepositStatus, OrderOptions, PaymentsResponse } from "@/lib/api/types";
 import { getMe } from "@/lib/session";
 import { sumByCurrency } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
@@ -20,10 +20,20 @@ export type OrderPaymentRow = {
   /** The order's: orderValue, paid and balance are in it. */
   currency: Currency;
   orderValue: number;
+  /** Every paid payment, agents (sea freight) included. */
   paid: number;
-  /** INR, each payment at the rate of its own date */
+  /** INR, each payment at the rate of its own date; every payee. */
   paidInr: number;
+  /** Paid to the supplier only (phase 2 fixes, 1): the balance is the order value less this. */
+  supplierPaid: number;
+  supplierPaidInr: number;
+  /** What the supplier is still owed. */
   balance: number;
+  /** The deposit the supplier asked for (0009): null when none was agreed; pending = max(0, required - paid). */
+  depositRequired: number | null;
+  depositPaid: number;
+  depositPending: number | null;
+  depositStatus: DepositStatus;
   /** YYYY-MM-DD, the earliest due payment; null shows "Not yet due". */
   nextDue: string | null;
   /** danger when overdue, warning when due within 7 days. */
@@ -76,7 +86,13 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
       orderValue: o.orderValueCny,
       paid: o.paidCny,
       paidInr: o.paidInr,
+      supplierPaid: o.supplierPaidCny,
+      supplierPaidInr: o.supplierPaidInr,
       balance: o.balanceCny,
+      depositRequired: o.depositRequiredCny,
+      depositPaid: o.depositPaidCny,
+      depositPending: o.depositPendingCny,
+      depositStatus: o.depositStatus,
       nextDue: o.nextDue,
       nextDueTone: dueTone(o.nextDue, today),
     }),
