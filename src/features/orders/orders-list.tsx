@@ -11,23 +11,29 @@ import { orderHref, PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 import { STAGES } from "@/types/domain";
 
 import type { OrderRow, OrdersListData } from "./data/queries";
 import { DeleteOrderButton, rowActionClass } from "./delete-order";
 import { filterOrders, type OrderChip } from "./filter-orders";
+import { describeFilters, ordersFile } from "./order-files";
 import { isEditableStage } from "./order-permissions";
+import { stageLabel } from "./order-status";
+import { OrdersFrame } from "./orders-frame";
 
 const ALL = "all";
 const PAGE_SIZE = 10;
 
 const STAGE_OPTIONS: FilterOption[] = [
   { value: ALL, label: "All stages" },
-  ...STAGES.map((name, index) => ({ value: String(index + 1), label: `${index + 1}. ${name}` })),
+  ...STAGES.map((_, index) => ({ value: String(index + 1), label: stageLabel(index + 1) })),
 ];
+// The chips without their counts, for the export filters line.
+const CHIP_TITLE: Record<OrderChip, string> = { all: "All", late: "Late", dueSoon: "Due soon", shortReceived: "Short received", completed: "Completed" };
 
 // The row opens the order too; the link keeps it keyboard-reachable. Stopping its click avoids a second navigation.
-function PoCell({ order }: { order: OrderRow }) {
+export function PoCell({ order }: { order: OrderRow }) {
   return (
     <span onClick={(event) => event.stopPropagation()}>
       <PoLink po={order.po} linked />
@@ -93,8 +99,8 @@ function actionsColumn(canEdit: boolean, canDelete: boolean): ColumnDef<OrderRow
 }
 
 /**
- * Filter row and the orders table. Every order is loaded; filters and pages run on the client. `canEdit` and
- * `canDelete` (D1, decided on the server) add the row actions.
+ * The All orders tab: header and tabs (OrdersFrame), filter row and the orders table. Every order is loaded; filters
+ * and pages run on the client. `canEdit` and `canDelete` (D1, decided on the server) add the row actions.
  */
 export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }: OrdersListData & { canEdit: boolean; canDelete: boolean }) {
   const navigate = useNavigate();
@@ -120,44 +126,58 @@ export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }
     chip,
   };
   const rows = filterOrders(orders, filters);
+  // Phase 2 §6: the export holds these rows, as filtered, built on click.
+  const file = () =>
+    ordersFile(
+      rows,
+      describeFilters([
+        query.trim() && `Search: "${query.trim()}"`,
+        filters.stage !== null && `Stage: ${stageLabel(filters.stage)}`,
+        filters.supplier && `Supplier: ${filters.supplier}`,
+        chip !== "all" && `Status: ${CHIP_TITLE[chip]}`,
+      ]),
+      todayInIndia(),
+    );
 
   return (
-    // 16 px between the filter row and the table in the reference (the page gap is 18).
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchInput
-          label="Search PO, item or supplier"
-          placeholder="Search PO, item or supplier"
-          value={query}
-          onValueChange={setQuery}
-          // 290 px as in the reference, shrinking (down to 200 px) before the chips wrap: the shared selects and chips
-          // are wider than in the reference.
-          className="w-full sm:w-auto sm:max-w-[290px] sm:flex-[1_1_200px]"
-        />
-        <FilterSelect label="Stage" showLabel size="sm" value={stage} options={STAGE_OPTIONS} onValueChange={setStage} />
-        <FilterSelect label="Supplier" showLabel size="sm" value={supplier} options={supplierOptions} onValueChange={setSupplier} />
-        <FilterChips
-          label="Order status"
+    <OrdersFrame canEdit={canEdit} file={file}>
+      {/* 16 px between the filter row and the table in the reference (the page gap is 18). */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            label="Search PO, item or supplier"
+            placeholder="Search PO, item or supplier"
+            value={query}
+            onValueChange={setQuery}
+            // 290 px as in the reference, shrinking (down to 200 px) before the chips wrap: the shared selects and chips
+            // are wider than in the reference.
+            className="w-full sm:w-auto sm:max-w-[290px] sm:flex-[1_1_200px]"
+          />
+          <FilterSelect label="Stage" showLabel size="sm" value={stage} options={STAGE_OPTIONS} onValueChange={setStage} />
+          <FilterSelect label="Supplier" showLabel size="sm" value={supplier} options={supplierOptions} onValueChange={setSupplier} />
+          <FilterChips
+            label="Order status"
+            size="sm"
+            options={chips}
+            value={chip}
+            onValueChange={(value) => setChip(chips.find((c) => c.value === value)?.value ?? "all")}
+            className="ml-auto"
+          />
+        </div>
+        <DataTable
+          // Remount on a filter change so the pager returns to page 1.
+          key={JSON.stringify(filters)}
+          columns={tableColumns}
+          data={rows}
+          getRowId={(order) => order.po}
+          density="tall"
           size="sm"
-          options={chips}
-          value={chip}
-          onValueChange={(value) => setChip(chips.find((c) => c.value === value)?.value ?? "all")}
-          className="ml-auto"
+          header="tall"
+          onRowClick={(order) => navigate(orderHref(order.po))}
+          emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
+          pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
         />
       </div>
-      <DataTable
-        // Remount on a filter change so the pager returns to page 1.
-        key={JSON.stringify(filters)}
-        columns={tableColumns}
-        data={rows}
-        getRowId={(order) => order.po}
-        density="tall"
-        size="sm"
-        header="tall"
-        onRowClick={(order) => navigate(orderHref(order.po))}
-        emptyState={orders.length === 0 ? "No orders yet." : "No orders match these filters."}
-        pagination={{ pageSize: PAGE_SIZE, itemLabel: "orders" }}
-      />
-    </div>
+    </OrdersFrame>
   );
 }

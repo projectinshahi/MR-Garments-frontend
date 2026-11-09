@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { orderStatus } from "./order-status";
+import { orderStatus, stageLabel } from "./order-status";
 
 const TODAY = "2026-10-27";
 type Facts = Parameters<typeof orderStatus>[0];
-const order: Facts = { stage: 1, deliveryDate: "2026-11-20", quantity: 2400, received: 0, unit: "m" };
+const order: Facts = { stage: 1, deliveryDate: "2026-11-20", quantity: 2400, received: 0, unit: "m", closed: false };
 const status = (patch: Partial<Facts>) => orderStatus({ ...order, ...patch }, TODAY);
 
 describe("orderStatus", () => {
@@ -12,6 +12,11 @@ describe("orderStatus", () => {
     expect(status({ stage: 4, deliveryDate: "2026-01-01" })).toEqual({ label: "In clearing", tone: "info", chip: null });
     expect(status({ stage: 5 })).toEqual({ label: "On the road", tone: "info", chip: null });
     expect(status({ stage: 6 })).toEqual({ label: "Received", tone: "success", chip: null });
+  });
+
+  it("is Closed once every carrier is stocked (phase 2 §1); a stage-6 order still waiting keeps Received", () => {
+    expect(status({ stage: 6, closed: true, deliveryDate: "2026-01-01" })).toEqual({ label: "Closed", tone: "success", chip: null });
+    expect(status({ stage: 6, closed: false })).toMatchObject({ label: "Received" });
   });
 
   it("shows a short stage-3 order by the missing quantity, and a full one by its dates", () => {
@@ -33,5 +38,10 @@ describe("orderStatus", () => {
     expect(status({ deliveryDate: "2026-10-28" })).toMatchObject({ label: "Due in 1 day", chip: "dueSoon" });
     expect(status({ deliveryDate: "2026-11-03" })).toMatchObject({ label: "Due in 7 days", chip: "dueSoon" });
     expect(status({ deliveryDate: "2026-11-04" })).toEqual({ label: "On track", tone: "success", chip: null });
+  });
+
+  it("names a stage with its number, as the Stage filter does", () => {
+    expect(stageLabel(1)).toBe("1. Order and deposit");
+    expect(stageLabel(6)).toBe("6. India warehouse");
   });
 });

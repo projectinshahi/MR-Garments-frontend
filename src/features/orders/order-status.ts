@@ -1,7 +1,7 @@
 import { differenceInCalendarDays, parseISO } from "date-fns";
 
 import type { OrderListItem } from "@/lib/api/types";
-import type { Tone } from "@/types/domain";
+import { STAGES, type Tone } from "@/types/domain";
 
 /** The chip an order counts under (Completed is stage 6, checked separately). */
 export type StatusChip = "late" | "dueSoon" | "shortReceived" | null;
@@ -10,11 +10,17 @@ export type OrderStatus = { label: string; tone: Tone; chip: StatusChip };
 const DUE_SOON_DAYS = 7;
 const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 
+/** "1. Order and deposit": a stage as the Stage filter and the Pending list name it. */
+export const stageLabel = (stage: number) => `${stage}. ${STAGES[stage - 1]}`;
+
 /** Status label, tone and chip of an order (docs/live-screens-contracts.md, "Order status"); `today` is YYYY-MM-DD in India. */
 export function orderStatus(
-  order: Pick<OrderListItem, "stage" | "deliveryDate" | "quantity" | "received" | "unit">,
+  // `closed` is optional: the supplier statement (PSUP-2) has no closure flag, so its stage-6 orders stay "Received".
+  order: Pick<OrderListItem, "stage" | "deliveryDate" | "quantity" | "received" | "unit"> & Partial<Pick<OrderListItem, "closed">>,
   today: string,
 ): OrderStatus {
+  // Phase 2 §1: closed = stage 6 with every carrier stocked; a stage-6 order still waiting for a warehouse keeps "Received".
+  if (order.closed) return { label: "Closed", tone: "success", chip: null };
   if (order.stage === 4) return { label: "In clearing", tone: "info", chip: null };
   if (order.stage === 5) return { label: "On the road", tone: "info", chip: null };
   if (order.stage === 6) return { label: "Received", tone: "success", chip: null };
