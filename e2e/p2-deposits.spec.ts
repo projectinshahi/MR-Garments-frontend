@@ -28,8 +28,11 @@ test("Scenario 6: an order's partial deposit shows as Paid on the Deposits page,
   await expect(row).toContainText("Order deposit");
   await expect(row).toContainText(cny(300));
   await expect(row.getByText("Paid", { exact: true })).toBeVisible();
-  await expect(kpi(page, "Total pending")).toContainText(cny(0));
-  await expect(kpi(page, "Deposit count")).toContainText("1");
+  // Payables only: the ¥300 deposit is paid, nothing pending, nothing to receive.
+  await expect(kpi(page, "Deposits to pay")).toContainText(`${cny(300)}1 deposit`);
+  await expect(kpi(page, "Paid")).toContainText(cny(300));
+  await expect(kpi(page, "Pending to pay")).toContainText(cny(0));
+  await expect(kpi(page, "To receive")).toContainText("0 deposits");
 
   await page.getByRole("link", { name: "Paid" }).click();
   await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
@@ -112,4 +115,13 @@ test("Scenario 7: a deposit to give with a partial payment and one to receive wi
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Excel" }).click();
   expect((await download).suggestedFilename()).toMatch(/^supplier-deposits-deposit-test-\d{6}-\d{4}-\d{2}-\d{2}\.xlsx$/);
+
+  // Leave nothing behind (the Suppliers tab pages by 10): each transaction (SD-4), each deposit (SD-5), then the supplier.
+  const statement = await api.get<{ deposits: { id: string; transactions: { id: string }[] }[] }>(`/suppliers/${supplier.id}/deposits`);
+  const remove = async (path: string) => expect((await api.request.delete(`/api/v1${path}`, { data: {} })).status(), path).toBe(204);
+  for (const deposit of statement.deposits) {
+    for (const transaction of deposit.transactions) await remove(`/supplier-deposit-transactions/${transaction.id}`);
+    await remove(`/supplier-deposits/${deposit.id}`);
+  }
+  await remove(`/suppliers/${supplier.id}`);
 });

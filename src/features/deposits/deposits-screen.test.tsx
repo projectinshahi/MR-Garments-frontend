@@ -22,7 +22,7 @@ vi.mock("@/lib/api/client", () => ({ apiClient: { post: vi.fn(), delete: vi.fn()
 
 const api: DepositsResponse = {
   orderDeposits: [
-    { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half", },
+    { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", payeeRole: "agent", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half" },
   ],
   supplierDeposits: [
     { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
@@ -52,11 +52,17 @@ describe("DepositsScreen", () => {
     expect(within(rows[1]!).getByText("Partly settled")).toBeInTheDocument();
     expect(within(rows[1]!).getByRole("link", { name: "Details" })).toHaveAttribute("href", "/deposits/suppliers/s1");
     expect(rows[2]).toHaveTextContent("To give");
-    // ¥300 + ¥500 and $1,000; paid ¥300 + ¥100; pending ¥400 and $1,000.
-    expect(kpi("Total deposits")).toHaveTextContent("¥800 · $1,000");
-    expect(kpi("Total paid / settled")).toHaveTextContent("¥400");
-    expect(kpi("Total pending")).toHaveTextContent("¥400 · $1,000");
-    expect(kpi("Deposit count")).toHaveTextContent("3");
+    // "Paid to" names who was paid: the agent for the order deposit, the supplier for a deposit to give, nothing for one to receive.
+    expect(within(rows[0]!).getAllByRole("cell")[3]).toHaveTextContent("Sino Freight");
+    expect(within(rows[1]!).getAllByRole("cell")[3]).toHaveTextContent("–");
+    expect(within(rows[2]!).getAllByRole("cell")[3]).toHaveTextContent("Hangzhou Knits");
+    // Payables: the ¥300 order deposit and the $1,000 to give (paid ¥300; pending $1,000). Receivables: ¥500, ¥100 received, ¥400 pending.
+    expect(kpi("Deposits to pay")).toHaveTextContent("¥300 · $1,000");
+    expect(kpi("Deposits to pay")!.nextSibling).toHaveTextContent("2 deposits");
+    expect(kpi("Paid")).toHaveTextContent("¥300");
+    expect(kpi("Pending to pay")).toHaveTextContent("$1,000");
+    expect(kpi("To receive")).toHaveTextContent("¥400");
+    expect(kpi("To receive")!.nextSibling).toHaveTextContent("received ¥100 of ¥500 · 1 deposit");
     expect(screen.getByRole("button", { name: "Export Excel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
   });
@@ -65,7 +71,8 @@ describe("DepositsScreen", () => {
     const user = userEvent.setup();
     const pending = render(<DepositsScreen data={data()} view="pending" />);
     expect(rowsOf(screen.getByRole("table")).map((row) => row.textContent)).toEqual([expect.stringContaining("To receive"), expect.stringContaining("To give")]);
-    expect(kpi("Total pending")).toHaveTextContent("¥400 · $1,000");
+    expect(kpi("Pending to pay")).toHaveTextContent("$1,000");
+    expect(kpi("To receive")).toHaveTextContent("¥400");
     pending.unmount();
 
     render(<DepositsScreen data={data()} view="paid" />);
@@ -73,7 +80,8 @@ describe("DepositsScreen", () => {
     expect(screen.getByRole("table")).toHaveTextContent("PO-3001");
     await user.type(screen.getByRole("searchbox", { name: "Search PO" }), "9999");
     expect(screen.getByText("No deposits match these filters.")).toBeInTheDocument();
-    expect(kpi("Deposit count")).toHaveTextContent("0");
+    expect(kpi("Deposits to pay")).toHaveTextContent("¥0");
+    expect(kpi("Deposits to pay")!.nextSibling).toHaveTextContent("0 deposits");
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(rowsOf(screen.getByRole("table"))).toHaveLength(1);
   });
@@ -86,14 +94,26 @@ describe("DepositsScreen", () => {
     expect(cells(rows[0]!)).toEqual(["Foshan Fabrics", "–", "–", "–", "¥500", "¥100", "¥400", "Statement"]);
     expect(cells(rows[1]!)).toEqual(["Hangzhou Knits", "$1,000", "$0", "$1,000", "–", "–", "–", "Statement"]);
     expect(within(rows[0]!).getByRole("link", { name: "Statement of Foshan Fabrics" })).toHaveAttribute("href", "/deposits/suppliers/s1");
-    expect(kpi("Deposit count")).toHaveTextContent("2");
+    // Supplier deposits only: the $1,000 to give, and the ¥500 to receive.
+    expect(kpi("Deposits to pay")).toHaveTextContent("$1,000");
+    expect(kpi("Deposits to pay")!.nextSibling).toHaveTextContent("1 deposit");
+    expect(kpi("To receive")!.nextSibling).toHaveTextContent("received ¥100 of ¥500 · 1 deposit");
     expect(screen.queryByRole("searchbox", { name: "Search PO" })).not.toBeInTheDocument();
   });
 
   it("says there are none yet when the API returns nothing", () => {
     render(<DepositsScreen data={data({ rows: [] })} view="all" />);
     expect(screen.getByText("No deposits yet.")).toBeInTheDocument();
-    expect(kpi("Total deposits")).toHaveTextContent("¥0");
+    expect(kpi("Deposits to pay")).toHaveTextContent("¥0");
+    expect(kpi("To receive")!.nextSibling).toHaveTextContent("received ¥0 of ¥0 · 0 deposits");
+  });
+
+  it("without Orders access, an order deposit's PO is plain text and the row has no Details link; statement links stay", () => {
+    render(<DepositsScreen data={data({ rows: toRows(api, false), linkPo: false })} view="all" />);
+    const rows = rowsOf(screen.getByRole("table"));
+    expect(within(rows[0]!).queryByRole("link")).not.toBeInTheDocument();
+    expect(rows[0]).toHaveTextContent("PO-3001");
+    expect(within(rows[1]!).getByRole("link", { name: "Details" })).toHaveAttribute("href", "/deposits/suppliers/s1");
   });
 });
 

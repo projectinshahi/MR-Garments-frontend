@@ -26,9 +26,12 @@ const row: SupplierRow = {
 };
 
 describe("Settings > Suppliers row actions", () => {
-  it("adds a Deposits link to the supplier's statement next to the unchanged Edit and Delete", () => {
+  it("adds a Deposits link to the supplier's statement in the actions cell, before the unchanged Edit and Delete", () => {
     render(<SuppliersScreen suppliers={[row]} draft={structuredClone(supplierDraft)} />);
     const line = screen.getByRole("row", { name: /ABC Textiles/ });
+    const cells = within(line).getAllByRole("cell");
+    expect(cells.at(-1)).toHaveTextContent(/^DepositsEditDelete$/);
+    expect(cells.at(-2)).toHaveTextContent("Active");
     expect(within(line).getByRole("link", { name: "Deposits of ABC Textiles" })).toHaveAttribute("href", "/deposits/suppliers/s-1");
     expect(within(line).getByRole("link", { name: "Edit ABC Textiles" })).toHaveAttribute("href", "/settings/suppliers?dialog=edit&id=s-1");
     expect(within(line).getByRole("button", { name: /^Delete/ })).toBeInTheDocument();

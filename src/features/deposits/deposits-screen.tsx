@@ -15,12 +15,13 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
 import { rowActionClass } from "@/features/orders/delete-order";
 import { ExportActions } from "@/features/reports/report-actions";
-import { formatMoneyList, formatNumber, formatShortDate } from "@/lib/formatters";
+import { formatNumber, formatShortDate } from "@/lib/formatters";
 import { type Currency, CURRENCIES, type MoneyTotal } from "@/types/domain";
 
 import type { DepositsData } from "./data/queries";
 import { depositsFile, filterLabel, suppliersFile } from "./deposit-files";
 import {
+  amountList,
   amountText,
   type DepositFilters,
   type DepositKind,
@@ -37,6 +38,7 @@ import {
   supplierSummaries,
   type SupplierSummary,
   totals,
+  VIEW_STATUSES,
 } from "./deposits-logic";
 
 // Deposits (docs/phase2-contracts.md 3.3), no reference design: the list pages' parts (header, RouteTabs, filter row,
@@ -51,14 +53,15 @@ const TABS: RouteTab[] = [
 const ALL = "all";
 const PAGE_SIZE = 10;
 const option = <T extends string>(value: T, label: string): FilterOption => ({ value, label });
-const STATUS_OPTIONS = [option(ALL, "All statuses"), ...(Object.keys(STATUS_LABEL) as DepositStatus[]).map((s) => option(s, STATUS_LABEL[s]))];
+const statusOptions = (statuses: DepositStatus[]) => [option(ALL, "All statuses"), ...statuses.map((s) => option(s, STATUS_LABEL[s]))];
 const CURRENCY_OPTIONS = [option(ALL, "All currencies"), ...CURRENCIES.map((c) => option(c, c))];
 const KIND_OPTIONS = [option(ALL, "All kinds"), ...(Object.keys(KIND_LABEL) as DepositKind[]).map((k) => option(k, KIND_LABEL[k]))];
+const plural = (count: number, noun: string) => `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 
-/** "¥1,000 · $200", or "–" when there is nothing (a supplier with no deposits in a direction). */
-const list = (amounts: MoneyTotal[]) => (amounts.length ? formatMoneyList(amounts) : "–");
+/** Per currency, or "–" when there is nothing (a supplier with no deposits in a direction). */
+const list = (amounts: MoneyTotal[]) => (amounts.length ? amountList(amounts) : "–");
 
-// Columns: supplier, PO when applicable, kind, amount, currency, paid/settled, pending, date, mode, reference, notes, status.
+// Columns: supplier, PO when applicable, kind, paid to, amount, currency, paid/settled, pending, date, mode, reference, notes, status.
 function depositColumns(linkPo: boolean): ColumnDef<DepositRow>[] {
   const money = (pick: (row: DepositRow) => number) => ({ row }: { row: { original: DepositRow } }) => amountText(pick(row.original), row.original.currency);
   return [
@@ -76,6 +79,7 @@ function depositColumns(linkPo: boolean): ColumnDef<DepositRow>[] {
         ),
     },
     { accessorKey: "kind", header: "Kind", cell: ({ row }) => KIND_LABEL[row.original.kind] },
+    { accessorKey: "payee", header: "Paid to", cell: ({ row }) => row.original.payee || "–" },
     { accessorKey: "amount", header: "Amount", meta: { align: "right" }, cell: money((r) => r.amount) },
     { accessorKey: "currency", header: "Currency" },
     { accessorKey: "paid", header: "Paid / settled", meta: { align: "right" }, cell: money((r) => r.paid) },
@@ -94,11 +98,13 @@ function depositColumns(linkPo: boolean): ColumnDef<DepositRow>[] {
       id: "details",
       header: () => <span className="sr-only">Details</span>,
       meta: { className: "w-px whitespace-nowrap" },
-      cell: ({ row }) => (
-        <Link href={row.original.href} className={rowActionClass} onClick={(event) => event.stopPropagation()}>
-          Details
-        </Link>
-      ),
+      // None for an order deposit when the user can't open orders (href null), as PoLink stays plain text.
+      cell: ({ row }) =>
+        row.original.href ? (
+          <Link href={row.original.href} className={rowActionClass} onClick={(event) => event.stopPropagation()}>
+            Details
+          </Link>
+        ) : null,
     },
   ];
 }
@@ -139,7 +145,7 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
   const scoped = data.rows.filter((row) => (view === "suppliers" ? row.kind !== "order" : inView(row, view)));
   const rows = filterDeposits(scoped, filters);
   const summaries = view === "suppliers" ? supplierSummaries(rows) : [];
-  const figures = totals(rows);
+  const { pay, receive } = totals(rows);
   const supplierOptions = [option(ALL, "All suppliers"), ...data.suppliers.map((s) => option(s.id, s.name))];
   const label = filterLabel(filters, data.suppliers);
   const empty = scoped.length === 0 ? (view === "pending" ? "No pending deposits." : view === "paid" ? "No paid deposits." : "No deposits yet.") : "No deposits match these filters.";
@@ -172,7 +178,7 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
           </label>
           <Input id={`${id}-to`} type="date" size="sm" className={DATE_INPUT} value={filters.to} min={filters.from || undefined} onChange={(e) => set("to")(e.target.value)} />
           {view === "suppliers" ? null : (
-            <FilterSelect label="Status" size="sm" value={filters.status ?? ALL} options={STATUS_OPTIONS} onValueChange={fromSelect(set("status"))} />
+            <FilterSelect label="Status" size="sm" value={filters.status ?? ALL} options={statusOptions(VIEW_STATUSES[view])} onValueChange={fromSelect(set("status"))} />
           )}
           <FilterSelect label="Currency" size="sm" value={filters.currency ?? ALL} options={CURRENCY_OPTIONS} onValueChange={fromSelect<Currency>(set("currency"))} />
           <FilterSelect
@@ -188,12 +194,18 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
             </button>
           ) : null}
         </div>
-        {/* Each figure per currency, from the rows shown; amounts in different currencies are never added together. */}
+        {/* Payables (order deposits and deposits to give) and receivables apart, never netted; each figure per currency,
+            from the rows shown; amounts in different currencies are never added together. */}
         <KpiRow gap="sm">
-          <KpiCard size="xs" label="Total deposits" value={formatMoneyList(figures.amount)} sub={view === "suppliers" ? "supplier deposits" : "as filtered"} />
-          <KpiCard size="xs" label="Total paid / settled" value={formatMoneyList(figures.paid)} sub="paid, or received for deposits to receive" />
-          <KpiCard size="xs" label="Total pending" value={formatMoneyList(figures.pending)} sub="still to pay or receive" />
-          <KpiCard size="xs" label="Deposit count" value={formatNumber(figures.count)} sub={view === "suppliers" ? `${formatNumber(summaries.length)} supplier${summaries.length === 1 ? "" : "s"}` : "shown"} />
+          <KpiCard size="xs" label="Deposits to pay" value={amountList(pay.amount)} sub={plural(pay.count, "deposit")} />
+          <KpiCard size="xs" label="Paid" value={amountList(pay.paid)} sub="of deposits to pay" />
+          <KpiCard size="xs" label="Pending to pay" value={amountList(pay.pending)} sub="due order deposits and deposits to give" />
+          <KpiCard
+            size="xs"
+            label="To receive"
+            value={amountList(receive.pending)}
+            sub={`received ${amountList(receive.paid)} of ${amountList(receive.amount)} · ${plural(receive.count, "deposit")}`}
+          />
         </KpiRow>
         {view === "suppliers" ? (
           <DataTable
@@ -216,7 +228,7 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
             getRowId={(row) => row.id}
             size="sm"
             header="tall"
-            onRowClick={(row) => navigate(row.href)}
+            onRowClick={(row) => (row.href ? navigate(row.href) : undefined)}
             emptyState={empty}
             pagination={{ pageSize: PAGE_SIZE, itemLabel: "deposits" }}
           />

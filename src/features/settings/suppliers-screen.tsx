@@ -21,18 +21,14 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "city", header: "City" },
   { accessorKey: "currency", header: "Currency", cell: ({ row }) => CURRENCY_SYMBOL[row.original.currency] },
   { accessorKey: "openOrders", header: "Open orders", meta: right },
-  {
-    id: "deposits",
-    header: () => <span className="sr-only">Deposits</span>,
-    meta: { className: "w-px whitespace-nowrap" },
-    // The supplier's deposit statement (docs/phase2-contracts.md 3.3), as a text link like Edit.
-    cell: ({ row }) => (
-      <Link href={statementHref(row.original.id)} aria-label={`Deposits of ${row.original.name}`} className={rowActionClass}>
-        Deposits
-      </Link>
-    ),
-  },
 ];
+
+/** The supplier's deposit statement (docs/phase2-contracts.md 3.3): a text action before Edit, as Edit is drawn. */
+const depositsLink = (row: SupplierRow) => (
+  <Link href={statementHref(row.id)} aria-label={`Deposits of ${row.name}`} className={rowActionClass}>
+    Deposits
+  </Link>
+);
 
 /** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */
 export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
@@ -45,6 +41,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         searchText={contactSearch}
         noun="suppliers"
         deletable={supplierDeletable}
+        extraActions={depositsLink}
         footnote="Suppliers appear in the dropdown when a new order is created."
         action={
           <Button asChild size="header" className={actionClass}>

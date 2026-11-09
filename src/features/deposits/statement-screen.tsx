@@ -7,14 +7,14 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/features/reports/report-actions";
 import type { SupplierDepositRow, SupplierStatement } from "@/lib/api/deposits-types";
-import { CURRENCY_NAME, formatDate, formatMoneyList } from "@/lib/formatters";
+import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
 
 import type { StatementData } from "./data/queries";
 import { DeleteDepositButton, DeleteTransactionButton } from "./delete-deposit";
 import { statementFile } from "./deposit-files";
 import { NewDepositDialog, SettleDepositDialog } from "./deposit-dialogs";
-import { amountText, STATUS_LABEL, STATUS_TONE, statementTotals } from "./deposits-logic";
+import { amountList, amountText, STATUS_LABEL, STATUS_TONE, statementTotals } from "./deposits-logic";
 
 // A supplier's deposit statement (SD-1), no reference design: the supplier, six figures (give and receive are never
 // netted), each deposit with its transactions stacked under it (oldest first), the dialogs and Delete for Management.
@@ -23,7 +23,7 @@ type Deposit = SupplierStatement["deposits"][number];
 const DIRECTION = { give: "To give", receive: "To receive" } as const;
 const orDash = (value: string) => value.trim() || "–";
 /** Per currency, "–" when the direction has no deposits. */
-const list = (amounts: MoneyTotal[]) => (amounts.length ? formatMoneyList(amounts) : "–");
+const list = (amounts: MoneyTotal[]) => (amounts.length ? amountList(amounts) : "–");
 
 export function StatementScreen({ data }: { data: StatementData }) {
   const { statement, today, canEnter, canDelete } = data;
@@ -65,7 +65,7 @@ export function StatementScreen({ data }: { data: StatementData }) {
               className="border-t border-border-subtle lg:border-t-0"
               items={[
                 { label: "City", value: orDash(supplier.city) },
-                { label: "Deposit currency", value: CURRENCY_NAME[supplier.currency] },
+                { label: "Default currency", value: CURRENCY_NAME[supplier.currency] },
               ]}
             />
           </div>

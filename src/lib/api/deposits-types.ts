@@ -12,7 +12,11 @@ export type OrderDeposit = {
   orderId: string;
   po: string;
   supplierId: string;
+  /** The order's supplier. */
   supplier: string;
+  /** Who was paid: the supplier, or a shipping agent (ORD-3 / PAY-2 `payeeRole: "agent"`). */
+  payee: string;
+  payeeRole: "supplier" | "agent";
   currency: Currency;
   amountCny: number;
   status: "paid" | "due";

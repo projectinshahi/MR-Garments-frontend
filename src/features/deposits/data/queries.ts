@@ -27,7 +27,8 @@ export type DepositsData = Awaited<ReturnType<typeof getDeposits>>;
 /** DEP-1 GET /api/v1/deposits as table rows, the suppliers to filter by, and today in India (read after the API call). */
 export async function getDeposits() {
   const [response, access] = await Promise.all([apiGet<DepositsResponse>("/deposits"), getAccess()]);
-  return { rows: toRows(response), suppliers: response.suppliers, today: todayInIndia(), ...access };
+  // Order rows link to their order only when the user may open orders (as PoLink does).
+  return { rows: toRows(response, access.linkPo), suppliers: response.suppliers, today: todayInIndia(), ...access };
 }
 
 export type StatementData = Awaited<ReturnType<typeof getStatement>>;

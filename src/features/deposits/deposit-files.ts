@@ -44,6 +44,7 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
         text("Supplier"),
         text("PO"),
         text("Kind"),
+        text("Paid to"),
         money("Amount", currency),
         money("Paid / settled", currency),
         money("Pending", currency),
@@ -53,7 +54,7 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
         text("Notes"),
         text("Status"),
       ],
-      rows: list.map((r) => [r.supplier, r.po ?? "", KIND_LABEL[r.kind], r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status]]),
+      rows: list.map((r) => [r.supplier, r.po ?? "", KIND_LABEL[r.kind], r.payee, r.amount, r.paid, r.pending, r.date, r.mode, r.reference, r.notes, STATUS_LABEL[r.status]]),
     })),
   };
 }

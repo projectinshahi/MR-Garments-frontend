@@ -50,7 +50,8 @@ test("AT-S1: Suppliers lists the 5 seeded suppliers as 40, with 0 open orders", 
   await page.goto("/settings/suppliers");
   await expect(rows(page)).toHaveCount(SUPPLIERS.length + 1);
   for (const [index, supplier] of SUPPLIERS.entries()) {
-    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", /^\d+$/, "Active", "EditDelete"]);
+    // The actions cell: the Deposits statement link (phase 2), then Edit and Delete.
+    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", /^\d+$/, "Active", "DepositsEditDelete"]);
   }
 });
 
@@ -104,7 +105,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await expect(page.getByText("Supplier added", { exact: true })).toBeVisible();
-  const cells = [NINGBO.name, NINGBO.contactPerson, NINGBO.phone, NINGBO.city, "¥", "0", "Active", "EditDelete"];
+  const cells = [NINGBO.name, NINGBO.contactPerson, NINGBO.phone, NINGBO.city, "¥", "0", "Active", "DepositsEditDelete"];
   await expect(rows(page).nth(6).getByRole("cell")).toHaveText(cells);
 
   await page.reload();

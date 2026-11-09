@@ -5,7 +5,8 @@ import { type Currency, CURRENCIES, type MoneyTotal, type Tone } from "@/types/d
 
 // Deposits pages (docs/phase2-contracts.md 3.3): DEP-1's two lists as one table. An order deposit is a `payments` row
 // (paid or due); a supplier deposit is settled by its transactions (give: paid to the supplier; receive: received
-// from it). The two are never netted and amounts in different currencies are never added together.
+// from it). Payables (order deposits, deposits to give) and receivables (deposits to receive) are never netted, and
+// amounts in different currencies are never added together.
 
 export type DepositKind = "order" | DepositDirection;
 export type DepositStatus = "paid" | "due" | "open" | "partly settled" | "settled";
@@ -14,6 +15,12 @@ export type DepositView = "all" | "pending" | "paid";
 export const KIND_LABEL: Record<DepositKind, string> = { order: "Order deposit", give: "To give", receive: "To receive" };
 export const STATUS_LABEL: Record<DepositStatus, string> = { paid: "Paid", due: "Due", open: "Open", "partly settled": "Partly settled", settled: "Settled" };
 export const STATUS_TONE: Record<DepositStatus, Tone> = { paid: "success", due: "warning", open: "warning", "partly settled": "info", settled: "success" };
+/** The statuses a tab's rows can have (the Status filter offers these). */
+export const VIEW_STATUSES: Record<DepositView, DepositStatus[]> = {
+  all: ["paid", "due", "open", "partly settled", "settled"],
+  pending: ["due", "open", "partly settled"],
+  paid: ["paid", "settled"],
+};
 
 export const statementHref = (supplierId: string) => `/deposits/suppliers/${encodeURIComponent(supplierId)}`;
 
@@ -22,7 +29,10 @@ export type DepositRow = {
   id: string;
   kind: DepositKind;
   supplierId: string;
+  /** The order's supplier, or the deposit's. */
   supplier: string;
+  /** Who was paid: the order deposit's payee (the supplier or a shipping agent), the supplier for a deposit to give; "" for one to receive. */
+  payee: string;
   /** The order's PO; null for a supplier deposit. */
   po: string | null;
   currency: Currency;
@@ -35,12 +45,12 @@ export type DepositRow = {
   reference: string;
   notes: string;
   status: DepositStatus;
-  /** The order, or the supplier's statement. */
-  href: string;
+  /** The order (null when the user can't open orders), or the supplier's statement. */
+  href: string | null;
 };
 
 /** Every deposit as the table shows it, in DEP-1's order: order deposits first (latest first), then supplier deposits (newest first). */
-export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse): DepositRow[] {
+export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse, linkPo = true): DepositRow[] {
   return [
     ...orderDeposits.map(
       (d): DepositRow => ({
@@ -48,6 +58,7 @@ export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse): D
         kind: "order",
         supplierId: d.supplierId,
         supplier: d.supplier,
+        payee: d.payee,
         po: d.po,
         currency: d.currency,
         amount: d.amountCny,
@@ -58,7 +69,7 @@ export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse): D
         reference: d.reference,
         notes: d.notes,
         status: d.status,
-        href: orderHref(d.po),
+        href: linkPo ? orderHref(d.po) : null,
       }),
     ),
     ...supplierDeposits.map(
@@ -67,6 +78,7 @@ export function toRows({ orderDeposits, supplierDeposits }: DepositsResponse): D
         kind: d.direction,
         supplierId: d.supplierId,
         supplier: d.supplier,
+        payee: d.direction === "give" ? d.supplier : "",
         po: null,
         currency: d.currency,
         amount: d.amount,
@@ -121,17 +133,20 @@ export const isFiltered = (f: DepositFilters) => JSON.stringify(f) !== JSON.stri
 
 const currencyOf = (row: { currency: Currency }) => row.currency;
 
-/** The overview cards, from the rows shown: each figure per currency. `paid`: paid, or received for deposits to receive. */
-export const totals = (rows: DepositRow[]) => ({
+/** One direction's figures, each per currency: the amounts agreed, paid (or received), pending, and how many deposits. */
+export type DirectionTotals = { amount: MoneyTotal[]; paid: MoneyTotal[]; pending: MoneyTotal[]; count: number };
+const totalsOf = (rows: DepositRow[]): DirectionTotals => ({
   amount: sumByCurrency(rows, currencyOf, (r) => r.amount),
   paid: sumByCurrency(rows, currencyOf, (r) => r.paid),
   pending: sumByCurrency(rows, currencyOf, (r) => r.pending),
   count: rows.length,
 });
 
-/** The six figures of one direction: to give / given / pending to give (or to receive / received / pending to receive). */
-export type DirectionTotals = { amount: MoneyTotal[]; paid: MoneyTotal[]; pending: MoneyTotal[]; count: number };
-const directionTotals = (rows: DepositRow[]): DirectionTotals => ({ ...totals(rows) });
+/** The overview cards, from the rows shown: payables (order deposits and deposits to give) and receivables apart, never netted. */
+export const totals = (rows: DepositRow[]) => ({
+  pay: totalsOf(rows.filter((row) => row.kind !== "receive")),
+  receive: totalsOf(rows.filter((row) => row.kind === "receive")),
+});
 
 export type SupplierSummary = { supplierId: string; supplier: string; give: DirectionTotals; receive: DirectionTotals; href: string };
 
@@ -143,8 +158,8 @@ export function supplierSummaries(rows: DepositRow[]): SupplierSummary[] {
     .map(([supplierId, list]) => ({
       supplierId,
       supplier: list[0]!.supplier,
-      give: directionTotals(list.filter((r) => r.kind === "give")),
-      receive: directionTotals(list.filter((r) => r.kind === "receive")),
+      give: totalsOf(list.filter((r) => r.kind === "give")),
+      receive: totalsOf(list.filter((r) => r.kind === "receive")),
       href: statementHref(supplierId),
     }))
     .sort((a, b) => a.supplier.localeCompare(b.supplier));
@@ -160,8 +175,9 @@ export function statementTotals(summary: SupplierStatement["summary"], direction
 /** "¥1,234.50", "¥1,000": paise shown only when there are some, as the API's own messages do. */
 export const amountText = (value: number, currency: Currency) => formatMoney(value, currency, { decimals: Number.isInteger(value) ? 0 : 2 });
 
-/** Notes in a table cell: the first line, cut at `max` characters with an ellipsis. */
-export function trimNotes(notes: string, max = 40) {
-  const line = notes.split("\n")[0]!.trim();
-  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+/** "¥1,234.50 · $200": each currency apart (zeros left out), paise only when fractional; "¥0" (or `empty`'s symbol) when nothing is left. */
+export function amountList(totals: MoneyTotal[], empty: Currency = "CNY") {
+  const shown = totals.filter((total) => total.amount !== 0);
+  if (shown.length === 0) return amountText(0, totals[0]?.currency ?? empty);
+  return shown.map((total) => amountText(total.amount, total.currency)).join(" · ");
 }

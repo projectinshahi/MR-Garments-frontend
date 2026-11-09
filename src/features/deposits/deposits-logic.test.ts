@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { DepositsResponse, SupplierStatement } from "@/lib/api/deposits-types";
 
 import {
+  amountList,
   amountText,
   EMPTY_FILTERS,
   filterDeposits,
@@ -12,13 +13,13 @@ import {
   supplierSummaries,
   toRows,
   totals,
-  trimNotes,
+  VIEW_STATUSES,
 } from "./deposits-logic";
 
 const api: DepositsResponse = {
   orderDeposits: [
-    { id: "p2", orderId: "o2", po: "PO-3002", supplierId: "s2", supplier: "Hangzhou Knits", currency: "CNY", amountCny: 200, status: "due", paidOn: null, dueDate: "2026-11-30", rateInr: null, amountInr: null, mode: null, reference: "", notes: "" },
-    { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half\nsecond line" },
+    { id: "p2", orderId: "o2", po: "PO-3002", supplierId: "s2", supplier: "Hangzhou Knits", payee: "Hangzhou Knits", payeeRole: "supplier", currency: "CNY", amountCny: 200, status: "due", paidOn: null, dueDate: "2026-11-30", rateInr: null, amountInr: null, mode: null, reference: "", notes: "" },
+    { id: "p1", orderId: "o1", po: "PO-3001", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", payeeRole: "agent", currency: "CNY", amountCny: 300, status: "paid", paidOn: "2026-10-21", dueDate: null, rateInr: 12, amountInr: 3600, mode: "Bank transfer", reference: "UTR 9", notes: "Half\nsecond line" },
   ],
   supplierDeposits: [
     { id: "d3", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
@@ -34,13 +35,14 @@ const rows = toRows(api);
 const ids = (list: { id: string }[]) => list.map((row) => row.id);
 
 describe("toRows", () => {
-  it("makes one table of both lists: order deposits first, each with its kind, figures, date and link", () => {
+  it("makes one table of both lists: order deposits first, each with its kind, payee, figures, date and link", () => {
     expect(ids(rows)).toEqual(["p2", "p1", "d3", "d2", "d1"]);
     expect(rows[1]).toEqual({
       id: "p1",
       kind: "order",
       supplierId: "s1",
       supplier: "Foshan Fabrics",
+      payee: "Sino Freight",
       po: "PO-3001",
       currency: "CNY",
       amount: 300,
@@ -53,9 +55,16 @@ describe("toRows", () => {
       status: "paid",
       href: "/orders/PO-3001",
     });
-    // A due order deposit is pending in full; a supplier deposit's paid is what was settled.
-    expect(rows[0]).toMatchObject({ kind: "order", paid: 0, pending: 200, date: "2026-11-30", mode: "", status: "due" });
-    expect(rows[2]).toMatchObject({ kind: "receive", po: null, paid: 100, pending: 400, date: "2026-10-10", status: "partly settled", href: "/deposits/suppliers/s1" });
+    // A due order deposit is pending in full; a supplier deposit's paid is what was settled; a deposit to give is paid to the supplier.
+    expect(rows[0]).toMatchObject({ kind: "order", payee: "Hangzhou Knits", paid: 0, pending: 200, date: "2026-11-30", mode: "", status: "due" });
+    expect(rows[2]).toMatchObject({ kind: "receive", payee: "", po: null, paid: 100, pending: 400, date: "2026-10-10", status: "partly settled", href: "/deposits/suppliers/s1" });
+    expect(rows[4]).toMatchObject({ kind: "give", payee: "Hangzhou Knits" });
+  });
+
+  it("gives order rows no link when the user can't open orders; statement links stay", () => {
+    const plain = toRows(api, false);
+    expect(plain.slice(0, 2).map((row) => row.href)).toEqual([null, null]);
+    expect(plain[2]!.href).toBe("/deposits/suppliers/s1");
   });
 });
 
@@ -64,6 +73,10 @@ describe("inView", () => {
     expect(ids(rows.filter((r) => inView(r, "pending")))).toEqual(["p2", "d3", "d1"]);
     expect(ids(rows.filter((r) => inView(r, "paid")))).toEqual(["p1", "d2"]);
     expect(rows.filter((r) => inView(r, "all"))).toHaveLength(5);
+    // The Status filter offers each tab only the statuses its rows can have.
+    expect(VIEW_STATUSES.pending).toEqual(["due", "open", "partly settled"]);
+    expect(VIEW_STATUSES.paid).toEqual(["paid", "settled"]);
+    expect(VIEW_STATUSES.all).toHaveLength(5);
   });
 });
 
@@ -85,23 +98,27 @@ describe("filterDeposits", () => {
 });
 
 describe("totals", () => {
-  it("adds each figure per currency, never across currencies, from the rows given", () => {
+  it("keeps payables (order deposits and deposits to give) apart from receivables, each figure per currency", () => {
     expect(totals(rows)).toEqual({
-      amount: [
-        { currency: "CNY", amount: 2000 },
-        { currency: "USD", amount: 200 },
-      ],
-      paid: [
-        { currency: "CNY", amount: 400 },
-        { currency: "USD", amount: 200 },
-      ],
-      pending: [
-        { currency: "CNY", amount: 1600 },
-        { currency: "USD", amount: 0 },
-      ],
-      count: 5,
+      pay: {
+        // ¥200 due + ¥300 paid + ¥1,000 to give; $200 to give.
+        amount: [
+          { currency: "CNY", amount: 1500 },
+          { currency: "USD", amount: 200 },
+        ],
+        paid: [
+          { currency: "CNY", amount: 300 },
+          { currency: "USD", amount: 200 },
+        ],
+        pending: [
+          { currency: "CNY", amount: 1200 },
+          { currency: "USD", amount: 0 },
+        ],
+        count: 4,
+      },
+      receive: { amount: [{ currency: "CNY", amount: 500 }], paid: [{ currency: "CNY", amount: 100 }], pending: [{ currency: "CNY", amount: 400 }], count: 1 },
     });
-    expect(totals([])).toEqual({ amount: [], paid: [], pending: [], count: 0 });
+    expect(totals([])).toEqual({ pay: { amount: [], paid: [], pending: [], count: 0 }, receive: { amount: [], paid: [], pending: [], count: 0 } });
   });
 });
 
@@ -147,13 +164,20 @@ describe("statementTotals", () => {
   });
 });
 
-describe("text helpers", () => {
-  it("shows paise only when there are some, and trims notes to one short line", () => {
+describe("money text", () => {
+  it("shows paise only when there are some, on single amounts and on per-currency lists", () => {
     expect(amountText(1234.5, "CNY")).toBe("¥1,234.50");
     expect(amountText(1000, "USD")).toBe("$1,000");
     expect(amountText(0.01, "INR")).toBe("₹0.01");
-    expect(trimNotes("Half\nsecond line")).toBe("Half");
-    expect(trimNotes("x".repeat(50), 10)).toBe("xxxxxxxxx…");
-    expect(trimNotes("  short  ")).toBe("short");
+    expect(
+      amountList([
+        { currency: "CNY", amount: 1234.5 },
+        { currency: "USD", amount: 0 },
+        { currency: "INR", amount: 20 },
+      ]),
+    ).toBe("¥1,234.50 · ₹20");
+    expect(amountList([{ currency: "USD", amount: 0 }])).toBe("$0");
+    expect(amountList([])).toBe("¥0");
+    expect(amountList([], "INR")).toBe("₹0");
   });
 });
