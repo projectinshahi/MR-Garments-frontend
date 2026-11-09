@@ -87,7 +87,7 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       `/orders/${po}`,
       async (page) => {
         await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
-        await expect(kv(page, `Goods, paid ${s.paid}`)).toHaveText(s.paidInr);
+        await expect(kv(page, `Paid to supplier ${s.paid}`)).toHaveText(s.paidInr);
       },
     ],
     [
@@ -101,10 +101,10 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       `/orders/${po}/payments`,
       async (page) => {
         await expect(kpi(page, "Order value")).toContainText("¥4,000");
-        await expect(kpi(page, "Paid so far")).toContainText(s.paid);
-        await expect(kpi(page, "Paid so far")).toContainText(`${s.payments} payment`);
-        await expect(kpi(page, "Balance to pay")).toContainText(s.balance);
-        await expect(kv(page, "Goods cost in INR")).toHaveText(s.paidInr);
+        await expect(kpi(page, "Paid to supplier")).toContainText(s.paid);
+        await expect(kpi(page, "Paid to supplier")).toContainText(`${s.payments} payment`);
+        await expect(kpi(page, "Balance to supplier")).toContainText(s.balance);
+        await expect(kv(page, "Paid to supplier in INR")).toHaveText(s.paidInr);
       },
     ],
     [
@@ -214,7 +214,7 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await expect(toast(page, `Order ${po} placed`)).toBeVisible();
     await expect(page).toHaveURL(`/orders/${po}`);
     await page.reload();
-    await expect(kv(page, "Goods, paid ¥1,000")).toHaveText("₹12,000");
+    await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
     await everywhere(page, po, due, s, true);
   });
 
@@ -364,7 +364,7 @@ for (const role of ROLES) {
       await expect(rowOf(page, flow.po)).toContainText("₹12,000");
       await page.goto(`/orders/${flow.po}`);
       await expect(page.getByRole("heading", { level: 1, name: flow.po })).toBeVisible();
-      await expect(kv(page, "Goods, paid ¥1,000")).toHaveText("₹12,000");
+      await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
       // Sections the role can't view have no tab, and their URL says Not found.
       const hasTab = (label: string) => tabs(page).getByRole("link", { name: label });
       const want = { "Deposits & payments": role.pages.includes("/payments"), Receiving: role.pages.includes("/receiving"), Containers: role.pages.includes("/containers") };
@@ -452,7 +452,7 @@ test("back/forward across list, detail, tab and container; breadcrumbs", async (
   await expect(page.getByRole("heading", { name: `Container ${f.number}` })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(`/orders/${f.po}`);
-  await expect(kv(page, "Goods, paid ¥1,000")).toHaveText("₹12,000");
+  await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
   await page.goBack();
   await expect(page).toHaveURL("/orders");
   await page.goForward();

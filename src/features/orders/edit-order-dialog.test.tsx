@@ -157,10 +157,15 @@ describe("Money in the order's currency (phase 2 final fixes, 5)", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it("shows a dash for what's paid when an older API left it out, and still opens", () => {
-    open({ ...ORDER, supplierPaidCny: undefined as unknown as number, depositRequiredCny: undefined as unknown as null });
+  it("shows a dash for what's paid when an older API left it out, still opens, and a no-change save sends nothing", async () => {
+    const { user, onClose, save } = open({ ...ORDER, supplierPaidCny: undefined as unknown as number, depositRequiredCny: undefined as unknown as null });
     expect(screen.getByText("Paid to supplier –")).toBeVisible();
     expect(screen.getByRole("textbox", { name: "Deposit required (¥)" })).toHaveValue("");
+    // The missing requirement is "none": an untouched field must not become `depositRequiredCny: null` in the body
+    // (an older ORD-5 rejects the key), so saving unchanged just closes.
+    await user.click(save);
+    expect(patch).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
   });
 });
 

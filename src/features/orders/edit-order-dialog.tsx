@@ -82,7 +82,8 @@ function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditab
   const body: UpdateOrderBody = {};
   if (values.deliveryDate !== order.deliveryDate) body.deliveryDate = values.deliveryDate;
   const depositRequired = values.depositRequiredCny.trim() ? parseNumber(values.depositRequiredCny) : null;
-  if (depositRequired !== order.depositRequiredCny) body.depositRequiredCny = depositRequired;
+  // An older API leaves the requirement out (undefined): that is "none", so an untouched field sends nothing.
+  if (depositRequired !== (order.depositRequiredCny ?? null)) body.depositRequiredCny = depositRequired;
   if (!linesEditable) return body;
   if (values.orderDate !== order.orderDate) body.orderDate = values.orderDate;
   const lines = values.lines.map(({ lineId, itemId, rateCny, quantity }) => ({

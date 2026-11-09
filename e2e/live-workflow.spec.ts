@@ -9,8 +9,8 @@ import { LOADING_STAFF_STATE, PROCUREMENT_STATE, SIGNED_OUT, STAFF_STATE } from 
 // survives a reload and a fresh sign-in.
 //
 // Order: Shenzhen Apparel, 100 Men's jackets at ¥30 + 200 Kids t-shirts at ¥5 = ¥4,000, due in 5 days, with a
-// ¥1,000 deposit at 12.00 (₹12,000). Accounts then pays the agent ¥500 at 12.50 (₹6,250): paid ¥1,500 / ₹18,250,
-// balance ¥2,500.
+// ¥1,000 deposit at 12.00 (₹12,000). Accounts then pays the agent ¥500 at 12.50 (₹6,250): every payee ₹18,250, but the
+// supplier figures stay at paid ¥1,000 / balance ¥3,000 (an agent's payment is sea freight, phase 2 fixes 1).
 
 const VIEWPORT = { width: 1440, height: 900 };
 test.use({ viewport: VIEWPORT });
@@ -25,8 +25,11 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
   let po = "";
   const receiptsOf = async () => (await api.get<ReceiptListItem[]>("/receipts")).filter((r) => r.po === po);
 
-  /** The order's figures on Orders, Payments and the order's Deposits & payments tab, as Management sees them. */
-  async function expectMoney(viewer: Page, paid: string, paidInr: string, balance: string, payments: number) {
+  /**
+   * The order's figures on Orders, Payments and the order's Deposits & payments tab, as Management sees them: `paid`,
+   * `balance` and `payments` are the supplier's; `paidInr` is every payee's; `supplierInr` the supplier's INR total.
+   */
+  async function expectMoney(viewer: Page, paid: string, paidInr: string, balance: string, payments: number, supplierInr = paidInr) {
     await viewer.goto("/orders");
     await viewer.getByRole("searchbox", { name: "Search PO, item or supplier" }).fill(po);
     await expect(rowOf(viewer, po)).toContainText(paidInr);
@@ -44,10 +47,10 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     ]);
     await viewer.goto(`/orders/${po}/payments`);
     await expect(kpi(viewer, "Order value")).toContainText("¥4,000");
-    await expect(kpi(viewer, "Paid so far")).toContainText(paid);
-    await expect(kpi(viewer, "Paid so far")).toContainText(`${payments} payment`);
-    await expect(kpi(viewer, "Balance to pay")).toContainText(balance);
-    await expect(kv(viewer, "Goods cost in INR")).toHaveText(paidInr);
+    await expect(kpi(viewer, "Paid to supplier")).toContainText(paid);
+    await expect(kpi(viewer, "Paid to supplier")).toContainText(`${payments} payment`);
+    await expect(kpi(viewer, "Balance to supplier")).toContainText(balance);
+    await expect(kv(viewer, "Paid to supplier in INR")).toHaveText(supplierInr);
   }
 
   await test.step("Procurement places the order with a deposit (Orders)", async () => {
@@ -118,7 +121,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     const order = await api.order(po);
     expect(order.payments).toHaveLength(2);
     expect(order.payments![1]).toMatchObject({ kind: "Balance", payee: "Dragon Cargo", payeeRole: "agent", amountCny: 500, rateInr: 12.5, mode: "Wire" });
-    await expectMoney(page, "¥1,500", "₹18,250", "¥2,500", 2);
+    await expectMoney(page, "¥1,000", "₹18,250", "¥3,000", 1, "₹12,000");
     // Management (payments Full): each payment has the Actions column's Delete.
     const rows = page.getByRole("table").getByRole("row");
     await expect(rows.nth(1).getByRole("cell")).toHaveText([longDate(today()), "Deposit", "Shenzhen Apparel", "¥1,000", "12.00", "₹12,000", "Delete"]);
@@ -307,18 +310,19 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await expect(viewer).toHaveURL(`/containers/${containerId}`);
     await expect(viewer.getByRole("banner")).toContainText("Arrived, in clearing");
 
-    await expectMoney(viewer, "¥1,500", "₹18,250", "¥2,500", 2);
+    await expectMoney(viewer, "¥1,000", "₹18,250", "¥3,000", 1, "₹12,000");
     await viewer.goto(`/orders/${po}/receiving`);
     await expect(kpi(viewer, "Received in China")).toContainText("100 pcs");
     await viewer.goto(`/orders/${po}`);
     await expect(viewer.getByText("Shenzhen Apparel · Contact: Ms. Liu Yan")).toBeVisible();
-    await expect(kv(viewer, "Goods, paid ¥1,500")).toHaveText("₹18,250");
+    await expect(kv(viewer, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
+    await expect(kv(viewer, "Paid to agents (sea freight) ¥500")).toHaveText("₹6,250");
   }
 
   await test.step("everything is the same after a reload and after a fresh sign-in", async () => {
     await expectFinalState(page);
     await page.reload();
-    await expect(kv(page, "Goods, paid ¥1,500")).toHaveText("₹18,250");
+    await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
 
     const fresh = await as(browser, SIGNED_OUT);
     await fresh.goto("/login");
