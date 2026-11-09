@@ -1,5 +1,5 @@
 import type { SupplierStatement } from "@/lib/api/deposits-types";
-import { type Column, money, type ReportFile, type Section } from "@/features/reports/report-files";
+import { type Column, money, perCurrency, type ReportFile, type Section } from "@/features/reports/report-files";
 import { formatDate } from "@/lib/formatters";
 import { type Currency, CURRENCIES } from "@/types/domain";
 
@@ -12,11 +12,6 @@ const date = (header: string): Column => ({ header, date: true });
 const text = (header: string): Column => ({ header });
 const DIRECTION_LABEL = { give: "Give", receive: "Receive" } as const;
 
-/** Rows split by currency, in CNY, USD, INR order; none: one empty CNY table (the sheet then says "No rows"). */
-function perCurrency<T extends { currency: Currency }>(rows: T[]): [Currency, T[]][] {
-  const tables = CURRENCIES.map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]).filter(([, list]) => list.length);
-  return tables.length ? tables : [["CNY", []]];
-}
 
 const VIEW_TITLE: Record<DepositView | "suppliers", string> = { all: "All deposits", pending: "Pending deposits", paid: "Paid deposits", suppliers: "Deposits by supplier" };
 
