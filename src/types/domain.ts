@@ -89,7 +89,6 @@ export type ItemMaster = {
   name: string;
   countedIn: string;
   /** Number of pieces, or a unit label such as "Roll". */
-  perBundle: number | string;
   usedInOrders: string[];
   status: RecordStatus;
 };

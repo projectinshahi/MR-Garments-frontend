@@ -16,8 +16,8 @@ vi.mock("@/lib/api/client", () => ({ apiClient: { patch: vi.fn() } }));
 const patch = vi.mocked(apiClient.patch);
 
 const ITEMS: ItemOption[] = [
-  { id: "i-1", name: "Denim jeans", unit: "pcs" },
-  { id: "i-2", name: "Cotton fabric", unit: "m" },
+  { id: "i-1", name: "Denim jeans", unit: "pcs", price: null },
+  { id: "i-2", name: "Cotton fabric", unit: "m", price: null },
 ];
 const line = (id: string, item: { id: string; name: string }, quantity: number, rateCny: number): OrderDetail["lines"][number] => ({
   id,

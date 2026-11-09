@@ -75,14 +75,14 @@ export type TeamRow = {
   averagePerPieceInr: number | null;
   status: RecordStatus;
 };
-/** MD-19 GET /api/v1/items. Exactly one of `perBundle` and `bundleLabel` is set. */
+/** MD-19 GET /api/v1/items. */
 export type ItemRow = {
   id: string;
   name: string;
   /** The name of a unit (GET /api/v1/units). */
   countedIn: string;
-  perBundle: number | null;
-  bundleLabel: string | null;
+  /** Default rate per unit on a new order (0 or more, 2 decimals), in the order's currency; null when none is set. */
+  price: number | null;
   usedInOrders: string[];
   status: RecordStatus;
 };
@@ -137,8 +137,8 @@ export type CreateUnitBody = { name: string; symbol?: string };
 export type UpdateUnitBody = Editable<CreateUnitBody>;
 export type UnitResponse = { unit: UnitRow };
 
-/** POST /api/v1/items. Exactly one of `perBundle` (whole number 1-100000) and `bundleLabel` is set, the other null. */
-export type CreateItemBody = { name: string; countedIn: ItemRow["countedIn"]; perBundle: number | null; bundleLabel: string | null };
+/** POST /api/v1/items. `price`: the default rate per unit on a new order, 0 or more with at most 2 decimals, or null. */
+export type CreateItemBody = { name: string; countedIn: ItemRow["countedIn"]; price: number | null };
 /** PATCH /api/v1/items/:id. `countedIn` can't change once the item is on an order (409 `item_in_use`). */
 export type UpdateItemBody = Editable<CreateItemBody>;
 export type ItemResponse = { item: ItemRow };
@@ -204,7 +204,8 @@ export type OrderOptions = {
   nextPo: string;
   /** `currency`: the supplier's, the new order's default. */
   suppliers: (Named & { contactPerson: string; phone: string; city: string; currency: Currency })[];
-  items: (Named & { unit: Unit })[];
+  /** `price`: the item's default rate per unit, offered for the line when the item is chosen; null when none is set. */
+  items: (Named & { unit: Unit; price: number | null })[];
   /** Active shipping agents: the other kind of deposit payee. */
   agents: Named[];
 };

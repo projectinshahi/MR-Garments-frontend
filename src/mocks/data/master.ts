@@ -52,14 +52,14 @@ export const teams: Team[] = [
 ];
 
 export const items: ItemMaster[] = [
-  { id: "item-denim-jeans", name: "Denim jeans", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2028", "PO-2050"], status: "Active" },
-  { id: "item-track-pants", name: "Track pants", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2030", "PO-2057"], status: "Active" },
-  { id: "item-kids-t-shirts", name: "Kids t-shirts", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2029"], status: "Active" },
-  { id: "item-ladies-kurtis", name: "Ladies kurtis", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2032", "PO-2060"], status: "Active" },
-  { id: "item-polo-shirts", name: "Polo shirts", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2033", "PO-2059"], status: "Active" },
-  { id: "item-mens-shorts", name: "Men's shorts", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2034"], status: "Active" },
-  { id: "item-mens-jackets", name: "Men's jackets", countedIn: "Pieces", perBundle: 50, usedInOrders: ["PO-2035"], status: "Active" },
-  { id: "item-cotton-fabric", name: "Cotton fabric", countedIn: "Metres", perBundle: "Roll", usedInOrders: ["PO-2027", "PO-2058"], status: "Active" },
+  { id: "item-denim-jeans", name: "Denim jeans", countedIn: "Pieces", usedInOrders: ["PO-2028", "PO-2050"], status: "Active" },
+  { id: "item-track-pants", name: "Track pants", countedIn: "Pieces", usedInOrders: ["PO-2030", "PO-2057"], status: "Active" },
+  { id: "item-kids-t-shirts", name: "Kids t-shirts", countedIn: "Pieces", usedInOrders: ["PO-2029"], status: "Active" },
+  { id: "item-ladies-kurtis", name: "Ladies kurtis", countedIn: "Pieces", usedInOrders: ["PO-2032", "PO-2060"], status: "Active" },
+  { id: "item-polo-shirts", name: "Polo shirts", countedIn: "Pieces", usedInOrders: ["PO-2033", "PO-2059"], status: "Active" },
+  { id: "item-mens-shorts", name: "Men's shorts", countedIn: "Pieces", usedInOrders: ["PO-2034"], status: "Active" },
+  { id: "item-mens-jackets", name: "Men's jackets", countedIn: "Pieces", usedInOrders: ["PO-2035"], status: "Active" },
+  { id: "item-cotton-fabric", name: "Cotton fabric", countedIn: "Metres", usedInOrders: ["PO-2027", "PO-2058"], status: "Active" },
 ];
 
 export const users: User[] = [

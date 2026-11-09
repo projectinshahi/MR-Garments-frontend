@@ -16,32 +16,33 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
   const add = page.getByRole("dialog", { name: "Add item" });
   await expect(add).toBeVisible();
 
-  // Exactly one of pieces per bundle and a bundle label.
+  // The price is optional, but never negative or finer than 2 decimals.
   await add.getByLabel("Item name").fill(NAME);
   await add.getByLabel("Counted in").selectOption("Pieces");
+  await add.getByLabel("Item price").fill("-24");
   await add.getByRole("button", { name: "Save item" }).click();
-  await expect(add.getByText("Enter the pieces per bundle or a bundle label.")).toBeVisible();
-  await add.getByLabel("Pieces per bundle").fill("24");
+  await expect(add.getByText("Enter a price of 0 or more with at most 2 decimals.")).toBeVisible();
+  await add.getByLabel("Item price").fill("24.5");
   await add.getByRole("button", { name: "Save item" }).click();
 
   await expect(page.getByText("Item added")).toBeVisible();
   await expect(add).toBeHidden();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Pieces", "24", "", "Active", "EditDelete"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Pieces", "24.50", "", "Active", "EditDelete"]);
 
-  // Switch to a bundle label; the item is on no order, so its unit can still change.
+  // Change the price; the item is on no order, so its unit can still change.
   await page.getByRole("link", { name: `Edit ${NAME}` }).click();
   const edit = page.getByRole("dialog", { name: "Edit item" });
   await expect(edit.getByLabel("Item name")).toHaveValue(NAME);
   await expect(edit.getByLabel("Counted in")).toBeEnabled();
   await edit.getByLabel("Counted in").selectOption("Metres");
-  await edit.getByLabel("Pieces per bundle").fill("");
-  await edit.getByLabel("Bundle label").fill("Bale");
+  await expect(edit.getByLabel("Item price")).toHaveValue("24.5");
+  await edit.getByLabel("Item price").fill("8");
   await edit.getByRole("button", { name: "Save item" }).click();
   await expect(page.getByText("Item saved")).toBeVisible();
   await expect(edit).toBeHidden();
 
   await page.reload();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Active", "EditDelete"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "8.00", "", "Active", "EditDelete"]);
 
   // Deactivating asks first; Cancel saves nothing.
   await page.getByRole("link", { name: `Edit ${NAME}` }).click();
@@ -59,5 +60,5 @@ test("adds an item, edits it, keeps it after a reload and deactivates it with co
 
   await expect(rowOf(page)).toHaveCount(0);
   await page.getByRole("group", { name: "Status" }).getByRole("button", { name: "Inactive" }).click();
-  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "Bale", "", "Inactive", "EditDelete"]);
+  await expect(rowOf(page).getByRole("cell")).toHaveText([NAME, "Metres", "8.00", "", "Inactive", "EditDelete"]);
 });

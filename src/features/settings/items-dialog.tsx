@@ -13,7 +13,7 @@ import type { ItemResponse, ItemRow, UnitRow } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 import { DeactivateConfirm, type Deletable, fieldClass, labelClass, listFact, setApiErrors, SettingsDialog, SettingsDialogFooter, useSettingsDialog } from "./settings-dialog";
-import { perBundleText } from "./settings-logic";
+import { itemPriceText } from "./settings-logic";
 
 const DEACTIVATE_NOTE = "An inactive item no longer appears on new orders. Orders that already have it keep it.";
 
@@ -28,7 +28,7 @@ export const itemDeletable = (row: ItemRow): Deletable => ({
   usedBy: "orders",
   details: [
     ["Counted in", row.countedIn],
-    ["Pieces per bundle", perBundleText(row)],
+    ["Item price", itemPriceText(row.price)],
     ["Used in orders", listFact(row.usedInOrders)],
   ],
 });
@@ -42,9 +42,7 @@ export const MESSAGES = {
   name: "Enter the item name.",
   nameTooLong: "Use 200 characters or fewer.",
   countedIn: "Choose a unit from the list.",
-  bundle: "Enter the pieces per bundle or a bundle label.",
-  perBundle: "Enter a whole number of pieces from 1 to 100000.",
-  bundleLabelTooLong: "Use 200 characters or fewer.",
+  price: "Enter a price of 0 or more with at most 2 decimals.",
 };
 export const SUCCESS = { itemAdded: "Item added", itemSaved: "Item saved" };
 const M = MESSAGES;
@@ -55,28 +53,21 @@ export const itemSchema = z
     name: z.string().trim().min(1, M.name).max(200, M.nameTooLong),
     // A unit's name (Settings, Units). Undefined while the unit is locked (the item is on an order), so the edit doesn't send it.
     countedIn: z.string().min(1, M.countedIn).optional(),
-    perBundle: z
+    // The default rate per unit on a new order: blank for none, else 0 or more to 2 decimals ("1,250.50" is fine).
+    price: z
       .string()
       .trim()
-      .refine((text) => text === "" || (/^\d+$/.test(text) && Number(text) >= 1 && Number(text) <= 100_000), M.perBundle),
-    bundleLabel: z.string().trim().max(200, M.bundleLabelTooLong),
+      .refine((text) => text === "" || /^(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/.test(text), M.price),
     status: z.enum(["Active", "Inactive"]),
   })
-  // Exactly one of the two. Checked even when another field fails, so every message shows at once.
-  .refine(({ perBundle, bundleLabel }) => (perBundle === "") !== (bundleLabel === ""), { message: M.bundle, path: ["perBundle"], when: () => true })
-  .transform(({ perBundle, bundleLabel, ...values }) => ({
-    ...values,
-    perBundle: perBundle === "" ? null : Number(perBundle),
-    bundleLabel: bundleLabel || null,
-  }));
+  .transform(({ price, ...values }) => ({ ...values, price: price === "" ? null : Number(price.replace(/,/g, "")) }));
 type ItemInput = z.input<typeof itemSchema>;
 type ItemValues = z.output<typeof itemSchema>;
 
 const toInput = (row?: ItemRow): ItemInput => ({
   name: row?.name ?? "",
   countedIn: row?.countedIn ?? "",
-  perBundle: row?.perBundle?.toString() ?? "",
-  bundleLabel: row?.bundleLabel ?? "",
+  price: row?.price == null ? "" : String(row.price),
   status: row?.status ?? "Active",
 });
 
@@ -165,19 +156,15 @@ function ItemForm({ row, units, onCancel, onSaved }: { row?: ItemRow; units: Uni
           ) : null}
           <FieldError errors={[errors.countedIn]} />
         </Field>
-        <Field className={fieldClass} data-invalid={!!errors.perBundle}>
-          <FieldLabel htmlFor="item-per-bundle" className={labelClass}>
-            Pieces per bundle
+        <Field className={fieldClass} data-invalid={!!errors.price}>
+          <FieldLabel htmlFor="item-price" className={labelClass}>
+            Item price
           </FieldLabel>
-          <Input id="item-per-bundle" inputMode="numeric" placeholder="Enter number" aria-invalid={!!errors.perBundle} size="sm" {...register("perBundle")} />
-          <FieldError errors={[errors.perBundle]} />
-        </Field>
-        <Field className={fieldClass} data-invalid={!!errors.bundleLabel}>
-          <FieldLabel htmlFor="item-bundle-label" className={labelClass}>
-            Bundle label
-          </FieldLabel>
-          <Input id="item-bundle-label" maxLength={200} placeholder="Or a label, such as Roll" aria-invalid={!!errors.bundleLabel} size="sm" {...register("bundleLabel")} />
-          <FieldError errors={[errors.bundleLabel]} />
+          <Input id="item-price" inputMode="decimal" placeholder="0.00" aria-invalid={!!errors.price} aria-describedby="item-price-hint" size="sm" {...register("price")} />
+          <FieldDescription id="item-price-hint" className="text-[12.5px] leading-4">
+            Fills the rate on a new order, in the order&apos;s currency; leave empty if none.
+          </FieldDescription>
+          <FieldError errors={[errors.price]} />
         </Field>
         {row ? (
           <Field className={fieldClass} data-invalid={!!errors.status}>

@@ -24,8 +24,10 @@ const options: OrderOptions = {
     { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR" },
   ],
   items: [
-    { id: "i-denim", name: "Cotton denim fabric", unit: "m" },
-    { id: "i-buttons", name: "Metal buttons", unit: "pcs" },
+    { id: "i-denim", name: "Cotton denim fabric", unit: "m", price: null },
+    { id: "i-buttons", name: "Metal buttons", unit: "pcs", price: null },
+    // The one item with a saved price: New order fills its rate from it.
+    { id: "i-zips", name: "Zips", unit: "pcs", price: 0.75 },
   ],
   agents: [{ id: "a-sino", name: "Sino Freight" }],
 };
@@ -170,6 +172,24 @@ describe("NewOrderScreen", () => {
     expect(ui.field("Delivery date")).toHaveValue("2026-11-25");
     expect(toast.success).not.toHaveBeenCalled();
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("fills the rate from the item's saved price, which stays editable, and clears it for an item without one", async () => {
+    const ui = open();
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-zips");
+    expect(ui.field("Rate (¥), line 1")).toHaveValue("0.75");
+    await ui.user.type(ui.field("Quantity, line 1"), "1,000");
+    expect(ui.field("Amount (¥), line 1")).toHaveValue("750.00");
+    // The user may still type another rate; the totals follow.
+    await ui.user.clear(ui.field("Rate (¥), line 1"));
+    await ui.user.type(ui.field("Rate (¥), line 1"), "0.8");
+    expect(ui.field("Amount (¥), line 1")).toHaveValue("800.00");
+    // An item without a price never keeps the previous item's rate.
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-denim");
+    expect(ui.field("Rate (¥), line 1")).toHaveValue("");
+    expect(ui.field("Amount (¥), line 1")).toHaveValue("");
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-zips");
+    expect(ui.field("Rate (¥), line 1")).toHaveValue("0.75");
   });
 
   it("checks the form before calling the API", async () => {

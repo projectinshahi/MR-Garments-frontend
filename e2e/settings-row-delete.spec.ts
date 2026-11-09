@@ -13,7 +13,7 @@ const TABS = [
   { tab: "/settings/transport-companies", api: "/transport-companies", key: "transportCompany", noun: "transport company", body: {} },
   { tab: "/settings/offices", api: "/locations", key: "location", noun: "office or warehouse", body: { type: "Warehouse" } },
   { tab: "/settings/teams", api: "/teams", key: "team", noun: "team", body: {} },
-  { tab: "/settings/items", api: "/items", key: "item", noun: "item", body: { countedIn: "Pieces", perBundle: 10 } },
+  { tab: "/settings/items", api: "/items", key: "item", noun: "item", body: { countedIn: "Pieces", price: 10 } },
   { tab: "/settings/units", api: "/units", key: "unit", noun: "unit", body: {} },
 ] as const;
 type Tab = (typeof TABS)[number];

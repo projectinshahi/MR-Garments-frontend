@@ -38,11 +38,10 @@ test("a unit added in Settings is offered on a new item at once; an inactive one
   const addItem = page.getByRole("dialog", { name: "Add item" });
   await addItem.getByLabel("Item name").fill(item);
   await addItem.getByLabel("Counted in").selectOption(unit);
-  await addItem.getByLabel("Pieces per bundle").fill("12");
   await addItem.getByRole("button", { name: "Save item" }).click();
   await expect(toast(page, "Item added")).toBeVisible();
   const itemRow = page.getByRole("table").getByRole("row", { name: new RegExp(item) });
-  await expect(itemRow.getByRole("cell")).toHaveText([item, unit, "12", "", "Active", "EditDelete"]);
+  await expect(itemRow.getByRole("cell")).toHaveText([item, unit, "–", "", "Active", "EditDelete"]);
   await page.goto("/settings/units");
   await expect(row.getByRole("cell")).toHaveText([unit, "box", item, "Active", "EditDelete"]);
 

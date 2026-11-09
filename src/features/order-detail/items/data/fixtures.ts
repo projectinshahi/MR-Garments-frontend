@@ -14,7 +14,6 @@ export type ItemLine = {
 export type ItemsFixture = {
   lines: ItemLine[];
   sizes: { size: string; pieces: number }[];
-  piecesPerBundle: number;
   supplier: string;
   contact: string;
   terms: Terms;
@@ -36,7 +35,6 @@ export const itemsByPO: Record<string, ItemsFixture> = {
       { size: "34", pieces: 500 },
       { size: "36", pieces: 300 },
     ],
-    piecesPerBundle: 50,
     supplier: "Guangzhou Textile Co.",
     contact: "Mr. Zhao Lin",
     terms: "CNF",

@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import type { ItemRow } from "@/lib/api/types";
 import { MESSAGES } from "@/lib/feedback";
 import { formatINR, formatNumber } from "@/lib/formatters";
 import { CURRENCIES, type RecordStatus } from "@/types/domain";
@@ -38,6 +37,5 @@ export type SupplierDraft = z.infer<typeof supplierSchema>;
 /** Teams "Average per piece": "–" until the team holds stock (B6.2, 5.6). */
 export const averagePerPieceText = (value: number | null) => (value === null ? "–" : formatINR(value, 2));
 
-/** Items "Pieces per bundle": the bundle label ("Roll") when set, otherwise the number (MD-19 sets exactly one). */
-export const perBundleText = ({ perBundle, bundleLabel }: Pick<ItemRow, "perBundle" | "bundleLabel">) =>
-  bundleLabel ?? formatNumber(perBundle ?? 0);
+/** Items "Item price": the default rate per unit to 2 decimals, or "–" while none is set. */
+export const itemPriceText = (price: number | null | undefined) => (price == null ? "–" : formatNumber(price, 2));

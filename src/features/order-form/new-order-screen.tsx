@@ -67,6 +67,11 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
   const inr = currency === "INR";
   const spaced = (value: number) => formatMoney(value, currency, { spaced: true });
   const unitOf = (itemId: string) => options.items.find((item) => item.id === itemId)?.unit ?? "";
+  /** The chosen item's saved price fills the line's rate (still editable); an item without one clears it, so no stale rate stays. */
+  const rateFor = (itemId: string) => {
+    const price = options.items.find((item) => item.id === itemId)?.price ?? null;
+    return price !== null && price > 0 ? String(price) : "";
+  };
   const numericLines = lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) }));
   const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: inr ? 1 : parseNumber(d.rateInr) }));
   const totals = orderTotals(numericLines, numericDeposits);
@@ -225,7 +230,10 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                             aria-label={`Item, line ${n}`}
                             aria-invalid={!!e?.itemId}
                             className="[&>select]:h-[38px] [&>select]:pl-2.5"
-                            {...register(`lines.${i}.itemId`)}
+                            {...register(`lines.${i}.itemId`, {
+                              onChange: (event: React.ChangeEvent<HTMLSelectElement>) =>
+                                setValue(`lines.${i}.rateCny`, rateFor(event.target.value), { shouldDirty: true, shouldValidate: formState.isSubmitted }),
+                            })}
                           >
                             <option value="">Select item</option>
                             {options.items.map((item) => (

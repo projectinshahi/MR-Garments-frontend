@@ -10,7 +10,7 @@ import type { ItemRow, UnitRow } from "@/lib/api/types";
 import { ItemDialog, itemDeletable, ITEMS_PATH } from "./items-dialog";
 import { addHref } from "./settings-dialog";
 import { actionClass, right, SettingsList } from "./settings-list";
-import { perBundleText } from "./settings-logic";
+import { itemPriceText } from "./settings-logic";
 
 // Fixed widths measured from 46 (table 1134 px), so the "Used in orders" lists don't re-space the columns; a long
 // list wraps inside its column. Status and Edit share the rest.
@@ -18,10 +18,10 @@ const itemColumns: ColumnDef<ItemRow>[] = [
   { accessorKey: "name", header: "Item", meta: { className: "w-[212px] font-bold" } },
   { accessorKey: "countedIn", header: "Counted in", meta: { className: "w-[167px]" } },
   {
-    accessorKey: "perBundle",
-    header: "Pieces per bundle",
+    accessorKey: "price",
+    header: "Item price",
     meta: { ...right, className: "w-[241px]" },
-    cell: ({ row }) => perBundleText(row.original),
+    cell: ({ row }) => itemPriceText(row.original.price),
   },
   {
     accessorKey: "usedInOrders",

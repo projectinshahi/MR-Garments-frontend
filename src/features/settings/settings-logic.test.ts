@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { suppliers } from "@/mocks/data/master";
 
 import { supplierDraft } from "./data/fixtures";
-import { averagePerPieceText, filterRecords, perBundleText, supplierSchema } from "./settings-logic";
+import { averagePerPieceText, filterRecords, itemPriceText, supplierSchema } from "./settings-logic";
 
 const search = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 const names = (rows: { name: string }[]) => rows.map((row) => row.name);
@@ -67,9 +67,12 @@ describe("read-only tab cells", () => {
     expect(averagePerPieceText(0)).toBe("₹0.00");
   });
 
-  it("shows the bundle label when set, otherwise the pieces per bundle", () => {
-    expect(perBundleText({ perBundle: 50, bundleLabel: null })).toBe("50");
-    expect(perBundleText({ perBundle: 1200, bundleLabel: null })).toBe("1,200");
-    expect(perBundleText({ perBundle: null, bundleLabel: "Roll" })).toBe("Roll");
+  it("shows the item price to 2 decimals, or – while none is set", () => {
+    expect(itemPriceText(null)).toBe("–");
+    expect(itemPriceText(50)).toBe("50.00");
+    expect(itemPriceText(1250.5)).toBe("1,250.50");
+    expect(itemPriceText(0)).toBe("0.00");
+    // An older API without the field: a dash, never NaN.
+    expect(itemPriceText(undefined)).toBe("–");
   });
 });
