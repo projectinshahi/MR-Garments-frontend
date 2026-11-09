@@ -22,9 +22,12 @@ test("Scenario 6: an order's partial deposit shows as Paid on the Deposits page,
 
   await page.goto("/deposits");
   await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
-  await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
   const row = page.getByRole("table").getByRole("row").filter({ hasText: po });
-  await expect(row).toHaveCount(1);
+  // Typed again if hydration reset the box (the list is long on a shared database and hydrates after the HTML).
+  await expect(async () => {
+    await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
+    await expect(row).toHaveCount(1, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   await expect(row).toContainText("Order deposit");
   await expect(row).toContainText(cny(300));
   await expect(row.getByText("Paid", { exact: true })).toBeVisible();
@@ -40,7 +43,8 @@ test("Scenario 6: an order's partial deposit shows as Paid on the Deposits page,
 
   await page.getByRole("link", { name: "Pending" }).click();
   await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
-  await expect(page.getByText("No deposits match these filters.")).toBeVisible();
+  // Nothing pending at all on a fresh database, or nothing matching once other specs have left pending rows.
+  await expect(page.getByText(/^No (pending deposits|deposits match these filters)\.$/)).toBeVisible();
 });
 
 test("Scenario 7: a deposit to give with a partial payment and one to receive with a partial receipt stay apart; the statement exports", async ({ page, api }) => {

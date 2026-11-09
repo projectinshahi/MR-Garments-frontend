@@ -111,8 +111,9 @@ test("a PO number in any format places the order, opens its page, tabs, Edit ord
   await expect(toast(page, "Order saved")).toBeVisible();
   expect((await api.order(po)).deliveryDate).toBe(today(25));
 
-  // The list links to it, encoded.
+  // The list links to it, encoded (searched first: the list pages by 10 and other specs place orders the same day).
   await page.goto("/orders");
+  await page.getByRole("searchbox", { name: "Search PO, item or supplier" }).fill(po);
   await page.getByRole("link", { name: po, exact: true }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(href);
   await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();

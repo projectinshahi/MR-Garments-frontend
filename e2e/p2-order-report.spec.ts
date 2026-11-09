@@ -39,7 +39,7 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(row("Cotton fabric").getByText("20 m", { exact: true })).toBeVisible(); // short
   await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
   await expect(kv(page, "Paid to supplier")).toHaveText("¥300");
-  await expect(kv(page, "Balance")).toHaveText("¥1,100");
+  await expect(kv(page, "Balance to supplier")).toHaveText("¥1,100");
   await expect(row("Deposit")).toContainText("₹3,600");
   await expect(page.getByRole("heading", { level: 2, name: "Timeline" })).toBeVisible();
   for (const step of ["Order placed", "Deposit paid", "Received in China"]) {
