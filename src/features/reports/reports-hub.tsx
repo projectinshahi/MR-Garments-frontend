@@ -8,15 +8,21 @@ import { Button } from "@/components/ui/button";
 import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 
 import type { ReportsHubData, ReportsSummary } from "./data/queries";
+import { OrderReportsDownloads } from "./order-reports/order-reports-downloads";
 import { CardDownloads, UrlSelect } from "./report-actions";
 import type { ReportName } from "./report-files";
 
 const plural = (count: number, noun: string) => `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 
-type ReportCard = { category: string; title: string; description: string; name: ReportName; stat: (s: ReportsSummary) => string };
+type ReportCard = { category: string; title: string; description: string; stat: (s: ReportsSummary) => string } & (
+  | { name: ReportName }
+  /** A report outside the GET /reports/<name> family, with its own download buttons. */
+  | { href: string; Downloads: typeof OrderReportsDownloads }
+);
 
-// The six cards of 32_13_Reports.jpeg; the stat strip of each comes from GET /reports/summary with the hub's filters.
-// Open report, Excel and PDF all carry those filters (a card's file is its report as Open report shows it).
+// The six cards of 32_13_Reports.jpeg and, since phase 2, Order reports (RPT-O2); the stat strip of each comes from
+// GET /reports/summary with the hub's filters. Open report, Excel and PDF all carry those filters (a card's file is
+// its report as Open report shows it).
 const CARDS: ReportCard[] = [
   {
     category: "Orders",
@@ -62,9 +68,17 @@ const CARDS: ReportCard[] = [
     name: "landed-cost-by-month",
     stat: (s) => `${plural(s.landedCost.finishedOrders, "order")} finished · ${formatINR(s.landedCost.finishedTotalInr)}`,
   },
+  {
+    category: "Orders",
+    title: "Order reports",
+    description: "Every order with its payments, closure and landed cost; filter and download.",
+    href: "/reports/orders",
+    Downloads: OrderReportsDownloads,
+    stat: (s) => `${plural(s.orders.total, "order")} · ${formatNumber(s.landedCost.finishedOrders)} finished`,
+  },
 ];
 
-/** Reports hub (32_13_Reports.jpeg): six report cards, recent downloads (none are kept) and the access note. */
+/** Reports hub (32_13_Reports.jpeg): the report cards, recent downloads (none are kept) and the access note. */
 export function ReportsHub({ data }: { data: ReportsHubData }) {
   const { summary, query } = data;
   const suppliers = [{ value: "all", label: "All suppliers" }, ...summary.suppliers.map((s) => ({ value: s.id, label: s.name }))];
@@ -83,7 +97,7 @@ export function ReportsHub({ data }: { data: ReportsHubData }) {
       <PageContainer>
         <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {CARDS.map((card) => (
-            <ReportCardItem key={card.name} card={card} stat={card.stat(summary)} query={query} />
+            <ReportCardItem key={card.title} card={card} stat={card.stat(summary)} query={query} />
           ))}
         </ul>
         <SectionCard title="Recently downloaded" titleGap="none" className="px-[18px] pt-[13px] pb-[15.5px]">
@@ -100,6 +114,8 @@ export function ReportsHub({ data }: { data: ReportsHubData }) {
 
 // Card geometry from the reference: 15 px top, a two-line description slot, the 35 px stat strip, 32.5 px buttons; 219.5 px in all (the reference rows measure 219 and 220).
 function ReportCardItem({ card, stat, query }: { card: ReportCard; stat: string; query: string }) {
+  const href = "name" in card ? `/reports/${card.name}` : card.href;
+  const buttonClass = "h-[32.5px] px-[11px] text-[13.5px] text-label";
   return (
     <li className="flex flex-col rounded-xl border bg-card px-5 pt-[15px] pb-[19px]">
       <p className="text-[11.5px] leading-4 font-bold tracking-[0.12em] text-primary uppercase">{card.category}</p>
@@ -109,11 +125,11 @@ function ReportCardItem({ card, stat, query }: { card: ReportCard; stat: string;
       {/* Accessible names add the report, so the six identical button rows stay distinguishable. */}
       <div className="mt-[14.5px] flex flex-wrap gap-2">
         <Button asChild size="sm" className="h-[32.5px] px-[15px] text-[13.5px]">
-          <Link href={`/reports/${card.name}${query}`} aria-label={`Open report: ${card.title}`}>
+          <Link href={`${href}${query}`} aria-label={`Open report: ${card.title}`}>
             Open report
           </Link>
         </Button>
-        <CardDownloads name={card.name} title={card.title} query={query} className="h-[32.5px] px-[11px] text-[13.5px] text-label" />
+        {"name" in card ? <CardDownloads name={card.name} title={card.title} query={query} className={buttonClass} /> : <card.Downloads query={query} className={buttonClass} />}
       </div>
     </li>
   );

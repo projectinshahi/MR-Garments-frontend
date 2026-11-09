@@ -218,3 +218,148 @@ export type LandedCostByMonthReport = Report<{
   totals: { orders: number; pieces: number; landedCostInr: number; perPieceInr: number | null };
   biggest: { month: string; landedCostInr: number } | null;
 }>;
+
+// Phase 2 (backend docs/phase2-contracts.md sections 4 and 8.R). Owner: Agent R.
+
+/** The dated steps of an order's timeline, in date order; only the steps of sections the user may see. */
+export type OrderTimelineStep = {
+  step: "created" | "deposit" | "payment" | "received" | "loaded" | "sailed" | "arrived" | "cleared" | "dispatched" | "unloaded" | "stocked" | "closed";
+  on: string;
+  detail: string;
+};
+
+export type OrderReportPayment = {
+  id: string;
+  kind: PaymentKind;
+  payee: string;
+  payeeRole: "supplier" | "agent";
+  amountCny: number;
+  /** round2(amountCny x rateInr) when paid; null when due. */
+  amountInr: number | null;
+  status: "paid" | "due";
+  paidOn: string | null;
+  dueDate: string | null;
+  rateInr: number | null;
+  mode: string | null;
+  reference: string;
+  notes: string;
+};
+
+export type OrderReportContainer = {
+  id: string;
+  number: string;
+  status: ContainerState;
+  terms: ContainerTerms;
+  agent: string;
+  portOfLoading: string;
+  portOfArrival: string;
+  loadedOn: string | null;
+  sailedOn: string | null;
+  eta: string;
+  /** This order's lines only. */
+  lines: { orderLineId: string; item: string; unit: Unit; bundles: number; quantity: number }[];
+  /** The container's clearing and its own totals; null without one or below `clearing` View. */
+  clearing: {
+    id: string;
+    agent: string;
+    arrivedOn: string;
+    handedOn: string | null;
+    billOfEntry: string;
+    dutyPaidOn: string | null;
+    clearedOn: string | null;
+    status: "in_clearing" | "cleared";
+    customsDutyInr: number;
+    otherDutiesInr: number;
+    agentChargesInr: number;
+    portChargesInr: number;
+    totalInr: number;
+  } | null;
+  /** The container's road trip and its own totals; null without one or below `transport` View. */
+  transport: {
+    id: string;
+    company: string;
+    lrNumber: string;
+    vehicleNumber: string;
+    driverName: string;
+    destination: string;
+    loadedOn: string;
+    unloadedOn: string | null;
+    bundlesLoaded: number;
+    bundlesReceived: number | null;
+    status: "on_road" | "unloaded";
+    freightInr: number;
+    handlingInr: number;
+    totalInr: number;
+  } | null;
+};
+
+/**
+ * RPT-O1 GET /api/v1/orders/:po/report: everything the order's Report tab shows. A section is null when the user's
+ * access to its capability is below View (payments, containers, warehouse, landedCost).
+ */
+export type OrderReport = {
+  order: {
+    id: string;
+    po: string;
+    supplier: { id: string; name: string; contactPerson: string; phone: string; city: string };
+    orderDate: string;
+    deliveryDate: string;
+    stage: OrderStage;
+    closed: boolean;
+    closedOn: string | null;
+    currency: Currency;
+    orderValueCny: number;
+    /** One total per unit (pieces and metres are never added together). */
+    totals: { unit: Unit; ordered: number; received: number; stocked: number }[];
+  };
+  /** excess = max(0, received - ordered), short = max(0, ordered - received). */
+  lines: { id: string; position: number; item: string; unit: Unit; ordered: number; received: number; excess: number; short: number; loaded: number; stocked: number; rateCny: number; valueCny: number }[];
+  /** Paid, balance, deposits and due count supplier payments only; `list` is every payment, oldest first. */
+  payments: { paidCny: number; paidInr: number; balanceCny: number; depositsPaidCny: number; dueCny: number; list: OrderReportPayment[] } | null;
+  logistics: OrderReportContainer[] | null;
+  /** Every warehouse receipt (draft or stocked) of a trip carrying the order's goods, with this order's pieces per team. */
+  warehouse: { receiptId: string; transportId: string; container: string; warehouse: string; receivedOn: string; receivedBy: string; status: "draft" | "stocked"; bundlesReceived: number; lines: { item: string; unit: Unit; team: string; quantity: number }[] }[] | null;
+  /** loadLandedCosts' figures, unchanged. */
+  landedCost: Omit<LandedCostRow, "po" | "supplier" | "currency" | "item" | "quantity" | "unit" | "terms" | "teams" | "goodsPayments"> | null;
+  timeline: OrderTimelineStep[];
+};
+
+export type OrderState = "pending" | "active" | "closed";
+export type PaymentState = "unpaid" | "partly" | "paid";
+
+/** One row of RPT-O2: the ORD-1 figures with paid and balance counting supplier payments only. */
+export type OrderReportRow = {
+  id: string;
+  po: string;
+  orderDate: string;
+  deliveryDate: string;
+  stage: OrderStage;
+  supplier: Named;
+  currency: Currency;
+  item: string;
+  quantity: number;
+  unit: Unit;
+  received: number;
+  stocked: number;
+  closed: boolean;
+  closedOn: string | null;
+  orderValueCny: number;
+  paidCny: number;
+  paidInr: number;
+  balanceCny: number;
+  paymentStatus: PaymentState;
+  /** null while the order has no cost at all. */
+  landedCostInr: number | null;
+  perPieceInr: number | null;
+};
+
+/**
+ * RPT-O2 GET /api/v1/reports/orders?po&supplierId&from&to&status&warehouseId&paymentStatus: every order (newest
+ * first) matching the filters, the summary of those rows, the filters echoed by name and the page's select options.
+ */
+export type OrderReportsResponse = {
+  rows: OrderReportRow[];
+  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; paidCny: number; balanceCny: number }[]; paidInr: number; landedCostInr: number };
+  filter: { po: string | null; supplier: string | null; from: string | null; to: string | null; status: OrderState | null; warehouse: string | null; paymentStatus: PaymentState | null };
+  options: { suppliers: Named[]; warehouses: Named[] };
+};

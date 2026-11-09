@@ -14,13 +14,15 @@ import { getMe } from "@/lib/session";
 
 // Clearing & transport, Warehouse, Cost and History are hidden: ORD-4 has no per-order section for them yet (the stage
 // screens record clearing, transport and warehouse per container since wave 3).
-// Payments, Receiving and Containers show only when ORD-4 gives the section (the user may view it).
+// Payments, Receiving and Containers show only when ORD-4 gives the section (the user may view it). Report (RPT-O1,
+// docs/phase2-contracts.md 4.3) is always shown: the API nulls the sections the user can't see.
 const TABS: { segment: string; label: string; chip: string; section?: "payments" | "receipts" | "containers" }[] = [
   { segment: "", label: "Overview", chip: "a" },
   { segment: "/items", label: "Items", chip: "b" },
   { segment: "/payments", label: "Deposits & payments", chip: "c", section: "payments" },
   { segment: "/receiving", label: "Receiving", chip: "d", section: "receipts" },
   { segment: "/containers", label: "Containers", chip: "e", section: "containers" },
+  { segment: "/report", label: "Report", chip: "f" },
 ];
 
 /**
