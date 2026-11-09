@@ -52,7 +52,7 @@ const valueColumn: ColumnDef<OrderRow> = {
   accessorKey: "orderValueCny",
   header: "Order value",
   meta: right,
-  cell: ({ row }) => formatMoney(row.original.orderValueCny, row.original.currency),
+  cell: ({ row }) => formatMoney(row.original.orderValueCny, row.original.currency, { decimals: 2 }),
 };
 
 const PENDING: Spec = {
@@ -93,8 +93,9 @@ const CLOSED: Spec = {
     valueColumn,
     orderedColumn,
     { accessorKey: "stocked", header: "Warehouse received", meta: right, cell: ({ row }) => formatQty(row.original.stocked, row.original.unit) },
-    { accessorKey: "paidCny", header: "Total payments", meta: right, cell: ({ row }) => formatMoney(row.original.paidCny, row.original.currency) },
-    { id: "balance", header: "Balance", meta: right, cell: ({ row }) => formatMoney(balanceCny(row.original), row.original.currency, { decimals: 2 }) },
+    // Supplier payments only, as the order report and Payments per supplier count them; the All tab's INR figure keeps every payee.
+    { accessorKey: "supplierPaidCny", header: "Paid to supplier", meta: right, cell: ({ row }) => formatMoney(row.original.supplierPaidCny, row.original.currency, { decimals: 2 }) },
+    { id: "balance", header: "Balance to supplier", meta: right, cell: ({ row }) => formatMoney(balanceCny(row.original), row.original.currency, { decimals: 2 }) },
     { accessorKey: "closedOn", header: "Closed date", cell: ({ row }) => (row.original.closedOn ? formatDate(row.original.closedOn) : "–") },
     {
       // The order's report page (phase 2 §4.3, Agent R); the row itself opens the order.

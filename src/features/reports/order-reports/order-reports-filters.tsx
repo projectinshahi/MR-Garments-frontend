@@ -7,6 +7,7 @@ import { useNavigate } from "@/components/layout/navigation-progress";
 import { Button } from "@/components/ui/button";
 import type { OrderReportsResponse } from "@/lib/api/reports-types";
 
+import { isMonth, monthRange } from "../data/filters";
 import { UrlSelect } from "../report-actions";
 import { DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STATUS_OPTIONS } from "./params";
 
@@ -58,8 +59,11 @@ function BoundTextFilters() {
 
 /** Uncontrolled inputs seeded from the URL (the key remounts them when it changes), read on submit. */
 function TextFilters({ params, onApply, onClear }: { params: URLSearchParams; onApply?: (values: Record<string, string>) => void; onClear?: () => void }) {
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
+  // The hub's ?period=YYYY-MM stands in for the range (params.ts), so the inputs show that month's days.
+  const period = params.get("period");
+  const month = !params.get("from") && !params.get("to") && isMonth(period) ? monthRange(period) : null;
+  const from = params.get("from") ?? month?.from ?? "";
+  const to = params.get("to") ?? month?.to ?? "";
   return (
     <form
       key={params.toString()}

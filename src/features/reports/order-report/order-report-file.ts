@@ -1,7 +1,7 @@
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
+import { stageLabel } from "@/features/orders/order-status";
 import type { OrderReport, OrderTimelineStep } from "@/lib/api/reports-types";
 import { formatDate } from "@/lib/formatters";
-import { STAGES } from "@/types/domain";
 
 import { type Column, money, type ReportFile, type Section } from "../report-files";
 
@@ -30,7 +30,10 @@ export const TIMELINE_LABEL: Record<OrderTimelineStep["step"], string> = {
   closed: "Order closed",
 };
 
-export const stageLabel = (stage: number) => `${stage}. ${STAGES[stage - 1]}`;
+/** A container's state for the report: its trip and clearing say more than the container's own status once it has arrived. */
+export const containerState = (c: Pick<NonNullable<OrderReport["logistics"]>[number], "status" | "clearing" | "transport">) =>
+  c.transport?.status === "unloaded" ? "Unloaded" : c.transport ? "On the road" : c.clearing?.status === "cleared" ? "Cleared" : CONTAINER_STATUS[c.status].label;
+export { stageLabel };
 export const closureLabel = (order: Pick<OrderReport["order"], "closed" | "closedOn">) => (order.closed && order.closedOn ? `Closed on ${formatDate(order.closedOn)}` : "Open");
 /** "Estimate, waiting for duty" or "Final". */
 export const costStatus = (cost: NonNullable<OrderReport["landedCost"]>) => (cost.final ? "Final" : `Estimate, waiting for ${cost.waitingFor}`);
@@ -102,7 +105,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         columns: columns("Container", "Status", "Terms", "Agent", "Port of loading", "Port of arrival", date("Loaded"), date("Sailed"), date("ETA"), "This order's goods"),
         rows: logistics.map((c) => [
           c.number,
-          CONTAINER_STATUS[c.status].label,
+          containerState(c),
           c.terms,
           c.agent,
           c.portOfLoading,

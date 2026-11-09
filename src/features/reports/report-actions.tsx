@@ -49,8 +49,10 @@ export function ExportActions({
   return (
     <>
       {formats.map((format) => (
-        <Button key={format} type="button" variant="outline" size={size} disabled={pending} onClick={() => download(format)}>
-          {FORMAT_LABEL[format]}
+        // "Excel" / "PDF" on a phone, so three header buttons fit beside the title; the accessible name stays the full label.
+        <Button key={format} type="button" variant="outline" size={size} disabled={pending} aria-label={FORMAT_LABEL[format]} onClick={() => download(format)}>
+          <span className="max-sm:hidden">Export </span>
+          {FORMAT_LABEL[format].replace("Export ", "")}
         </Button>
       ))}
     </>

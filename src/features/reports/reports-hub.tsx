@@ -74,7 +74,7 @@ const CARDS: ReportCard[] = [
     description: "Every order with its payments, closure and landed cost; filter and download.",
     href: "/reports/orders",
     Downloads: OrderReportsDownloads,
-    stat: (s) => `${plural(s.orders.total, "order")} · ${formatNumber(s.landedCost.finishedOrders)} finished`,
+    stat: (s) => `${plural(s.orders.total, "order")} · ${formatNumber(s.orders.atStage1)} pending`,
   },
 ];
 

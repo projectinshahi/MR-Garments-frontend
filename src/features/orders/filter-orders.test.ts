@@ -31,6 +31,7 @@ const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"
   closedOn: null,
   orderValueCny: 0,
   paidCny: 0,
+  supplierPaidCny: 0,
   paidInr: 0,
   status: "",
   tone: "success",
@@ -85,15 +86,15 @@ describe("Pending and Closed tabs (phase 2 §1, §5)", () => {
     expect(pendingQty({ quantity: 100, received: 0 })).toBe(100);
     expect(pendingQty({ quantity: 100, received: 60 })).toBe(40);
     expect(pendingQty({ quantity: 100, received: 130 })).toBe(0);
-    expect(balanceCny({ orderValueCny: 44400, paidCny: 20000.1 })).toBe(24399.9);
-    expect(balanceCny({ orderValueCny: 0.3, paidCny: 0.1 })).toBe(0.2);
+    expect(balanceCny({ orderValueCny: 44400, supplierPaidCny: 20000.1 })).toBe(24399.9);
+    expect(balanceCny({ orderValueCny: 0.3, supplierPaidCny: 0.1 })).toBe(0.2);
   });
 
   it("payment status: Unpaid at zero, Paid at or over the order value, else Partly paid", () => {
-    expect(paymentStatus({ paidCny: 0, orderValueCny: 1000 })).toEqual({ label: "Unpaid", tone: "neutral" });
-    expect(paymentStatus({ paidCny: 500, orderValueCny: 1000 })).toEqual({ label: "Partly paid", tone: "warning" });
-    expect(paymentStatus({ paidCny: 1000, orderValueCny: 1000 })).toEqual({ label: "Paid", tone: "success" });
-    expect(paymentStatus({ paidCny: 1200, orderValueCny: 1000 })).toMatchObject({ label: "Paid" });
+    expect(paymentStatus({ supplierPaidCny: 0, orderValueCny: 1000 })).toEqual({ label: "Unpaid", tone: "neutral" });
+    expect(paymentStatus({ supplierPaidCny: 500, orderValueCny: 1000 })).toEqual({ label: "Partly paid", tone: "warning" });
+    expect(paymentStatus({ supplierPaidCny: 1000, orderValueCny: 1000 })).toEqual({ label: "Paid", tone: "success" });
+    expect(paymentStatus({ supplierPaidCny: 1200, orderValueCny: 1000 })).toMatchObject({ label: "Paid" });
   });
 
   const open: TabFilters = { query: "", supplier: null, from: "", to: "" };

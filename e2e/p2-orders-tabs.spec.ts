@@ -46,7 +46,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
     shortDate(today(30)),
     "100 pcs",
     "100 pcs",
-    cny(1000),
+    `${cny(1000)}.00`,
     "Unpaid",
     "1. Order and deposit",
   ]);
@@ -58,7 +58,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
     shortDate(today(30)),
     "75 pcs",
     "75 pcs",
-    cny(2250),
+    `${cny(2250)}.00`,
     "Partly paid",
     "1. Order and deposit",
   ]);

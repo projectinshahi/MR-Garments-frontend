@@ -181,7 +181,10 @@ export type OrderListItem = {
   closed: boolean;
   closedOn: string | null;
   orderValueCny: number;
+  /** Every paid payment, agent (sea freight) ones included. */
   paidCny: number;
+  /** Paid payments to the supplier only: the Pending tab's payment status and the Closed tab's balance to the supplier read this. */
+  supplierPaidCny: number;
   paidInr: number;
 };
 

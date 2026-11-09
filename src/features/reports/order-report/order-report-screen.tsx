@@ -180,8 +180,8 @@ export function OrderReportScreen({ report, today }: { report: OrderReport; toda
             </span>,
             formatQty(line.ordered, line.unit),
             formatQty(line.received, line.unit),
-            line.excess > 0 ? <span className="font-bold text-warning">{formatQty(line.excess, line.unit)}</span> : "0",
-            line.short > 0 ? <span className="font-bold text-danger">{formatQty(line.short, line.unit)}</span> : "0",
+            line.excess > 0 ? <span className="font-bold text-warning">{formatQty(line.excess, line.unit)}</span> : formatQty(0, line.unit),
+            line.short > 0 ? <span className="font-bold text-danger">{formatQty(line.short, line.unit)}</span> : formatQty(0, line.unit),
             formatQty(line.loaded, line.unit),
             formatQty(line.stocked, line.unit),
             `${money(line.rateCny, 2)} / ${line.unit}`,
@@ -202,7 +202,7 @@ export function OrderReportScreen({ report, today }: { report: OrderReport; toda
                 { label: "Of which deposits", value: money(payments.depositsPaidCny), muted: true },
                 { label: "Due", value: money(payments.dueCny), muted: true },
               ]}
-              total={{ label: "Balance", value: money(payments.balanceCny) }}
+              total={{ label: "Balance to supplier", value: money(payments.balanceCny) }}
             />
             <ReportTable
               columns={[{ header: "Date" }, { header: "Type" }, { header: "Payee" }, right("Amount"), right("Rate"), right("INR"), { header: "Mode" }, { header: "Reference" }, { header: "Status" }]}

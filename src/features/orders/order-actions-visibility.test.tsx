@@ -63,6 +63,7 @@ const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   closedOn: null,
   orderValueCny: 1000,
   paidCny: 0,
+  supplierPaidCny: 0,
   paidInr: 0,
   status: "On track",
   tone: "success",

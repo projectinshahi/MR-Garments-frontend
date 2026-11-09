@@ -40,14 +40,14 @@ export const closedOrders = (orders: OrderRow[]) => orders.filter((order) => ord
 /** Main line still to receive; excess (received > ordered) never goes below 0. */
 export const pendingQty = (order: Pick<OrderRow, "quantity" | "received">) => Math.max(0, order.quantity - order.received);
 
-/** Balance owed to the supplier in the order's currency, to the cent as the API rounds. */
-export const balanceCny = (order: Pick<OrderRow, "orderValueCny" | "paidCny">) => Math.round((order.orderValueCny - order.paidCny) * 100) / 100;
+/** Balance owed to the supplier in the order's currency (order value less what the supplier was paid; agent payments are sea freight), to the cent. */
+export const balanceCny = (order: Pick<OrderRow, "orderValueCny" | "supplierPaidCny">) => Math.round((order.orderValueCny - order.supplierPaidCny) * 100) / 100;
 
 export type PaymentStatus = { label: "Unpaid" | "Partly paid" | "Paid"; tone: Tone };
-/** Deposit/payment status from the supplier payments against the order value. Proposed tones: neutral, warning, success. */
-export function paymentStatus({ paidCny, orderValueCny }: Pick<OrderRow, "paidCny" | "orderValueCny">): PaymentStatus {
-  if (paidCny <= 0) return { label: "Unpaid", tone: "neutral" };
-  if (paidCny >= orderValueCny) return { label: "Paid", tone: "success" };
+/** Deposit/payment status from the payments to the supplier against the order value (13.5). Proposed tones: neutral, warning, success. */
+export function paymentStatus({ supplierPaidCny, orderValueCny }: Pick<OrderRow, "supplierPaidCny" | "orderValueCny">): PaymentStatus {
+  if (supplierPaidCny <= 0) return { label: "Unpaid", tone: "neutral" };
+  if (supplierPaidCny >= orderValueCny) return { label: "Paid", tone: "success" };
   return { label: "Partly paid", tone: "warning" };
 }
 

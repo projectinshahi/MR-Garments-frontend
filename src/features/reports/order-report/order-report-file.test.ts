@@ -127,7 +127,7 @@ describe("order report file", () => {
 
   it("lists containers with this order's goods, a clearing row per cleared container and no transport row without a trip", () => {
     const [containers, clearing, transport] = file.sections.slice(5, 8);
-    expect(containers!.rows[0]).toEqual(["TCLU6000000", "Arrived, in clearing", "CNF", "Sino Freight", "Nansha", "Kochi", "2026-10-20", "2026-10-20", "2026-10-28", "Denim jeans: 100 pcs"]);
+    expect(containers!.rows[0]).toEqual(["TCLU6000000", "Cleared", "CNF", "Sino Freight", "Nansha", "Kochi", "2026-10-20", "2026-10-20", "2026-10-28", "Denim jeans: 100 pcs"]);
     expect(clearing!.rows).toEqual([["TCLU6000000", "Kochi Clearing Services", "2026-10-30", null, "BE-1", "2026-11-01", "2026-11-02", "Cleared", 19600, 14200, 1800, 1450, 37050]]);
     expect(transport!.rows).toEqual([]);
   });

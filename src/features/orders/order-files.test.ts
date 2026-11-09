@@ -21,6 +21,7 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   closedOn: null,
   orderValueCny: 1000,
   paidCny: 0,
+  supplierPaidCny: 0,
   paidInr: 0,
   status: "On track",
   tone: "success",
@@ -40,8 +41,8 @@ describe("orders export files (phase 2 §5, §6)", () => {
 
   it("Pending: one table per currency with the pending quantity and payment status derived", () => {
     const rows = [
-      row("PO-2053", { received: 60, paidCny: 500 }),
-      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", quantity: 75, orderValueCny: 2250, paidCny: 2250 }),
+      row("PO-2053", { received: 60, paidCny: 500, supplierPaidCny: 500 }),
+      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", quantity: 75, orderValueCny: 2250, paidCny: 2250, supplierPaidCny: 2250 }),
     ];
     const file = pendingOrdersFile(rows, "Supplier: All suppliers", TODAY);
     expect(file).toMatchObject({ title: "Pending orders", filename: "pending-orders-2026-11-09" });
@@ -54,10 +55,10 @@ describe("orders export files (phase 2 §5, §6)", () => {
   });
 
   it("Closed: stocked quantity, payments and the balance to the cent; no rows gives one empty CNY table", () => {
-    const closed = row("PO-2050", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", paidCny: 600.5 });
+    const closed = row("PO-2050", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", paidCny: 600.5, supplierPaidCny: 600.5 });
     const file = closedOrdersFile([closed], "Closed date: from 1 Oct 2026", TODAY);
     expect(file).toMatchObject({ title: "Closed orders", filename: "closed-orders-2026-11-09", filters: "Closed date: from 1 Oct 2026" });
-    expect(headers(file)).toEqual(["PO", "Supplier", "Order value (CNY)", "Ordered qty", "Unit", "Warehouse received qty", "Total payments (CNY)", "Balance (CNY)", "Closed date"]);
+    expect(headers(file)).toEqual(["PO", "Supplier", "Order value (CNY)", "Ordered qty", "Unit", "Warehouse received qty", "Paid to supplier (CNY)", "Balance to supplier (CNY)", "Closed date"]);
     expect(file.sections[0]!.rows).toEqual([["PO-2050", "Foshan Fabrics", 1000, 100, "pcs", 100, 600.5, 399.5, "2026-10-20"]]);
 
     const empty = closedOrdersFile([], "No filters", TODAY);

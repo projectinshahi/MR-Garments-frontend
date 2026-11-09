@@ -77,10 +77,10 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         text("Ordered qty"),
         text("Unit"),
         text("Warehouse received qty"),
-        money("Total payments", currency),
-        money("Balance", currency),
+        money("Paid to supplier", currency),
+        money("Balance to supplier", currency),
         date("Closed date"),
       ],
-      rows: list.map((o) => [o.po, o.supplier, o.orderValueCny, o.quantity, o.unit, o.stocked, o.paidCny, balanceCny(o), o.closedOn]),
+      rows: list.map((o) => [o.po, o.supplier, o.orderValueCny, o.quantity, o.unit, o.stocked, o.supplierPaidCny, balanceCny(o), o.closedOn]),
     })),
   );

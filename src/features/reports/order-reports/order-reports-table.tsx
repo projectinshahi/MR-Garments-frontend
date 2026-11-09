@@ -52,7 +52,7 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
     { accessorKey: "perPieceInr", header: "Per piece", meta: { align: "right" }, cell: ({ row }) => (row.original.perPieceInr === null ? DASH : formatINR(row.original.perPieceInr, 2)) },
     {
       id: "report",
-      header: "",
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) =>
         linkPos ? (
           <Link href={`${orderHref(row.original.po)}/report`} aria-label={`Report: ${row.original.po}`} className="rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">

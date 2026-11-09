@@ -27,6 +27,7 @@ const order = (po: string, patch: Partial<OrderListItem>): OrderListItem => ({
   closedOn: null,
   orderValueCny: 44400,
   paidCny: 20000,
+  supplierPaidCny: 20000,
   paidInr: 232000,
   ...patch,
 });

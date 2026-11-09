@@ -15,8 +15,8 @@ const sum = <T>(rows: T[], pick: (row: T) => number) => Math.round(rows.reduce((
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 export const PAYMENT_STATE_LABEL: Record<OrderReportRow["paymentStatus"], string> = { unpaid: "Unpaid", partly: "Partly paid", paid: "Paid" };
-/** The row's status as the lists show it; a closed order reads "Closed" (section 1.1). */
-export const rowStatus = (row: OrderReportRow, today: string) => (row.closed ? { label: "Closed", tone: "success" as const } : orderStatus(row, today));
+/** The row's status as the lists show it (a closed order reads "Closed", section 1.1). */
+export const rowStatus = (row: OrderReportRow, today: string) => orderStatus(row, today);
 
 function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): Section {
   return {

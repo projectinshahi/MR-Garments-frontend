@@ -30,6 +30,7 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   closedOn: null,
   orderValueCny: 1000,
   paidCny: 0,
+  supplierPaidCny: 0,
   paidInr: 0,
   status: "On track",
   tone: "success",
@@ -37,9 +38,9 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   ...patch,
 });
 const orders = [
-  row("PO-2053", { received: 60, paidCny: 500, orderDate: "2026-10-05" }),
+  row("PO-2053", { received: 60, paidCny: 500, supplierPaidCny: 500, orderDate: "2026-10-05" }),
   row("PO-2052", { stage: 2, received: 100 }),
-  row("PO-2040", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", paidCny: 600 }),
+  row("PO-2040", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", paidCny: 600, supplierPaidCny: 600 }),
   row("PO-2039", { stage: 6, received: 100, stocked: 0 }),
 ];
 const cells = (po: string) =>
@@ -60,7 +61,7 @@ describe("Pending tab", () => {
     expect(screen.getByRole("link", { name: "+ New order" })).toHaveAttribute("href", "/orders/new");
 
     expect(screen.getAllByRole("row")).toHaveLength(2);
-    expect(cells("PO-2053")).toEqual(["PO-2053", "Foshan Fabrics", "5 Oct", "15 Nov", "100 pcs", "40 pcs", "¥1,000", "Partly paid", "1. Order and deposit"]);
+    expect(cells("PO-2053")).toEqual(["PO-2053", "Foshan Fabrics", "5 Oct", "15 Nov", "100 pcs", "40 pcs", "¥1,000.00", "Partly paid", "1. Order and deposit"]);
     expect(screen.getByText("Showing 1 to 1 of 1 orders")).toBeVisible();
   });
 
@@ -87,7 +88,7 @@ describe("Closed tab", () => {
   it("lists closed orders only (not every stage 6), with stocked quantity, payments, balance, date and a Report link", () => {
     render(<ClosedList orders={orders} supplierNames={["Foshan Fabrics"]} canEdit={false} />);
     expect(screen.getAllByRole("row")).toHaveLength(2);
-    expect(cells("PO-2040")).toEqual(["PO-2040", "Foshan Fabrics", "¥1,000", "100 pcs", "100 pcs", "¥600", "¥400.00", "20 Oct 2026", "Report"]);
+    expect(cells("PO-2040")).toEqual(["PO-2040", "Foshan Fabrics", "¥1,000.00", "100 pcs", "100 pcs", "¥600.00", "¥400.00", "20 Oct 2026", "Report"]);
     expect(screen.getByRole("link", { name: "Report PO-2040" })).toHaveAttribute("href", "/orders/PO-2040/report");
     expect(screen.getByRole("link", { name: "PO-2040" })).toHaveAttribute("href", "/orders/PO-2040");
   });
