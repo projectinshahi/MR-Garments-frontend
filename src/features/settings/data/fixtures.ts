@@ -7,11 +7,18 @@ import type { SupplierDraft } from "../settings-logic";
  * 53_17.4_Add_supplier_(pop-up).jpeg, which draws it partly filled with Ningbo Denim Works.
  */
 export const supplierDraft: SupplierDraft = {
+  code: "",
   name: "",
+  country: "",
   city: "",
+  state: "",
+  postalCode: "",
   contactPerson: "",
+  email: "",
   phone: "",
   currency: "CNY",
   address: "",
+  paymentTerms: "",
+  taxNumber: "",
   notes: "",
 };

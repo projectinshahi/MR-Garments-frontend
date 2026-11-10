@@ -1,6 +1,6 @@
 import type { Currency, MoneyTotal, RecordStatus } from "@/types/domain";
 
-import type { ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, Unit } from "./types";
+import type { ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, SupplierProfile, Unit } from "./types";
 
 // Landed cost and Reports (backend docs/wave3-contracts.md sections 6.4, 7 and 8). Owner: A6. INR amounts have 2
 // decimals; dates are YYYY-MM-DD; months YYYY-MM. Order-currency amounts (...Cny) come with their `currency`, and their
@@ -160,7 +160,7 @@ type Page<T> = { rows: T[]; total: number; page: number; pageSize: 10 };
  * The summary ignores all but the period. Amounts are in each order's currency (`...Cny` is the legacy name).
  */
 export type SupplierPaymentDetail = {
-  supplier: { id: string; name: string; contactPerson: string; phone: string; city: string; address: string; currency: Currency; status: RecordStatus };
+  supplier: { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus } & SupplierProfile;
   filter: { from: string | null; to: string | null };
   summary: {
     orders: number;

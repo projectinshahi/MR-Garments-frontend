@@ -17,7 +17,7 @@ import type { SupplierDraft } from "./settings-logic";
 const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "name", header: "Supplier", meta: bold },
   { accessorKey: "contactPerson", header: "Contact person" },
-  { accessorKey: "phone", header: "Phone / WeChat" },
+  { accessorKey: "phone", header: "Phone" },
   { accessorKey: "city", header: "City" },
   { accessorKey: "currency", header: "Currency", cell: ({ row }) => CURRENCY_SYMBOL[row.original.currency] },
   { accessorKey: "openOrders", header: "Open orders", meta: right },

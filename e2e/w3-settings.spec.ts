@@ -77,7 +77,7 @@ test("the Add supplier dialog opens empty, closes and validates", async ({ page 
   await expect(page).toHaveURL(/\?dialog=add$/);
   const dialog = page.getByRole("dialog", { name: "Add supplier" });
   await expect(dialog).toBeVisible();
-  for (const label of ["Supplier name", "City", "Contact person", "Phone / WeChat", "Address", "Notes"]) {
+  for (const label of ["Supplier name", "City", "Contact person", "Phone", "Address", "Notes"]) {
     await expect(dialog.getByLabel(label)).toHaveValue("");
   }
   await expect(dialog.getByLabel("Currency")).toHaveValue("CNY");

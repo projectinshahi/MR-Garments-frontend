@@ -33,17 +33,39 @@ describe("filterRecords", () => {
 
 describe("add supplier", () => {
   const ningbo = {
+    code: "SUP-006",
     name: "Ningbo Denim Works",
+    country: "China",
     city: "Ningbo",
+    state: "",
+    postalCode: "",
     contactPerson: "Mr. Xu Feng",
+    email: "",
     phone: "+86 138 5740 9921",
     currency: "CNY" as const,
     address: "",
+    paymentTerms: "",
+    taxNumber: "",
     notes: "",
   };
 
   it("opens empty with yuan selected, and requires a supplier name", () => {
-    expect(supplierDraft).toEqual({ name: "", city: "", contactPerson: "", phone: "", currency: "CNY", address: "", notes: "" });
+    expect(supplierDraft).toEqual({
+      code: "",
+      name: "",
+      country: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      contactPerson: "",
+      email: "",
+      phone: "",
+      currency: "CNY",
+      address: "",
+      paymentTerms: "",
+      taxNumber: "",
+      notes: "",
+    });
     for (const name of ["", "   "]) {
       const result = supplierSchema.safeParse({ ...ningbo, name });
       expect(result.success).toBe(false);

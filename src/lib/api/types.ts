@@ -1,6 +1,6 @@
 // API contracts shared with the backend (MR-Garments-Backend docs/contracts.md). Coordinator-owned.
 
-import type { Currency, RecordStatus, Role } from "@/types/domain";
+import type { Currency, MoneyTotal, RecordStatus, Role } from "@/types/domain";
 
 export type Access = "None" | "View" | "Enter" | "Full";
 
@@ -48,8 +48,34 @@ export type RolesResponse = {
 // Master-data lists (backend docs/contracts.md, "Endpoint formats fixed in Phase 0"). Arrays in creation order.
 type Contact = { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus };
 
-/** MD-1 GET /api/v1/suppliers */
-export type SupplierRow = Contact & { city: string; address: string; notes: string; currency: Currency; openOrders: number };
+/** A supplier's profile beyond its name and contact (backend docs/suppliers.md, migration 0011). */
+export type SupplierProfile = {
+  /** Unique, upper-case: SUP-001 when the API assigned it. */
+  code: string;
+  email: string;
+  country: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  address: string;
+  paymentTerms: string;
+  taxNumber: string;
+  notes: string;
+  currency: Currency;
+};
+/**
+ * MD-1 GET /api/v1/suppliers. `ytdValue`: this year's order value; `balance`: what is still owed over every order;
+ * both one entry per order currency present (never added together), `[]` without orders.
+ */
+export type SupplierRow = Contact &
+  SupplierProfile & {
+    /** Orders with stage < 6 (the Settings tab's "Open orders"). */
+    openOrders: number;
+    /** Orders not closed (phase 2 §1): the Suppliers list's "Active POs", the same rule as its Open POs card. */
+    openPos: number;
+    ytdValue: MoneyTotal[];
+    balance: MoneyTotal[];
+  };
 /** MD-4 GET /api/v1/shipping-agents */
 export type ShippingAgentRow = Contact & { officeCity: string; activeContainers: number };
 /** MD-7 GET /api/v1/clearing-agents */
@@ -93,8 +119,11 @@ export type ItemRow = {
 type Editable<T> = Partial<T> & { status?: RecordStatus };
 type ContactBody = { name: string; contactPerson?: string; phone?: string };
 
-/** MD-2 POST /api/v1/suppliers. `currency` (CNY when left out) is the default for the supplier's new orders. */
-export type CreateSupplierBody = ContactBody & { city?: string; address?: string; notes?: string; currency?: Currency };
+/**
+ * MD-2 POST /api/v1/suppliers. `currency` (CNY when left out) is the default for the supplier's new orders; `code`
+ * left out is assigned (SUP-nnn), else kept upper-case (409 `code_exists` under code when another supplier has it).
+ */
+export type CreateSupplierBody = ContactBody & Partial<SupplierProfile>;
 /** PATCH /api/v1/suppliers/:id. A new currency applies to new orders only. */
 export type UpdateSupplierBody = Editable<CreateSupplierBody>;
 export type SupplierResponse = { supplier: SupplierRow };

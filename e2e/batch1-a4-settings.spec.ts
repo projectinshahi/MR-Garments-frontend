@@ -41,7 +41,7 @@ async function fillSupplier(dialog: Locator, name: string) {
   await dialog.getByLabel("Supplier name").fill(name);
   await dialog.getByLabel("City").fill(NINGBO.city);
   await dialog.getByLabel("Contact person").fill(NINGBO.contactPerson);
-  await dialog.getByLabel("Phone / WeChat").fill(NINGBO.phone);
+  await dialog.getByLabel("Phone").fill(NINGBO.phone);
   await dialog.getByLabel("Address").fill(NINGBO.address);
   await dialog.getByLabel("Notes").fill(NINGBO.notes);
 }
@@ -115,7 +115,9 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   // Address and notes are stored, though the table doesn't show them.
   const response = await page.request.get("/api/v1/suppliers?search=ningbo");
   expect(response.ok()).toBe(true);
-  expect(await response.json()).toEqual([{ ...NINGBO, id: expect.any(String), currency: "CNY", openOrders: 0, status: "Active" }]);
+  // The profile fields (docs/suppliers.md) stay empty, the code is the next SUP-nnn, and the money lists are empty without orders.
+  const profile = { code: expect.stringMatching(/^SUP-\d{3,}$/), country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "", openPos: 0, ytdValue: [], balance: [] };
+  expect(await response.json()).toEqual([{ ...NINGBO, ...profile, id: expect.any(String), currency: "CNY", openOrders: 0, status: "Active" }]);
 });
 
 test("AT-S5: adding ningbo denim works again shows M22 and saves nothing", async ({ page }) => {

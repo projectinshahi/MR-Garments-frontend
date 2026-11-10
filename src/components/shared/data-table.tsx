@@ -4,6 +4,7 @@ import {
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
   type ColumnDef,
   type RowData,
@@ -50,6 +51,8 @@ type DataTablePagination = {
   onPageChange?: (pageIndex: number) => void;
   /** The page shown (0-based) when the caller owns it, e.g. from the URL; then only `onPageChange` moves it. */
   pageIndex?: number;
+  /** Offers a "Rows per page" select with these sizes (the Suppliers list: 5, 10, 25, 50); the page goes back to 1 on a change. */
+  pageSizeOptions?: number[];
 };
 
 type DataTableProps<TData, TValue> = {
@@ -83,6 +86,8 @@ type DataTableProps<TData, TValue> = {
   emptyState?: React.ReactNode;
   /** Omit to show every row (most reference tables are unpaginated). */
   pagination?: DataTablePagination;
+  /** Column headers with an accessor become sort toggles (none, ascending, descending), as on the Suppliers list. */
+  sortable?: boolean;
   className?: string;
 };
 
@@ -102,6 +107,7 @@ export function DataTable<TData, TValue>({
   onRowClick,
   emptyState = "No results.",
   pagination,
+  sortable = false,
   className,
 }: DataTableProps<TData, TValue>) {
   const manual = pagination?.rowCount !== undefined;
@@ -110,6 +116,7 @@ export function DataTable<TData, TValue>({
     columns,
     getRowId,
     getCoreRowModel: getCoreRowModel(),
+    ...(sortable ? { getSortedRowModel: getSortedRowModel() } : { enableSorting: false }),
     ...(pagination
       ? {
           getPaginationRowModel: manual ? undefined : getPaginationRowModel(),
@@ -143,6 +150,7 @@ export function DataTable<TData, TValue>({
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
+                  aria-sort={header.column.getIsSorted() === "asc" ? "ascending" : header.column.getIsSorted() === "desc" ? "descending" : undefined}
                   className={cn(
                     // dense: the header sits right under a SectionCard title (titleGap="none"), text low in its 36 px.
                     dense ? "h-9 pt-[7px]" : headerHeight === "tall" ? "h-[39px]" : sm ? "h-[34px]" : density === "compact" ? "h-9" : "h-11",
@@ -156,7 +164,20 @@ export function DataTable<TData, TValue>({
                     header.column.columnDef.meta?.className,
                   )}
                 >
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  {header.isPlaceholder ? null : sortable && header.column.getCanSort() ? (
+                    <button
+                      type="button"
+                      onClick={header.column.getToggleSortingHandler()}
+                      className="inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      <span aria-hidden className={cn("text-[10px]", header.column.getIsSorted() ? "text-primary" : "text-muted-foreground/60")}>
+                        {header.column.getIsSorted() === "asc" ? "▲" : header.column.getIsSorted() === "desc" ? "▼" : "⇅"}
+                      </span>
+                    </button>
+                  ) : (
+                    flexRender(header.column.columnDef.header, header.getContext())
+                  )}
                 </TableHead>
               ))}
             </TableRow>
@@ -231,10 +252,32 @@ function DataTablePager<TData>({ table, pagination }: { table: TanstackTable<TDa
 
   return (
     <nav aria-label="Table pagination" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-5 py-3.5">
-      <p className="text-[13px] text-muted-foreground">
-        Showing {from} to {to} of {total}
-        {pagination.itemLabel ? ` ${pagination.itemLabel}` : ""}
-      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="text-[13px] text-muted-foreground">
+          Showing {from} to {to} of {total}
+          {pagination.itemLabel ? ` ${pagination.itemLabel}` : ""}
+        </p>
+        {pagination.pageSizeOptions ? (
+          <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            Rows per page
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                table.setPageSize(Number(event.target.value));
+                table.setPageIndex(0);
+                pagination.onPageChange?.(0);
+              }}
+              className="h-[30px] rounded-md border bg-card px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {pagination.pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={box} aria-label="Previous page" onClick={() => go(pageIndex - 1)} disabled={!table.getCanPreviousPage()}>
           ‹

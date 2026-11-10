@@ -8,7 +8,7 @@ import { Suspense } from "react";
 
 import { cn, decodePath } from "@/lib/utils";
 
-export type RouteTab = { href: string; label: string; /** Letter or number chip: "a", "1". */ chip: string };
+export type RouteTab = { href: string; label: string; /** Letter or number chip: "a", "1"; none on the Suppliers tabs. */ chip?: string };
 
 /**
  * 46 px tab bar under the header (order detail a–i, calendar a–c, settings 1–7, users 1–3).
@@ -43,15 +43,17 @@ function Tabs({ tabs, pathname }: { tabs: RouteTab[]; pathname: string | null })
           active ? "font-bold text-primary" : "text-muted-foreground hover:text-foreground",
         )}
       >
-        <span
-          aria-hidden
-          className={cn(
-            "flex size-[18px] items-center justify-center rounded-[5px] text-[11px] font-bold",
-            active ? "bg-primary text-white" : "bg-chip-muted text-muted-foreground",
-          )}
-        >
-          {tab.chip}
-        </span>
+        {tab.chip ? (
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-[18px] items-center justify-center rounded-[5px] text-[11px] font-bold",
+              active ? "bg-primary text-white" : "bg-chip-muted text-muted-foreground",
+            )}
+          >
+            {tab.chip}
+          </span>
+        ) : null}
         {tab.label}
         {active ? <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-primary" /> : null}
         <LinkPending />

@@ -24,7 +24,23 @@ type Totals = SupplierPaymentDetail["summary"]["byCurrency"][number];
 const plural = (count: number, noun: string) => `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 const orDash = (value: string) => value.trim() || "–";
 
-export function SupplierDetailScreen({ page, linkPos }: { page: SupplierDetailPage; linkPos: boolean }) {
+/**
+ * `parent` and `base`: the Suppliers page shows the same detail as its View action (/suppliers/<id>, back to the
+ * Suppliers list) with its own header `actions`; the report leaves them out.
+ */
+export function SupplierDetailScreen({
+  page,
+  linkPos,
+  parent,
+  base,
+  actions,
+}: {
+  page: SupplierDetailPage;
+  linkPos: boolean;
+  parent?: { label: string; href: string };
+  base?: string;
+  actions?: React.ReactNode;
+}) {
   const { data } = page;
   const { supplier, summary } = data;
   const params = new URLSearchParams(page.search);
@@ -37,27 +53,37 @@ export function SupplierDetailScreen({ page, linkPos }: { page: SupplierDetailPa
 
   const details = [
     { label: "Name", value: supplier.name },
+    { label: "Supplier code", value: orDash(supplier.code) },
     { label: "Supplier ID", value: <span className="break-all">{supplier.id}</span> },
+    { label: "Country", value: orDash(supplier.country) },
     { label: "Contact person", value: orDash(supplier.contactPerson) },
+    { label: "Email", value: orDash(supplier.email) },
     { label: "Phone", value: orDash(supplier.phone) },
-    { label: "City", value: orDash(supplier.city) },
     { label: "Address", value: orDash(supplier.address) },
+    { label: "City", value: orDash(supplier.city) },
+    { label: "State / Province", value: orDash(supplier.state) },
+    { label: "Postal code", value: orDash(supplier.postalCode) },
+    { label: "Payment terms", value: orDash(supplier.paymentTerms) },
     { label: "Payment currency", value: CURRENCY_NAME[supplier.currency] },
+    { label: "Tax / registration number", value: orDash(supplier.taxNumber) },
+    { label: "Notes", value: orDash(supplier.notes) },
     { label: "Status", value: <StatusPill tone={supplier.status === "Active" ? "success" : "neutral"}>{supplier.status}</StatusPill> },
   ];
+  const half = Math.ceil(details.length / 2);
 
   return (
     <>
       <PageHeader
         title={supplier.name}
-        parent={{ label: "Payments per supplier", href: `/reports/payments-per-supplier${page.query}` }}
+        parent={parent ?? { label: "Payments per supplier", href: `/reports/payments-per-supplier${page.query}` }}
         titleAddon={period ? <StatusPill tone="neutral">{period}</StatusPill> : undefined}
+        actions={actions}
       />
       <PageContainer>
         <SectionCard title="Supplier overview">
           <div className="grid gap-x-10 lg:grid-cols-2">
-            <KeyValueList boldValues items={details.slice(0, 4)} />
-            <KeyValueList boldValues items={details.slice(4)} className="border-t border-border-subtle lg:border-t-0" />
+            <KeyValueList boldValues items={details.slice(0, half)} />
+            <KeyValueList boldValues items={details.slice(half)} className="border-t border-border-subtle lg:border-t-0" />
           </div>
         </SectionCard>
         <KpiRow gap="sm">
@@ -84,7 +110,7 @@ export function SupplierDetailScreen({ page, linkPos }: { page: SupplierDetailPa
           <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub="order value less paid" />
         </KpiRow>
 
-        <DetailUrlProvider base={`/reports/payments-per-supplier/${supplier.id}`} search={page.search}>
+        <DetailUrlProvider base={base ?? `/reports/payments-per-supplier/${supplier.id}`} search={page.search}>
           <SectionCard title="Payments" titleGap="none" className="min-w-0">
             <CardSubtitle>Payments to the supplier on these orders, newest first</CardSubtitle>
             <div className="mt-3 flex flex-col gap-3">

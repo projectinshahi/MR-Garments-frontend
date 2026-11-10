@@ -35,6 +35,8 @@ export const MANAGEMENT_NAV: NavSection[] = [
     label: "Management",
     items: [
       { title: "Landed Cost", href: "/landed-cost" },
+      // Supplier management (docs/suppliers.md): Management only, like the Settings tab it extends.
+      { title: "Suppliers", href: "/suppliers" },
       { title: "Reports", href: "/reports" },
     ],
   },
@@ -81,6 +83,7 @@ const ROUTE_CAPABILITY: [string, Capability][] = [
   ["/transport", "transport"],
   ["/warehouse", "warehouse"],
   ["/landed-cost", "landedCost"],
+  ["/suppliers", "admin"],
   ["/reports", "reports"],
   ["/settings", "admin"],
   ["/users", "admin"],

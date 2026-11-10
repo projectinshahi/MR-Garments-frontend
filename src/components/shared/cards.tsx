@@ -57,12 +57,32 @@ export function CardNote({ size = "default", className, ...props }: React.Compon
   return <span className={cn(size === "sm" ? "text-[13px]" : "text-sm", "text-muted-foreground", className)} {...props} />;
 }
 
+const KPI_TINTS = {
+  info: "bg-info-soft text-info",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning",
+  danger: "bg-danger-soft text-danger",
+  purple: "bg-purple-soft text-purple",
+} as const;
+/** A faint tint in place of the white card background (the later bg class wins in cn), so the five Suppliers cards read as a set. */
+const KPI_WASHES: Record<keyof typeof KPI_TINTS, string> = {
+  info: "bg-info-soft/40",
+  success: "bg-success-soft/40",
+  warning: "bg-warning-soft/40",
+  danger: "bg-danger-soft/40",
+  purple: "bg-purple-soft/40",
+};
+
 type KpiCardProps = {
   label: React.ReactNode;
   value: React.ReactNode;
   sub?: React.ReactNode;
   /** "danger" renders the value in strong red (late counts, shortages). */
   tone?: "default" | "danger";
+  /** A Lucide icon drawn top-right in a tinted circle (the Suppliers cards). */
+  icon?: React.ReactNode;
+  /** The icon's circle colour and a faint wash of it over the card. */
+  tint?: keyof typeof KPI_TINTS;
   /**
    * default 106 px tall; sm 104 px with the text set tighter (dashboard, 04); xs 91.5 px with a 28 px value and an
    * 18 px side inset (order detail, payments and the list screens: 08, 09, 12, 16, 22, 24, 26, 28, 30, 31, 33–38).
@@ -78,11 +98,22 @@ const KPI_SIZES = {
 } as const;
 
 /** KPI tile: 13 px label, bold value, 13 px sub-line. */
-export function KpiCard({ label, value, sub, tone = "default", size = "default", className }: KpiCardProps) {
+export function KpiCard({ label, value, sub, tone = "default", icon, tint, size = "default", className }: KpiCardProps) {
   const s = KPI_SIZES[size];
   return (
-    <div className={cn("rounded-xl border bg-card", s.box, className)}>
-      <p className="text-[13px] leading-[18px] text-muted-foreground">{label}</p>
+    <div className={cn("relative rounded-xl border bg-card", s.box, tint && KPI_WASHES[tint], className)}>
+      {icon ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-3.5 right-3.5 flex size-9 items-center justify-center rounded-full [&>svg]:size-[18px]",
+            KPI_TINTS[tint ?? "info"],
+          )}
+        >
+          {icon}
+        </span>
+      ) : null}
+      <p className={cn("text-[13px] leading-[18px] text-muted-foreground", icon && "pr-11")}>{label}</p>
       <p className={cn(s.value, "font-bold", tone === "danger" && "text-danger-strong")}>{value}</p>
       {sub ? <p className={cn("text-[13px] leading-[18px] text-muted-foreground", s.sub)}>{sub}</p> : null}
     </div>

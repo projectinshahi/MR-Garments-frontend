@@ -27,6 +27,9 @@ export const MESSAGES = {
   lastManagement: "At least one active Management user is required.", // M20
   supplierNameEmpty: "Enter the supplier name.", // M21 (existing)
   supplierNameTaken: "A supplier with this name already exists.", // M22
+  supplierCode: "Use up to 20 letters, digits or dashes.", // Suppliers page (backend docs/suppliers.md)
+  supplierCodeTaken: "A supplier with this code already exists.",
+  phoneInvalid: "Enter a valid phone number.",
   noAccess: "You don't have access to do that.", // M23
   somethingWrong: "Something went wrong.", // M24 title (existing ErrorState default)
   tryAgain: "Please try again.", // M24 description (existing ErrorState default)

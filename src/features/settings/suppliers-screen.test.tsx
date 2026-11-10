@@ -22,6 +22,16 @@ const row: SupplierRow = {
   notes: "",
   currency: "CNY",
   openOrders: 0,
+  openPos: 0,
+  code: "SUP-001",
+  email: "",
+  country: "China",
+  state: "",
+  postalCode: "",
+  paymentTerms: "",
+  taxNumber: "",
+  ytdValue: [],
+  balance: [],
   status: "Active",
 };
 

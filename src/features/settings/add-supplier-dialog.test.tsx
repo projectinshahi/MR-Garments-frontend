@@ -33,8 +33,11 @@ const NINGBO = {
   address: "88 Zhongshan Road, Ningbo",
   notes: "Denim only",
 };
-const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, id: "s-6", openOrders: 0, status: "Active" } };
-const ROWS: SupplierRow[] = [saved.supplier, { ...saved.supplier, id: "s-7", name: "Wenzhou Buttons", status: "Inactive" }];
+// The profile fields (backend docs/suppliers.md) of the saved row; the Add form posts them empty unless typed.
+const PROFILE = { code: "SUP-006", country: "China", email: "xu.feng@ningbo-denim.cn", state: "Zhejiang", postalCode: "315000", paymentTerms: "30% deposit", taxNumber: "91330200MA" };
+const EMPTY_PROFILE = { country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "" };
+const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, ...PROFILE, id: "s-6", openOrders: 0, openPos: 0, ytdValue: [], balance: [], status: "Active" } };
+const ROWS: SupplierRow[] = [saved.supplier, { ...saved.supplier, id: "s-7", code: "SUP-007", name: "Wenzhou Buttons", status: "Inactive" }];
 
 function open(query = "dialog=add") {
   nav.query = query;
@@ -50,12 +53,15 @@ beforeEach(() => vi.clearAllMocks());
 
 // The dialog opens empty (user decision, 2026-10-26), so each test types what it needs.
 describe("Add supplier", () => {
-  it("opens empty, with yuan selected and no Status", () => {
+  it("opens empty but for the next code, with yuan selected and no Status", () => {
     const { field } = open();
     expect(screen.getByRole("dialog", { name: "Add supplier" })).toBeVisible();
-    for (const label of ["Supplier name", "City", "Contact person", "Phone / WeChat", "Address", "Notes"]) {
+    for (const label of ["Supplier name", "City", "State / Province", "Postal code", "Contact person", "Email", "Phone", "Address", "Payment terms", "Tax / registration number", "Notes"]) {
       expect(field(label)).toHaveValue("");
     }
+    // The highest SUP-nnn in the list (SUP-007) plus one.
+    expect(field("Supplier code")).toHaveValue("SUP-008");
+    expect(field("Country")).toHaveValue("");
     expect(field("Currency")).toHaveValue("CNY");
     expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
   });
@@ -66,13 +72,13 @@ describe("Add supplier", () => {
     await user.type(field("Supplier name"), NINGBO.name);
     await user.type(field("City"), NINGBO.city);
     await user.type(field("Contact person"), NINGBO.contactPerson);
-    await user.type(field("Phone / WeChat"), NINGBO.phone);
+    await user.type(field("Phone"), NINGBO.phone);
     await user.type(field("Address"), NINGBO.address);
     await user.type(field("Notes"), NINGBO.notes);
     await user.click(save);
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
-    expect(post).toHaveBeenCalledWith("/suppliers", NINGBO);
+    expect(post).toHaveBeenCalledWith("/suppliers", { ...NINGBO, ...EMPTY_PROFILE, code: "SUP-008" });
     expect(toast.success).toHaveBeenCalledWith("Supplier added");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
     expect(replaceState.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
@@ -115,6 +121,30 @@ describe("Add supplier", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it("checks the code, email and phone shapes without calling the API, and shows a taken code under Supplier code", async () => {
+    const { user, field, save } = open();
+    await user.type(field("Supplier name"), NINGBO.name);
+    await user.clear(field("Supplier code"));
+    await user.type(field("Email"), "nope");
+    await user.type(field("Phone"), "call me");
+    await user.click(save);
+    expect(await screen.findByText("Use up to 20 letters, digits or dashes.")).toBeVisible();
+    expect(screen.getByText("Enter a valid email address.")).toBeVisible();
+    expect(screen.getByText("Enter a valid phone number.")).toBeVisible();
+    expect(post).not.toHaveBeenCalled();
+
+    const CODE_TAKEN = "A supplier with this code already exists.";
+    post.mockRejectedValue(new ApiError(409, "code_exists", CODE_TAKEN, { code: CODE_TAKEN }));
+    await user.type(field("Supplier code"), "sup-007");
+    await user.clear(field("Email"));
+    await user.clear(field("Phone"));
+    await user.click(save);
+    expect(await screen.findByText(CODE_TAKEN)).toBeVisible();
+    // Posted upper-case, as the API stores it.
+    expect(post).toHaveBeenCalledWith("/suppliers", expect.objectContaining({ code: "SUP-007" }));
+    expect(field("Supplier code")).toHaveFocus();
+  });
+
   it("toasts M24 and keeps the dialog and values when the request fails (E12)", async () => {
     post.mockRejectedValue(new ApiError(0, "network_error", "Something went wrong."));
     const { user, field, save } = open();
@@ -135,10 +165,17 @@ describe("Edit supplier", () => {
   it("opens the Add form filled from the row, plus Status", () => {
     const { field, save } = open(EDIT);
     expect(screen.getByRole("dialog", { name: "Edit supplier" })).toBeVisible();
+    expect(field("Supplier code")).toHaveValue(PROFILE.code);
     expect(field("Supplier name")).toHaveValue(NINGBO.name);
+    expect(field("Country")).toHaveValue(PROFILE.country);
     expect(field("City")).toHaveValue(NINGBO.city);
+    expect(field("State / Province")).toHaveValue(PROFILE.state);
+    expect(field("Postal code")).toHaveValue(PROFILE.postalCode);
     expect(field("Contact person")).toHaveValue(NINGBO.contactPerson);
-    expect(field("Phone / WeChat")).toHaveValue(NINGBO.phone);
+    expect(field("Email")).toHaveValue(PROFILE.email);
+    expect(field("Phone")).toHaveValue(NINGBO.phone);
+    expect(field("Payment terms")).toHaveValue(PROFILE.paymentTerms);
+    expect(field("Tax / registration number")).toHaveValue(PROFILE.taxNumber);
     expect(field("Currency")).toHaveValue("CNY");
     expect(field("Address")).toHaveValue(NINGBO.address);
     expect(field("Notes")).toHaveValue(NINGBO.notes);
@@ -162,16 +199,7 @@ describe("Edit supplier", () => {
     await user.click(save);
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
-    expect(patch).toHaveBeenCalledWith("/suppliers/s-6", {
-      name: NINGBO.name,
-      city: "Shanghai",
-      contactPerson: NINGBO.contactPerson,
-      phone: NINGBO.phone,
-      currency: "USD",
-      address: NINGBO.address,
-      notes: NINGBO.notes,
-      status: "Active",
-    });
+    expect(patch).toHaveBeenCalledWith("/suppliers/s-6", { ...NINGBO, ...PROFILE, city: "Shanghai", currency: "USD", status: "Active" });
     expect(post).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Supplier saved");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
