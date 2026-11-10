@@ -20,6 +20,8 @@ import { PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
 
 const PAYMENT_TONE = { unpaid: "danger", partly: "warning", paid: "success" } as const;
 const right = { align: "right" } as const;
+// Table cells never wrap by default; these columns may, so twelve columns fit a 1440 px page with every row's text.
+const wrap = "whitespace-normal";
 /** The detailed report under Reports (breadcrumb Reports › Order Report › PO). */
 export const detailedReportHref = (po: string) => `/reports/orders/${encodeURIComponent(po)}`;
 
@@ -32,7 +34,7 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       id: "supplier",
       accessorFn: (row) => row.supplier.name,
       header: "Supplier",
-      meta: { className: "min-w-[140px]" },
+      meta: { className: `w-[150px] ${wrap}` },
       cell: ({ row }) => (
         <span className="flex flex-col leading-[18px]">
           <span>{row.original.supplier.name}</span>
@@ -40,21 +42,21 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
         </span>
       ),
     },
-    { accessorKey: "lineCount", header: "Items", meta: { ...right, className: "w-[48px]" }, cell: ({ row }) => formatNumber(row.original.lineCount) },
+    { accessorKey: "lineCount", header: "Items", meta: { ...right, className: `w-[56px] ${wrap}` }, cell: ({ row }) => formatNumber(row.original.lineCount) },
     {
       // Pieces and metres never compare, so this column does not sort.
       id: "quantity",
       enableSorting: false,
       header: "Total Quantity",
-      meta: right,
+      meta: { ...right, className: `w-[104px] ${wrap}` },
       cell: ({ row }) => row.original.quantities.map((total) => formatQty(total.quantity, total.unit)).join(" · ") || "–",
     },
-    { accessorKey: "currency", header: "Currency", meta: { className: "w-[64px]" } },
-    { accessorKey: "orderValueCny", header: "PO Value", meta: { ...right, className: "w-[96px]" }, cell: money((row) => row.orderValueCny) },
+    { accessorKey: "currency", header: "Currency", meta: { className: `w-[72px] ${wrap}` } },
+    { accessorKey: "orderValueCny", header: "PO Value", meta: { ...right, className: `w-[88px] ${wrap}` }, cell: money((row) => row.orderValueCny) },
     {
       accessorKey: "paidCny",
       header: "Paid Amount",
-      meta: { ...right, className: "w-[96px]" },
+      meta: { ...right, className: `w-[96px] ${wrap}` },
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end">
           {formatMoney(row.original.paidCny, row.original.currency)}
@@ -62,13 +64,13 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
         </span>
       ),
     },
-    { accessorKey: "balanceCny", header: "Balance", meta: { ...right, className: "w-[96px]" }, cell: money((row) => row.balanceCny) },
-    { accessorKey: "stage", header: "Order Stage", meta: { className: "w-[100px]" }, cell: ({ row }) => stageLabel(row.original.stage) },
+    { accessorKey: "balanceCny", header: "Balance", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money((row) => row.balanceCny) },
+    { accessorKey: "stage", header: "Order Stage", meta: { className: `w-[108px] ${wrap}` }, cell: ({ row }) => stageLabel(row.original.stage) },
     {
       id: "status",
       accessorFn: (row) => rowStatus(row, today).label,
       header: "Status",
-      meta: { className: "w-[88px]" },
+      meta: { className: `w-[92px] ${wrap}` },
       cell: ({ row }) => {
         const status = rowStatus(row.original, today);
         return <StatusPill tone={status.tone}>{status.label}</StatusPill>;
@@ -78,7 +80,7 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       id: "report",
       enableSorting: false,
       header: "Actions",
-      meta: { className: "w-[60px]", align: "center" },
+      meta: { className: `w-[64px] ${wrap}`, align: "center" },
       // The eye opens the detailed report (the Suppliers list's icon actions); its accessible name keeps the PO.
       cell: ({ row }) => (
         <Link
