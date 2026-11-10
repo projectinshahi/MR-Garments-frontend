@@ -1,45 +1,60 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { Eye } from "lucide-react";
 import Link from "next/link";
 
 import { LinkPending } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
-import { orderHref, PoLink } from "@/components/shared/po-link";
+import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
+import { stageLabel } from "@/features/orders/order-status";
 import type { OrderReportRow } from "@/lib/api/reports-types";
-import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
+import { formatDate, formatMoney, formatNumber, formatQty } from "@/lib/formatters";
 
 import { PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
 
-// The Order reports table (RPT-O2): one row per order, amounts in the row's currency, INR landed cost, and a Report
-// link to the order's Report tab. Client-side because column definitions and value formatters are functions.
+// The Order reports table (RPT-O2, docs/order-report.md): one row per order with its supplier (name and code), items,
+// ordered quantity per unit, currency, PO value, paid, balance, stage and status, and the link to the order's detailed
+// report. Amounts in the row's currency. Sortable, paged by 10. Client-side because column definitions hold functions.
 
-const DASH = "–";
 const PAYMENT_TONE = { unpaid: "danger", partly: "warning", paid: "success" } as const;
+const right = { align: "right" } as const;
+/** The detailed report under Reports (breadcrumb Reports › Order Report › PO). */
+export const detailedReportHref = (po: string) => `/reports/orders/${encodeURIComponent(po)}`;
 
 export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportRow[]; today: string; linkPos: boolean }) {
   const money = (pick: (row: OrderReportRow) => number) => ({ row }: { row: { original: OrderReportRow } }) => formatMoney(pick(row.original), row.original.currency);
   const columns: ColumnDef<OrderReportRow>[] = [
-    { accessorKey: "po", header: "PO", cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
-    { id: "supplier", header: "Supplier", cell: ({ row }) => row.original.supplier.name },
-    { accessorKey: "orderDate", header: "Order date", cell: ({ row }) => formatDate(row.original.orderDate) },
+    { accessorKey: "po", header: "PO Number", meta: { className: "w-[88px] font-bold" }, cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
+    { accessorKey: "orderDate", header: "Order Date", meta: { className: "w-[92px]" }, cell: ({ row }) => formatDate(row.original.orderDate) },
     {
-      id: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const status = rowStatus(row.original, today);
-        return <StatusPill tone={status.tone}>{status.label}</StatusPill>;
-      },
+      id: "supplier",
+      accessorFn: (row) => row.supplier.name,
+      header: "Supplier",
+      meta: { className: "min-w-[140px]" },
+      cell: ({ row }) => (
+        <span className="flex flex-col leading-[18px]">
+          <span>{row.original.supplier.name}</span>
+          <span className="text-[12.5px] text-muted-foreground">{row.original.supplier.code || "–"}</span>
+        </span>
+      ),
     },
-    { accessorKey: "quantity", header: "Ordered", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.quantity, row.original.unit) },
-    { accessorKey: "received", header: "Received", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.received, row.original.unit) },
-    { accessorKey: "stocked", header: "Stocked", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.stocked, row.original.unit) },
-    { accessorKey: "orderValueCny", header: "Order value", meta: { align: "right" }, cell: money((row) => row.orderValueCny) },
+    { accessorKey: "lineCount", header: "Items", meta: { ...right, className: "w-[48px]" }, cell: ({ row }) => formatNumber(row.original.lineCount) },
+    {
+      // Pieces and metres never compare, so this column does not sort.
+      id: "quantity",
+      enableSorting: false,
+      header: "Total Quantity",
+      meta: right,
+      cell: ({ row }) => row.original.quantities.map((total) => formatQty(total.quantity, total.unit)).join(" · ") || "–",
+    },
+    { accessorKey: "currency", header: "Currency", meta: { className: "w-[64px]" } },
+    { accessorKey: "orderValueCny", header: "PO Value", meta: { ...right, className: "w-[96px]" }, cell: money((row) => row.orderValueCny) },
     {
       accessorKey: "paidCny",
-      header: "Paid",
-      meta: { align: "right" },
+      header: "Paid Amount",
+      meta: { ...right, className: "w-[96px]" },
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end">
           {formatMoney(row.original.paidCny, row.original.currency)}
@@ -47,20 +62,49 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
         </span>
       ),
     },
-    { accessorKey: "balanceCny", header: "Balance", meta: { align: "right" }, cell: money((row) => row.balanceCny) },
-    { accessorKey: "landedCostInr", header: "Landed cost", meta: { align: "right" }, cell: ({ row }) => (row.original.landedCostInr === null ? DASH : formatINR(row.original.landedCostInr)) },
-    { accessorKey: "perPieceInr", header: "Per piece", meta: { align: "right" }, cell: ({ row }) => (row.original.perPieceInr === null ? DASH : formatINR(row.original.perPieceInr, 2)) },
+    { accessorKey: "balanceCny", header: "Balance", meta: { ...right, className: "w-[96px]" }, cell: money((row) => row.balanceCny) },
+    { accessorKey: "stage", header: "Order Stage", meta: { className: "w-[100px]" }, cell: ({ row }) => stageLabel(row.original.stage) },
+    {
+      id: "status",
+      accessorFn: (row) => rowStatus(row, today).label,
+      header: "Status",
+      meta: { className: "w-[88px]" },
+      cell: ({ row }) => {
+        const status = rowStatus(row.original, today);
+        return <StatusPill tone={status.tone}>{status.label}</StatusPill>;
+      },
+    },
     {
       id: "report",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) =>
-        linkPos ? (
-          <Link href={`${orderHref(row.original.po)}/report`} aria-label={`Report: ${row.original.po}`} className="rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
-            Report
-            <LinkPending />
-          </Link>
-        ) : null,
+      enableSorting: false,
+      header: "Actions",
+      meta: { className: "w-[60px]", align: "center" },
+      // The eye opens the detailed report (the Suppliers list's icon actions); its accessible name keeps the PO.
+      cell: ({ row }) => (
+        <Link
+          href={detailedReportHref(row.original.po)}
+          aria-label={`Report: ${row.original.po}`}
+          title="View detailed report"
+          className="inline-flex size-8 items-center justify-center rounded-md text-primary outline-none hover:bg-info-soft focus-visible:ring-3 focus-visible:ring-ring/50 [&>svg]:size-4"
+        >
+          <Eye />
+          <LinkPending />
+        </Link>
+      ),
     },
   ];
-  return <DataTable columns={columns} data={rows} getRowId={(row) => row.id} density="loose" size="sm" header="tall" emptyState="No orders match these filters." />;
+  return (
+    <DataTable
+      columns={columns}
+      data={rows}
+      getRowId={(row) => row.id}
+      density="loose"
+      size="sm"
+      header="tall"
+      padding="tight"
+      sortable
+      pagination={{ pageSize: 10, itemLabel: "orders", pageSizeOptions: [10, 25, 50] }}
+      emptyState="No orders match these filters."
+    />
+  );
 }

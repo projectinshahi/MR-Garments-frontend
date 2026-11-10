@@ -28,7 +28,7 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         title="Order reports"
         parent={{ label: "Reports", href: `/reports${page.query}` }}
         titleAddon={label ? <StatusPill tone="neutral">{label}</StatusPill> : undefined}
-        actions={<ExportActions file={orderReportsFile(data, today)} formats={["xlsx", "pdf"]} />}
+        actions={<ExportActions file={orderReportsFile(data, today)} formats={["xlsx", "pdf", "csv"]} />}
       />
       <PageContainer>
         <OrderReportsFilters options={data.options} />

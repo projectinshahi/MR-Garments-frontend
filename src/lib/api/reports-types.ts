@@ -226,7 +226,14 @@ export type OrderTimelineStep = {
   step: "created" | "deposit" | "payment" | "received" | "loaded" | "sailed" | "arrived" | "cleared" | "dispatched" | "unloaded" | "stocked" | "closed";
   on: string;
   detail: string;
+  /** When the record behind the step was written (ISO timestamp); null when derived (closed) or not kept (sailed). */
+  at: string | null;
+  /** The user who wrote it; null when the record keeps no author. */
+  by: string | null;
 };
+
+/** When a record was written and by whom (null when the row keeps none), and when it last changed. */
+type Authored = { recordedAt: string | null; recordedBy: string | null; updatedAt: string | null; updatedBy: string | null };
 
 export type OrderReportPayment = {
   id: string;
@@ -243,6 +250,49 @@ export type OrderReportPayment = {
   mode: string | null;
   reference: string;
   notes: string;
+  recordedAt: string | null;
+  recordedBy: string | null;
+};
+
+/** One China receipt of the order (REC-3), with this order's lines. */
+export type OrderReportReceipt = {
+  id: string;
+  receivedOn: string;
+  office: string;
+  receivedBy: string;
+  bundles: number;
+  deliveryNote: string;
+  shortRemark: string;
+  recordedAt: string | null;
+  lines: { item: string; unit: Unit; quantity: number }[];
+};
+
+/** A supplier-level deposit (migration 0008) with its transactions: account money, linked to no order. */
+export type OrderReportDeposit = {
+  id: string;
+  direction: "give" | "receive";
+  currency: Currency;
+  amount: number;
+  settled: number;
+  pending: number;
+  status: "open" | "partly settled" | "settled";
+  openedOn: string;
+  reference: string;
+  notes: string;
+  transactions: { id: string; paidOn: string; amount: number; mode: string; reference: string; notes: string }[];
+};
+
+/** The supplier's account beside the order: every order of the supplier, per currency, and the account-level deposits. */
+export type OrderReportSupplierAccount = {
+  orders: number;
+  openOrders: number;
+  purchaseValue: MoneyTotal[];
+  paid: MoneyTotal[];
+  balance: MoneyTotal[];
+  deposits: {
+    summary: { currency: Currency; direction: "give" | "receive"; amount: number; settled: number; pending: number }[];
+    list: OrderReportDeposit[];
+  };
 };
 
 export type OrderReportContainer = {
@@ -256,6 +306,9 @@ export type OrderReportContainer = {
   loadedOn: string | null;
   sailedOn: string | null;
   eta: string;
+  etaEstimated: boolean;
+  recordedAt: string | null;
+  recordedBy: string | null;
   /** This order's lines only. */
   lines: { orderLineId: string; item: string; unit: Unit; bundles: number; quantity: number }[];
   /** The container's clearing and its own totals; null without one or below `clearing` View. */
@@ -268,12 +321,14 @@ export type OrderReportContainer = {
     dutyPaidOn: string | null;
     clearedOn: string | null;
     status: "in_clearing" | "cleared";
+    /** Information only: not part of the clearing cost. */
+    goodsValueInr: number | null;
     customsDutyInr: number;
     otherDutiesInr: number;
     agentChargesInr: number;
     portChargesInr: number;
     totalInr: number;
-  } | null;
+  } & Authored | null;
   /** The container's road trip and its own totals; null without one or below `transport` View. */
   transport: {
     id: string;
@@ -281,16 +336,21 @@ export type OrderReportContainer = {
     lrNumber: string;
     vehicleNumber: string;
     driverName: string;
+    driverPhone: string;
     destination: string;
     loadedOn: string;
+    loadedFrom: string;
+    loadedBy: string;
     unloadedOn: string | null;
     bundlesLoaded: number;
     bundlesReceived: number | null;
+    receivedBy: string;
+    shortRemark: string;
     status: "on_road" | "unloaded";
     freightInr: number;
     handlingInr: number;
     totalInr: number;
-  } | null;
+  } & Authored | null;
 };
 
 /**
@@ -301,35 +361,72 @@ export type OrderReport = {
   order: {
     id: string;
     po: string;
-    supplier: { id: string; name: string; contactPerson: string; phone: string; city: string };
+    /** The supplier's whole profile (backend docs/suppliers.md) as it is now; the order keeps its own currency. */
+    supplier: Named & SupplierProfile & { contactPerson: string; phone: string; status: RecordStatus };
     orderDate: string;
     deliveryDate: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+    createdBy: string | null;
     stage: OrderStage;
     closed: boolean;
     closedOn: string | null;
     currency: Currency;
     orderValueCny: number;
-    /** One total per unit (pieces and metres are never added together). */
-    totals: { unit: Unit; ordered: number; received: number; stocked: number }[];
+    /** Distinct lines on the order. */
+    products: number;
+    /** One total per unit (pieces and metres are never added together); pending = max(0, ordered - received). */
+    totals: { unit: Unit; ordered: number; received: number; pending: number; stocked: number }[];
   };
-  /** excess = max(0, received - ordered), short = max(0, ordered - received). */
-  lines: { id: string; position: number; item: string; unit: Unit; ordered: number; received: number; excess: number; short: number; loaded: number; stocked: number; rateCny: number; valueCny: number }[];
-  /** Paid, balance, deposits and due count supplier payments only; `list` is every payment, oldest first. */
+  /** excess = max(0, received - ordered), short = pending = max(0, ordered - received). */
+  lines: {
+    id: string;
+    position: number;
+    itemId: string;
+    item: string;
+    unit: Unit;
+    ordered: number;
+    received: number;
+    excess: number;
+    short: number;
+    pending: number;
+    loaded: number;
+    stocked: number;
+    rateCny: number;
+    valueCny: number;
+  }[];
+  /** Paid, balance, deposits and due count supplier payments only; agent payments (sea freight) are apart; `list` is every payment, oldest first. */
   payments: {
     paidCny: number;
     paidInr: number;
     balanceCny: number;
     depositsPaidCny: number;
     dueCny: number;
+    agentPaidCny: number;
+    agentPaidInr: number;
     /** The deposit the supplier asked for (0009) and what is still pending against it; null / "none" when none was agreed. */
     depositRequiredCny: number | null;
     depositPendingCny: number | null;
     depositStatus: DepositStatus;
     list: OrderReportPayment[];
   } | null;
+  /** The supplier's account (payments View): every order of the supplier and the account-level deposits; null below View. */
+  supplierAccount: OrderReportSupplierAccount | null;
+  /** The order's China receipts (receiving View), oldest first; null below View. */
+  receipts: OrderReportReceipt[] | null;
   logistics: OrderReportContainer[] | null;
   /** Every warehouse receipt (draft or stocked) of a trip carrying the order's goods, with this order's pieces per team. */
-  warehouse: { receiptId: string; transportId: string; container: string; warehouse: string; receivedOn: string; receivedBy: string; status: "draft" | "stocked"; bundlesReceived: number; lines: { item: string; unit: Unit; team: string; quantity: number }[] }[] | null;
+  warehouse: ({
+    receiptId: string;
+    transportId: string;
+    container: string;
+    warehouse: string;
+    receivedOn: string;
+    receivedBy: string;
+    status: "draft" | "stocked";
+    bundlesReceived: number;
+    lines: { item: string; unit: Unit; team: string; quantity: number }[];
+  } & Authored)[] | null;
   /** loadLandedCosts' figures, unchanged. */
   landedCost: Omit<LandedCostRow, "po" | "supplier" | "currency" | "item" | "quantity" | "unit" | "terms" | "teams" | "goodsPayments"> | null;
   timeline: OrderTimelineStep[];
@@ -345,13 +442,16 @@ export type OrderReportRow = {
   orderDate: string;
   deliveryDate: string;
   stage: OrderStage;
-  supplier: Named;
+  supplier: Named & { code: string };
   currency: Currency;
   item: string;
   quantity: number;
   unit: Unit;
   received: number;
   stocked: number;
+  /** Distinct lines, and the ordered quantity per unit over every line (never added across units). */
+  lineCount: number;
+  quantities: { unit: Unit; quantity: number }[];
   closed: boolean;
   closedOn: string | null;
   orderValueCny: number;
@@ -371,6 +471,18 @@ export type OrderReportRow = {
 export type OrderReportsResponse = {
   rows: OrderReportRow[];
   summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; paidCny: number; balanceCny: number }[]; paidInr: number; landedCostInr: number };
-  filter: { po: string | null; supplier: string | null; from: string | null; to: string | null; status: OrderState | null; warehouse: string | null; paymentStatus: PaymentState | null };
+  filter: {
+    po: string | null;
+    /** The supplier-name text filter, as typed. */
+    supplierName: string | null;
+    supplier: string | null;
+    from: string | null;
+    to: string | null;
+    status: OrderState | null;
+    stage: OrderStage | null;
+    currency: Currency | null;
+    warehouse: string | null;
+    paymentStatus: PaymentState | null;
+  };
   options: { suppliers: Named[]; warehouses: Named[] };
 };

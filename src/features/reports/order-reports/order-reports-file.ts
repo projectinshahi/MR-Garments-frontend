@@ -1,4 +1,4 @@
-import { orderStatus } from "@/features/orders/order-status";
+import { orderStatus, stageLabel } from "@/features/orders/order-status";
 import type { OrderReportRow, OrderReportsResponse } from "@/lib/api/reports-types";
 import { type Currency, CURRENCIES } from "@/types/domain";
 
@@ -25,8 +25,12 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
     columns: columns(
       "PO",
       "Supplier",
+      "Supplier code",
       date("Order date"),
+      "Stage",
       "Status",
+      "Items",
+      "Total quantity",
       "Item",
       "Ordered",
       "Unit",
@@ -44,8 +48,12 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
     rows: rows.map((row) => [
       row.po,
       row.supplier.name,
+      row.supplier.code,
       row.orderDate,
+      stageLabel(row.stage),
       rowStatus(row, today).label,
+      row.lineCount,
+      row.quantities.map((total) => `${total.quantity} ${total.unit}`).join(" · "),
       row.item,
       row.quantity,
       row.unit,
@@ -65,6 +73,10 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
           "Total",
           plural(rows.length, "order"),
           null,
+          null,
+          null,
+          null,
+          sum(rows, (row) => row.lineCount),
           null,
           null,
           null,

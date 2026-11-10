@@ -2,7 +2,8 @@ import { isValid, parseISO } from "date-fns";
 
 import type { FilterOption } from "@/components/shared/filters";
 import type { OrderReportsResponse, OrderState, PaymentState } from "@/lib/api/reports-types";
-import { formatDate } from "@/lib/formatters";
+import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
+import { CURRENCIES, STAGES } from "@/types/domain";
 
 import { isId, isMonth, monthRange } from "../data/filters";
 
@@ -11,6 +12,8 @@ import { isId, isMonth, monthRange } from "../data/filters";
 // URL shows the unfiltered list instead of a 400.
 
 export const PO_PARAM = "po";
+/** The supplier-name text filter (a part of the name); ?supplier= stays the id select. */
+export const SUPPLIER_PARAM = "supplierName";
 export const DATE_PARAMS = ["from", "to"] as const;
 
 const ORDER_STATES: OrderState[] = ["pending", "active", "closed"];
@@ -20,6 +23,9 @@ const PAYMENT_LABEL: Record<PaymentState, string> = { unpaid: "Unpaid", partly: 
 
 export const STATUS_OPTIONS: FilterOption[] = [{ value: "all", label: "All statuses" }, ...ORDER_STATES.map((value) => ({ value, label: STATE_LABEL[value] }))];
 export const PAYMENT_OPTIONS: FilterOption[] = [{ value: "all", label: "Any payment status" }, ...PAYMENT_STATES.map((value) => ({ value, label: PAYMENT_LABEL[value] }))];
+/** The shipment status filter: the order's stage. */
+export const STAGE_OPTIONS: FilterOption[] = [{ value: "all", label: "Any stage" }, ...STAGES.map((name, index) => ({ value: String(index + 1), label: `${index + 1}. ${name}` }))];
+export const CURRENCY_OPTIONS: FilterOption[] = [{ value: "all", label: "Any currency" }, ...CURRENCIES.map((currency) => ({ value: currency, label: CURRENCY_NAME[currency] }))];
 
 const isDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValid(parseISO(value));
 const oneOf = <T extends string>(values: readonly T[], value: string | null): value is T => values.includes(value as T);
@@ -29,6 +35,8 @@ export function orderReportsQuery(params: URLSearchParams) {
   const query = new URLSearchParams();
   const po = params.get(PO_PARAM)?.trim();
   if (po) query.set("po", po.slice(0, 50));
+  const supplierName = params.get(SUPPLIER_PARAM)?.trim();
+  if (supplierName) query.set("supplier", supplierName.slice(0, 200));
   const supplier = params.get("supplier");
   if (isId(supplier)) query.set("supplierId", supplier);
   let from = params.get("from");
@@ -40,6 +48,10 @@ export function orderReportsQuery(params: URLSearchParams) {
   if (isDay(to)) query.set("to", to);
   const status = params.get("status");
   if (oneOf(ORDER_STATES, status)) query.set("status", status);
+  const stage = params.get("stage");
+  if (stage && /^[1-6]$/.test(stage)) query.set("stage", stage);
+  const currency = params.get("currency");
+  if (oneOf(CURRENCIES, currency)) query.set("currency", currency);
   const warehouse = params.get("warehouse");
   if (isId(warehouse)) query.set("warehouseId", warehouse);
   const paymentStatus = params.get("paymentStatus");
@@ -52,9 +64,12 @@ export function orderReportsFilterLabel(filter: OrderReportsResponse["filter"]) 
   const dates = filter.from && filter.to ? `${formatDate(filter.from)} to ${formatDate(filter.to)}` : filter.from ? `From ${formatDate(filter.from)}` : filter.to ? `To ${formatDate(filter.to)}` : null;
   const parts = [
     filter.po ? `PO: ${filter.po}` : null,
+    filter.supplierName ? `Supplier: ${filter.supplierName}` : null,
     filter.supplier,
     dates,
     filter.status ? STATE_LABEL[filter.status] : null,
+    filter.stage ? `${filter.stage}. ${STAGES[filter.stage - 1]}` : null,
+    filter.currency,
     filter.warehouse,
     filter.paymentStatus ? PAYMENT_LABEL[filter.paymentStatus] : null,
   ].filter(Boolean);

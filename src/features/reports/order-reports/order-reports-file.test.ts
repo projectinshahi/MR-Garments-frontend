@@ -11,13 +11,18 @@ const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
   orderDate: "2026-10-10",
   deliveryDate: "2026-11-19",
   stage: 6,
-  supplier: { id: "s1", name: "Guangzhou Textile Co." },
+  supplier: { id: "s1", name: "Guangzhou Textile Co.", code: "SUP-001" },
   currency: "CNY",
   item: "Denim jeans",
   quantity: 100,
   unit: "pcs",
   received: 120,
   stocked: 100,
+  lineCount: 2,
+  quantities: [
+    { unit: "pcs", quantity: 100 },
+    { unit: "m", quantity: 50 },
+  ],
   closed: true,
   closedOn: "2026-11-05",
   orderValueCny: 1400,
@@ -43,7 +48,7 @@ const data: OrderReportsResponse = {
     paidInr: 9850,
     landedCostInr: 49550,
   },
-  filter: { po: null, supplier: "Guangzhou Textile Co.", from: null, to: null, status: null, warehouse: null, paymentStatus: null },
+  filter: { po: null, supplierName: null, supplier: "Guangzhou Textile Co.", from: null, to: null, status: null, stage: null, currency: null, warehouse: null, paymentStatus: null },
   options: { suppliers: [], warehouses: [] },
 };
 
@@ -62,10 +67,12 @@ describe("order reports file", () => {
   it("writes each row with its status label, payment status and INR figures, and totals the currency's table", () => {
     const [cny, usd] = file.sections;
     expect(cny!.columns.map((column) => column.header)).toContain("Order value (CNY)");
-    expect(cny!.rows).toEqual([["PO-2050", "Guangzhou Textile Co.", "2026-10-10", "Closed", "Denim jeans", 100, "pcs", 120, 100, 1400, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"]]);
-    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, null, null, null, null, 1400, 800, 600, null, 9850, 49550, null, null]);
+    expect(cny!.rows).toEqual([
+      ["PO-2050", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "6. India warehouse", "Closed", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 120, 100, 1400, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"],
+    ]);
+    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, null, 2, null, null, null, null, null, null, 1400, 800, 600, null, 9850, 49550, null, null]);
     // A pending order due in 10 days reads as the orders list labels it (on track beyond 7 days); no cost yet is an empty cell.
-    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "2026-10-10", "On track", "Denim jeans", 100, "pcs", 0, 0, 200, 0, 200, "Unpaid", 0, null, null, null]);
+    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "1. Order and deposit", "On track", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 0, 0, 200, 0, 200, "Unpaid", 0, null, null, null]);
     expect(usd!.columns.map((column) => column.header)).toContain("Balance (USD)");
   });
 

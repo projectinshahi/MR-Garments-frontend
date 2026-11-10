@@ -9,11 +9,12 @@ import type { OrderReportsResponse } from "@/lib/api/reports-types";
 
 import { isMonth, monthRange } from "../data/filters";
 import { UrlSelect } from "../report-actions";
-import { DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STATUS_OPTIONS } from "./params";
+import { CURRENCY_OPTIONS, DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STAGE_OPTIONS, STATUS_OPTIONS, SUPPLIER_PARAM } from "./params";
 
 // The Order reports filters, all kept in the URL so the server page reloads its data: dropdowns through UrlSelect
-// (?supplier, ?status, ?warehouse, ?paymentStatus) and a small form for the PO text and the order-date range (?po,
-// ?from, ?to), applied on submit (Enter or Apply) like the calendar's period parameters.
+// (?supplier, ?status, ?stage, ?currency, ?warehouse, ?paymentStatus) and a small form for the PO and supplier-name
+// text and the order-date range (?po, ?supplierName, ?from, ?to), applied on submit (Enter or Apply) like the
+// calendar's period parameters.
 
 const fieldBox = "flex h-10 items-center gap-[9px] rounded-lg border bg-card pr-2 pl-[15px] focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25";
 const fieldInput = "h-full min-w-0 bg-transparent text-sm text-label outline-none placeholder:text-placeholder";
@@ -28,13 +29,15 @@ export function OrderReportsFilters({ options }: { options: OrderReportsResponse
       </Suspense>
       <UrlSelect param="supplier" size="sm" label="Supplier" options={suppliers} />
       <UrlSelect param="status" size="sm" label="Status" options={STATUS_OPTIONS} />
+      <UrlSelect param="stage" size="sm" label="Shipment stage" options={STAGE_OPTIONS} />
+      <UrlSelect param="currency" size="sm" label="Currency" options={CURRENCY_OPTIONS} />
       <UrlSelect param="warehouse" size="sm" label="Warehouse" options={warehouses} />
       <UrlSelect param="paymentStatus" size="sm" label="Payment" options={PAYMENT_OPTIONS} />
     </div>
   );
 }
 
-const TEXT_PARAMS = [PO_PARAM, ...DATE_PARAMS];
+const TEXT_PARAMS = [PO_PARAM, SUPPLIER_PARAM, ...DATE_PARAMS];
 
 function BoundTextFilters() {
   const navigate = useNavigate();
@@ -77,6 +80,10 @@ function TextFilters({ params, onApply, onClear }: { params: URLSearchParams; on
       <label className={fieldBox}>
         <span className="text-xs text-muted-foreground">PO</span>
         <input name={PO_PARAM} type="search" aria-label="PO number" placeholder="Any part of it" defaultValue={params.get(PO_PARAM) ?? ""} maxLength={50} className={`${fieldInput} w-32 [&::-webkit-search-cancel-button]:appearance-none`} />
+      </label>
+      <label className={fieldBox}>
+        <span className="text-xs text-muted-foreground">Supplier name</span>
+        <input name={SUPPLIER_PARAM} type="search" aria-label="Supplier name" placeholder="Any part of it" defaultValue={params.get(SUPPLIER_PARAM) ?? ""} maxLength={200} className={`${fieldInput} w-36 [&::-webkit-search-cancel-button]:appearance-none`} />
       </label>
       <label className={fieldBox}>
         <span className="text-xs text-muted-foreground">Ordered from</span>
