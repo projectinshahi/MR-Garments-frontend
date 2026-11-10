@@ -77,8 +77,11 @@ type DataTableProps<TData, TValue> = {
    * and padding. No effect with `dense`.
    */
   header?: "default" | "tall";
-  /** card: bordered box with a tinted header (list pages). plain: no box, white header (tables inside a SectionCard). */
-  variant?: "card" | "plain";
+  /**
+   * card: bordered box with a tinted header (list pages). plain: no box, white header (tables inside a SectionCard).
+   * embedded: the card's tinted header and padding without the box, for a table inside its own toolbar card (Suppliers).
+   */
+  variant?: "card" | "plain" | "embedded";
   /** Highlights the row (blue tint and left bar), as on Deposits & Payments and Landed Cost. */
   selectedRowId?: string;
   onRowClick?: (row: TData) => void;
@@ -88,6 +91,8 @@ type DataTableProps<TData, TValue> = {
   pagination?: DataTablePagination;
   /** Column headers with an accessor become sort toggles (none, ascending, descending), as on the Suppliers list. */
   sortable?: boolean;
+  /** tight: 10 px side padding in the cells (16 px at the edges), so eleven columns fit a 1440 px page (Suppliers). */
+  padding?: "default" | "tight";
   className?: string;
 };
 
@@ -108,6 +113,7 @@ export function DataTable<TData, TValue>({
   emptyState = "No results.",
   pagination,
   sortable = false,
+  padding = "default",
   className,
 }: DataTableProps<TData, TValue>) {
   const manual = pagination?.rowCount !== undefined;
@@ -131,8 +137,12 @@ export function DataTable<TData, TValue>({
   const hasFooter = columns.some((column) => column.footer !== undefined);
   const dense = density === "dense";
   const sm = size === "sm" && !dense;
+  // embedded keeps the card's header tint and padding; only the outer box is left to the caller's card.
+  const carded = variant === "card" || variant === "embedded";
   const cellPad =
-    variant === "card"
+    padding === "tight"
+      ? "px-2.5 first:pl-4 last:pr-4"
+      : carded
       ? sm
         ? "px-[14.5px] first:pl-[14.5px] last:pr-[14.5px]"
         : "px-5 first:pl-5 last:pr-5"
@@ -146,7 +156,7 @@ export function DataTable<TData, TValue>({
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className={cn("border-b hover:bg-transparent", variant === "card" && "bg-table-head")}>
+            <TableRow key={headerGroup.id} className={cn("border-b hover:bg-transparent", carded && "bg-table-head")}>
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
@@ -252,14 +262,15 @@ function DataTablePager<TData>({ table, pagination }: { table: TanstackTable<TDa
 
   return (
     <nav aria-label="Table pagination" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-5 py-3.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-[13px] text-muted-foreground">
-          Showing {from} to {to} of {total}
-          {pagination.itemLabel ? ` ${pagination.itemLabel}` : ""}
-        </p>
+      <p className="text-[13px] text-muted-foreground">
+        Showing {from} to {to} of {total}
+        {pagination.itemLabel ? ` ${pagination.itemLabel}` : ""}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
         {pagination.pageSizeOptions ? (
-          <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            Rows per page
+          // Suppliers reference: "Rows per page: 5" boxed at the far right, after the page buttons.
+          <label className="order-last ml-2 flex h-[30px] items-center gap-1.5 rounded-md border bg-card px-2.5 text-[13px] text-muted-foreground">
+            Rows per page:
             <select
               value={pageSize}
               onChange={(event) => {
@@ -267,7 +278,7 @@ function DataTablePager<TData>({ table, pagination }: { table: TanstackTable<TDa
                 table.setPageIndex(0);
                 pagination.onPageChange?.(0);
               }}
-              className="h-[30px] rounded-md border bg-card px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="bg-transparent text-sm font-bold text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               {pagination.pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -277,8 +288,6 @@ function DataTablePager<TData>({ table, pagination }: { table: TanstackTable<TDa
             </select>
           </label>
         ) : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={box} aria-label="Previous page" onClick={() => go(pageIndex - 1)} disabled={!table.getCanPreviousPage()}>
           ‹
         </button>

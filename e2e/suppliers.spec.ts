@@ -40,7 +40,7 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
   await expect(nav(page).getByRole("link", { name: "Suppliers", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { level: 1, name: "Suppliers" })).toBeVisible();
   for (const label of ["Total Suppliers", "Open POs", "In Transit", "Unpaid Amount", "Upcoming Payments"]) await expect(kpi(page, label)).toBeVisible();
-  await expect(kpi(page, "Total Suppliers")).toContainText(/\d+ active, \d+ inactive/);
+  await expect(kpi(page, "Total Suppliers")).toContainText(/Active: \d+ · Inactive: \d+/);
   await expect(tabs(page).getByRole("link", { name: "Supplier List" })).toHaveAttribute("aria-current", "page");
   for (const header of ["Supplier Code", "Supplier Name", "Country", "Contact Person", "Email / Phone", "Active POs", "YTD Value", "Balance", "Status"]) {
     await expect(page.getByRole("columnheader", { name: new RegExp(header) })).toBeVisible();
@@ -64,9 +64,12 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
   await expect(rows(page).filter({ hasText: "Foshan Fabrics" })).toHaveCount(1);
   await page.getByRole("button", { name: /^Country:/ }).click();
   await page.getByRole("menuitemradio", { name: "All countries" }).click();
-  await page.getByRole("group", { name: "Status" }).getByRole("button", { name: "Inactive" }).click();
+  await page.getByRole("button", { name: /^Status:/ }).click();
+  await page.getByRole("menuitemradio", { name: "Inactive" }).click();
   await expect(rows(page).filter({ hasText: "Guangzhou Textile Co." })).toHaveCount(0);
-  await page.getByRole("group", { name: "Status" }).getByRole("button", { name: "All" }).click();
+  await page.getByRole("button", { name: /^Status:/ }).click();
+  await page.getByRole("menuitemradio", { name: "All" }).click();
+  await expect(rows(page).filter({ hasText: "Guangzhou Textile Co." })).toHaveCount(1);
 
   // Rows per page and the range; sorting by code.
   await page.getByLabel("Rows per page").selectOption("5");
@@ -91,7 +94,7 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
 test("adds a supplier with the offered code, views, edits and deactivates it from the row actions", async ({ page, api }, testInfo) => {
   const name = `Playwright Mills ${tag()}`;
   await page.goto("/suppliers");
-  await page.getByRole("link", { name: "+ Add Supplier" }).click();
+  await page.getByRole("link", { name: "Add Supplier" }).click();
   const dialog = page.getByRole("dialog", { name: "Add supplier" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Supplier code")).toHaveValue(/^SUP-\d{3,}$/);

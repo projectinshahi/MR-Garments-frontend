@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu } from "lucide-react";
+import { type LucideIcon, Menu, Users } from "lucide-react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, Suspense, useState } from "react";
@@ -85,6 +85,9 @@ export function SidebarFallback() {
 /** `navigate`: takes over the nav links' navigation (the mobile sheet); without it they navigate themselves. */
 type Navigate = (href: string) => void;
 
+/** Items drawn with a Lucide icon in place of the square (the Suppliers reference); every other item keeps its square. */
+const NAV_ICONS: Record<string, LucideIcon> = { "/suppliers": Users };
+
 /** `bell`: the desktop sidebar's notification bell; the mobile sheet leaves it out (its top bar has one). */
 function SidebarContent({ user, navigate, bell = false }: SidebarProps & { navigate?: Navigate; bell?: boolean }) {
   const { sections } = user;
@@ -158,7 +161,7 @@ function NavSections({ sections, pathname, navigate }: { sections: NavSection[];
                       active ? "bg-sidebar-accent font-bold text-white" : "hover:bg-sidebar-accent/50",
                     )}
                   >
-                    <NavBullet active={active} />
+                    <NavMarker href={item.href} active={active} />
                     {item.title}
                   </Link>
                 </li>
@@ -169,6 +172,13 @@ function NavSections({ sections, pathname, navigate }: { sections: NavSection[];
       ))}
     </div>
   );
+}
+
+/** The item's marker: its Lucide icon (NAV_ICONS), else the square. */
+function NavMarker({ href, active }: { href: string; active: boolean }) {
+  const Icon = NAV_ICONS[href];
+  if (!Icon) return <NavBullet active={active} />;
+  return <Icon aria-hidden className={cn("size-4 shrink-0", active ? "text-white" : "text-sidebar-muted")} />;
 }
 
 /** The item's square; it lights up while its page loads (after 100 ms, so a fast navigation shows nothing). */

@@ -100,22 +100,23 @@ const KPI_SIZES = {
 /** KPI tile: 13 px label, bold value, 13 px sub-line. */
 export function KpiCard({ label, value, sub, tone = "default", icon, tint, size = "default", className }: KpiCardProps) {
   const s = KPI_SIZES[size];
-  return (
-    <div className={cn("relative rounded-xl border bg-card", s.box, tint && KPI_WASHES[tint], className)}>
-      {icon ? (
-        <span
-          aria-hidden
-          className={cn(
-            "absolute top-3.5 right-3.5 flex size-9 items-center justify-center rounded-full [&>svg]:size-[18px]",
-            KPI_TINTS[tint ?? "info"],
-          )}
-        >
-          {icon}
-        </span>
-      ) : null}
-      <p className={cn("text-[13px] leading-[18px] text-muted-foreground", icon && "pr-11")}>{label}</p>
+  const text = (
+    <>
+      <p className="text-[13px] leading-[18px] text-muted-foreground">{label}</p>
       <p className={cn(s.value, "font-bold", tone === "danger" && "text-danger-strong")}>{value}</p>
       {sub ? <p className={cn("text-[13px] leading-[18px] text-muted-foreground", s.sub)}>{sub}</p> : null}
+    </>
+  );
+  if (!icon) return <div className={cn("rounded-xl border bg-card", s.box, className)}>{text}</div>;
+  // Suppliers reference: the icon in a 40 px tinted square on the left, the label beside it, the value and sub-line
+  // under the label. 16 px side padding, so five cards fit a 1440 px page with their sub-lines on one line.
+  return (
+    <div className={cn("flex items-start gap-3 rounded-xl border bg-card", s.box, "px-4", tint && KPI_WASHES[tint], className)}>
+      <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-[10px] [&>svg]:size-5", KPI_TINTS[tint ?? "info"])}>
+        {icon}
+      </span>
+      {/* The label and sub-line stay on one line; the value (money in two currencies) may wrap. */}
+      <div className="min-w-0 flex-1 [&>p:not(:nth-child(2))]:whitespace-nowrap">{text}</div>
     </div>
   );
 }

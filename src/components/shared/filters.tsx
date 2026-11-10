@@ -143,6 +143,7 @@ export function FilterSelect({
 export function SearchInput({
   label,
   inlineLabel,
+  icon,
   value,
   onValueChange,
   placeholder,
@@ -153,6 +154,8 @@ export function SearchInput({
   /** Accessible name. */
   label: string;
   inlineLabel?: string;
+  /** A leading icon (the Suppliers list's magnifier), drawn muted at 16 px. */
+  icon?: React.ReactNode;
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
@@ -168,6 +171,11 @@ export function SearchInput({
         className,
       )}
     >
+      {icon ? (
+        <span aria-hidden className="flex shrink-0 text-muted-foreground [&>svg]:size-4">
+          {icon}
+        </span>
+      ) : null}
       {inlineLabel ? (
         <span aria-hidden className="text-xs text-muted-foreground">
           {inlineLabel}

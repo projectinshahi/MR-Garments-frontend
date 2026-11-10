@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ellipsis, Eye, Pencil } from "lucide-react";
+import { Ellipsis, Eye, Pencil, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -9,7 +9,7 @@ import { Suspense, useState } from "react";
 import { LinkPending } from "@/components/layout/navigation-progress";
 import { DeactivateConfirm } from "@/components/shared/confirm-dialog";
 import { DataTable } from "@/components/shared/data-table";
-import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filters";
+import { FilterSelect, SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,16 +36,19 @@ const STATUS_OPTIONS = [
 ];
 const PAGE_SIZES = [5, 10, 25, 50];
 const right = { align: "right" } as const;
-const iconAction = "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-neutral-soft hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&>svg]:size-4";
+// The reference draws the three row actions in blue.
+const iconAction = "inline-flex size-8 items-center justify-center rounded-md text-primary outline-none hover:bg-info-soft focus-visible:ring-3 focus-visible:ring-ring/50 [&>svg]:size-4";
 const viewHref = (row: SupplierRow) => `${PATH}/${row.id}`;
 /** Sorts a money column by its first currency's amount (CNY, then USD, then INR). */
 const firstAmount = (totals: MoneyTotal[]) => totals[0]?.amount ?? 0;
 
 /**
- * Supplier List (backend docs/suppliers.md): the toolbar (count, search, status, country, Add), the sortable, paged
- * table with row selection, and the row actions: View (the supplier's page), Edit (the dialog) and More (View, Edit,
- * Activate / Deactivate). Deactivating asks first, as the Settings tab does; a supplier with orders is never deleted
- * here. Search, status and country stay client-side over the loaded rows (filterSuppliers).
+ * Supplier List (backend docs/suppliers.md), as the reference draws it: one card holding the toolbar (count, search,
+ * Status and Country selects, Add) and the sortable, paged table with row selection, then the row actions: View (the
+ * supplier's page), Edit (the dialog) and More (View, Edit, Activate / Deactivate). Deactivating asks first, as the
+ * Settings tab does; a supplier with orders is never deleted here. Search, status and country stay client-side over
+ * the loaded rows (filterSuppliers). Money columns show bare numbers under a "(¥)" header while every amount is in
+ * yuan, and carry their symbols once another currency appears (as the Payments by order list does).
  */
 export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
   const router = useRouter();
@@ -55,6 +58,8 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
   // The supplier waiting for the deactivate confirmation.
   const [deactivating, setDeactivating] = useState<SupplierRow | null>(null);
   const visible = filterSuppliers(suppliers, { query, status, country });
+  const yuanOnly = suppliers.every((row) => [...row.ytdValue, ...row.balance].every((total) => total.currency === "CNY"));
+  const money = (totals: MoneyTotal[]) => (yuanOnly ? (totals.length ? formatNumber(totals[0]!.amount) : "–") : moneyText(totals));
 
   async function setStatusOf(row: SupplierRow, next: "Active" | "Inactive") {
     try {
@@ -72,7 +77,7 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
     {
       id: "select",
       enableSorting: false,
-      meta: { className: "w-[46px] pr-0" },
+      meta: { className: "w-10 pr-0" },
       header: ({ table }) => (
         <Checkbox
           aria-label="Select all suppliers on this page"
@@ -85,11 +90,10 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
         <Checkbox aria-label={`Select ${row.original.name}`} checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(!!checked)} className="size-4" />
       ),
     },
-    { accessorKey: "code", header: "Supplier Code", meta: { className: "w-[130px] font-bold" } },
+    { accessorKey: "code", header: "Supplier Code", meta: { className: "w-[108px]" } },
     {
       accessorKey: "name",
       header: "Supplier Name",
-      meta: { className: "font-bold" },
       cell: ({ row }) => (
         <Link href={viewHref(row.original)} className="rounded-sm outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
           {row.original.name}
@@ -99,12 +103,14 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
     },
     {
       accessorKey: "country",
+      enableSorting: false,
       header: "Country",
+      meta: { className: "w-[100px]" },
       cell: ({ row }) =>
         row.original.country ? (
           <span className="inline-flex items-center gap-1.5">
             {countryCode(row.original.country) ? (
-              <span aria-hidden className="inline-flex h-4 items-center rounded-[4px] bg-info-soft px-1 text-[10px] leading-none font-bold text-info">
+              <span aria-hidden className="inline-flex h-4 items-center rounded-[4px] bg-danger-soft px-1 text-[10px] leading-none font-bold text-danger">
                 {countryCode(row.original.country)}
               </span>
             ) : null}
@@ -114,38 +120,51 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
           "–"
         ),
     },
-    { accessorKey: "contactPerson", header: "Contact Person", cell: ({ row }) => row.original.contactPerson || "–" },
+    { accessorKey: "contactPerson", enableSorting: false, header: "Contact Person", cell: ({ row }) => row.original.contactPerson || "–" },
     {
       id: "contact",
-      accessorFn: (row) => row.email || row.phone,
+      enableSorting: false,
       header: "Email / Phone",
       cell: ({ row }) => (
-        <span className="flex flex-col leading-[18px]">
+        <span className="flex flex-col text-[13px] leading-[18px]">
           <span>{row.original.email || "–"}</span>
-          <span className="text-[12.5px] text-muted-foreground">{row.original.phone || "–"}</span>
+          <span>{row.original.phone || "–"}</span>
         </span>
       ),
     },
-    // Not closed (phase 2 §1), the Open POs card's rule; the Settings tab's "Open orders" (stage < 6) is a different count.
-    { accessorKey: "openPos", header: "Active POs", meta: right, cell: ({ row }) => formatNumber(row.original.openPos) },
-    { id: "ytdValue", accessorFn: (row) => firstAmount(row.ytdValue), header: "YTD Value", meta: right, cell: ({ row }) => moneyText(row.original.ytdValue) },
+    {
+      // Not closed (phase 2 §1), the Open POs card's rule; the Settings tab's "Open orders" (stage < 6) is a different count.
+      accessorKey: "openPos",
+      enableSorting: false,
+      header: "Active POs",
+      meta: { align: "center", className: "w-[92px]" },
+      cell: ({ row }) => (
+        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-md bg-info-soft px-2 text-[13px] font-bold text-primary">
+          {formatNumber(row.original.openPos)}
+        </span>
+      ),
+    },
+    { id: "ytdValue", accessorFn: (row) => firstAmount(row.ytdValue), enableSorting: false, header: yuanOnly ? "YTD Value (¥)" : "YTD Value", meta: { ...right, className: "w-[112px]" }, cell: ({ row }) => money(row.original.ytdValue) },
     {
       id: "balance",
       accessorFn: (row) => firstAmount(row.balance),
-      header: "Balance",
-      meta: right,
-      cell: ({ row }) => <span className={cn(row.original.balance.some((total) => total.amount > 0) && "font-bold text-danger")}>{moneyText(row.original.balance)}</span>,
+      enableSorting: false,
+      header: yuanOnly ? "Balance (¥)" : "Balance",
+      meta: { ...right, className: "w-[104px]" },
+      cell: ({ row }) => money(row.original.balance),
     },
     {
       accessorKey: "status",
+      enableSorting: false,
       header: "Status",
+      meta: { className: "w-[88px]" },
       cell: ({ row }) => <StatusPill tone={row.original.status === "Active" ? "success" : "neutral"}>{row.original.status}</StatusPill>,
     },
     {
       id: "actions",
       enableSorting: false,
-      header: () => <span className="sr-only">Actions</span>,
-      meta: { className: cn(ACTIONS_COLUMN_CLASS, "w-[120px]") },
+      header: "Actions",
+      meta: { className: cn(ACTIONS_COLUMN_CLASS, "w-[112px]"), align: "center" },
       cell: ({ row }) => {
         const supplier = row.original;
         const active = supplier.status === "Active";
@@ -184,36 +203,43 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base leading-[22px] font-bold">Suppliers ({formatNumber(visible.length)})</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput
-            label="Search supplier name, code or country"
-            placeholder="Search name, code or country"
-            value={query}
-            onValueChange={setQuery}
-            size="md"
-            className="w-full bg-card sm:w-[250px]"
-          />
-          <FilterChips label="Status" size="sm" options={STATUS_OPTIONS} value={status} onValueChange={(value) => setStatus(value as StatusFilter)} />
-          <FilterSelect label="Country" size="sm" value={country} options={countryOptions(suppliers)} onValueChange={setCountry} />
-          <Button asChild size="header" className="px-[15px]">
-            <Link href={addHref(PATH)} replace scroll={false}>
-              + Add Supplier
-            </Link>
-          </Button>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <h2 className="text-[19px] leading-7 font-bold">Suppliers ({formatNumber(visible.length)})</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchInput
+              label="Search supplier name, code or country"
+              icon={<Search />}
+              placeholder="Search supplier (name, code, country)…"
+              value={query}
+              onValueChange={setQuery}
+              size="md"
+              className="w-full bg-card sm:w-[300px]"
+            />
+            <FilterSelect label="Status" showLabel size="sm" value={status} options={STATUS_OPTIONS} onValueChange={(value) => setStatus(value as StatusFilter)} />
+            <FilterSelect label="Country" showLabel size="sm" value={country} options={countryOptions(suppliers)} onValueChange={setCountry} />
+            <Button asChild size="header" className="px-[15px]">
+              <Link href={addHref(PATH)} replace scroll={false}>
+                <Plus aria-hidden className="size-4" />
+                Add Supplier
+              </Link>
+            </Button>
+          </div>
         </div>
+        <DataTable
+          columns={columns}
+          data={visible}
+          getRowId={(row) => row.id}
+          variant="embedded"
+          size="sm"
+          header="tall"
+          padding="tight"
+          sortable
+          pagination={{ pageSize: 5, itemLabel: "suppliers", pageSizeOptions: PAGE_SIZES }}
+          emptyState={suppliers.length === 0 ? "No suppliers yet. Add the first one with Add Supplier." : "No suppliers match these filters."}
+          className="border-t"
+        />
       </div>
-      <DataTable
-        columns={columns}
-        data={visible}
-        getRowId={(row) => row.id}
-        size="sm"
-        header="tall"
-        sortable
-        pagination={{ pageSize: 10, itemLabel: "suppliers", pageSizeOptions: PAGE_SIZES }}
-        emptyState={suppliers.length === 0 ? "No suppliers yet. Add the first one with + Add Supplier." : "No suppliers match these filters."}
-      />
       <Suspense fallback={null}>
         <SupplierDialog draft={draft} suppliers={suppliers} path={PATH} />
       </Suspense>
