@@ -62,6 +62,11 @@ export const formatLakh = (value: number) => `₹${formatNumber(value / 100_000,
 /** Exchange rate: 12.00 */
 export const formatRate = (value: number) => formatNumber(value, 2);
 
+/** A supplier's or order's INR rate: ₹12.50, or ₹11.8765 when it was typed with more decimals (at most 4). */
+export const formatRateInr = (rate: number) => formatINR(rate, Math.max(2, Math.min(4, (String(rate).split(".")[1] ?? "").length)));
+/** "1 CNY = ₹12.50": the rate with its direction, as the supplier form, the lists and the reports say it. */
+export const rateText = (currency: Currency, rate: number) => `1 ${currency} = ${formatRateInr(rate)}`;
+
 /** 2,400 m · 1,800 pcs · 30,000 sets */
 export const formatQty = (value: number, unit: string) => `${formatNumber(value)} ${unit}`;
 

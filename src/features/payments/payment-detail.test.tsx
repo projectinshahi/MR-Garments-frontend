@@ -13,6 +13,7 @@ const order: OrderPaymentRow = {
   po: "PO-3002",
   supplier: "Hangzhou Silk",
   currency: "CNY",
+  supplierRate: null,
   orderValue: 20_000,
   paid: 5_000,
   paidInr: 60_000,

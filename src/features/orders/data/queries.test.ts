@@ -12,6 +12,7 @@ const get = vi.mocked(apiGet);
 
 const order = (po: string, patch: Partial<OrderListItem>): OrderListItem => ({
   id: po,
+  exchangeRate: null,
   po,
   orderDate: "2026-10-01",
   deliveryDate: "2026-12-01",
@@ -44,7 +45,7 @@ const list = [
 ];
 const options: OrderOptions = {
   nextPo: "PO-2054",
-  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY" }],
+  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", exchangeRate: null }],
   items: [],
   agents: [],
 };

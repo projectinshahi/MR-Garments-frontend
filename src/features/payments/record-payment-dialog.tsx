@@ -8,13 +8,13 @@ import { useForm, useWatch } from "react-hook-form";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import type { CreatePaymentResponse, OrderOptions } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, formatINR } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, formatINR, rateText } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
@@ -35,8 +35,10 @@ const fieldClass = "gap-[5px]";
 const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const footerButtonClass = "h-[42px] px-[17px]";
 
-/** `currency`: the order's, which the payment is in. */
-export type OrderChoice = { orderId: string; po: string; supplier: string; currency: Currency };
+/** `currency`: the order's, which the payment is in; `supplierRate`: the supplier's rate now, the payment's default rate (null while not set). */
+export type OrderChoice = { orderId: string; po: string; supplier: string; currency: Currency; supplierRate: number | null };
+/** The rate a payment starts with: the supplier's rate now as text; "" for an INR order or a supplier without one. */
+const defaultRate = (order: OrderChoice | undefined) => (!order || order.currency === "INR" || order.supplierRate === null ? "" : String(order.supplierRate));
 
 type RecordPaymentDialogProps = {
   /** The orders to choose from (PAY-1). With `fixed`, the one order given is preselected and can't be changed. */
@@ -92,11 +94,12 @@ function RecordPaymentForm({
   onSaved: (po: string) => void;
 }) {
   const [today] = useState(() => todayInIndia());
-  const { register, handleSubmit, setError, control, formState } = useForm<RecordPaymentInput, unknown, RecordPaymentValues>({
+  const { register, handleSubmit, setError, setValue, control, formState } = useForm<RecordPaymentInput, unknown, RecordPaymentValues>({
     // Checked against the chosen order's currency (an INR order has no rate to check).
     resolver: (values, context, options) =>
       zodResolver(recordPaymentSchema(today, orders.find((o) => o.orderId === values.orderId)?.currency))(values, context, options),
-    defaultValues: emptyPayment(fixed ? orders[0]!.orderId : "", today),
+    // The supplier's rate now fills the rate (docs/supplier-currency.md); the user changes it when this payment used another.
+    defaultValues: { ...emptyPayment(fixed ? orders[0]!.orderId : "", today), rateInr: fixed ? defaultRate(orders[0]) : "" },
   });
   const { errors } = formState;
   const [orderId, amountCny, rateInr] = useWatch({ control, name: ["orderId", "amountCny", "rateInr"] });
@@ -130,7 +133,19 @@ function RecordPaymentForm({
           {fixed ? (
             <Input id="payment-order" readOnly size="sm" value={`${orders[0]!.po} · ${orders[0]!.supplier}`} aria-invalid={!!errors.orderId} />
           ) : (
-            <NativeSelect size="sm" id="payment-order" required aria-invalid={!!errors.orderId} {...register("orderId")}>
+            <NativeSelect
+              size="sm"
+              id="payment-order"
+              required
+              aria-invalid={!!errors.orderId}
+              {...register("orderId", {
+                // The chosen order's supplier rate replaces the previous order's default, never a rate the user typed over it.
+                onChange: (event: { target: { value: string } }) => {
+                  const chosen = orders.find((o) => o.orderId === event.target.value);
+                  if (rateInr === "" || rateInr === defaultRate(order)) setValue("rateInr", defaultRate(chosen));
+                },
+              })}
+            >
               <option value="">Select order</option>
               {orders.map((o) => (
                 <option key={o.orderId} value={o.orderId}>
@@ -186,6 +201,9 @@ function RecordPaymentForm({
               Rate (₹ per {symbol}) <RequiredMark />
             </FieldLabel>
             <Input id="payment-rate" required inputMode="decimal" size="sm" aria-invalid={!!errors.rateInr} {...register("rateInr")} />
+            <FieldDescription className="text-xs">
+              {order?.supplierRate != null ? `Supplier rate now: ${rateText(order.currency, order.supplierRate)}. Change it if this payment used another.` : "No rate set on the supplier: enter this payment's."}
+            </FieldDescription>
             <FieldError errors={[errors.rateInr]} />
           </Field>
         )}

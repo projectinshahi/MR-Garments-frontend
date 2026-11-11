@@ -32,6 +32,9 @@ const row: SupplierRow = {
   taxNumber: "",
   ytdValue: [],
   balance: [],
+  exchangeRate: null,
+  rateUpdatedAt: null,
+  hasTransactions: false,
   status: "Active",
 };
 

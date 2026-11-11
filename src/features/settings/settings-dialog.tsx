@@ -83,7 +83,8 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent
-        className="gap-0 pb-[26px]"
+        // Never taller than the viewport: a long form (Add supplier on a phone) scrolls inside, so its footer stays reachable.
+        className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto pb-[26px]"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();

@@ -12,7 +12,7 @@ import { CURRENCY_SYMBOL } from "@/lib/formatters";
 
 import { ADD_SUPPLIER_HREF, supplierDeletable, SupplierDialog } from "./add-supplier-dialog";
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
-import type { SupplierDraft } from "./settings-logic";
+import { exchangeRateText, type SupplierDraft } from "./settings-logic";
 
 const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "name", header: "Supplier", meta: bold },
@@ -20,6 +20,7 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "phone", header: "Phone" },
   { accessorKey: "city", header: "City" },
   { accessorKey: "currency", header: "Currency", cell: ({ row }) => CURRENCY_SYMBOL[row.original.currency] },
+  { accessorKey: "exchangeRate", header: "Exchange rate", meta: right, cell: ({ row }) => exchangeRateText(row.original.currency, row.original.exchangeRate) },
   { accessorKey: "openOrders", header: "Open orders", meta: right },
 ];
 

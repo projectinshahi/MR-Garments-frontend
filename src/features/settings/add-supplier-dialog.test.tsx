@@ -33,11 +33,19 @@ const NINGBO = {
   address: "88 Zhongshan Road, Ningbo",
   notes: "Denim only",
 };
+// The rate (INR per 1 CNY) as the form takes it and as the body carries it (docs/supplier-currency.md).
+const RATE = "11.5";
+const CURRENCY = "Preferred transaction currency";
 // The profile fields (backend docs/suppliers.md) of the saved row; the Add form posts them empty unless typed.
 const PROFILE = { code: "SUP-006", country: "China", email: "xu.feng@ningbo-denim.cn", state: "Zhejiang", postalCode: "315000", paymentTerms: "30% deposit", taxNumber: "91330200MA" };
 const EMPTY_PROFILE = { country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "" };
-const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, ...PROFILE, id: "s-6", openOrders: 0, openPos: 0, ytdValue: [], balance: [], status: "Active" } };
-const ROWS: SupplierRow[] = [saved.supplier, { ...saved.supplier, id: "s-7", code: "SUP-007", name: "Wenzhou Buttons", status: "Inactive" }];
+const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, ...PROFILE, id: "s-6", openOrders: 0, openPos: 0, ytdValue: [], balance: [], exchangeRate: 11.5, rateUpdatedAt: "2026-11-01T06:30:00.000Z", hasTransactions: false, status: "Active" } };
+const ROWS: SupplierRow[] = [
+  saved.supplier,
+  { ...saved.supplier, id: "s-7", code: "SUP-007", name: "Wenzhou Buttons", status: "Inactive" },
+  // Has orders or deposits: a new currency or rate asks first (the code is outside SUP-nnn, so the next code stays SUP-008).
+  { ...saved.supplier, id: "s-8", code: "HZ-01", name: "Hangzhou Knits", hasTransactions: true },
+];
 
 function open(query = "dialog=add") {
   nav.query = query;
@@ -62,7 +70,9 @@ describe("Add supplier", () => {
     // The highest SUP-nnn in the list (SUP-007) plus one.
     expect(field("Supplier code")).toHaveValue("SUP-008");
     expect(field("Country")).toHaveValue("");
-    expect(field("Currency")).toHaveValue("CNY");
+    expect(field(CURRENCY)).toHaveValue("CNY");
+    expect(field("Exchange rate")).toHaveValue("");
+    expect(field("Exchange rate")).toHaveAccessibleName("Exchange rate (1 CNY = ? INR)");
     expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
   });
 
@@ -75,10 +85,12 @@ describe("Add supplier", () => {
     await user.type(field("Phone"), NINGBO.phone);
     await user.type(field("Address"), NINGBO.address);
     await user.type(field("Notes"), NINGBO.notes);
+    await user.type(field("Exchange rate"), RATE);
+    expect(screen.getByText("1 CNY = ₹11.50")).toBeVisible();
     await user.click(save);
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
-    expect(post).toHaveBeenCalledWith("/suppliers", { ...NINGBO, ...EMPTY_PROFILE, code: "SUP-008" });
+    expect(post).toHaveBeenCalledWith("/suppliers", { ...NINGBO, ...EMPTY_PROFILE, code: "SUP-008", exchangeRate: 11.5 });
     expect(toast.success).toHaveBeenCalledWith("Supplier added");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
     expect(replaceState.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
@@ -89,6 +101,7 @@ describe("Add supplier", () => {
     post.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     const { user, field, save } = open();
     await user.type(field("Supplier name"), NINGBO.name);
+    await user.type(field("Exchange rate"), RATE);
     await user.click(save);
     await waitFor(() => expect(save).toBeDisabled());
     finish(saved);
@@ -100,6 +113,7 @@ describe("Add supplier", () => {
     const { user, field, save } = open();
     await user.type(field("Supplier name"), "ningbo denim works");
     await user.type(field("City"), NINGBO.city);
+    await user.type(field("Exchange rate"), RATE);
     await user.click(save);
 
     expect(await screen.findByText(M22)).toBeVisible();
@@ -127,11 +141,15 @@ describe("Add supplier", () => {
     await user.clear(field("Supplier code"));
     await user.type(field("Email"), "nope");
     await user.type(field("Phone"), "call me");
+    await user.type(field("Exchange rate"), "0");
     await user.click(save);
     expect(await screen.findByText("Use up to 20 letters, digits or dashes.")).toBeVisible();
     expect(screen.getByText("Enter a valid email address.")).toBeVisible();
     expect(screen.getByText("Enter a valid phone number.")).toBeVisible();
+    expect(screen.getByText("Enter the exchange rate: INR per 1 unit, above 0, with at most 4 decimals.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();
+    await user.clear(field("Exchange rate"));
+    await user.type(field("Exchange rate"), RATE);
 
     const CODE_TAKEN = "A supplier with this code already exists.";
     post.mockRejectedValue(new ApiError(409, "code_exists", CODE_TAKEN, { code: CODE_TAKEN }));
@@ -149,6 +167,7 @@ describe("Add supplier", () => {
     post.mockRejectedValue(new ApiError(0, "network_error", "Something went wrong."));
     const { user, field, save } = open();
     await user.type(field("Supplier name"), NINGBO.name);
+    await user.type(field("Exchange rate"), RATE);
     await user.click(save);
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Something went wrong.", { description: "Please try again." }));
@@ -176,7 +195,8 @@ describe("Edit supplier", () => {
     expect(field("Phone")).toHaveValue(NINGBO.phone);
     expect(field("Payment terms")).toHaveValue(PROFILE.paymentTerms);
     expect(field("Tax / registration number")).toHaveValue(PROFILE.taxNumber);
-    expect(field("Currency")).toHaveValue("CNY");
+    expect(field(CURRENCY)).toHaveValue("CNY");
+    expect(field("Exchange rate")).toHaveValue("11.5");
     expect(field("Address")).toHaveValue(NINGBO.address);
     expect(field("Notes")).toHaveValue(NINGBO.notes);
     expect(field("Status")).toHaveValue("Active");
@@ -194,12 +214,16 @@ describe("Edit supplier", () => {
     const { user, field, save } = open(EDIT);
     await user.clear(field("City"));
     await user.type(field("City"), " Shanghai ");
-    expect([...(field("Currency") as HTMLSelectElement).options].map((option) => option.text)).toEqual(["¥ Chinese yuan", "$ US dollar", "₹ Indian rupee"]);
-    await user.selectOptions(field("Currency"), "USD");
+    expect([...(field(CURRENCY) as HTMLSelectElement).options].map((option) => option.text)).toEqual(["¥ Chinese yuan", "$ US dollar", "₹ Indian rupee"]);
+    await user.selectOptions(field(CURRENCY), "USD");
+    // Another currency starts with an empty rate (the yuan rate means nothing for dollars) and asks for one.
+    expect(field("Exchange rate")).toHaveValue("");
+    expect(field("Exchange rate")).toHaveAccessibleName("Exchange rate (1 USD = ? INR)");
+    await user.type(field("Exchange rate"), "88");
     await user.click(save);
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
-    expect(patch).toHaveBeenCalledWith("/suppliers/s-6", { ...NINGBO, ...PROFILE, city: "Shanghai", currency: "USD", status: "Active" });
+    expect(patch).toHaveBeenCalledWith("/suppliers/s-6", { ...NINGBO, ...PROFILE, city: "Shanghai", currency: "USD", exchangeRate: 88, status: "Active" });
     expect(post).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Supplier saved");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/settings/suppliers");
@@ -258,5 +282,50 @@ describe("Edit supplier", () => {
     expect(field("Supplier name")).toHaveAttribute("aria-invalid", "true");
     expect(toast.success).not.toHaveBeenCalled();
     expect(replaceState).not.toHaveBeenCalled();
+  });
+});
+
+describe("Currency and exchange rate (docs/supplier-currency.md)", () => {
+  it("INR fixes the rate at 1, read-only, and posts it as 1", async () => {
+    post.mockResolvedValue(saved);
+    const { user, field, save } = open();
+    await user.type(field("Supplier name"), "Kochi Mills");
+    await user.selectOptions(field(CURRENCY), "INR");
+    expect(field("Exchange rate")).toHaveValue("1");
+    expect(field("Exchange rate")).toHaveAttribute("readonly");
+    expect(screen.getByText("INR is the base currency: the rate is fixed at 1.")).toBeVisible();
+    await user.click(save);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post).toHaveBeenCalledWith("/suppliers", expect.objectContaining({ currency: "INR", exchangeRate: 1 }));
+  });
+
+  it("asks before a new rate or currency on a supplier with orders or deposits: Cancel keeps the dialog, confirming saves", async () => {
+    patch.mockResolvedValue(saved);
+    const { user, field, save } = open("dialog=edit&id=s-8");
+    await user.clear(field("Exchange rate"));
+    await user.type(field("Exchange rate"), "12");
+    await user.click(save);
+    const confirm = await screen.findByRole("alertdialog", { name: "Change this supplier's currency or rate?" });
+    expect(confirm).toHaveTextContent("Hangzhou Knits already has orders or deposits.");
+    expect(confirm).toHaveTextContent("apply to new orders and deposits only");
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(patch).not.toHaveBeenCalled();
+    expect(field("Exchange rate")).toHaveValue("12");
+
+    await user.click(save);
+    await user.click(await screen.findByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    expect(patch).toHaveBeenCalledWith("/suppliers/s-8", expect.objectContaining({ currency: "CNY", exchangeRate: 12 }));
+  });
+
+  it("saves other edits on such a supplier without asking", async () => {
+    patch.mockResolvedValue(saved);
+    const { user, field, save } = open("dialog=edit&id=s-8");
+    await user.type(field("Notes"), " more");
+    await user.click(save);
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(patch).toHaveBeenCalledWith("/suppliers/s-8", expect.objectContaining({ exchangeRate: 11.5, notes: "Denim only more" }));
   });
 });

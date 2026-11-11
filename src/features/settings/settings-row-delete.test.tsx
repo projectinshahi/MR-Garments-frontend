@@ -24,7 +24,7 @@ const remove = vi.mocked(apiClient.delete);
 const patch = vi.mocked(apiClient.patch);
 
 const contact = { contactPerson: "Mr. Li", phone: "+86 20 1111 2222", status: "Active" as const };
-const profile = { code: "SUP-001", email: "", country: "China", state: "", postalCode: "", paymentTerms: "", taxNumber: "", ytdValue: [], balance: [] };
+const profile = { code: "SUP-001", email: "", country: "China", state: "", postalCode: "", paymentTerms: "", taxNumber: "", ytdValue: [], balance: [], exchangeRate: null, rateUpdatedAt: null, hasTransactions: false };
 const supplier: SupplierRow = { id: "s-1", name: "ABC Textiles", ...contact, ...profile, city: "Guangzhou", address: "", notes: "", currency: "CNY", openOrders: 2, openPos: 2 };
 const ask = () => screen.getByRole("alertdialog", { name: "Delete supplier?" });
 const renderSuppliers = (row: SupplierRow = supplier) => {
@@ -52,6 +52,7 @@ describe("Settings: Delete on each table row", () => {
       ["Country", "China"],
       ["City", "Guangzhou"],
       ["Currency", expect.stringContaining("yuan")],
+      ["Exchange rate", "Not set"],
       ["Open orders", "2"],
       ["Status", "Active"],
     ]);

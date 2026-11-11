@@ -62,6 +62,8 @@ export type SupplierProfile = {
   taxNumber: string;
   notes: string;
   currency: Currency;
+  /** INR per 1 unit of `currency` (backend docs/supplier-currency.md): what new orders and deposits snapshot; null while never set. */
+  exchangeRate: number | null;
 };
 /**
  * MD-1 GET /api/v1/suppliers. `ytdValue`: this year's order value; `balance`: what is still owed over every order;
@@ -75,6 +77,10 @@ export type SupplierRow = Contact &
     openPos: number;
     ytdValue: MoneyTotal[];
     balance: MoneyTotal[];
+    /** When the currency or rate was last set (ISO); null while never set. */
+    rateUpdatedAt: string | null;
+    /** Any order or supplier deposit: a change of currency or rate then applies to new transactions only. */
+    hasTransactions: boolean;
   };
 /** MD-4 GET /api/v1/shipping-agents */
 export type ShippingAgentRow = Contact & { officeCity: string; activeContainers: number };
@@ -120,11 +126,13 @@ type Editable<T> = Partial<T> & { status?: RecordStatus };
 type ContactBody = { name: string; contactPerson?: string; phone?: string };
 
 /**
- * MD-2 POST /api/v1/suppliers. `currency` (CNY when left out) is the default for the supplier's new orders; `code`
- * left out is assigned (SUP-nnn), else kept upper-case (409 `code_exists` under code when another supplier has it).
+ * MD-2 POST /api/v1/suppliers. `currency` (CNY when left out) is the one currency of the supplier's new orders and
+ * deposits; `exchangeRate` is INR per 1 unit of it (above 0, at most 4 decimals; an INR supplier's is 1, set when left
+ * out; another currency's left out is "not set yet"). `code` left out is assigned (SUP-nnn), else kept upper-case
+ * (409 `code_exists` under code when another supplier has it).
  */
-export type CreateSupplierBody = ContactBody & Partial<SupplierProfile>;
-/** PATCH /api/v1/suppliers/:id. A new currency applies to new orders only. */
+export type CreateSupplierBody = ContactBody & Partial<Omit<SupplierProfile, "exchangeRate">> & { exchangeRate?: number };
+/** PATCH /api/v1/suppliers/:id. A new currency or rate applies to new orders and deposits only; a new currency needs its rate in the same request. */
 export type UpdateSupplierBody = Editable<CreateSupplierBody>;
 export type SupplierResponse = { supplier: SupplierRow };
 
@@ -201,6 +209,8 @@ export type OrderListItem = {
   stage: OrderStage;
   supplier: Named;
   currency: Currency;
+  /** INR per 1 of `currency` when the order was placed (migration 0012); null for older orders or a supplier without a rate then. */
+  exchangeRate: number | null;
   item: string;
   quantity: number;
   unit: Unit;
@@ -231,8 +241,8 @@ export type DepositStatus = "none" | "due" | "partly" | "paid";
 /** ORD-2 GET /api/v1/orders/options */
 export type OrderOptions = {
   nextPo: string;
-  /** `currency`: the supplier's, the new order's default. */
-  suppliers: (Named & { contactPerson: string; phone: string; city: string; currency: Currency })[];
+  /** `currency`: the supplier's, which the order is in; `exchangeRate`: the supplier's rate now (null while not set), kept on the order. */
+  suppliers: (Named & { contactPerson: string; phone: string; city: string; currency: Currency; exchangeRate: number | null })[];
   /** `price`: the item's default rate per unit, offered for the line when the item is chosen; null when none is set. */
   items: (Named & { unit: Unit; price: number | null })[];
   /** Active shipping agents: the other kind of deposit payee. */
@@ -294,6 +304,8 @@ export type PaymentsResponse = {
     po: string;
     supplier: string;
     currency: Currency;
+    /** The supplier's rate now (INR per 1 of `currency`), a new payment's default; null while not set. */
+    supplierRate: number | null;
     orderValueCny: number;
     /** Every paid payment, agents (sea freight) included. */
     paidCny: number;
@@ -429,7 +441,7 @@ export type PaymentKind = "Deposit" | "Balance";
  * the signed-in user can't view it (payments, receiving, containers access). Records are oldest first.
  */
 export type OrderDetail = Omit<OrderListItem, "supplier"> & {
-  supplier: Omit<OrderOptions["suppliers"][number], "currency">;
+  supplier: Omit<OrderOptions["suppliers"][number], "currency" | "exchangeRate">;
   balanceCny: number;
   lines: {
     id: string;

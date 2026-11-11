@@ -19,9 +19,10 @@ const TODAY = "2026-10-27";
 const options: OrderOptions = {
   nextPo: "PO-2050",
   suppliers: [
-    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China", currency: "CNY" },
-    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu", currency: "USD" },
-    { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR" },
+    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China", currency: "CNY", exchangeRate: null },
+    // Yiwu has its rate set (1 USD = ₹88): the deposits' default rate. Foshan has none yet; INR needs none.
+    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu", currency: "USD", exchangeRate: 88 },
+    { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR", exchangeRate: 1 },
   ],
   items: [
     { id: "i-denim", name: "Cotton denim fabric", unit: "m", price: null },
@@ -222,7 +223,7 @@ describe("NewOrderScreen", () => {
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![1]).not.toHaveProperty("depositRequiredCny");
 
-    await ui.user.selectOptions(ui.field("Currency"), "USD");
+    await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
     expect(screen.getByLabelText("Deposit required ($)")).toBeVisible();
   });
 
@@ -239,13 +240,14 @@ describe("NewOrderScreen", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("takes the supplier's currency, which the user may change: labels and totals follow it", async () => {
+  it("is in the supplier's currency, shown but not chosen (docs/supplier-currency.md): labels and totals follow the supplier", async () => {
     post.mockResolvedValue({ order: { id: "o-2", po: "PO-2050" } });
     const ui = open();
-    expect(ui.field("Currency")).toHaveValue("CNY");
-    expect([...(ui.field("Currency") as HTMLSelectElement).options].map((option) => option.text)).toEqual(["CNY (¥)", "USD ($)", "INR (₹)"]);
+    expect(ui.field("Currency")).toHaveValue("CNY (¥)");
+    expect(ui.field("Currency")).toHaveAttribute("readonly");
     await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
-    expect(ui.field("Currency")).toHaveValue("USD");
+    expect(ui.field("Currency")).toHaveValue("USD ($)");
+    expect(screen.getByText("Supplier rate now: 1 USD = ₹88.00")).toBeVisible();
     await ui.user.type(ui.field("Delivery date"), "2026-11-25");
     await ui.user.selectOptions(ui.field("Item, line 1"), "i-buttons");
     await ui.user.type(screen.getByLabelText("Rate ($), line 1"), "0.35");
@@ -254,6 +256,9 @@ describe("NewOrderScreen", () => {
     await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
     await ui.user.type(screen.getByLabelText("Amount ($), deposit 1"), "100");
     await ui.user.type(ui.field("Mode"), "Wire");
+    // The supplier's rate now fills the deposit's rate; this deposit was paid at another, so it is changed.
+    expect(ui.field("Rate to INR")).toHaveValue("88");
+    await ui.user.clear(ui.field("Rate to INR"));
     await ui.user.click(ui.place);
     expect(await screen.findByText("Deposit 1: Enter the rate.")).toBeVisible();
     await ui.user.type(ui.field("Rate to INR"), "88.5");
@@ -267,11 +272,12 @@ describe("NewOrderScreen", () => {
     });
   }, 30_000);
 
-  it("an INR order asks no deposit rate and sends none", async () => {
+  it("an INR supplier's order asks no deposit rate and sends none", async () => {
     post.mockResolvedValue({ order: { id: "o-3", po: "PO-2050" } });
     const ui = open();
-    await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
-    await ui.user.selectOptions(ui.field("Currency"), "INR");
+    await ui.user.selectOptions(ui.field("Supplier"), "s-kochi");
+    expect(ui.field("Currency")).toHaveValue("INR (₹)");
+    expect(screen.getByText("INR is the base currency: no exchange rate.")).toBeVisible();
     await ui.user.type(ui.field("Delivery date"), "2026-11-25");
     await ui.user.selectOptions(ui.field("Item, line 1"), "i-denim");
     await ui.user.type(ui.field("Rate (₹), line 1"), "250");
@@ -284,8 +290,22 @@ describe("NewOrderScreen", () => {
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     const body = post.mock.calls[0]![1] as { currency: string; deposits: object[] };
     expect(body.currency).toBe("INR");
-    expect(body.deposits).toEqual([{ payee: "Foshan Fabrics", payeeRole: "supplier", amountCny: 1000, paidOn: TODAY, mode: "NEFT" }]);
+    expect(body.deposits).toEqual([{ payee: "Kochi Mills", payeeRole: "supplier", amountCny: 1000, paidOn: TODAY, mode: "NEFT" }]);
   }, 30_000);
+
+  it("fills each deposit's rate from the supplier's rate now, and replaces it when the supplier changes", async () => {
+    const ui = open();
+    await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
+    expect(screen.getByText("No exchange rate set for this supplier yet: set it under Suppliers.")).toBeVisible();
+    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
+    expect(ui.field("Rate to INR")).toHaveValue("");
+    await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
+    expect(ui.field("Currency")).toHaveValue("USD ($)");
+    expect(ui.field("Rate to INR")).toHaveValue("88");
+    await ui.user.selectOptions(ui.field("Supplier"), "s-kochi");
+    expect(ui.field("Currency")).toHaveValue("INR (₹)");
+    expect(screen.queryByLabelText("Rate to INR")).not.toBeInTheDocument();
+  });
 
   it("has no Save draft stub", () => {
     open();

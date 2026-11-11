@@ -25,7 +25,7 @@ const due = { id: "6f1c2b9e-0000-4000-8000-000000000002", kind: "Balance", payee
 const freight = { id: "6f1c2b9e-0000-4000-8000-000000000003", kind: "Balance", payee: "Sino Freight", payeeRole: "agent", amountCny: 500, status: "paid", paidOn: "2026-10-05", dueDate: null, rateInr: 12.5, mode: "Cash", reference: "", notes: "", amountInr: 6_250 } as const;
 const noDeposit = { depositRequiredCny: null, depositPaidCny: 0, depositPendingCny: null, depositStatus: "none" } as const;
 const api: PaymentsResponse = {
-  orders: [{ orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit }],
+  orders: [{ orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", supplierRate: null, orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit }],
   payments: [
     { ...due, orderId: "o2", po: "PO-3002", currency: "CNY" },
     { ...deposit, orderId: "o2", po: "PO-3002", currency: "CNY" },
@@ -146,9 +146,9 @@ describe("Payments by order: Actions (PAY-3)", () => {
   const paid3 = { id: "6f1c2b9e-0000-4000-8000-000000000009", kind: "Balance", payee: "Ningbo Knits", payeeRole: "supplier", amountCny: 2_000, status: "paid", paidOn: "2026-10-20", dueDate: null, rateInr: 12, mode: "Cash", reference: "", notes: "", amountInr: 24_000 } as const;
   const byOrder: PaymentsResponse = {
     orders: [
-      { orderId: "o1", po: "PO-3001", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 9_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 9_000, nextDue: null, ...noDeposit },
+      { orderId: "o1", po: "PO-3001", supplier: "Hangzhou Silk", currency: "CNY", supplierRate: null, orderValueCny: 9_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 9_000, nextDue: null, ...noDeposit },
       api.orders[0]!,
-      { orderId: "o3", po: "PO-3003", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 4_000, paidCny: 2_000, paidInr: 24_000, supplierPaidCny: 2_000, supplierPaidInr: 24_000, balanceCny: 2_000, nextDue: null, ...noDeposit },
+      { orderId: "o3", po: "PO-3003", supplier: "Ningbo Knits", currency: "CNY", supplierRate: null, orderValueCny: 4_000, paidCny: 2_000, paidInr: 24_000, supplierPaidCny: 2_000, supplierPaidInr: 24_000, balanceCny: 2_000, nextDue: null, ...noDeposit },
     ],
     payments: [{ ...paid3, orderId: "o3", po: "PO-3003", currency: "CNY" }, ...api.payments],
   };

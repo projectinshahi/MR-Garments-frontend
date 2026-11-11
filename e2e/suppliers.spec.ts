@@ -114,6 +114,8 @@ test("adds a supplier with the offered code, views, edits and deactivates it fro
   await dialog.getByLabel("Contact person").fill("Ms. Tran Linh");
   await dialog.getByLabel("City").fill("Hanoi");
   await dialog.getByLabel("Payment terms").fill("50% deposit, balance on shipment");
+  // The rate (INR per 1 CNY) is required (docs/supplier-currency.md).
+  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
   await dialog.getByRole("button", { name: "Save supplier" }).click();
   await expect(toast(page, "Supplier added")).toBeVisible();
   await expect(dialog).toBeHidden();

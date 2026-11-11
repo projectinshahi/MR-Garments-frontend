@@ -15,8 +15,8 @@ vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 const noDeposit = { depositRequiredCny: null, depositPaidCny: 0, depositPendingCny: null, depositStatus: "none" } as const;
 const api: PaymentsResponse = {
   orders: [
-    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 10_000, nextDue: null, ...noDeposit },
-    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit },
+    { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", supplierRate: null, orderValueCny: 10_000, paidCny: 0, paidInr: 0, supplierPaidCny: 0, supplierPaidInr: 0, balanceCny: 10_000, nextDue: null, ...noDeposit },
+    { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY", supplierRate: null, orderValueCny: 20_000, paidCny: 5_000, paidInr: 60_000, supplierPaidCny: 5_000, supplierPaidInr: 60_000, balanceCny: 15_000, nextDue: "2026-11-12", ...noDeposit },
   ],
   // PAY-1 order: newest first by coalesce(paidOn, dueDate).
   payments: [
@@ -85,7 +85,7 @@ describe("PaymentsScreen", () => {
     renderScreen();
     expect(screen.getByText("Order value (¥)")).toBeInTheDocument();
     cleanup();
-    const usd = { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, orderValueCny: 1_200, paidCny: 200, paidInr: 17_600, supplierPaidCny: 200, supplierPaidInr: 17_600, balanceCny: 1_000, nextDue: null, ...noDeposit };
+    const usd = { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, supplierRate: null, orderValueCny: 1_200, paidCny: 200, paidInr: 17_600, supplierPaidCny: 200, supplierPaidInr: 17_600, balanceCny: 1_000, nextDue: null, ...noDeposit };
     renderScreen({ ...api, orders: [...api.orders, usd] });
     expect(screen.getByText("Order value")).toBeInTheDocument();
     expect(screen.queryByText("Order value (¥)")).not.toBeInTheDocument();

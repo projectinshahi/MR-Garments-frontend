@@ -26,8 +26,8 @@ const api: DepositsResponse = {
   ],
   orderObligations: [],
   supplierDeposits: [
-    { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
-    { id: "d1", supplierId: "s2", supplier: "Hangzhou Knits", direction: "give", currency: "USD", amount: 1000, settled: 0, pending: 1000, status: "open", openedOn: "2026-10-01", reference: "", notes: "", transactions: 0 },
+    { id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", exchangeRate: null, amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: 1 },
+    { id: "d1", supplierId: "s2", supplier: "Hangzhou Knits", direction: "give", currency: "USD", exchangeRate: null, amount: 1000, settled: 0, pending: 1000, status: "open", openedOn: "2026-10-01", reference: "", notes: "", transactions: 0 },
   ],
   suppliers: [
     { id: "s1", name: "Foshan Fabrics" },
@@ -161,12 +161,12 @@ const statement: SupplierStatement = {
   ],
   deposits: [
     {
-      id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 500, pending: 0, status: "settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: [
+      id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", exchangeRate: null, amount: 500, settled: 500, pending: 0, status: "settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: [
         { id: "t3", paidOn: "2026-10-12", amount: 500, mode: "Cash", reference: "", notes: "" },
       ],
     },
     {
-      id: "d1", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "CNY", amount: 1000, settled: 300, pending: 700, status: "partly settled", openedOn: "2026-10-01", reference: "", notes: "Tooling", transactions: [
+      id: "d1", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "CNY", exchangeRate: null, amount: 1000, settled: 300, pending: 700, status: "partly settled", openedOn: "2026-10-01", reference: "", notes: "Tooling", transactions: [
         { id: "t2", paidOn: "2026-10-20", amount: 100, mode: "Cash", reference: "", notes: "" },
         { id: "t1", paidOn: "2026-10-05", amount: 200, mode: "Bank transfer", reference: "TXN 1", notes: "" },
       ],

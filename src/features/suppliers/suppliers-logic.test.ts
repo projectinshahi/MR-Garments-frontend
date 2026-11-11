@@ -26,6 +26,9 @@ const row = (over: Partial<SupplierRow>): SupplierRow => ({
   openPos: 0,
   ytdValue: [],
   balance: [],
+  exchangeRate: null,
+  rateUpdatedAt: null,
+  hasTransactions: false,
   status: "Active",
   ...over,
 });
@@ -84,7 +87,7 @@ describe("supplier form rules", () => {
   });
 
   it("upper-cases the code and checks the code, email and phone shapes", () => {
-    const base = { name: "Ningbo Denim Works", country: "", city: "", state: "", postalCode: "", contactPerson: "", email: "", phone: "", currency: "CNY" as const, address: "", paymentTerms: "", taxNumber: "", notes: "" };
+    const base = { name: "Ningbo Denim Works", country: "", city: "", state: "", postalCode: "", contactPerson: "", email: "", phone: "", currency: "CNY" as const, exchangeRate: "11.5", address: "", paymentTerms: "", taxNumber: "", notes: "" };
     expect(supplierSchema.parse({ ...base, code: " nb-01 " }).code).toBe("NB-01");
     const problems = (values: object) => supplierSchema.safeParse(values).error?.issues.map((issue) => `${String(issue.path[0])}: ${issue.message}`);
     expect(problems({ ...base, code: "" })).toEqual(["code: Use up to 20 letters, digits or dashes."]);

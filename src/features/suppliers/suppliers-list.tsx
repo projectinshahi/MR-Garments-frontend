@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
 import { DEACTIVATE_NOTE, SupplierDialog } from "@/features/settings/add-supplier-dialog";
 import { addHref, editHref } from "@/features/settings/settings-dialog";
-import type { StatusFilter, SupplierDraft } from "@/features/settings/settings-logic";
+import { exchangeRateText, type StatusFilter, type SupplierDraft } from "@/features/settings/settings-logic";
 import { apiClient } from "@/lib/api/client";
 import type { SupplierRow } from "@/lib/api/types";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
@@ -131,6 +131,14 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
           <span>{row.original.phone || "–"}</span>
         </span>
       ),
+    },
+    { accessorKey: "currency", header: "Currency", meta: { className: "w-[84px]" }, cell: ({ row }) => <span className="font-bold">{row.original.currency}</span> },
+    {
+      // INR per 1 unit of the supplier's currency (docs/supplier-currency.md); "Not set" until the supplier is edited with one.
+      accessorKey: "exchangeRate",
+      header: "Exchange Rate",
+      meta: { ...right, className: "w-[108px]" },
+      cell: ({ row }) => <span className={cn(row.original.exchangeRate === null && "text-muted-foreground")}>{exchangeRateText(row.original.currency, row.original.exchangeRate)}</span>,
     },
     {
       // Not closed (phase 2 §1), the Open POs card's rule; the Settings tab's "Open orders" (stage < 6) is a different count.

@@ -35,8 +35,15 @@ async function newSupplier(api: Api, body: Record<string, string>) {
 type Line = { item: string; quantity: number; rateCny: number };
 type Deposit = { amountCny: number; paidOn: string; rateInr: number };
 
-/** ORD-3 in `currency`, ordered today, with supplier deposits. */
+/** The supplier's currency (docs/supplier-currency.md): an order is in it, so a supplier paid in two currencies over time is switched between orders. */
+async function setCurrency(api: Api, supplierId: string, currency: Currency) {
+  const response = await api.request.patch(`/api/v1/suppliers/${supplierId}`, { data: currency === "INR" ? { currency } : { currency, exchangeRate: currency === "USD" ? 88 : 11.5 } });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
+/** ORD-3 in `currency` (the supplier is switched to it first), ordered today, with supplier deposits. */
 async function placeOrder(api: Api, supplier: { id: string; name: string }, currency: Currency, lines: Line[], deposits: Deposit[]) {
+  await setCurrency(api, supplier.id, currency);
   const { items } = await api.options();
   const body = {
     supplierId: supplier.id,
@@ -74,6 +81,8 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
   );
   // USD: $200, a $80 deposit today at 88 (₹7,040).
   const usd = await placeOrder(api, supplier, "USD", [{ item: "Polo shirts", quantity: 40, rateCny: 5 }], [{ amountCny: 80, paidOn: today(), rateInr: 88 }]);
+  // Back to yuan: the USD order keeps its currency (and the rate it was placed at), the supplier's page shows yuan.
+  await setCurrency(api, supplier.id, "CNY");
   await api.pay(cny.id, { amountCny: 100, rateInr: 12 });
   // Sea freight to a shipping agent on the same order, and another supplier's order: neither belongs on this page.
   const sino = (await api.options()).agents.find((agent) => agent.name === "Sino Freight")!;
@@ -117,7 +126,7 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(kv(page, "Phone")).toHaveText("+86 100 2000 3000");
     await expect(kv(page, "City")).toHaveText("Wenzhou");
     await expect(kv(page, "Address")).toHaveText("8 Harbour Road, Wenzhou");
-    await expect(kv(page, "Payment currency")).toHaveText("¥ Chinese yuan");
+    await expect(kv(page, "Preferred currency")).toHaveText("¥ Chinese yuan");
     await expect(kv(page, "Status")).toHaveText("Active");
 
     await expect(kpiTexts(page, "Orders")).toHaveText(["Orders", "2", "2 open"]);
@@ -218,7 +227,7 @@ test("a supplier with no orders shows zeros and an empty state in each list", as
   await page.goto(`${REPORT}/${supplier.id}`);
   await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
   for (const label of ["Contact person", "Phone", "City", "Address"]) await expect(kv(page, label)).toHaveText("–");
-  await expect(kv(page, "Payment currency")).toHaveText("$ US dollar");
+  await expect(kv(page, "Preferred currency")).toHaveText("$ US dollar");
   await expect(kpiTexts(page, "Orders")).toHaveText(["Orders", "0", "0 open"]);
   await expect(kpiTexts(page, "Order value").nth(1)).toHaveText("$0");
   await expect(kpiTexts(page, "Balance to pay").nth(1)).toHaveText("$0");

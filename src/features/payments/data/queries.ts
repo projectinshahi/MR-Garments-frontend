@@ -19,6 +19,8 @@ export type OrderPaymentRow = {
   supplier: string;
   /** The order's: orderValue, paid and balance are in it. */
   currency: Currency;
+  /** The supplier's rate now (INR per 1 of `currency`), the default for a new payment; null while not set or with an older API. */
+  supplierRate: number | null;
   orderValue: number;
   /** Every paid payment, agents (sea freight) included. */
   paid: number;
@@ -83,6 +85,7 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
       po: o.po,
       supplier: o.supplier,
       currency: o.currency,
+      supplierRate: o.supplierRate ?? null,
       orderValue: o.orderValueCny,
       paid: o.paidCny,
       paidInr: o.paidInr,

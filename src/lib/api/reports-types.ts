@@ -160,7 +160,7 @@ type Page<T> = { rows: T[]; total: number; page: number; pageSize: 10 };
  * The summary ignores all but the period. Amounts are in each order's currency (`...Cny` is the legacy name).
  */
 export type SupplierPaymentDetail = {
-  supplier: { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus } & SupplierProfile;
+  supplier: { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus; rateUpdatedAt: string | null } & SupplierProfile;
   filter: { from: string | null; to: string | null };
   summary: {
     orders: number;
@@ -272,6 +272,8 @@ export type OrderReportDeposit = {
   id: string;
   direction: "give" | "receive";
   currency: Currency;
+  /** The supplier's rate when the deposit was opened; null before migration 0012 or without a rate then. */
+  exchangeRate: number | null;
   amount: number;
   settled: number;
   pending: number;
@@ -362,7 +364,7 @@ export type OrderReport = {
     id: string;
     po: string;
     /** The supplier's whole profile (backend docs/suppliers.md) as it is now; the order keeps its own currency. */
-    supplier: Named & SupplierProfile & { contactPerson: string; phone: string; status: RecordStatus };
+    supplier: Named & SupplierProfile & { contactPerson: string; phone: string; status: RecordStatus; rateUpdatedAt: string | null };
     orderDate: string;
     deliveryDate: string;
     createdAt: string | null;
@@ -373,6 +375,9 @@ export type OrderReport = {
     closedOn: string | null;
     currency: Currency;
     orderValueCny: number;
+    /** The rate saved when the order was placed (null for older orders) and the PO value at it, never at a later rate. */
+    exchangeRate: number | null;
+    orderValueInr: number | null;
     /** Distinct lines on the order. */
     products: number;
     /** One total per unit (pieces and metres are never added together); pending = max(0, ordered - received). */
@@ -444,6 +449,9 @@ export type OrderReportRow = {
   stage: OrderStage;
   supplier: Named & { code: string };
   currency: Currency;
+  /** The rate saved on the order (null for older orders) and the PO value at it; `paidInr` stays at each payment's own rate. */
+  exchangeRate: number | null;
+  orderValueInr: number | null;
   item: string;
   quantity: number;
   unit: Unit;

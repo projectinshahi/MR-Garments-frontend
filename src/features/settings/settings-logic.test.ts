@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { suppliers } from "@/mocks/data/master";
 
 import { supplierDraft } from "./data/fixtures";
-import { averagePerPieceText, filterRecords, itemPriceText, supplierSchema } from "./settings-logic";
+import { averagePerPieceText, exchangeRateProblem, exchangeRateText, filterRecords, itemPriceText, supplierSchema, toSupplierBody } from "./settings-logic";
 
 const search = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 const names = (rows: { name: string }[]) => rows.map((row) => row.name);
@@ -43,6 +43,7 @@ describe("add supplier", () => {
     email: "",
     phone: "+86 138 5740 9921",
     currency: "CNY" as const,
+    exchangeRate: "11.5",
     address: "",
     paymentTerms: "",
     taxNumber: "",
@@ -61,6 +62,7 @@ describe("add supplier", () => {
       email: "",
       phone: "",
       currency: "CNY",
+      exchangeRate: "",
       address: "",
       paymentTerms: "",
       taxNumber: "",
@@ -79,6 +81,27 @@ describe("add supplier", () => {
       ...ningbo,
       notes: "Denim only",
     });
+    expect(toSupplierBody(supplierSchema.parse(ningbo))).toEqual({ ...ningbo, exchangeRate: 11.5 });
+  });
+
+  // docs/supplier-currency.md: the rate is INR per 1 unit of the currency; INR is the base currency, so its rate is 1.
+  it("requires the exchange rate above 0 with at most 4 decimals unless the currency is INR, whose rate is 1", () => {
+    const message = "Enter the exchange rate: INR per 1 unit, above 0, with at most 4 decimals.";
+    for (const rate of ["", "0", "0.0000", "-1", "abc", "12.12345", "1e3"]) expect(exchangeRateProblem("CNY", rate), rate).toBe(message);
+    for (const rate of ["1", "11.5", "88.2500", "0.0001", "99999999"]) expect(exchangeRateProblem("USD", rate), rate).toBeNull();
+    for (const rate of ["", "0", "anything"]) expect(exchangeRateProblem("INR", rate), rate).toBeNull();
+    const problems = supplierSchema.safeParse({ ...ningbo, exchangeRate: "" }).error?.issues.map((issue) => `${String(issue.path[0])}: ${issue.message}`);
+    expect(problems).toEqual([`exchangeRate: ${message}`]);
+    expect(supplierSchema.safeParse({ ...ningbo, currency: "INR", exchangeRate: "" }).success).toBe(true);
+    expect(toSupplierBody({ ...ningbo, currency: "INR", exchangeRate: "" })).toMatchObject({ currency: "INR", exchangeRate: 1 });
+    expect(toSupplierBody({ ...ningbo, currency: "USD", exchangeRate: "88.25" })).toMatchObject({ currency: "USD", exchangeRate: 88.25 });
+  });
+
+  it("writes the list's Exchange rate cell: ₹ per unit, 1.00 for INR, Not set without one", () => {
+    expect(exchangeRateText("CNY", 11.5)).toBe("₹11.50");
+    expect(exchangeRateText("USD", 88.2525)).toBe("₹88.2525");
+    expect(exchangeRateText("INR", 1)).toBe("1.00");
+    expect(exchangeRateText("CNY", null)).toBe("Not set");
   });
 });
 

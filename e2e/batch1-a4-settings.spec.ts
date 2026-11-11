@@ -44,6 +44,8 @@ async function fillSupplier(dialog: Locator, name: string) {
   await dialog.getByLabel("Phone").fill(NINGBO.phone);
   await dialog.getByLabel("Address").fill(NINGBO.address);
   await dialog.getByLabel("Notes").fill(NINGBO.notes);
+  // The rate (INR per 1 CNY) is required (docs/supplier-currency.md).
+  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
 }
 
 test("AT-S1: Suppliers lists the 5 seeded suppliers as 40, with 0 open orders", async ({ page }) => {
@@ -51,7 +53,8 @@ test("AT-S1: Suppliers lists the 5 seeded suppliers as 40, with 0 open orders", 
   await expect(rows(page)).toHaveCount(SUPPLIERS.length + 1);
   for (const [index, supplier] of SUPPLIERS.entries()) {
     // The actions cell: the Deposits statement link (phase 2), then Edit and Delete.
-    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", /^\d+$/, "Active", "DepositsEditDelete"]);
+    // Seeded suppliers have no exchange rate yet ("Not set" until edited with one).
+    await expect(rows(page).nth(index + 1).getByRole("cell")).toHaveText([...supplier, "¥", "Not set", /^\d+$/, "Active", "DepositsEditDelete"]);
   }
 });
 
@@ -105,7 +108,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/suppliers$/);
   await expect(page.getByText("Supplier added", { exact: true })).toBeVisible();
-  const cells = [NINGBO.name, NINGBO.contactPerson, NINGBO.phone, NINGBO.city, "¥", "0", "Active", "DepositsEditDelete"];
+  const cells = [NINGBO.name, NINGBO.contactPerson, NINGBO.phone, NINGBO.city, "¥", "₹12.50", "0", "Active", "DepositsEditDelete"];
   await expect(rows(page).nth(6).getByRole("cell")).toHaveText(cells);
 
   await page.reload();
@@ -116,7 +119,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   const response = await page.request.get("/api/v1/suppliers?search=ningbo");
   expect(response.ok()).toBe(true);
   // The profile fields (docs/suppliers.md) stay empty, the code is the next SUP-nnn, and the money lists are empty without orders.
-  const profile = { code: expect.stringMatching(/^SUP-\d{3,}$/), country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "", openPos: 0, ytdValue: [], balance: [] };
+  const profile = { code: expect.stringMatching(/^SUP-\d{3,}$/), country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "", openPos: 0, ytdValue: [], balance: [], exchangeRate: 12.5, rateUpdatedAt: expect.any(String), hasTransactions: false };
   expect(await response.json()).toEqual([{ ...NINGBO, ...profile, id: expect.any(String), currency: "CNY", openOrders: 0, status: "Active" }]);
 });
 

@@ -25,6 +25,7 @@ const DEPOSIT: SupplierDepositRow = {
   supplier: "Foshan Fabrics",
   direction: "give",
   currency: "CNY",
+  exchangeRate: null,
   amount: 1000,
   settled: 300,
   pending: 700,
@@ -61,24 +62,23 @@ const settle = (deposit = DEPOSIT) =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("NewDepositDialog (SD-2)", () => {
-  it("defaults to the supplier's currency and today, posts the deposit, toasts, closes and refreshes", async () => {
+  it("is in the supplier's currency (shown, not chosen) and defaults to today; posts the deposit, toasts, closes and refreshes", async () => {
     post.mockResolvedValue({ deposit: DEPOSIT });
     const form = await newDeposit();
     expect(within(form.dialog).getByRole("heading", { name: "New deposit for Foshan Fabrics" })).toBeInTheDocument();
-    expect(form.field("Currency")).toHaveValue("USD");
+    expect(form.field("Currency")).toHaveValue("USD ($)");
+    expect(form.field("Currency")).toHaveAttribute("readonly");
     expect(form.field("Agreed on")).toHaveValue("2026-11-10");
     expect(form.field("Amount ($)")).toBeVisible();
     await form.user.selectOptions(form.field("Direction"), "receive");
-    await form.user.selectOptions(form.field("Currency"), "CNY");
-    expect(form.field("Amount (¥)")).toBeVisible();
-    await form.user.type(form.field("Amount (¥)"), "1,234.5");
+    await form.user.type(form.field("Amount ($)"), "1,234.5");
     fireEvent.change(form.field("Agreed on"), { target: { value: "2026-11-01" } });
     await form.user.type(form.field("Reference"), " INV-7 ");
     await form.user.type(form.field("Notes"), "Returned mould");
 
     await form.user.click(form.submit);
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
-    expect(post).toHaveBeenCalledWith("/suppliers/s1/deposits", { direction: "receive", amount: 1234.5, currency: "CNY", openedOn: "2026-11-01", reference: "INV-7", notes: "Returned mould" });
+    expect(post).toHaveBeenCalledWith("/suppliers/s1/deposits", { direction: "receive", amount: 1234.5, currency: "USD", openedOn: "2026-11-01", reference: "INV-7", notes: "Returned mould" });
     expect(toast.success).toHaveBeenCalledWith("Deposit opened");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

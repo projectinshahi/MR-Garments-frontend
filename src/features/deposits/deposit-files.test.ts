@@ -60,10 +60,10 @@ const statement: SupplierStatement = {
   ],
   deposits: [
     {
-      id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: [{ id: "t2", paidOn: "2026-10-12", amount: 100, mode: "Cash", reference: "", notes: "" }],
+      id: "d2", supplierId: "s1", supplier: "Foshan Fabrics", direction: "receive", currency: "CNY", exchangeRate: null, amount: 500, settled: 100, pending: 400, status: "partly settled", openedOn: "2026-10-10", reference: "Mould", notes: "", transactions: [{ id: "t2", paidOn: "2026-10-12", amount: 100, mode: "Cash", reference: "", notes: "" }],
     },
     {
-      id: "d1", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "CNY", amount: 1000, settled: 300, pending: 700, status: "partly settled", openedOn: "2026-10-01", reference: "", notes: "Tooling", transactions: [{ id: "t1", paidOn: "2026-10-05", amount: 300, mode: "Bank transfer", reference: "TXN 1", notes: "" }],
+      id: "d1", supplierId: "s1", supplier: "Foshan Fabrics", direction: "give", currency: "CNY", exchangeRate: null, amount: 1000, settled: 300, pending: 700, status: "partly settled", openedOn: "2026-10-01", reference: "", notes: "Tooling", transactions: [{ id: "t1", paidOn: "2026-10-05", amount: 300, mode: "Bank transfer", reference: "TXN 1", notes: "" }],
     },
   ],
 };

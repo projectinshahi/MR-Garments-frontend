@@ -38,6 +38,8 @@ export type SupplierDepositRow = {
   supplier: string;
   direction: DepositDirection;
   currency: Currency;
+  /** The supplier's rate (INR per 1 of `currency`) when the deposit was opened; null before migration 0012 or without a rate then. */
+  exchangeRate: number | null;
   amount: number;
   settled: number;
   pending: number;

@@ -48,6 +48,7 @@ describe("orderPermissions", () => {
 
 const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   id: po,
+  exchangeRate: null,
   po,
   orderDate: "2026-10-01",
   deliveryDate: "2026-11-15",

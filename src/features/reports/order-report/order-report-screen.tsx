@@ -11,7 +11,7 @@ import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { DepositStatusPill } from "@/features/payments/money";
 import { ExportActions } from "@/features/reports/report-actions";
 import type { OrderReport, OrderReportContainer, OrderReportDeposit } from "@/lib/api/reports-types";
-import { CURRENCY_NAME, formatDate, formatDateTime, formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, formatRate } from "@/lib/formatters";
+import { CURRENCY_NAME, formatDate, formatDateTime, formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, rateText, formatRate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { type MoneyTotal, STAGES } from "@/types/domain";
 
@@ -295,6 +295,7 @@ function DepositBlock({ deposit }: { deposit: OrderReportDeposit }) {
         boldValues
         items={[
           { label: "Deposit amount", value: formatMoney(deposit.amount, deposit.currency) },
+          { label: "Rate when opened", value: deposit.exchangeRate === null ? "Not saved" : rateText(deposit.currency, deposit.exchangeRate) },
           { label: "Settled so far", value: formatMoney(deposit.settled, deposit.currency) },
           { label: "Remaining", value: formatMoney(deposit.pending, deposit.currency) },
           { label: "Applied to this PO", value: "Not tracked (account-level deposit)" },
@@ -390,6 +391,9 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   { label: "Status", value: <StatusPill tone={order.closed ? "success" : "info"}>{closureLabel(order)}</StatusPill> },
                   { label: "Stage", value: stageLabel(order.stage) },
                   { label: "Currency", value: CURRENCY_NAME[cur] },
+                  // The rate saved when the PO was placed, never the supplier's current one (docs/supplier-currency.md).
+                  { label: "Exchange rate on this PO", value: order.exchangeRate === null ? "Not saved (placed before rates were kept)" : rateText(cur, order.exchangeRate) },
+                  { label: "PO value in INR", value: order.orderValueInr === null ? DASH : `${formatINR(order.orderValueInr, 2)} at the PO rate` },
                   { label: "Products", value: formatNumber(order.products) },
                   { label: "Ordered", value: quantities((t) => t.ordered) },
                   { label: "Received in China · pending", value: `${quantities((t) => t.received)} · ${quantities((t) => t.pending)}` },
@@ -440,6 +444,8 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                 items={[
                   { label: "Payment terms", value: orDash(supplier.paymentTerms) },
                   { label: "Supplier currency", value: CURRENCY_NAME[supplier.currency] },
+                  { label: "Exchange rate now", value: supplier.exchangeRate === null ? "Not set" : rateText(supplier.currency, supplier.exchangeRate) },
+                  { label: "Rate last updated", value: when(supplier.rateUpdatedAt) },
                   { label: "Tax / registration number", value: orDash(supplier.taxNumber) },
                   { label: "Notes", value: orDash(supplier.notes) },
                 ]}

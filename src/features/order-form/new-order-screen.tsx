@@ -11,18 +11,17 @@ import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { orderHref } from "@/components/shared/po-link";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, currencyLabel, formatINR, formatMoney, formatNumber } from "@/lib/formatters";
+import { CURRENCY_SYMBOL, currencyLabel, formatINR, formatMoney, formatNumber, rateText } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { CURRENCIES } from "@/types/domain";
 
 import type { NewOrderData } from "./data/queries";
-import { emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
+import { defaultRate, emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
 import { depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
 
 // Measured from 15_4_New_order.jpeg: 12.5 px bold labels 5 px above 42 px fields with 14 px text, 12 px table
@@ -155,10 +154,13 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                     required
                     aria-invalid={!!errors.supplierId}
                     {...register("supplierId", {
-                      // The supplier's currency is the order's default; the user may still change it.
+                      // The order is in the supplier's currency (the API refuses another), and its rate now replaces
+                      // the previous supplier's on every deposit row (docs/supplier-currency.md).
                       onChange: (event: { target: { value: string } }) => {
                         const chosen = options.suppliers.find((s) => s.id === event.target.value);
-                        if (chosen) setValue("currency", chosen.currency);
+                        if (!chosen) return;
+                        setValue("currency", chosen.currency);
+                        deposits.forEach((_deposit, index) => setValue(`deposits.${index}.rateInr`, defaultRate(chosen)));
                       },
                     })}
                   >
@@ -175,13 +177,18 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   <FieldLabel htmlFor="currency" className={labelClass}>
                     Currency
                   </FieldLabel>
-                  <NativeSelect size="sm" id="currency" aria-invalid={!!errors.currency} {...register("currency")}>
-                    {CURRENCIES.map((code) => (
-                      <option key={code} value={code}>
-                        {currencyLabel(code)}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  {/* The supplier's: shown, not chosen (the API refuses another). The hidden input keeps it in the form. */}
+                  <Input id="currency" readOnly value={currencyLabel(currency)} size="sm" aria-describedby="currency-note" />
+                  <input type="hidden" {...register("currency")} />
+                  <FieldDescription id="currency-note" className="text-xs">
+                    {!supplier
+                      ? "The supplier's currency."
+                      : inr
+                        ? "INR is the base currency: no exchange rate."
+                        : supplier.exchangeRate === null
+                          ? "No exchange rate set for this supplier yet: set it under Suppliers."
+                          : `Supplier rate now: ${rateText(currency, supplier.exchangeRate)}`}
+                  </FieldDescription>
                   <FieldError errors={[errors.currency]} />
                 </Field>
                 <Field className={fieldClass}>
@@ -374,7 +381,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                 </div>
               ) : null}
               <FieldError className="mt-2" errors={messages(errors.deposits, errors.deposits?.root, ...depositErrors)} />
-              <Button type="button" variant="link" className={addLinkClass} onClick={() => depositRows.append(emptyDeposit(today))}>
+              <Button type="button" variant="link" className={addLinkClass} onClick={() => depositRows.append(emptyDeposit(today, defaultRate(supplier)))}>
                 + Add deposit
               </Button>
             </SectionCard>

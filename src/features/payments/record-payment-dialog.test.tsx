@@ -18,10 +18,10 @@ vi.mock("@/lib/today", () => ({ todayInIndia: () => "2026-11-10" }));
 
 const post = vi.mocked(apiClient.post);
 const ORDERS = [
-  { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY" as const },
-  { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY" as const },
-  { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const },
-  { orderId: "o4", po: "PO-3004", supplier: "Kochi Mills", currency: "INR" as const },
+  { orderId: "o1", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY" as const, supplierRate: null },
+  { orderId: "o2", po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY" as const, supplierRate: null },
+  { orderId: "o3", po: "PO-3003", supplier: "Boston Denim", currency: "USD" as const, supplierRate: 88 },
+  { orderId: "o4", po: "PO-3004", supplier: "Kochi Mills", currency: "INR" as const, supplierRate: 1 },
 ];
 const AGENTS = [{ id: "a1", name: "Sino Freight" }];
 
@@ -150,6 +150,19 @@ describe("RecordPaymentDialog", () => {
 
     await form.user.click(screen.getByRole("button", { name: "Open" }));
     expect(within(screen.getByRole("dialog")).getByLabelText((text) => text.startsWith("Amount (¥)"))).toHaveValue("");
+  });
+
+  it("fills the rate from the chosen order's supplier rate now, unless a rate was typed", async () => {
+    const ui = await open();
+    await ui.user.selectOptions(ui.field("Order"), "o3");
+    expect(ui.field("Rate (₹ per $)")).toHaveValue("88");
+    expect(within(ui.dialog).getByText("Supplier rate now: 1 USD = ₹88.00. Change it if this payment used another.")).toBeVisible();
+    await ui.user.selectOptions(ui.field("Order"), "o1");
+    expect(ui.field("Rate (₹ per ¥)")).toHaveValue("");
+    expect(within(ui.dialog).getByText("No rate set on the supplier: enter this payment's.")).toBeVisible();
+    await ui.user.type(ui.field("Rate (₹ per ¥)"), "11.9");
+    await ui.user.selectOptions(ui.field("Order"), "o3");
+    expect(ui.field("Rate (₹ per $)")).toHaveValue("11.9");
   });
 
   it("follows the chosen order's currency: $ labels for a USD order, no rate for an INR order", async () => {

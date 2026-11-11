@@ -28,6 +28,8 @@ const report: OrderReport = {
       taxNumber: "",
       notes: "",
       currency: "CNY",
+      exchangeRate: null,
+      rateUpdatedAt: null,
       status: "Active",
     },
     orderDate: "2026-10-10",
@@ -40,6 +42,8 @@ const report: OrderReport = {
     closedOn: "2026-11-05",
     currency: "CNY",
     orderValueCny: 1400,
+    exchangeRate: null,
+    orderValueInr: null,
     products: 2,
     totals: [
       { unit: "pcs", ordered: 100, received: 120, pending: 0, stocked: 100 },
@@ -81,6 +85,7 @@ const report: OrderReport = {
           id: "d1",
           direction: "give",
           currency: "CNY",
+          exchangeRate: null,
           amount: 1000,
           settled: 400,
           pending: 600,
@@ -210,7 +215,7 @@ describe("order report file", () => {
     expect(titled("Deposits paid on this PO").total?.[3]).toBe(300);
     // The due deposit is a ledger row, not a paid one.
     expect(titled("Payment ledger").rows).toHaveLength(3);
-    expect(titled("Supplier account deposits (not linked to this PO)").rows).toEqual([["DEP-1", "To give", "2026-10-01", "CNY", 1000, 400, 600, "partly settled", "Not tracked", "", "2026-10-02", "DEP-1/1", "Bank", 400, ""]]);
+    expect(titled("Supplier account deposits (not linked to this PO)").rows).toEqual([["DEP-1", "To give", "2026-10-01", "CNY", null, 1000, 400, 600, "partly settled", "Not tracked", "", "2026-10-02", "DEP-1/1", "Bank", 400, ""]]);
   });
 
   it("lists the China receipts, the containers with arrival and author columns, a clearing row per container and no transport row without a trip", () => {

@@ -15,6 +15,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 
 const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   id: po,
+  exchangeRate: null,
   po,
   orderDate: "2026-10-01",
   deliveryDate: "2026-11-15",

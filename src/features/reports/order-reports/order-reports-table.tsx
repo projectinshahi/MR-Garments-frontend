@@ -10,7 +10,7 @@ import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { stageLabel } from "@/features/orders/order-status";
 import type { OrderReportRow } from "@/lib/api/reports-types";
-import { formatDate, formatMoney, formatNumber, formatQty } from "@/lib/formatters";
+import { formatDate, formatINR, formatMoney, formatNumber, formatQty, formatRateInr } from "@/lib/formatters";
 
 import { PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
 
@@ -51,8 +51,30 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       meta: { ...right, className: `w-[104px] ${wrap}` },
       cell: ({ row }) => row.original.quantities.map((total) => formatQty(total.quantity, total.unit)).join(" · ") || "–",
     },
-    { accessorKey: "currency", header: "Currency", meta: { className: `w-[72px] ${wrap}` } },
-    { accessorKey: "orderValueCny", header: "PO Value", meta: { ...right, className: `w-[88px] ${wrap}` }, cell: money((row) => row.orderValueCny) },
+    {
+      // The rate saved on the order under its currency; "–" for orders placed before rates were kept.
+      accessorKey: "currency",
+      header: "Currency",
+      meta: { className: `w-[84px] ${wrap}` },
+      cell: ({ row }) => (
+        <span className="flex flex-col leading-[18px]">
+          <span>{row.original.currency}</span>
+          <span className="text-[12.5px] text-muted-foreground">{row.original.exchangeRate === null ? "–" : `@ ${formatRateInr(row.original.exchangeRate)}`}</span>
+        </span>
+      ),
+    },
+    {
+      accessorKey: "orderValueCny",
+      header: "PO Value",
+      meta: { ...right, className: `w-[104px] ${wrap}` },
+      // The INR value at the order's own rate under the amount (none without a rate).
+      cell: ({ row }) => (
+        <span className="inline-flex flex-col items-end leading-[18px]">
+          {formatMoney(row.original.orderValueCny, row.original.currency)}
+          {row.original.orderValueInr === null || row.original.currency === "INR" ? null : <span className="text-[12.5px] text-muted-foreground">{formatINR(row.original.orderValueInr)}</span>}
+        </span>
+      ),
+    },
     {
       accessorKey: "paidCny",
       header: "Paid Amount",

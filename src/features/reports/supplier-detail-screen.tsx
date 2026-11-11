@@ -2,7 +2,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
-import { CURRENCY_NAME, formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
+import { CURRENCY_NAME, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
 
 import { filterLabel } from "./data/filters";
 import type { SupplierDetailPage, SupplierPaymentDetail } from "./data/queries";
@@ -64,7 +64,11 @@ export function SupplierDetailScreen({
     { label: "State / Province", value: orDash(supplier.state) },
     { label: "Postal code", value: orDash(supplier.postalCode) },
     { label: "Payment terms", value: orDash(supplier.paymentTerms) },
-    { label: "Payment currency", value: CURRENCY_NAME[supplier.currency] },
+    // Currency information (docs/supplier-currency.md): the one currency of new orders and deposits, and its INR rate now.
+    { label: "Preferred currency", value: CURRENCY_NAME[supplier.currency] },
+    { label: "Exchange rate", value: supplier.exchangeRate === null ? <span className="text-muted-foreground">Not set</span> : rateText(supplier.currency, supplier.exchangeRate) },
+    { label: "Rate last updated", value: supplier.rateUpdatedAt ? formatDateTime(supplier.rateUpdatedAt) : "–" },
+    { label: "INR equivalent", value: supplier.currency === "INR" ? "Amounts are in INR already." : "Amount × rate. Each order, payment and deposit keeps the rate saved on it." },
     { label: "Tax / registration number", value: orDash(supplier.taxNumber) },
     { label: "Notes", value: orDash(supplier.notes) },
     { label: "Status", value: <StatusPill tone={supplier.status === "Active" ? "success" : "neutral"}>{supplier.status}</StatusPill> },

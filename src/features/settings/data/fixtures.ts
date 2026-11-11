@@ -17,6 +17,7 @@ export const supplierDraft: SupplierDraft = {
   email: "",
   phone: "",
   currency: "CNY",
+  exchangeRate: "",
   address: "",
   paymentTerms: "",
   taxNumber: "",

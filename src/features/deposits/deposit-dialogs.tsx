@@ -17,7 +17,7 @@ import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
 import { CURRENCY_SYMBOL, currencyLabel } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
-import { type Currency, CURRENCIES } from "@/types/domain";
+import type { Currency } from "@/types/domain";
 
 import {
   emptyDeposit,
@@ -83,7 +83,7 @@ function Extras({ id, errors, register }: { id: string; errors: { reference?: { 
 
 export type StatementSupplier = { id: string; name: string; currency: Currency };
 
-/** "+ New deposit" (SD-2): a deposit agreed with the supplier, to give or to receive, in its currency (the supplier's by default). */
+/** "+ New deposit" (SD-2): a deposit agreed with the supplier, to give or to receive, in the supplier's currency (the API refuses another). */
 export function NewDepositDialog({ supplier, children }: { supplier: StatementSupplier; children: React.ReactElement }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -146,15 +146,11 @@ function NewDepositForm({ supplier, onCancel, onSaved }: { supplier: StatementSu
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.currency}>
           <FieldLabel htmlFor="deposit-currency" className={labelClass}>
-            Currency <RequiredMark />
+            Currency
           </FieldLabel>
-          <NativeSelect size="sm" id="deposit-currency" required aria-invalid={!!errors.currency} {...register("currency")}>
-            {CURRENCIES.map((code) => (
-              <option key={code} value={code}>
-                {currencyLabel(code)}
-              </option>
-            ))}
-          </NativeSelect>
+          {/* The supplier's (docs/supplier-currency.md): shown, not chosen. The hidden input keeps it in the form. */}
+          <Input id="deposit-currency" readOnly value={currencyLabel(supplier.currency)} size="sm" />
+          <input type="hidden" {...register("currency")} />
           <FieldError errors={[errors.currency]} />
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.amount}>

@@ -14,6 +14,7 @@ vi.mock("@/lib/today", () => ({ todayInIndia: () => "2026-11-10" }));
 type Order = PaymentsResponse["orders"][number];
 const order = (po: string, over: Partial<Order> = {}): Order => ({
   orderId: `o-${po}`,
+  supplierRate: null,
   po,
   supplier: "Ningbo Knits",
   currency: "CNY",
@@ -122,6 +123,7 @@ describe("toPaymentsData", () => {
       po: "PO-3001",
       supplier: "Ningbo Knits",
       currency: "CNY",
+      supplierRate: null,
       orderValue: 10_000,
       paid: 4_000,
       paidInr: 48_000,

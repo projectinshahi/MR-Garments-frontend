@@ -3,24 +3,30 @@ import type { Page } from "@playwright/test";
 import { amountCell, expect, field, kpi, kv, test, toast, today } from "./live-api";
 
 // QA "Support USD, CNY and INR": one order in US dollars, end to end against the live API. It is placed on New order
-// (15) for a seeded CNY supplier with the currency changed to USD, gets a deposit and a balance at their own typed INR
-// rates, and then shows dollars on the order's tabs, Deposits & Payments and Payments per supplier, converted to INR only
-// at those rates and never added to yuan. It leaves a USD order in the shared test database; the "Payments by order"
-// checks elsewhere use amountCell for that.
+// (15) for a USD supplier of this run's own (docs/supplier-currency.md: the order is in the supplier's currency, shown
+// not chosen), gets a deposit at the supplier's rate and a balance at a typed INR rate, and then shows dollars on the
+// order's tabs, Deposits & Payments and Payments per supplier, converted to INR only at those rates and never added to
+// yuan. The order keeps the rate it was placed at when the supplier's rate moves on. It leaves a USD order in the shared
+// test database; the "Payments by order" checks elsewhere use amountCell for that.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const combo = (page: Page, name: string) => page.getByRole("combobox", { name, exact: true });
 const box = (page: Page, name: string) => page.getByRole("textbox", { name, exact: true });
 
-test("a USD order is placed in dollars, paid at typed INR rates and shown in $ everywhere", async ({ page, api }) => {
+test("a USD supplier's order is placed in dollars at its rate, paid at typed INR rates and shown in $ everywhere", async ({ page, api }) => {
   test.setTimeout(120_000);
+  // A USD supplier of this run's own: 1 USD = ₹88 now.
+  const name = `Dollar Mills ${String(Date.now()).slice(-6)}`;
+  const created = await api.post("/suppliers", { name, currency: "USD", exchangeRate: 88 });
+  expect(created.status(), await created.text()).toBe(201);
+  const supplierId = ((await created.json()) as { supplier: { id: string } }).supplier.id;
 
-  await test.step("New order: the supplier's currency is the default, changed to USD; labels and totals follow", async () => {
+  await test.step("New order: the currency is the supplier's, shown not chosen; labels and totals follow; the deposit's rate starts at the supplier's", async () => {
     await page.goto("/orders/new");
-    await combo(page, "Supplier").selectOption({ label: "Yiwu Trims Ltd." });
-    await expect(combo(page, "Currency")).toHaveValue("CNY");
-    await combo(page, "Currency").selectOption("USD");
+    await combo(page, "Supplier").selectOption({ label: name });
+    await expect(box(page, "Currency")).toHaveValue("USD ($)");
+    await expect(page.getByText("Supplier rate now: 1 USD = ₹88.00")).toBeVisible();
     await field(page, "Delivery date").fill(today(20));
     await combo(page, "Item, line 1").selectOption({ label: "Denim jeans" });
     await box(page, "Rate ($), line 1").fill("2.5");
@@ -28,7 +34,7 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
     await expect(page.getByRole("status", { name: "Order total" })).toHaveText("$ 1,000.00");
     await page.getByRole("button", { name: "+ Add deposit" }).click();
     await box(page, "Amount ($), deposit 1").fill("300");
-    await field(page, "Rate to INR").fill("88");
+    await expect(field(page, "Rate to INR")).toHaveValue("88");
     await field(page, "Mode").fill("Wire");
     await expect(kv(page, "Deposits paid")).toHaveText("$ 300");
     await expect(kv(page, "Deposits in INR")).toHaveText("₹26,400");
@@ -50,7 +56,7 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = page.getByRole("dialog", { name: "Record payment" });
-    await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · Yiwu Trims Ltd.` });
+    await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · ${name}` });
     await form.getByRole("combobox", { name: "Kind", exact: true }).selectOption("Balance");
     await form.getByRole("textbox", { name: "Amount ($)", exact: true }).fill("700");
     await form.getByRole("textbox", { name: "Rate (₹ per $)", exact: true }).fill("88.5");
@@ -62,7 +68,7 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
     await page.getByRole("searchbox", { name: "Search PO or supplier" }).fill(po);
     const row = page.getByRole("table").getByRole("row").filter({ hasText: po });
     await expect(row.getByRole("cell")).toHaveText([
-      `${po}Yiwu Trims Ltd.`,
+      `${po}${name}`,
       amountCell("1,000", "$"),
       amountCell("1,000", "$"),
       "₹88,350",
@@ -85,5 +91,16 @@ test("a USD order is placed in dollars, paid at typed INR rates and shown in $ e
     await page.goto("/reports/payments-per-supplier");
     await expect(page.getByRole("table").getByRole("row").filter({ hasText: po })).toContainText("$1,000");
     await expect(kpi(page, "Order value")).toContainText("$1,000");
+  });
+
+  await test.step("The order keeps the rate it was placed at: a new supplier rate shows beside it, the PO value in INR stays at the old one", async () => {
+    expect(await api.order(po)).toMatchObject({ exchangeRate: 88 });
+    const changed = await api.request.patch(`/api/v1/suppliers/${supplierId}`, { data: { exchangeRate: 90 } });
+    expect(changed.status(), await changed.text()).toBe(200);
+    await page.goto(`/reports/orders/${po}`);
+    await expect(kv(page, "Exchange rate on this PO")).toHaveText("1 USD = ₹88.00");
+    await expect(kv(page, "PO value in INR")).toHaveText("₹88,000.00 at the PO rate");
+    await expect(kv(page, "Exchange rate now")).toHaveText("1 USD = ₹90.00");
+    expect(await api.order(po)).toMatchObject({ exchangeRate: 88 });
   });
 });

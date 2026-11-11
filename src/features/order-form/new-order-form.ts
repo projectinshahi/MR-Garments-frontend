@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { CreateOrderBody, OrderOptions } from "@/lib/api/types";
-import { CURRENCIES } from "@/types/domain";
+import { CURRENCIES, type Currency } from "@/types/domain";
 
 import { parseNumber } from "./order-totals";
 
@@ -72,13 +72,18 @@ export const newOrderSchema = z
 export type NewOrderValues = z.infer<typeof newOrderSchema>;
 
 export const emptyLine = (): NewOrderValues["lines"][number] => ({ itemId: "", rateCny: "", quantity: "" });
-export const emptyDeposit = (paidOn: string): NewOrderValues["deposits"][number] => ({
+/** A deposit row; `rateInr` starts as the supplier's rate now (defaultRate), still editable. */
+export const emptyDeposit = (paidOn: string, rateInr = ""): NewOrderValues["deposits"][number] => ({
   payee: SUPPLIER_PAYEE,
   amountCny: "",
   paidOn,
-  rateInr: "",
+  rateInr,
   mode: "",
 });
+
+/** The rate a deposit row starts with: the supplier's rate now as text; "" for INR (no rate) or while the supplier has none. */
+export const defaultRate = (supplier: { currency: Currency; exchangeRate: number | null } | undefined) =>
+  !supplier || supplier.currency === "INR" || supplier.exchangeRate === null ? "" : String(supplier.exchangeRate);
 
 /** The ORD-3 body: blank rows dropped, numbers parsed, payees resolved to the supplier's or agent's name. */
 export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOptions, "suppliers" | "agents">): CreateOrderBody {

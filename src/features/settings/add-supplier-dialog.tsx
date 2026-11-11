@@ -2,9 +2,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { COUNTRIES } from "@/features/suppliers/countries";
 import { apiClient } from "@/lib/api/client";
 import type { CreateSupplierBody, SupplierResponse, SupplierRow, UpdateSupplierBody } from "@/lib/api/types";
 import { SUCCESS } from "@/lib/feedback";
-import { CURRENCY_NAME, formatNumber } from "@/lib/formatters";
+import { CURRENCY_NAME, formatNumber, rateText } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { CURRENCIES } from "@/types/domain";
 
@@ -28,7 +29,7 @@ import {
   SettingsDialogFooter,
   useSettingsDialog,
 } from "./settings-dialog";
-import { suggestSupplierCode, supplierSchema, type SupplierDraft } from "./settings-logic";
+import { checkExchangeRate, exchangeRateProblem, exchangeRateText, suggestSupplierCode, supplierFields, toSupplierBody, type SupplierDraft } from "./settings-logic";
 
 const PATH = "/settings/suppliers";
 export const ADD_SUPPLIER_HREF = addHref(PATH);
@@ -51,12 +52,20 @@ export const supplierDeletable = (row: SupplierRow): Deletable => ({
     ["Country", orDash(row.country)],
     ["City", orDash(row.city)],
     ["Currency", CURRENCY_NAME[row.currency]],
+    ["Exchange rate", exchangeRateText(row.currency, row.exchangeRate)],
     ["Open orders", formatNumber(row.openOrders)],
   ],
 });
 
 const STATUSES = ["Active", "Inactive"] as const;
-const formSchema = supplierSchema.extend({ status: z.enum(STATUSES) });
+const formSchema = supplierFields.extend({ status: z.enum(STATUSES) }).superRefine(checkExchangeRate);
+export const RATE_CHANGE_TEXT = {
+  title: "Change this supplier's currency or rate?",
+  note: "The new currency and rate apply to new orders and deposits only. Existing orders, payments and deposits keep their own currency and the rate saved on them; nothing is converted or recalculated.",
+};
+/** A currency or rate the saved row doesn't have (an INR supplier's rate is 1 whatever the field says). */
+const moneyChanged = (row: SupplierRow, values: { currency: SupplierRow["currency"]; exchangeRate: string }) =>
+  row.currency !== values.currency || (values.currency !== "INR" && row.exchangeRate !== Number(values.exchangeRate));
 type SupplierValues = z.infer<typeof formSchema>;
 // The API's length limits (backend docs/suppliers.md), so its length errors can't come from this form.
 const SHORT = 200;
@@ -114,33 +123,43 @@ function SupplierForm({
   onCancel: () => void;
   onSaved: (message: string) => void;
 }) {
-  // The row's id, open orders and money aren't form fields: the schema drops them.
-  const { register, handleSubmit, setError, formState } = useForm({
+  // The row's id, open orders and money aren't form fields: the schema drops them. The rate is typed as text.
+  const { register, handleSubmit, setError, setValue, control, formState } = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: supplier ?? { ...draft, status: "Active" as const },
+    defaultValues: supplier ? { ...supplier, exchangeRate: supplier.exchangeRate === null ? "" : String(supplier.exchangeRate) } : { ...draft, status: "Active" as const },
   });
   const errors = formState.errors;
-  // The values waiting for the deactivate confirmation.
+  // The values waiting for the deactivate confirmation, and for the currency / rate change one.
   const [confirming, setConfirming] = useState<SupplierValues | null>(null);
+  const [moneyConfirm, setMoneyConfirm] = useState<SupplierValues | null>(null);
+  const [currency, exchangeRate] = useWatch({ control, name: ["currency", "exchangeRate"] });
+  const inr = currency === "INR";
+  // "1 CNY = ₹12.50" once the typed rate is valid, else what to type; INR needs no rate.
+  const rateHint = inr ? "INR is the base currency: the rate is fixed at 1." : exchangeRateProblem(currency, exchangeRate) ? `INR for 1 ${currency}, e.g. 12.5` : rateText(currency, Number(exchangeRate));
   // A stored country outside the list stays selectable, so saving never drops it.
   const countries = supplier?.country && !COUNTRIES.some((country) => country.name === supplier.country) ? [{ name: supplier.country, code: "" }, ...COUNTRIES] : COUNTRIES;
 
   async function save({ status, ...details }: SupplierValues) {
     try {
-      // A changed currency applies to the supplier's new orders only: each order keeps its own.
-      if (supplier) await apiClient.patch<SupplierResponse>(`/suppliers/${supplier.id}`, { ...details, status } satisfies UpdateSupplierBody);
-      else await apiClient.post<SupplierResponse>("/suppliers", details satisfies CreateSupplierBody);
+      // A changed currency or rate applies to the supplier's new orders and deposits only: each keeps its own.
+      if (supplier) await apiClient.patch<SupplierResponse>(`/suppliers/${supplier.id}`, { ...toSupplierBody(details), status } satisfies UpdateSupplierBody);
+      else await apiClient.post<SupplierResponse>("/suppliers", toSupplierBody(details) satisfies CreateSupplierBody);
     } catch (error) {
       // E1/E2: M21, M22 or a taken code under its field, focused, values kept. Other failures toast.
       setConfirming(null);
+      setMoneyConfirm(null);
       setApiErrors(error, setError);
       return;
     }
     onSaved(supplier ? SUPPLIER_SAVED : SUCCESS.supplierAdded);
   }
 
-  const submit = (values: SupplierValues) =>
-    supplier?.status === "Active" && values.status === "Inactive" ? setConfirming(values) : save(values);
+  // Deactivating asks first; so does a new currency or rate on a supplier that already has orders or deposits.
+  const submit = (values: SupplierValues) => {
+    if (supplier?.status === "Active" && values.status === "Inactive") return setConfirming(values);
+    if (supplier?.hasTransactions && moneyChanged(supplier, values)) return setMoneyConfirm(values);
+    return save(values);
+  };
 
   const text = (name: keyof SupplierDraft, label: string, extra: { max?: number; type?: string; placeholder?: string; span?: string; hint?: string } = {}) => (
     <Field className={cn(fieldClass, extra.span)} data-invalid={!!errors[name]}>
@@ -192,6 +211,51 @@ function SupplierForm({
               ))}
             </NativeSelect>
           </Field>
+          {/* The supplier's one currency and its INR rate (docs/supplier-currency.md): every new order and deposit is in it. */}
+          <Field className={fieldClass} data-invalid={!!errors.currency}>
+            <FieldLabel htmlFor="supplier-currency" className={labelClass}>
+              Preferred transaction currency <RequiredMark />
+            </FieldLabel>
+            <NativeSelect
+              size="sm"
+              id="supplier-currency"
+              required
+              aria-invalid={!!errors.currency}
+              {...register("currency", {
+                // INR's rate is 1 and fixed; another currency starts with the rate empty, never the previous currency's.
+                onChange: (event: { target: { value: string } }) => setValue("exchangeRate", event.target.value === "INR" ? "1" : "", { shouldValidate: formState.isSubmitted }),
+              })}
+            >
+              {CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {CURRENCY_NAME[currency]}
+                </option>
+              ))}
+            </NativeSelect>
+            <FieldError errors={[errors.currency]} />
+          </Field>
+          <Field className={fieldClass} data-invalid={!!errors.exchangeRate}>
+            <FieldLabel htmlFor="supplier-rate" className={labelClass}>
+              Exchange rate (1 {currency} = ? INR) <RequiredMark />
+            </FieldLabel>
+            <div className="flex items-center gap-2">
+              <Input
+                id="supplier-rate"
+                required
+                inputMode="decimal"
+                readOnly={inr}
+                aria-invalid={!!errors.exchangeRate}
+                size="sm"
+                className={cn(inr && "bg-muted text-muted-foreground")}
+                {...register("exchangeRate")}
+              />
+              <span aria-hidden className="shrink-0 text-[12.5px] font-bold text-muted-foreground">
+                INR
+              </span>
+            </div>
+            <FieldDescription className="text-xs">{rateHint}</FieldDescription>
+            <FieldError errors={[errors.exchangeRate]} />
+          </Field>
           {supplier && (
             <Field className={fieldClass}>
               <FieldLabel htmlFor="supplier-status" className={labelClass}>
@@ -216,18 +280,6 @@ function SupplierForm({
         </Section>
         <Section title="Additional information">
           {text("paymentTerms", "Payment terms", { placeholder: "e.g. 30% deposit, balance before shipment" })}
-          <Field className={fieldClass}>
-            <FieldLabel htmlFor="supplier-currency" className={labelClass}>
-              Currency
-            </FieldLabel>
-            <NativeSelect size="sm" id="supplier-currency" {...register("currency")}>
-              {CURRENCIES.map((currency) => (
-                <option key={currency} value={currency}>
-                  {CURRENCY_NAME[currency]}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
           {text("taxNumber", "Tax / registration number")}
           {text("notes", "Notes", { max: LONG, placeholder: "Optional", span: "sm:col-span-3" })}
         </Section>
@@ -245,6 +297,15 @@ function SupplierForm({
         note={DEACTIVATE_NOTE}
         onConfirm={() => save(confirming!)}
         onCancel={() => setConfirming(null)}
+      />
+      <ConfirmDialog
+        open={!!moneyConfirm}
+        title={RATE_CHANGE_TEXT.title}
+        description={`${supplier?.name ?? "This supplier"} already has orders or deposits. ${RATE_CHANGE_TEXT.note}`}
+        confirmLabel="Save changes"
+        pendingLabel="Saving…"
+        onConfirm={() => save(moneyConfirm!)}
+        onCancel={() => setMoneyConfirm(null)}
       />
     </>
   );

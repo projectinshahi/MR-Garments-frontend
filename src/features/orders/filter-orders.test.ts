@@ -16,6 +16,7 @@ import {
 
 const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"], chip: OrderRow["chip"], patch: Partial<OrderRow> = {}): OrderRow => ({
   id: po,
+  exchangeRate: null,
   po,
   orderDate: "2026-10-01",
   deliveryDate: "2026-10-30",

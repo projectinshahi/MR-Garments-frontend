@@ -119,8 +119,10 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Stage", stageLabel(order.stage)],
         ["Status", closureLabel(order)],
         ["Currency", cur],
+        [`Exchange rate on this PO (INR per 1 ${cur})`, order.exchangeRate],
         ["Products", order.products],
         [`Original PO value (${cur})`, order.orderValueCny],
+        ["PO value (INR, at the PO rate)", order.orderValueInr],
         ...(payments ? ([[`Total paid to supplier (${cur})`, payments.paidCny], ["Paid (INR)", payments.paidInr], [`Outstanding balance (${cur})`, payments.balanceCny]] as Cell[][]) : []),
         ["Ordered", perUnit((t) => t.ordered)],
         ["Received in China", perUnit((t) => t.received)],
@@ -152,6 +154,8 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Postal code", orDash(supplier.postalCode)],
         ["Payment terms", orDash(supplier.paymentTerms)],
         ["Supplier currency", supplier.currency],
+        ["Exchange rate now (INR per 1 unit)", supplier.exchangeRate],
+        ["Rate last updated", when(supplier.rateUpdatedAt)],
         ["Tax / registration number", orDash(supplier.taxNumber)],
         ["Notes", orDash(supplier.notes)],
       ],
@@ -413,9 +417,9 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
       {
         sheet: "Deposit History",
         title: "Supplier account deposits (not linked to this PO)",
-        columns: columns("Reference", "Direction", date("Agreed"), "Currency", "Amount", "Settled", "Remaining", "Status", "Applied to this PO", "Notes", date("Transaction date"), "Transaction reference", "Mode", "Transaction amount", "Transaction notes"),
+        columns: columns("Reference", "Direction", date("Agreed"), "Currency", "Rate (INR)", "Amount", "Settled", "Remaining", "Status", "Applied to this PO", "Notes", date("Transaction date"), "Transaction reference", "Mode", "Transaction amount", "Transaction notes"),
         rows: supplierAccount.deposits.list.flatMap((d) => {
-          const head: Cell[] = [d.reference, d.direction === "give" ? "To give" : "To receive", d.openedOn, d.currency, d.amount, d.settled, d.pending, d.status, "Not tracked", d.notes];
+          const head: Cell[] = [d.reference, d.direction === "give" ? "To give" : "To receive", d.openedOn, d.currency, d.exchangeRate, d.amount, d.settled, d.pending, d.status, "Not tracked", d.notes];
           return d.transactions.length ? d.transactions.map((t) => [...head, t.paidOn, t.reference, t.mode, t.amount, t.notes]) : [[...head, null, null, null, null, null]];
         }),
       },
