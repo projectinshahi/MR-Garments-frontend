@@ -13,7 +13,7 @@ import { orderReportsFile } from "./order-reports-file";
 import { orderReportsQuery } from "./params";
 
 /**
- * The Order reports hub card's Excel and PDF buttons: the list with the hub's filters (period as the order-date range,
+ * The Order Report hub card's Excel and PDF buttons: the list with the hub's filters (period as the order-date range,
  * supplier), as its Open report link shows it. The hub has no report data, so the click loads GET /reports/orders.
  * CardDownloads is typed on the six report names, so this card has its own.
  */
@@ -30,10 +30,10 @@ export function OrderReportsDownloads({ query, className }: { query: string; cla
     });
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label="Excel export: Order reports" onClick={() => download("xlsx")}>
+      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label="Excel export: Order Report" onClick={() => download("xlsx")}>
         Excel
       </Button>
-      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label="PDF export: Order reports" onClick={() => download("pdf")}>
+      <Button type="button" variant="outline" size="sm" className={className} disabled={pending} aria-label="PDF export: Order Report" onClick={() => download("pdf")}>
         PDF
       </Button>
     </>

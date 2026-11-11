@@ -148,8 +148,8 @@ test("Order reports lists the new order, filters by PO from the URL and download
   const order = await api.createOrder({ supplier: "Foshan Fabrics", lines: [{ item: "Track pants", quantity: 40, rateCny: 5 }] });
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { level: 2, name: "Order reports", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Open report: Order reports" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Order Report", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Open report: Order Report" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Order reports" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: order.po })).toBeVisible();
 
@@ -202,7 +202,7 @@ test("Order reports lists the new order, filters by PO from the URL and download
   await expect(page.getByRole("link", { name: /^Report: / }).first()).toBeVisible();
 
   await page.goto("/reports");
-  const hub = await download(page, page.getByRole("button", { name: "Excel export: Order reports" }));
+  const hub = await download(page, page.getByRole("button", { name: "Excel export: Order Report" }));
   expect(hub.name).toMatch(/^order-reports-\d{4}-\d{2}-\d{2}\.xlsx$/);
   expect(hub.text).toContain(order.po);
 });

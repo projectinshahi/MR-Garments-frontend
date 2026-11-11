@@ -120,11 +120,11 @@ test("landed cost and every report show the new order's real figures, filters na
 
     await page.goto("/reports");
     await expect(heading(page, "Reports")).toBeVisible();
-    await expect(page.getByText(/^\d[\d,]* orders? · \d[\d,]* waiting at stage 1$/)).toBeVisible();
+    await expect(page.getByText(/^\d[\d,]* orders? · \d[\d,]* pending$/)).toBeVisible(); // the Order Report card
     await expect(page.getByText(/^\d[\d,]* orders? short · \d[\d,]* pcs missing/)).toBeVisible();
     await expect(page.getByText("No downloads to show.")).toBeVisible();
     await choose(page, "Supplier: All suppliers", "Hangzhou Knits");
-    await expect(page.getByRole("link", { name: "Open report: Order status" })).toHaveAttribute("href", /supplier=/);
+    await expect(page.getByRole("link", { name: "Open report: Order Report" })).toHaveAttribute("href", /supplier=/);
     const month = periodLabel(today().slice(0, 7));
     await choose(page, "Period: All dates", month);
     await expect(page).toHaveURL(/period=/);
@@ -132,7 +132,8 @@ test("landed cost and every report show the new order's real figures, filters na
     const card = await download(page, "Excel export: Payments and balance due");
     expect(card.name).toBe(`payments-per-supplier-${today().slice(0, 7)}.xlsx`);
     for (const text of ["Supplier: Hangzhou Knits", po]) expect(card.text).toContain(text);
-    await page.getByRole("link", { name: "Open report: Order status" }).click();
+    // The Order status report has no hub card any more (the Order Report took its slot); its page keeps the hub's filters.
+    await page.goto(`/reports/order-status${new URL(page.url()).search}`);
     await expect(heading(page, "Order status")).toBeVisible();
     await expect(page.getByText(`${month} · Hangzhou Knits`)).toBeVisible(); // the header pill
     // The order was received and loaded above, so it now counts at stage 3.
