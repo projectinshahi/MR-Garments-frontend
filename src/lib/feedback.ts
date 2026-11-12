@@ -29,6 +29,7 @@ export const MESSAGES = {
   supplierNameTaken: "A supplier with this name already exists.", // M22
   supplierCode: "Use up to 20 letters, digits or dashes.", // Suppliers page (backend docs/suppliers.md)
   exchangeRate: "Enter the exchange rate: INR per 1 unit, above 0, with at most 4 decimals.",
+  currency: "Choose a currency.",
   supplierCodeTaken: "A supplier with this code already exists.",
   phoneInvalid: "Enter a valid phone number.",
   noAccess: "You don't have access to do that.", // M23

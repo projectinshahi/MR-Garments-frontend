@@ -29,8 +29,9 @@ test("the form shows the next PO and fills supplier facts and totals as you type
   await expect(page.getByRole("heading", { level: 1, name: "New order" })).toBeVisible();
   await expect(box(page, "Purchase order no.")).toHaveValue(po);
   await expect(field(page, "Order date")).toHaveValue(today());
-  await expect(combo(page, "Currency")).toHaveValue("CNY");
-  await expect(combo(page, "Currency").getByRole("option")).toHaveText(["CNY (¥)", "USD ($)", "INR (₹)"]);
+  // The order is in its supplier's currency: a read-only field, yuan until a supplier is chosen (docs/supplier-currency.md).
+  await expect(box(page, "Currency")).toHaveValue("CNY (¥)");
+  await expect(box(page, "Currency")).toHaveJSProperty("readOnly", true);
 
   await combo(page, "Supplier").selectOption({ label: "Foshan Fabrics" });
   await expect(box(page, "Contact person")).toHaveValue("Mr. Chen Hao");

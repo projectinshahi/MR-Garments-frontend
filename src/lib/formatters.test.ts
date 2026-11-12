@@ -81,3 +81,29 @@ describe("dates", () => {
     expect(formatToday("weekday")).toBe("Wed, 30 Sep 2026");
   });
 });
+
+describe("money in any ISO 4217 currency", () => {
+  it("keeps the three symbols, gives the rest theirs or their code set apart, and never more decimals than the minor unit", () => {
+    expect(formatMoney(1200.5, "EUR", { decimals: 2 })).toBe("€1,200.50");
+    expect(formatMoney(1200, "AED")).toBe("AED 1,200");
+    expect(formatMoney(1200.5, "AED", { decimals: 2 })).toBe("AED 1,200.50");
+    expect(formatMoney(1200, "AUD")).toBe("A$1,200");
+    expect(formatMoney(1000, "JPY", { decimals: 2 })).toBe("JPY 1,000");
+    // Amounts are stored with 2 decimals: a fraction in a 0-decimal currency still shows, never rounded away.
+    expect(formatMoney(999.5, "JPY", { decimals: 2 })).toBe("JPY 999.50");
+    expect(formatMoney(12.345, "KWD", { decimals: 2 })).toBe("KWD 12.35");
+    expect(formatMoney(-50, "SAR", { spaced: true })).toBe("−SAR 50");
+    expect(formatMoneyList([{ currency: "AED", amount: 10 }, { currency: "CNY", amount: 20 }])).toBe("AED 10 · ¥20");
+  });
+
+  it("totals per currency CNY, USD, INR first, then the rest by code", () => {
+    const rows = [{ c: "JPY", v: 1 }, { c: "AED", v: 2 }, { c: "CNY", v: 3 }, { c: "USD", v: 4 }, { c: "AED", v: 5 }];
+    expect(sumByCurrency(rows, (r) => r.c, (r) => r.v)).toEqual([
+      { currency: "CNY", amount: 3 },
+      { currency: "USD", amount: 4 },
+      { currency: "AED", amount: 7 },
+      { currency: "JPY", amount: 1 },
+    ]);
+  });
+});
+

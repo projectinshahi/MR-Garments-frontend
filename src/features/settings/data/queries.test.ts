@@ -27,20 +27,32 @@ describe("Settings queries read the API", () => {
     expect(get).toHaveBeenCalledWith(path);
   });
 
-  it("Suppliers come from GET /suppliers; the Add supplier draft starts empty", async () => {
+  it("Suppliers come from GET /suppliers with the currency master; the Add supplier draft starts empty", async () => {
     const rows = [{ id: "api-supplier" }];
-    get.mockResolvedValueOnce(rows);
+    const currencies = [{ code: "AED", name: "United Arab Emirates Dirham", isoName: "UAE Dirham", symbol: "AED", minorUnits: 2 }];
+    get.mockImplementation(async (path: string) => (path === "/currencies" ? { currencies, preferred: ["CNY", "USD", "INR"] } : rows));
     const data = await queries.getSuppliersSettings();
     expect(data.suppliers).toBe(rows);
+    expect(data.currencies).toBe(currencies);
     expect(get).toHaveBeenCalledWith("/suppliers");
+    expect(get).toHaveBeenCalledWith("/currencies");
     expect(data.draft).toMatchObject({ name: "", city: "", contactPerson: "", phone: "" });
+  });
+
+  it("a currency master that fails to load leaves the picker's list empty instead of failing the page", async () => {
+    const rows = [{ id: "api-supplier" }];
+    get.mockImplementation(async (path: string) => {
+      if (path === "/currencies") throw new ApiError(500, "server_error", "Something went wrong.");
+      return rows;
+    });
+    expect(await queries.getSuppliersSettings()).toMatchObject({ suppliers: rows, currencies: [] });
   });
 
   it.each([...LISTS.map(([name]) => name), "getSuppliersSettings" as const])(
     "%s fails when the API fails, so the error page shows instead of sample records",
     async (name) => {
       const failure = new ApiError(500, "server_error", "Something went wrong.");
-      get.mockRejectedValueOnce(failure);
+      get.mockRejectedValueOnce(failure).mockResolvedValue({ currencies: [], preferred: [] });
       await expect(queries[name]()).rejects.toBe(failure);
     },
   );

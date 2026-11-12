@@ -10,7 +10,7 @@ import { LegendSwatch, StackedBar, type StackedSegment } from "@/components/shar
 import { notInPrototype } from "@/components/shared/prototype";
 import { EmptyState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
-import { CURRENCY_SYMBOL, formatINR, formatNumber, formatRate, formatShortDate } from "@/lib/formatters";
+import { currencySymbol, formatINR, formatNumber, formatRate, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
 
@@ -224,7 +224,7 @@ const goodsColumns = (currency: Currency): ColumnDef<GoodsRow>[] => [
   },
   {
     accessorKey: "amountCny",
-    header: () => goodsHead(`Amount (${CURRENCY_SYMBOL[currency]})`),
+    header: () => goodsHead(`Amount (${currencySymbol(currency)})`),
     meta: { align: "right", className: PAD },
     cell: ({ row }) => goodsCell(row.original, formatNumber(row.original.amountCny, Number.isInteger(row.original.amountCny) ? 0 : 2)),
   },

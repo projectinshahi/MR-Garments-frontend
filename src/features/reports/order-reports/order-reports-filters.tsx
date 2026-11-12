@@ -9,7 +9,7 @@ import type { OrderReportsResponse } from "@/lib/api/reports-types";
 
 import { isMonth, monthRange } from "../data/filters";
 import { UrlSelect } from "../report-actions";
-import { CURRENCY_OPTIONS, DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STAGE_OPTIONS, STATUS_OPTIONS, SUPPLIER_PARAM } from "./params";
+import { currencyOptions, DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STAGE_OPTIONS, STATUS_OPTIONS, SUPPLIER_PARAM } from "./params";
 
 // The Order reports filters, all kept in the URL so the server page reloads its data: dropdowns through UrlSelect
 // (?supplier, ?status, ?stage, ?currency, ?warehouse, ?paymentStatus) and a small form for the PO and supplier-name
@@ -19,7 +19,8 @@ import { CURRENCY_OPTIONS, DATE_PARAMS, PAYMENT_OPTIONS, PO_PARAM, STAGE_OPTIONS
 const fieldBox = "flex h-10 items-center gap-[9px] rounded-lg border bg-card pr-2 pl-[15px] focus-within:border-primary focus-within:ring-3 focus-within:ring-ring/25";
 const fieldInput = "h-full min-w-0 bg-transparent text-sm text-label outline-none placeholder:text-placeholder";
 
-export function OrderReportsFilters({ options }: { options: OrderReportsResponse["options"] }) {
+/** `currencies`: the listed orders' currencies, offered by the currency filter beside CNY, USD and INR. */
+export function OrderReportsFilters({ options, currencies = [] }: { options: OrderReportsResponse["options"]; currencies?: string[] }) {
   const suppliers = [{ value: "all", label: "All suppliers" }, ...options.suppliers.map((s) => ({ value: s.id, label: s.name }))];
   const warehouses = [{ value: "all", label: "All warehouses" }, ...options.warehouses.map((w) => ({ value: w.id, label: w.name }))];
   return (
@@ -30,7 +31,7 @@ export function OrderReportsFilters({ options }: { options: OrderReportsResponse
       <UrlSelect param="supplier" size="sm" label="Supplier" options={suppliers} />
       <UrlSelect param="status" size="sm" label="Status" options={STATUS_OPTIONS} />
       <UrlSelect param="stage" size="sm" label="Shipment stage" options={STAGE_OPTIONS} />
-      <UrlSelect param="currency" size="sm" label="Currency" options={CURRENCY_OPTIONS} />
+      <UrlSelect param="currency" size="sm" label="Currency" options={currencyOptions(currencies)} />
       <UrlSelect param="warehouse" size="sm" label="Warehouse" options={warehouses} />
       <UrlSelect param="paymentStatus" size="sm" label="Payment" options={PAYMENT_OPTIONS} />
     </div>

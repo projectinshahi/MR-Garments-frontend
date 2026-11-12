@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { PLAIN_ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
 import type { OrderOptions } from "@/lib/api/types";
-import { CURRENCY_SYMBOL, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
+import { currencySymbol, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
@@ -32,7 +32,7 @@ const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</
  * cell (PAY-3, payments Full; the table has no Status, so it comes last), or null without it.
  */
 const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => React.ReactNode) | null): ColumnDef<OrderPaymentRow>[] => {
-  const label = (text: string) => head(currency ? `${text} (${CURRENCY_SYMBOL[currency]})` : text);
+  const label = (text: string) => head(currency ? `${text} (${currencySymbol(currency)})` : text);
   const amount = (value: number | null, row: OrderPaymentRow) => (value == null ? DASH : currency ? formatNumber(value) : formatMoney(value, row.currency));
   return [
   {
@@ -163,7 +163,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1.6fr_1fr]">
           <SectionCard
             title="Payments by order"
-            aside={<CardNote size="sm">{single ? `Amounts in supplier currency (${CURRENCY_SYMBOL[single]}) and INR` : "Amounts in each order's currency and INR"}</CardNote>}
+            aside={<CardNote size="sm">{single ? `Amounts in supplier currency (${currencySymbol(single)}) and INR` : "Amounts in each order's currency and INR"}</CardNote>}
             titleGap="none"
             className="min-w-0 pt-3.5 pb-[18px]"
           >

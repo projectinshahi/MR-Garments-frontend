@@ -80,7 +80,7 @@ test("the Add supplier dialog opens empty, closes and validates", async ({ page 
   for (const label of ["Supplier name", "City", "Contact person", "Phone", "Address", "Notes"]) {
     await expect(dialog.getByLabel(label)).toHaveValue("");
   }
-  await expect(dialog.getByLabel("Currency")).toHaveValue("CNY");
+  await expect(dialog.getByLabel("Preferred transaction currency")).toContainText("CNY – Chinese Yuan (¥)");
   await expect(dialog.getByLabel("Address")).toHaveAttribute("placeholder", "Enter address");
 
   await dialog.getByRole("button", { name: "Close" }).click();

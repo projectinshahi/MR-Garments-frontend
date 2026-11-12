@@ -1,7 +1,8 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 
 import { LOCALE, MOCK_TODAY } from "@/lib/constants";
-import { type Currency, CURRENCIES, type MoneyTotal } from "@/types/domain";
+import { currencyLabel, currencySymbol, currencyTitle, minorUnits, orderedCurrencies } from "@/lib/currencies";
+import type { Currency, MoneyTotal } from "@/types/domain";
 
 // Formats as they appear in the references. Every currency uses Indian digit grouping (₹15,00,000, ¥1,41,000, $1,200).
 
@@ -19,18 +20,24 @@ export function formatNumber(value: number, decimals = 0) {
 const signed = (value: number, symbol: string, decimals: number) =>
   `${value < 0 ? "−" : ""}${symbol}${formatNumber(Math.abs(value), decimals)}`;
 
-/** On screen an amount shows its symbol; selects and labels add the code ("USD ($)"), files use the code alone. */
-export const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", INR: "₹" } as const satisfies Record<Currency, string>;
-/** "Currency" in order terms and the supplier dialog. */
-export const CURRENCY_NAME = { CNY: "¥ Chinese yuan", USD: "$ US dollar", INR: "₹ Indian rupee" } as const satisfies Record<Currency, string>;
-/** "CNY (¥)": a currency select's option. */
-export const currencyLabel = (currency: Currency) => `${currency} (${CURRENCY_SYMBOL[currency]})`;
+// On screen an amount shows its symbol (lib/currencies: ¥, $, ₹, €, "A$", or the code of a currency without one);
+// selects and labels add the code ("USD ($)"), files use the code alone.
+export { currencyLabel, currencySymbol, currencyTitle };
 
 type MoneyOptions = { decimals?: number; spaced?: boolean };
 
-/** ¥80,000 · "$ 62,780" (spaced, as on the New order screen) · ₹32.00 (decimals: 2). One formatter for every currency. */
-export const formatMoney = (value: number, currency: Currency, { decimals = 0, spaced = false }: MoneyOptions = {}) =>
-  signed(value, spaced ? `${CURRENCY_SYMBOL[currency]} ` : CURRENCY_SYMBOL[currency], decimals);
+/**
+ * ¥80,000 · "$ 62,780" (spaced, as on the New order screen) · ₹32.00 (decimals: 2) · "AED 1,200" (a code stands apart
+ * from the number) · "JPY 1,000" even with decimals: 2 (a whole amount gets no more decimals than the currency's minor
+ * unit), but "JPY 999.50": amounts are stored with 2 decimals, and a stored fraction is never hidden. One formatter for
+ * every currency.
+ */
+export const formatMoney = (value: number, currency: Currency, { decimals = 0, spaced = false }: MoneyOptions = {}) => {
+  const symbol = currencySymbol(currency);
+  const apart = spaced || /[A-Za-z]$/.test(symbol);
+  const units = minorUnits(currency);
+  return signed(value, apart ? `${symbol} ` : symbol, Number.isInteger(value * 10 ** units) ? Math.min(decimals, units) : decimals);
+};
 
 /** ₹13,77,000 · ₹550.80 (decimals: 2) */
 export const formatINR = (value: number, decimals = 0) => formatMoney(value, "INR", { decimals });
@@ -39,11 +46,11 @@ export const formatINR = (value: number, decimals = 0) => formatMoney(value, "IN
 export const formatCNY = (value: number, options: MoneyOptions = {}) => formatMoney(value, "CNY", options);
 
 /**
- * One total per currency (CNY, USD, INR order), for the currencies the rows have: amounts in different currencies are
- * never added together. Rounded to the cent, as the API rounds.
+ * One total per currency (CNY, USD, INR, then the rest by code), for the currencies the rows have: amounts in
+ * different currencies are never added together. Rounded to the cent, as the API rounds.
  */
 export function sumByCurrency<T>(rows: T[], currencyOf: (row: T) => Currency, amountOf: (row: T) => number): MoneyTotal[] {
-  return CURRENCIES.filter((currency) => rows.some((row) => currencyOf(row) === currency)).map((currency) => ({
+  return orderedCurrencies(rows.map(currencyOf)).map((currency) => ({
     currency,
     amount: Math.round(rows.reduce((sum, row) => sum + (currencyOf(row) === currency ? amountOf(row) : 0), 0) * 100) / 100,
   }));

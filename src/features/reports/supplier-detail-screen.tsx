@@ -2,7 +2,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
-import { CURRENCY_NAME, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
+import { currencyTitle, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
 
 import { filterLabel } from "./data/filters";
 import type { SupplierDetailPage, SupplierPaymentDetail } from "./data/queries";
@@ -65,7 +65,7 @@ export function SupplierDetailScreen({
     { label: "Postal code", value: orDash(supplier.postalCode) },
     { label: "Payment terms", value: orDash(supplier.paymentTerms) },
     // Currency information (docs/supplier-currency.md): the one currency of new orders and deposits, and its INR rate now.
-    { label: "Preferred currency", value: CURRENCY_NAME[supplier.currency] },
+    { label: "Preferred currency", value: currencyTitle(supplier.currency) },
     { label: "Exchange rate", value: supplier.exchangeRate === null ? <span className="text-muted-foreground">Not set</span> : rateText(supplier.currency, supplier.exchangeRate) },
     { label: "Rate last updated", value: supplier.rateUpdatedAt ? formatDateTime(supplier.rateUpdatedAt) : "–" },
     { label: "INR equivalent", value: supplier.currency === "INR" ? "Amounts are in INR already." : "Amount × rate. Each order, payment and deposit keeps the rate saved on it." },

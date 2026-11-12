@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { rowActionClass } from "@/features/orders/delete-order";
 import { ExportActions } from "@/features/reports/report-actions";
 import { formatNumber, formatShortDate } from "@/lib/formatters";
-import { type Currency, CURRENCIES, type MoneyTotal } from "@/types/domain";
+import { orderedCurrencies } from "@/lib/currencies";
+import type { Currency, MoneyTotal } from "@/types/domain";
 
 import type { DepositsData } from "./data/queries";
 import { depositsFile, filterLabel, suppliersFile } from "./deposit-files";
@@ -54,7 +55,8 @@ const ALL = "all";
 const PAGE_SIZE = 10;
 const option = <T extends string>(value: T, label: string): FilterOption => ({ value, label });
 const statusOptions = (statuses: DepositStatus[]) => [option(ALL, "All statuses"), ...statuses.map((s) => option(s, STATUS_LABEL[s]))];
-const CURRENCY_OPTIONS = [option(ALL, "All currencies"), ...CURRENCIES.map((c) => option(c, c))];
+/** The currencies the loaded deposits are in (CNY, USD, INR first), so the filter never lists one nothing is in. */
+const currencyOptions = (currencies: Currency[]) => [option(ALL, "All currencies"), ...currencies.map((c) => option(c, c))];
 const KIND_OPTIONS = [option(ALL, "All kinds"), ...(Object.keys(KIND_LABEL) as DepositKind[]).map((k) => option(k, KIND_LABEL[k]))];
 const plural = (count: number, noun: string) => `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -191,7 +193,7 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
           {view === "suppliers" ? null : (
             <FilterSelect label="Status" size="sm" value={filters.status ?? ALL} options={statusOptions(VIEW_STATUSES[view])} onValueChange={fromSelect(set("status"))} />
           )}
-          <FilterSelect label="Currency" size="sm" value={filters.currency ?? ALL} options={CURRENCY_OPTIONS} onValueChange={fromSelect<Currency>(set("currency"))} />
+          <FilterSelect label="Currency" size="sm" value={filters.currency ?? ALL} options={currencyOptions(orderedCurrencies(scoped.map((row) => row.currency)))} onValueChange={fromSelect<Currency>(set("currency"))} />
           <FilterSelect
             label="Kind"
             size="sm"

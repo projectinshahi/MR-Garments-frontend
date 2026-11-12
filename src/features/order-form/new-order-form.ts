@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { CreateOrderBody, OrderOptions } from "@/lib/api/types";
-import { CURRENCIES, type Currency } from "@/types/domain";
+import type { Currency } from "@/types/domain";
 
 import { parseNumber } from "./order-totals";
 
@@ -47,7 +47,7 @@ export const newOrderSchema = z
     // from the surrounding spaces. The length matches ORD-3's; "already used" is its 422.
     po: z.string().trim().min(1, "Enter the PO number.").max(50, "Use 50 characters or fewer."),
     supplierId: z.string().min(1, "Choose a supplier."),
-    currency: z.enum(CURRENCIES),
+    currency: z.string().regex(/^[A-Z]{3}$/),
     orderDate: z.string().min(1, "Choose the order date."),
     deliveryDate: z.string().min(1, "Choose the delivery date."),
     lines: z

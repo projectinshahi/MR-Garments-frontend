@@ -19,7 +19,7 @@ import { DEACTIVATE_NOTE, SupplierDialog } from "@/features/settings/add-supplie
 import { addHref, editHref } from "@/features/settings/settings-dialog";
 import { exchangeRateText, type StatusFilter, type SupplierDraft } from "@/features/settings/settings-logic";
 import { apiClient } from "@/lib/api/client";
-import type { SupplierRow } from "@/lib/api/types";
+import type { CurrencyInfo, SupplierRow } from "@/lib/api/types";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ const firstAmount = (totals: MoneyTotal[]) => totals[0]?.amount ?? 0;
  * the loaded rows (filterSuppliers). Money columns show bare numbers under a "(¥)" header while every amount is in
  * yuan, and carry their symbols once another currency appears (as the Payments by order list does).
  */
-export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
+export function SuppliersList({ suppliers, draft, currencies }: { suppliers: SupplierRow[]; draft: SupplierDraft; currencies: CurrencyInfo[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("All");
@@ -249,7 +249,7 @@ export function SuppliersList({ suppliers, draft }: { suppliers: SupplierRow[]; 
         />
       </div>
       <Suspense fallback={null}>
-        <SupplierDialog draft={draft} suppliers={suppliers} path={PATH} />
+        <SupplierDialog draft={draft} suppliers={suppliers} currencies={currencies} path={PATH} />
       </Suspense>
       <DeactivateConfirm
         open={!!deactivating}

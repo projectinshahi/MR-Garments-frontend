@@ -1,6 +1,7 @@
 import { type SearchParams, toParams } from "@/features/calendar/params";
 import { filterQuery, periodOptions, reportQuery } from "@/features/reports/data/filters";
 import { supplierDraft } from "@/features/settings/data/fixtures";
+import { getCurrencies } from "@/features/settings/data/queries";
 import { apiGet } from "@/lib/api/server";
 import type { SuppliersInsights, SuppliersSummary } from "@/lib/api/suppliers-types";
 import type { SupplierRow } from "@/lib/api/types";
@@ -12,8 +13,8 @@ import { todayInIndia } from "@/lib/today";
 
 /** Supplier List: every supplier (search, status and country stay client-side) and the KPI cards. */
 export async function getSuppliersPage() {
-  const [suppliers, summary] = await Promise.all([apiGet<SupplierRow[]>("/suppliers"), apiGet<SuppliersSummary>("/suppliers/summary")]);
-  return { suppliers, summary, today: todayInIndia(), draft: structuredClone(supplierDraft) };
+  const [suppliers, summary, currencies] = await Promise.all([apiGet<SupplierRow[]>("/suppliers"), apiGet<SuppliersSummary>("/suppliers/summary"), getCurrencies()]);
+  return { suppliers, summary, currencies, today: todayInIndia(), draft: structuredClone(supplierDraft) };
 }
 export type SuppliersPageData = Awaited<ReturnType<typeof getSuppliersPage>>;
 

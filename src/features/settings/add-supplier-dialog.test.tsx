@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/api/errors";
 import type { SupplierRow } from "@/lib/api/types";
 
 import { SupplierDialog } from "./add-supplier-dialog";
-import { supplierDraft } from "./data/fixtures";
+import { currencyFixture, supplierDraft } from "./data/fixtures";
 
 const nav = vi.hoisted(() => ({ query: "dialog=add", router: { refresh: vi.fn() } }));
 const router = nav.router;
@@ -50,11 +50,17 @@ const ROWS: SupplierRow[] = [
 function open(query = "dialog=add") {
   nav.query = query;
   const user = userEvent.setup();
-  render(<SupplierDialog draft={supplierDraft} suppliers={ROWS} />);
+  render(<SupplierDialog draft={supplierDraft} suppliers={ROWS} currencies={currencyFixture} />);
   // Prefix match: "Supplier name" is followed by the required mark.
   const field = (label: string) => screen.getByLabelText(new RegExp(`^${label}`));
   const save = screen.getByRole("button", { name: "Save supplier" });
-  return { user, field, save };
+  /** Picks a currency in the searchable picker by typing its code. */
+  const pickCurrency = async (code: string) => {
+    await user.click(field(CURRENCY));
+    await user.type(screen.getByRole("searchbox", { name: "Search currencies" }), code);
+    await user.click(screen.getByRole("option", { name: new RegExp(`^${code}`) }));
+  };
+  return { user, field, save, pickCurrency };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -70,7 +76,7 @@ describe("Add supplier", () => {
     // The highest SUP-nnn in the list (SUP-007) plus one.
     expect(field("Supplier code")).toHaveValue("SUP-008");
     expect(field("Country")).toHaveValue("");
-    expect(field(CURRENCY)).toHaveValue("CNY");
+    expect(field(CURRENCY)).toHaveTextContent("CNY – Chinese Yuan (¥)");
     expect(field("Exchange rate")).toHaveValue("");
     expect(field("Exchange rate")).toHaveAccessibleName("Exchange rate (1 CNY = ? INR)");
     expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
@@ -195,7 +201,7 @@ describe("Edit supplier", () => {
     expect(field("Phone")).toHaveValue(NINGBO.phone);
     expect(field("Payment terms")).toHaveValue(PROFILE.paymentTerms);
     expect(field("Tax / registration number")).toHaveValue(PROFILE.taxNumber);
-    expect(field(CURRENCY)).toHaveValue("CNY");
+    expect(field(CURRENCY)).toHaveTextContent("CNY – Chinese Yuan (¥)");
     expect(field("Exchange rate")).toHaveValue("11.5");
     expect(field("Address")).toHaveValue(NINGBO.address);
     expect(field("Notes")).toHaveValue(NINGBO.notes);
@@ -205,17 +211,17 @@ describe("Edit supplier", () => {
 
   it("opens nothing for an id that isn't in the list", () => {
     nav.query = "dialog=edit&id=s-404";
-    render(<SupplierDialog draft={supplierDraft} suppliers={ROWS} />);
+    render(<SupplierDialog draft={supplierDraft} suppliers={ROWS} currencies={currencyFixture} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("patches the editable fields, the currency and status, then toasts Supplier saved, closes and reloads", async () => {
     patch.mockResolvedValue(saved);
-    const { user, field, save } = open(EDIT);
+    const { user, field, save, pickCurrency } = open(EDIT);
     await user.clear(field("City"));
     await user.type(field("City"), " Shanghai ");
-    expect([...(field(CURRENCY) as HTMLSelectElement).options].map((option) => option.text)).toEqual(["¥ Chinese yuan", "$ US dollar", "₹ Indian rupee"]);
-    await user.selectOptions(field(CURRENCY), "USD");
+    await pickCurrency("USD");
+    expect(field(CURRENCY)).toHaveTextContent("USD – US Dollar ($)");
     // Another currency starts with an empty rate (the yuan rate means nothing for dollars) and asks for one.
     expect(field("Exchange rate")).toHaveValue("");
     expect(field("Exchange rate")).toHaveAccessibleName("Exchange rate (1 USD = ? INR)");
@@ -288,15 +294,34 @@ describe("Edit supplier", () => {
 describe("Currency and exchange rate (docs/supplier-currency.md)", () => {
   it("INR fixes the rate at 1, read-only, and posts it as 1", async () => {
     post.mockResolvedValue(saved);
-    const { user, field, save } = open();
+    const { user, field, save, pickCurrency } = open();
     await user.type(field("Supplier name"), "Kochi Mills");
-    await user.selectOptions(field(CURRENCY), "INR");
+    await pickCurrency("INR");
     expect(field("Exchange rate")).toHaveValue("1");
     expect(field("Exchange rate")).toHaveAttribute("readonly");
     expect(screen.getByText("INR is the base currency: the rate is fixed at 1.")).toBeVisible();
     await user.click(save);
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
     expect(post).toHaveBeenCalledWith("/suppliers", expect.objectContaining({ currency: "INR", exchangeRate: 1 }));
+  });
+
+  it("finds any currency of the master by name, code or symbol; the rate label and body follow it", async () => {
+    post.mockResolvedValue(saved);
+    const { user, field, save } = open();
+    await user.type(field("Supplier name"), "Gulf Fabrics");
+    await user.click(field(CURRENCY));
+    const search = screen.getByRole("searchbox", { name: "Search currencies" });
+    await user.type(search, "dirham");
+    expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["AED – United Arab Emirates Dirham (AED)"]);
+    await user.click(screen.getByRole("option", { name: /^AED/ }));
+    expect(field(CURRENCY)).toHaveTextContent("AED – United Arab Emirates Dirham (AED)");
+    expect(field("Exchange rate")).toHaveAccessibleName("Exchange rate (1 AED = ? INR)");
+    expect(field("Exchange rate")).toHaveValue("");
+    await user.type(field("Exchange rate"), "23.5");
+    expect(screen.getByText("1 AED = ₹23.50")).toBeVisible();
+    await user.click(save);
+    await waitFor(() => expect(post).toHaveBeenCalledOnce());
+    expect(post).toHaveBeenCalledWith("/suppliers", expect.objectContaining({ currency: "AED", exchangeRate: 23.5 }));
   });
 
   it("asks before a new rate or currency on a supplier with orders or deposits: Cancel keeps the dialog, confirming saves", async () => {

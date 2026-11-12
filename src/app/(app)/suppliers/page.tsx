@@ -11,7 +11,7 @@ export default async function SuppliersPage() {
   const data = await getSuppliersPage();
   return (
     <SuppliersFrame summary={data.summary} today={data.today}>
-      <SuppliersList suppliers={data.suppliers} draft={data.draft} />
+      <SuppliersList suppliers={data.suppliers} draft={data.draft} currencies={data.currencies} />
     </SuppliersFrame>
   );
 }

@@ -31,7 +31,7 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         actions={<ExportActions file={orderReportsFile(data, today)} formats={["xlsx", "pdf", "csv"]} />}
       />
       <PageContainer>
-        <OrderReportsFilters options={data.options} />
+        <OrderReportsFilters options={data.options} currencies={data.rows.map((row) => row.currency)} />
         <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
           <KpiCard size="xs" label="Orders" value={formatNumber(summary.orders)} sub={label ? "matching the filters" : "every order"} />
           <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />

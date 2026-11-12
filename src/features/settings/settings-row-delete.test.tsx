@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/api/errors";
 import type { ClearingAgentRow, ItemRow, LocationRow, ShippingAgentRow, SupplierRow, TeamRow, TransportCompanyRow } from "@/lib/api/types";
 
 import { ClearingAgentsScreen } from "./clearing-agents-screen";
-import { supplierDraft } from "./data/fixtures";
+import { currencyFixture, supplierDraft } from "./data/fixtures";
 import { ItemsScreen } from "./items-screen";
 import { OfficesScreen } from "./offices-screen";
 import { ShippingAgentsScreen } from "./shipping-agents-screen";
@@ -29,7 +29,7 @@ const supplier: SupplierRow = { id: "s-1", name: "ABC Textiles", ...contact, ...
 const ask = () => screen.getByRole("alertdialog", { name: "Delete supplier?" });
 const renderSuppliers = (row: SupplierRow = supplier) => {
   nav.path = "/settings/suppliers";
-  render(<SuppliersScreen suppliers={[row]} draft={supplierDraft} />);
+  render(<SuppliersScreen suppliers={[row]} draft={supplierDraft} currencies={currencyFixture} />);
   return userEvent.setup();
 };
 

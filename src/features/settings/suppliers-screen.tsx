@@ -7,8 +7,8 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { statementHref } from "@/features/deposits/deposits-logic";
 import { rowActionClass } from "@/features/orders/delete-order";
-import type { SupplierRow } from "@/lib/api/types";
-import { CURRENCY_SYMBOL } from "@/lib/formatters";
+import type { CurrencyInfo, SupplierRow } from "@/lib/api/types";
+import { currencySymbol } from "@/lib/formatters";
 
 import { ADD_SUPPLIER_HREF, supplierDeletable, SupplierDialog } from "./add-supplier-dialog";
 import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
@@ -19,7 +19,7 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "contactPerson", header: "Contact person" },
   { accessorKey: "phone", header: "Phone" },
   { accessorKey: "city", header: "City" },
-  { accessorKey: "currency", header: "Currency", cell: ({ row }) => CURRENCY_SYMBOL[row.original.currency] },
+  { accessorKey: "currency", header: "Currency", cell: ({ row }) => currencySymbol(row.original.currency) },
   { accessorKey: "exchangeRate", header: "Exchange rate", meta: right, cell: ({ row }) => exchangeRateText(row.original.currency, row.original.exchangeRate) },
   { accessorKey: "openOrders", header: "Open orders", meta: right },
 ];
@@ -32,7 +32,7 @@ const depositsLink = (row: SupplierRow) => (
 );
 
 /** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */
-export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]; draft: SupplierDraft }) {
+export function SuppliersScreen({ suppliers, draft, currencies }: { suppliers: SupplierRow[]; draft: SupplierDraft; currencies: CurrencyInfo[] }) {
   return (
     <>
       <SettingsList
@@ -53,7 +53,7 @@ export function SuppliersScreen({ suppliers, draft }: { suppliers: SupplierRow[]
         }
       />
       <Suspense fallback={null}>
-        <SupplierDialog draft={draft} suppliers={suppliers} />
+        <SupplierDialog draft={draft} suppliers={suppliers} currencies={currencies} />
       </Suspense>
     </>
   );

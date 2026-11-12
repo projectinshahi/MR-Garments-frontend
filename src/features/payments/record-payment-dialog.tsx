@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import type { CreatePaymentResponse, OrderOptions } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, formatINR, rateText } from "@/lib/formatters";
+import { currencySymbol, formatINR, rateText } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
@@ -105,7 +105,7 @@ function RecordPaymentForm({
   const [orderId, amountCny, rateInr] = useWatch({ control, name: ["orderId", "amountCny", "rateInr"] });
   const order = orders.find((o) => o.orderId === orderId);
   // Before an order is chosen the labels show yuan, as they always did.
-  const symbol = CURRENCY_SYMBOL[order?.currency ?? "CNY"];
+  const symbol = currencySymbol(order?.currency ?? "CNY");
   const inr = order?.currency === "INR";
 
   async function save(values: RecordPaymentValues) {

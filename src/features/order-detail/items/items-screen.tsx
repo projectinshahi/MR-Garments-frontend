@@ -3,7 +3,7 @@ import { SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import type { OrderView } from "@/features/order-detail/data/queries";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
-import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
+import { currencyTitle, formatDate } from "@/lib/formatters";
 
 import { ItemsTable } from "./items-table";
 
@@ -37,7 +37,7 @@ export function ItemsScreen({ order }: { order: OrderView }) {
                 ].filter((row) => row.value),
                 { label: "Order date", value: formatDate(order.orderDate) },
                 { label: "Delivery date", value: formatDate(order.deliveryDate) },
-                { label: "Currency", value: CURRENCY_NAME[order.currency] },
+                { label: "Currency", value: currencyTitle(order.currency) },
               ]}
             />
           </SectionCard>

@@ -2,8 +2,9 @@ import { isValid, parseISO } from "date-fns";
 
 import type { FilterOption } from "@/components/shared/filters";
 import type { OrderReportsResponse, OrderState, PaymentState } from "@/lib/api/reports-types";
-import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
-import { CURRENCIES, STAGES } from "@/types/domain";
+import { currencyTitle, formatDate } from "@/lib/formatters";
+import { orderedCurrencies, PREFERRED_CURRENCIES } from "@/lib/currencies";
+import { STAGES } from "@/types/domain";
 
 import { isId, isMonth, monthRange } from "../data/filters";
 
@@ -25,7 +26,11 @@ export const STATUS_OPTIONS: FilterOption[] = [{ value: "all", label: "All statu
 export const PAYMENT_OPTIONS: FilterOption[] = [{ value: "all", label: "Any payment status" }, ...PAYMENT_STATES.map((value) => ({ value, label: PAYMENT_LABEL[value] }))];
 /** The shipment status filter: the order's stage. */
 export const STAGE_OPTIONS: FilterOption[] = [{ value: "all", label: "Any stage" }, ...STAGES.map((name, index) => ({ value: String(index + 1), label: `${index + 1}. ${name}` }))];
-export const CURRENCY_OPTIONS: FilterOption[] = [{ value: "all", label: "Any currency" }, ...CURRENCIES.map((currency) => ({ value: currency, label: CURRENCY_NAME[currency] }))];
+/** The currency filter: CNY, USD, INR and every other currency the listed orders are in. */
+export const currencyOptions = (present: string[]): FilterOption[] => [
+  { value: "all", label: "Any currency" },
+  ...orderedCurrencies([...PREFERRED_CURRENCIES, ...present]).map((currency) => ({ value: currency, label: currencyTitle(currency) })),
+];
 
 const isDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValid(parseISO(value));
 const oneOf = <T extends string>(values: readonly T[], value: string | null): value is T => values.includes(value as T);
@@ -51,7 +56,7 @@ export function orderReportsQuery(params: URLSearchParams) {
   const stage = params.get("stage");
   if (stage && /^[1-6]$/.test(stage)) query.set("stage", stage);
   const currency = params.get("currency");
-  if (oneOf(CURRENCIES, currency)) query.set("currency", currency);
+  if (currency && /^[A-Z]{3}$/.test(currency)) query.set("currency", currency);
   const warehouse = params.get("warehouse");
   if (isId(warehouse)) query.set("warehouseId", warehouse);
   const paymentStatus = params.get("paymentStatus");

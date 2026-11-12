@@ -1,6 +1,7 @@
 import { orderStatus, stageLabel } from "@/features/orders/order-status";
 import type { OrderReportRow, OrderReportsResponse } from "@/lib/api/reports-types";
-import { type Currency, CURRENCIES } from "@/types/domain";
+import { orderedCurrencies } from "@/lib/currencies";
+import type { Currency } from "@/types/domain";
 
 import { type Column, money, type ReportFile, type Section } from "../report-files";
 import { orderReportsFilterLabel } from "./params";
@@ -106,7 +107,7 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
 /** The page's file, named `order-reports-<today>`, with the filters spelled out as the header pill shows them. */
 export function orderReportsFile(data: OrderReportsResponse, today: string): ReportFile {
   const { rows, summary, filter } = data;
-  const currencies = CURRENCIES.filter((currency) => rows.some((row) => row.currency === currency));
+  const currencies = orderedCurrencies(rows.map((row) => row.currency));
   const tables = (currencies.length ? currencies : ["CNY" as const]).map((currency) =>
     rowsTable(
       currency,

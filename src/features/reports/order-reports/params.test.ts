@@ -14,7 +14,7 @@ describe("order reports query", () => {
   });
 
   it("leaves out malformed values, puts a swapped date range the right way round and trims an over-long PO", () => {
-    expect(query("po=&supplierName=&supplier=abc&from=2026-02-30&to=yesterday&status=done&stage=7&currency=EUR&warehouse=1&paymentStatus=half")).toBe("");
+    expect(query("po=&supplierName=&supplier=abc&from=2026-02-30&to=yesterday&status=done&stage=7&currency=eur&warehouse=1&paymentStatus=half")).toBe("");
     expect(query("from=2026-09-30&to=2026-09-01")).toBe("?from=2026-09-01&to=2026-09-30");
     expect(query(`po=${"x".repeat(60)}`)).toBe(`?po=${"x".repeat(50)}`);
   });

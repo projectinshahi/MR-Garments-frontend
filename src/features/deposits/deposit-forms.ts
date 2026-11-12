@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import type { CreateDepositTransactionBody, CreateSupplierDepositBody } from "@/lib/api/deposits-types";
-import { CURRENCIES } from "@/types/domain";
 
 // New deposit (SD-2) and Record payment / receipt (SD-3): what the inputs hold (strings, as typed), the client-side
 // checks mirroring the API, and the bodies. Messages are the API's own (backend deposits.routes.ts MESSAGES).
@@ -9,7 +8,7 @@ import { CURRENCIES } from "@/types/domain";
 export const MESSAGES = {
   direction: "Choose Give or Receive.",
   amount: "Enter an amount above 0.",
-  currency: "Choose CNY, USD or INR.",
+  currency: "Choose a supported currency code (ISO 4217, such as CNY, USD or AED).",
   openedOn: "Enter the date the deposit was agreed.",
   paidOn: "Enter the date of the payment or receipt.",
   future: "The date can't be in the future.",
@@ -36,7 +35,7 @@ export const newDepositSchema = (today: string) =>
   z.object({
     direction: z.string().pipe(z.enum(["give", "receive"], { error: M.direction })),
     amount,
-    currency: z.string().pipe(z.enum(CURRENCIES, { error: M.currency })),
+    currency: z.string().regex(/^[A-Z]{3}$/, M.currency),
     openedOn: notAfter(today, M.openedOn),
     reference,
     notes,

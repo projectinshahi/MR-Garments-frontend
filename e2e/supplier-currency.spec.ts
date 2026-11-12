@@ -1,7 +1,7 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 
 import type { OrderOptions, SupplierRow } from "../src/lib/api/types";
-import { type Api, expect, field, kv, test, toast, today } from "./live-api";
+import { type Api, expect, field, kpi, kv, test, toast, today } from "./live-api";
 
 // Supplier currency and exchange rate (backend docs/supplier-currency.md), against the live API: the Add / Edit
 // supplier fields (INR fixed at 1, a rate for the rest), the list columns, the supplier's page, the currency shown
@@ -11,10 +11,19 @@ import { type Api, expect, field, kv, test, toast, today } from "./live-api";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const tag = () => String(Date.now()).slice(-6);
-const shot = (page: Page, testInfo: TestInfo, name: string) =>
-  page.screenshot({ path: process.env.SHOTS_DIR ? `${process.env.SHOTS_DIR}/${name}` : testInfo.outputPath(name), fullPage: true });
+// fullPage: false for a phone-sized page: a full-page capture paints the page behind an open dialog above it.
+const shot = (page: Page, testInfo: TestInfo, name: string, fullPage = true) =>
+  page.screenshot({ path: process.env.SHOTS_DIR ? `${process.env.SHOTS_DIR}/${name}` : testInfo.outputPath(name), fullPage });
+/** Waits out the picker panel's open animation, so a screenshot shows it opaque. */
+const pickerSettled = (page: Page) => page.locator('[data-slot="popover-content"]').evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
 const dialog = (page: Page, name: string) => page.getByRole("dialog", { name });
 const currencyField = (scope: Locator) => scope.getByLabel("Preferred transaction currency");
+/** Picks a currency in the searchable picker: opens it, types `text` (a code, a name or a symbol), clicks the row of `code`. */
+async function pickCurrency(dialog: Locator, code: string, text = code) {
+  await currencyField(dialog).click();
+  await dialog.page().getByRole("searchbox", { name: "Search currencies" }).fill(text);
+  await dialog.page().getByRole("option", { name: new RegExp(`^${code} `) }).click();
+}
 const rateField = (scope: Locator) => scope.getByLabel(/^Exchange rate/);
 const search = (page: Page) => page.getByRole("searchbox", { name: "Search supplier name, code or country" });
 const rowOf = (page: Page, name: string) => page.getByRole("table").getByRole("row").filter({ hasText: name });
@@ -41,10 +50,10 @@ test("Add supplier: INR fixes the rate at 1, CNY takes a rate (checked), the lis
     await page.getByRole("link", { name: "Add Supplier" }).click();
     const add = dialog(page, "Add supplier");
     await expect(add).toBeVisible();
-    await expect(currencyField(add)).toHaveValue("CNY");
+    await expect(currencyField(add)).toContainText("CNY – Chinese Yuan (¥)");
     await expect(rateField(add)).toHaveValue("");
     await add.getByLabel("Supplier name").fill(rupee);
-    await currencyField(add).selectOption("INR");
+    await pickCurrency(add, "INR", "rupee");
     await expect(rateField(add)).toHaveValue("1");
     await expect(rateField(add)).toHaveJSProperty("readOnly", true);
     await expect(add.getByText("INR is the base currency: the rate is fixed at 1.")).toBeVisible();
@@ -98,7 +107,7 @@ test("Add supplier: INR fixes the rate at 1, CNY takes a rate (checked), the lis
     await page.getByRole("link", { name: "Edit supplier" }).click();
     const edit = dialog(page, "Edit supplier");
     await expect(rateField(edit)).toHaveValue("12.5");
-    await currencyField(edit).selectOption("USD");
+    await pickCurrency(edit, "USD");
     await expect(rateField(edit)).toHaveValue("");
     await expect(rateField(edit)).toHaveAccessibleName("Exchange rate (1 USD = ? INR)");
     await rateField(edit).fill("88.25");
@@ -192,6 +201,77 @@ test("New order and payments take the supplier's currency and rate; the API refu
   });
 });
 
+test("the currency picker: searchable by name, code and symbol over the ISO 4217 master; the rate label, the list and an order follow the choice", async ({ page, api }, testInfo) => {
+  test.setTimeout(120_000);
+  const name = `Gulf Fabrics ${tag()}`;
+  await page.goto("/suppliers");
+  await page.getByRole("link", { name: "Add Supplier" }).click();
+  const add = dialog(page, "Add supplier");
+  await add.getByLabel("Supplier name").fill(name);
+  await currencyField(add).click();
+  const box = page.getByRole("searchbox", { name: "Search currencies" });
+  await expect(box).toBeFocused();
+  const options = page.getByRole("listbox", { name: "Currencies" }).getByRole("option");
+  // The three the business uses most first, then the rest of the master by code: well over a hundred currencies.
+  await expect(options.nth(0)).toHaveAccessibleName("CNY – Chinese Yuan (¥)");
+  await expect(options.nth(1)).toHaveAccessibleName("USD – US Dollar ($)");
+  await expect(options.nth(2)).toHaveAccessibleName("INR – Indian Rupee (₹)");
+  expect(await options.count()).toBeGreaterThan(150);
+  await pickerSettled(page);
+  await shot(page, testInfo, "currency-dropdown-open.png");
+
+  await box.fill("dirham");
+  await expect(options.first()).toHaveAccessibleName("AED – United Arab Emirates Dirham (AED)");
+  await shot(page, testInfo, "currency-search-name.png");
+  // ISO's own name is searched too.
+  await box.fill("UAE");
+  await expect(options.first()).toHaveAccessibleName("AED – United Arab Emirates Dirham (AED)");
+  await box.fill("jpy");
+  await expect(options).toHaveCount(1);
+  await expect(options.first()).toHaveAccessibleName("JPY – Japanese Yen (JPY)");
+  await shot(page, testInfo, "currency-search-code.png");
+  await box.fill("€");
+  await expect(options).toHaveCount(1);
+  await expect(options.first()).toHaveAccessibleName("EUR – Euro (€)");
+  // Withdrawn currencies are not offered: the lev went with Bulgaria's move to the euro.
+  await box.fill("BGN");
+  await expect(page.getByRole("status")).toHaveText("No currency matches “BGN”.");
+  await box.fill("zzz");
+  await expect(page.getByRole("status")).toHaveText("No currency matches “zzz”.");
+  await box.fill("sar");
+  await box.press("Enter"); // the first match, SAR, by keyboard
+  await expect(currencyField(add)).toContainText("SAR – Saudi Riyal (SAR)");
+  await expect(rateField(add)).toHaveAccessibleName("Exchange rate (1 SAR = ? INR)");
+  await expect(rateField(add)).toHaveValue("");
+  await rateField(add).fill("23.5");
+  await expect(add.getByText("1 SAR = ₹23.50")).toBeVisible();
+  await shot(page, testInfo, "currency-selected-rate.png");
+  await add.getByRole("button", { name: "Save supplier" }).click();
+  await expect(add).toBeHidden();
+  const saved = await supplierNamed(api, name);
+  expect(saved).toMatchObject({ currency: "SAR", exchangeRate: 23.5 });
+  await search(page).fill(name);
+  await expect(rowOf(page, name).getByRole("cell").filter({ hasText: /^SAR$/ })).toBeVisible();
+  await expect(rowOf(page, name).getByRole("cell").filter({ hasText: /^₹23\.50$/ })).toBeVisible();
+
+  // Its orders are in SAR: the API fills the currency in, refuses another, snapshots the rate; the screens show "SAR 40".
+  const { items } = await api.get<OrderOptions>("/orders/options");
+  const item = items.find((row) => row.name === "Denim jeans")!;
+  const body = { supplierId: saved.id, orderDate: today(), deliveryDate: today(20), lines: [{ itemId: item.id, quantity: 10, rateCny: 4 }], deposits: [] };
+  const refused = await api.post("/orders", { ...body, currency: "CNY" });
+  expect(refused.status()).toBe(422);
+  expect(((await refused.json()) as { error: { fields: object } }).error.fields).toEqual({ currency: "This supplier's orders are in SAR." });
+  const placed = await api.post("/orders", body);
+  expect(placed.status(), await placed.text()).toBe(201);
+  const po = ((await placed.json()) as { order: { po: string } }).order.po;
+  expect(await api.order(po)).toMatchObject({ currency: "SAR", exchangeRate: 23.5, orderValueCny: 40 });
+  await page.goto(`/orders/${po}/payments`);
+  await expect(kpi(page, "Order value")).toContainText("SAR 40");
+  await page.goto(`/reports/orders/${po}`);
+  await expect(kv(page, "Exchange rate on this PO")).toHaveText("1 SAR = ₹23.50");
+  await expect(kv(page, "PO value in INR")).toHaveText("₹940.00 at the PO rate");
+});
+
 test("the supplier form at 390 px: currency and rate stacked, no sideways scroll", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/suppliers");
@@ -200,7 +280,20 @@ test("the supplier form at 390 px: currency and rate stacked, no sideways scroll
   await add.getByLabel("Supplier name").fill(`Mobile Mills ${tag()}`);
   await rateField(add).fill("12.5");
   await expect(add.getByText("1 CNY = ₹12.50")).toBeVisible();
-  await shot(page, testInfo, "supplier-form-390.png");
+  await shot(page, testInfo, "supplier-form-390.png", false);
+  // The picker fits the phone too: as wide as the field, never taller than the screen.
+  await currencyField(add).click();
+  await expect(page.getByRole("searchbox", { name: "Search currencies" })).toBeFocused();
+  await pickerSettled(page);
+  // As wide as the screen allows, never sideways past it.
+  const panel = await page.locator('[data-slot="popover-content"]').boundingBox();
+  expect(panel!.x).toBeGreaterThanOrEqual(0);
+  expect(panel!.x + panel!.width).toBeLessThanOrEqual(390);
+  await page.getByRole("searchbox", { name: "Search currencies" }).fill("euro");
+  await expect(page.getByRole("option").first()).toHaveAccessibleName("EUR – Euro (€)");
+  await shot(page, testInfo, "currency-dropdown-390.png", false);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await add.getByRole("button", { name: "Cancel" }).click();
   await expect(add).toBeHidden();

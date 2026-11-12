@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, currencyLabel, formatINR, formatMoney, formatNumber, rateText } from "@/lib/formatters";
+import { currencySymbol, currencyLabel, formatINR, formatMoney, formatNumber, rateText } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { NewOrderData } from "./data/queries";
@@ -62,7 +62,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
   const [supplierId, currency, lines, deposits] = useWatch({ control, name: ["supplierId", "currency", "lines", "deposits"] });
   const supplier = options.suppliers.find((s) => s.id === supplierId);
   // Amounts are in the order's currency; an INR order's deposits need no rate (it is 1).
-  const symbol = CURRENCY_SYMBOL[currency];
+  const symbol = currencySymbol(currency);
   const inr = currency === "INR";
   const spaced = (value: number) => formatMoney(value, currency, { spaced: true });
   const unitOf = (itemId: string) => options.items.find((item) => item.id === itemId)?.unit ?? "";

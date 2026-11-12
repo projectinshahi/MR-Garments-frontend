@@ -2,20 +2,20 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { CurrencyCombobox } from "@/components/shared/currency-combobox";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { COUNTRIES } from "@/features/suppliers/countries";
 import { apiClient } from "@/lib/api/client";
-import type { CreateSupplierBody, SupplierResponse, SupplierRow, UpdateSupplierBody } from "@/lib/api/types";
+import type { CreateSupplierBody, CurrencyInfo, SupplierResponse, SupplierRow, UpdateSupplierBody } from "@/lib/api/types";
 import { SUCCESS } from "@/lib/feedback";
-import { CURRENCY_NAME, formatNumber, rateText } from "@/lib/formatters";
+import { currencyTitle, formatNumber, rateText } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { CURRENCIES } from "@/types/domain";
 
 import {
   addHref,
@@ -51,7 +51,7 @@ export const supplierDeletable = (row: SupplierRow): Deletable => ({
     ["Phone", orDash(row.phone)],
     ["Country", orDash(row.country)],
     ["City", orDash(row.city)],
-    ["Currency", CURRENCY_NAME[row.currency]],
+    ["Currency", currencyTitle(row.currency)],
     ["Exchange rate", exchangeRateText(row.currency, row.exchangeRate)],
     ["Open orders", formatNumber(row.openOrders)],
   ],
@@ -80,7 +80,7 @@ const CODE_MAX = 20;
  * the parameters. Save posts MD-2 or patches the supplier; on success (K7) it toasts, removes the parameters and
  * reloads the list from the server. The Add form offers the next SUP-nnn code (suggestSupplierCode).
  */
-export function SupplierDialog({ draft, suppliers, path = PATH }: { draft: SupplierDraft; suppliers: SupplierRow[]; path?: string }) {
+export function SupplierDialog({ draft, suppliers, currencies, path = PATH }: { draft: SupplierDraft; suppliers: SupplierRow[]; currencies: CurrencyInfo[]; path?: string }) {
   const { open, id, close, saved } = useSettingsDialog(path);
   const supplier = open === "edit" ? suppliers.find((row) => row.id === id) : undefined;
   return (
@@ -95,6 +95,7 @@ export function SupplierDialog({ draft, suppliers, path = PATH }: { draft: Suppl
         key={supplier?.id ?? "add"}
         draft={{ ...draft, code: draft.code || suggestSupplierCode(suppliers) }}
         supplier={supplier}
+        currencies={currencies}
         onCancel={close}
         onSaved={saved}
       />
@@ -115,11 +116,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function SupplierForm({
   draft,
   supplier,
+  currencies,
   onCancel,
   onSaved,
 }: {
   draft: SupplierDraft;
   supplier?: SupplierRow;
+  /** The currency master (GET /currencies), loaded with the page. */
+  currencies: CurrencyInfo[];
   onCancel: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -216,22 +220,24 @@ function SupplierForm({
             <FieldLabel htmlFor="supplier-currency" className={labelClass}>
               Preferred transaction currency <RequiredMark />
             </FieldLabel>
-            <NativeSelect
-              size="sm"
-              id="supplier-currency"
-              required
-              aria-invalid={!!errors.currency}
-              {...register("currency", {
-                // INR's rate is 1 and fixed; another currency starts with the rate empty, never the previous currency's.
-                onChange: (event: { target: { value: string } }) => setValue("exchangeRate", event.target.value === "INR" ? "1" : "", { shouldValidate: formState.isSubmitted }),
-              })}
-            >
-              {CURRENCIES.map((currency) => (
-                <option key={currency} value={currency}>
-                  {CURRENCY_NAME[currency]}
-                </option>
-              ))}
-            </NativeSelect>
+            {/* Searched by code, name or symbol over the backend's currency master. INR's rate is 1 and fixed; another
+                currency starts with the rate empty, never the previous currency's. */}
+            <Controller
+              control={control}
+              name="currency"
+              render={({ field }) => (
+                <CurrencyCombobox
+                  id="supplier-currency"
+                  value={field.value}
+                  currencies={currencies}
+                  invalid={!!errors.currency}
+                  onChange={(code) => {
+                    field.onChange(code);
+                    setValue("exchangeRate", code === "INR" ? "1" : "", { shouldValidate: formState.isSubmitted });
+                  }}
+                />
+              )}
+            />
             <FieldError errors={[errors.currency]} />
           </Field>
           <Field className={fieldClass} data-invalid={!!errors.exchangeRate}>

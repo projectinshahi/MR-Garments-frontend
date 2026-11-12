@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { CreateSupplierBody } from "@/lib/api/types";
 import { MESSAGES } from "@/lib/feedback";
 import { formatINR, formatNumber, formatRateInr } from "@/lib/formatters";
-import { CURRENCIES, type Currency, type RecordStatus } from "@/types/domain";
+import type { Currency, RecordStatus } from "@/types/domain";
 
 export type StatusFilter = RecordStatus | "All";
 
@@ -47,7 +47,7 @@ export const supplierFields = z.object({
   contactPerson: z.string().trim(),
   email: z.string().trim().refine((email) => email === "" || EMAIL.test(email), MESSAGES.emailInvalid),
   phone: z.string().trim().refine((phone) => phone === "" || hasPhoneDigits(phone), MESSAGES.phoneInvalid),
-  currency: z.enum(CURRENCIES),
+  currency: z.string().regex(/^[A-Z]{3}$/, MESSAGES.currency),
   /** INR per 1 unit of `currency`, as typed; "" while never set. Read-only "1" for an INR supplier. */
   exchangeRate: z.string().trim(),
   address: z.string().trim(),

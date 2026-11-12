@@ -48,6 +48,10 @@ export type RolesResponse = {
 // Master-data lists (backend docs/contracts.md, "Endpoint formats fixed in Phase 0"). Arrays in creation order.
 type Contact = { id: string; name: string; contactPerson: string; phone: string; status: RecordStatus };
 
+/** GET /api/v1/currencies: the currency master (backend docs/supplier-currency.md) behind the supplier form's searchable picker. */
+export type CurrencyInfo = { code: string; name: string; /** ISO's own name ("UAE Dirham"), searched too. */ isoName: string; symbol: string; minorUnits: number };
+export type CurrenciesResponse = { currencies: CurrencyInfo[]; preferred: string[] };
+
 /** A supplier's profile beyond its name and contact (backend docs/suppliers.md, migration 0011). */
 export type SupplierProfile = {
   /** Unique, upper-case: SUP-001 when the API assigned it. */

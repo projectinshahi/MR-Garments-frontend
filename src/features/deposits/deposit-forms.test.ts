@@ -30,7 +30,7 @@ describe("newDepositSchema", () => {
     expect(errorsFor({ amount: "abc" })).toEqual({ amount: MESSAGES.amount });
     expect(errorsFor({ amount: "12.345" })).toEqual({ amount: MESSAGES.amount });
     expect(errorsFor({ amount: "1000000000000" })).toEqual({ amount: MESSAGES.amount });
-    expect(errorsFor({ currency: "EUR" })).toEqual({ currency: MESSAGES.currency });
+    expect(errorsFor({ currency: "eur" })).toEqual({ currency: MESSAGES.currency });
     expect(errorsFor({ openedOn: "" })).toEqual({ openedOn: MESSAGES.openedOn });
     expect(errorsFor({ openedOn: "2026-11-11" })).toEqual({ openedOn: MESSAGES.future });
     expect(errorsFor({ reference: "r".repeat(101) })).toEqual({ reference: MESSAGES.referenceTooLong });

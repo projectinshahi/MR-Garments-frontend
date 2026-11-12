@@ -8,7 +8,8 @@ import type {
   PaymentsPerSupplierReport,
 } from "@/lib/api/reports-types";
 import { formatDate, formatDateTime } from "@/lib/formatters";
-import { type Currency, CURRENCIES, STAGES } from "@/types/domain";
+import { orderedCurrencies } from "@/lib/currencies";
+import { type Currency, STAGES } from "@/types/domain";
 
 import { type CsvCell, toCsv } from "./csv";
 import { periodLabel } from "./data/filters";
@@ -35,11 +36,11 @@ export const NO_ROWS = "No rows";
 /** The one place a currency reaches the files: its code in the header ("Paid (INR)"), never ₹ or ¥ (the PDF fonts have no ₹). */
 export const money = (header: string, currency: Currency): Column => ({ header: `${header} (${currency})`, currency });
 /**
- * Rows in order currencies, one table per currency (CNY, USD, INR) so each amount column's header (`money`) names its
- * currency and no total adds two currencies. No rows: one CNY table, as before.
+ * Rows in order currencies, one table per currency (CNY, USD, INR, then the rest by code) so each amount column's
+ * header (`money`) names its currency and no total adds two currencies. No rows: one CNY table, as before.
  */
 export function perCurrency<T extends { currency: Currency }>(rows: T[]): [Currency, T[]][] {
-  const tables = CURRENCIES.map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]).filter(([, list]) => list.length);
+  const tables = orderedCurrencies(rows.map((row) => row.currency)).map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]);
   return tables.length ? tables : [["CNY", []]];
 }
 const date = (header: string): Column => ({ header, date: true });

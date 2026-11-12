@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SupplierRow } from "@/lib/api/types";
 
-import { supplierDraft } from "./data/fixtures";
+import { currencyFixture, supplierDraft } from "./data/fixtures";
 import { SuppliersScreen } from "./suppliers-screen";
 
 vi.mock("next/navigation", () => ({
@@ -40,7 +40,7 @@ const row: SupplierRow = {
 
 describe("Settings > Suppliers row actions", () => {
   it("adds a Deposits link to the supplier's statement in the actions cell, before the unchanged Edit and Delete", () => {
-    render(<SuppliersScreen suppliers={[row]} draft={structuredClone(supplierDraft)} />);
+    render(<SuppliersScreen suppliers={[row]} draft={structuredClone(supplierDraft)} currencies={currencyFixture} />);
     const line = screen.getByRole("row", { name: /ABC Textiles/ });
     const cells = within(line).getAllByRole("cell");
     expect(cells.at(-1)).toHaveTextContent(/^DepositsEditDelete$/);

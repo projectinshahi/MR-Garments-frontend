@@ -1,7 +1,8 @@
 import { orderHref } from "@/components/shared/po-link";
 import type { DepositDirection, DepositsResponse, SupplierStatement } from "@/lib/api/deposits-types";
 import { formatMoney, sumByCurrency } from "@/lib/formatters";
-import { type Currency, CURRENCIES, type MoneyTotal, type Tone } from "@/types/domain";
+import { compareCurrencies } from "@/lib/currencies";
+import type { Currency, MoneyTotal, Tone } from "@/types/domain";
 
 // Deposits pages (docs/phase2-contracts.md 3.3, docs/phase2-fixes.md 2): DEP-1's lists as one table. An order whose
 // supplier asked for a deposit is one obligation row (required / paid / pending, from DEP-1 `orderObligations`); its
@@ -205,7 +206,7 @@ export function supplierSummaries(rows: DepositRow[]): SupplierSummary[] {
 
 /** SD-1's summary lines of one direction as the statement's three figures, per currency (CNY, USD, INR order). */
 export function statementTotals(summary: SupplierStatement["summary"], direction: DepositDirection): Omit<DirectionTotals, "count"> {
-  const lines = summary.filter((line) => line.direction === direction).sort((a, b) => CURRENCIES.indexOf(a.currency) - CURRENCIES.indexOf(b.currency));
+  const lines = summary.filter((line) => line.direction === direction).sort((a, b) => compareCurrencies(a.currency, b.currency));
   const pick = (key: "amount" | "settled" | "pending") => lines.map((line) => ({ currency: line.currency, amount: line[key] }));
   return { amount: pick("amount"), paid: pick("settled"), pending: pick("pending") };
 }

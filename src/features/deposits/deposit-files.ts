@@ -1,7 +1,8 @@
 import type { SupplierStatement } from "@/lib/api/deposits-types";
 import { type Column, money, perCurrency, type ReportFile, type Section } from "@/features/reports/report-files";
 import { formatDate } from "@/lib/formatters";
-import { type Currency, CURRENCIES } from "@/types/domain";
+import { orderedCurrencies } from "@/lib/currencies";
+import type { Currency } from "@/types/domain";
 
 import { type DepositFilters, type DepositRow, type DepositView, KIND_LABEL, STATUS_LABEL, type SupplierSummary } from "./deposits-logic";
 
@@ -60,7 +61,7 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
 export function suppliersFile(summaries: SupplierSummary[], filters: string, today: string): ReportFile {
   type Line = { currency: Currency; supplier: string; figures: number[] };
   const lines: Line[] = summaries.flatMap((s) =>
-    CURRENCIES.filter((currency) => [s.give, s.receive].some((d) => d.amount.some((t) => t.currency === currency))).map((currency) => {
+    orderedCurrencies([s.give, s.receive].flatMap((d) => d.amount.map((t) => t.currency))).map((currency) => {
       const of = (totals: { currency: Currency; amount: number }[]) => totals.find((t) => t.currency === currency)?.amount ?? 0;
       return { currency, supplier: s.supplier, figures: [of(s.give.amount), of(s.give.paid), of(s.give.pending), of(s.receive.amount), of(s.receive.paid), of(s.receive.pending)] };
     }),

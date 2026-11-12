@@ -2,8 +2,9 @@
 
 import { BarChart } from "@/components/shared/bar-chart";
 import { EmptyState } from "@/components/shared/states";
-import { CURRENCY_NAME, formatINR, formatMoney, formatNumber } from "@/lib/formatters";
-import { CURRENCIES, type MoneyTotal } from "@/types/domain";
+import { currencyTitle, formatINR, formatMoney, formatNumber } from "@/lib/formatters";
+import { orderedCurrencies } from "@/lib/currencies";
+import type { MoneyTotal } from "@/types/domain";
 
 // The Suppliers dashboards' charts: the shared BarChart (Reports), one per order currency for money, since amounts
 // in different currencies are never added together. Client-side because the value formatters are functions.
@@ -14,17 +15,17 @@ export const shortLabel = (label: string) => (label.length > 15 ? `${label.slice
 export type MoneyBar = { label: string; totals: MoneyTotal[] };
 
 /**
- * Bars per currency present in `rows` (CNY, USD, INR order), each chart in its own currency with its name above it when
+ * Bars per currency present in `rows` (CNY, USD, INR, then the rest), each chart in its own currency with its name above it when
  * there is more than one. Nothing but zeros: the empty state.
  */
 export function MoneyCharts({ rows, label, empty }: { rows: MoneyBar[]; label: string; empty: string }) {
-  const currencies = CURRENCIES.filter((currency) => rows.some((row) => row.totals.some((total) => total.currency === currency && total.amount !== 0)));
+  const currencies = orderedCurrencies(rows.flatMap((row) => row.totals.filter((total) => total.amount !== 0).map((total) => total.currency)));
   if (currencies.length === 0) return <EmptyState title={empty} />;
   return (
     <div className="flex flex-col gap-4">
       {currencies.map((currency) => (
         <div key={currency}>
-          {currencies.length > 1 ? <p className="text-[12.5px] leading-[21px] text-muted-foreground">{CURRENCY_NAME[currency]}</p> : null}
+          {currencies.length > 1 ? <p className="text-[12.5px] leading-[21px] text-muted-foreground">{currencyTitle(currency)}</p> : null}
           <div className="overflow-x-auto">
             <BarChart
               label={`${label}, ${currency}`}

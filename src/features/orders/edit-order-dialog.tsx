@@ -19,7 +19,7 @@ import { moneyOrDash } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
 import type { OrderDetail, OrderOptions, UpdateOrderBody, UpdateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, formatMoney, formatNumber, formatQty } from "@/lib/formatters";
+import { currencySymbol, formatMoney, formatNumber, formatQty } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
@@ -150,7 +150,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
   const { errors, isSubmitting } = formState;
   const total = linesEditable ? totalOf(lines) : orderTotals(order.lines.map((l) => ({ rate: l.rateCny, quantity: l.quantity })), []).orderTotal;
   // Money in the dialog is in the order's currency (phase 2 final fixes, 5), the deposit required included.
-  const symbol = CURRENCY_SYMBOL[order.currency];
+  const symbol = currencySymbol(order.currency);
 
   async function save(values: EditValues) {
     const body = toUpdateOrderBody(values, order, linesEditable);

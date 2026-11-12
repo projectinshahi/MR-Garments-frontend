@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/features/reports/report-actions";
 import type { SupplierDepositRow, SupplierStatement } from "@/lib/api/deposits-types";
-import { CURRENCY_NAME, formatDate } from "@/lib/formatters";
+import { currencyTitle, formatDate } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
 
 import type { StatementData } from "./data/queries";
@@ -65,7 +65,7 @@ export function StatementScreen({ data }: { data: StatementData }) {
               className="border-t border-border-subtle lg:border-t-0"
               items={[
                 { label: "City", value: orDash(supplier.city) },
-                { label: "Default currency", value: CURRENCY_NAME[supplier.currency] },
+                { label: "Default currency", value: currencyTitle(supplier.currency) },
               ]}
             />
           </div>

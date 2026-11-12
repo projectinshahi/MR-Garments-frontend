@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import type { CreateDepositTransactionResponse, CreateSupplierDepositResponse, SupplierDepositRow } from "@/lib/api/deposits-types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { CURRENCY_SYMBOL, currencyLabel } from "@/lib/formatters";
+import { currencySymbol, currencyLabel } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
@@ -155,7 +155,7 @@ function NewDepositForm({ supplier, onCancel, onSaved }: { supplier: StatementSu
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.amount}>
           <FieldLabel htmlFor="deposit-amount" className={labelClass}>
-            Amount ({CURRENCY_SYMBOL[currency] ?? CURRENCY_SYMBOL[supplier.currency]}) <RequiredMark />
+            Amount ({currencySymbol(currency || supplier.currency)}) <RequiredMark />
           </FieldLabel>
           <Input id="deposit-amount" required inputMode="decimal" size="sm" aria-invalid={!!errors.amount} {...register("amount")} />
           <FieldError errors={[errors.amount]} />
@@ -237,7 +237,7 @@ function SettleDepositForm({ deposit, noun, onCancel, onSaved }: { deposit: Supp
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.amount}>
           <FieldLabel htmlFor="settle-amount" className={labelClass}>
-            Amount ({CURRENCY_SYMBOL[deposit.currency]}) <RequiredMark />
+            Amount ({currencySymbol(deposit.currency)}) <RequiredMark />
           </FieldLabel>
           <Input id="settle-amount" required inputMode="decimal" size="sm" aria-invalid={!!errors.amount} {...register("amount")} />
           <FieldError errors={[errors.amount]} />

@@ -13,9 +13,8 @@ export type StageNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type Tone = "danger" | "warning" | "success" | "info" | "purple" | "neutral";
 export type Terms = "FOB" | "CNF";
-/** Order and supplier currencies (backend migration 0006). Stage costs (clearing, transport) are always INR. */
-export const CURRENCIES = ["CNY", "USD", "INR"] as const;
-export type Currency = (typeof CURRENCIES)[number];
+/** An ISO 4217 code of the backend's currency master (docs/supplier-currency.md; migrations 0006, 0013): a supplier's, order's or deposit's currency. Stage costs (clearing, transport) are always INR. */
+export type Currency = string;
 /** One currency's total: amounts in different currencies are never added together. */
 export type MoneyTotal = { currency: Currency; amount: number };
 export type RecordStatus = "Active" | "Inactive";
