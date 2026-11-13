@@ -64,8 +64,8 @@ describe("DepositsScreen", () => {
     expect(kpi("Pending to pay")).toHaveTextContent("$1,000");
     expect(kpi("To receive")).toHaveTextContent("¥400");
     expect(kpi("To receive")!.nextSibling).toHaveTextContent("received ¥100 of ¥500 · 1 deposit");
-    expect(screen.getByRole("button", { name: "Export Excel" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    // One "Download report" menu (PDF, Excel, CSV) replaces the separate export buttons.
+    expect(screen.getByRole("button", { name: "Download report" })).toBeInTheDocument();
   });
 
   it("Pending and Paid keep their rows; filters narrow the table and the cards follow", async () => {

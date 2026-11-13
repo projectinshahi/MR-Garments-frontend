@@ -4,7 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Ellipsis, Eye, Pencil, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 
 import { LinkPending } from "@/components/layout/navigation-progress";
 import { DeactivateConfirm } from "@/components/shared/confirm-dialog";
@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
 import { DEACTIVATE_NOTE, SupplierDialog } from "@/features/settings/add-supplier-dialog";
 import { addHref, editHref } from "@/features/settings/settings-dialog";
 import { exchangeRateText, type StatusFilter, type SupplierDraft } from "@/features/settings/settings-logic";
@@ -22,10 +24,12 @@ import { apiClient } from "@/lib/api/client";
 import type { CurrencyInfo, SupplierRow } from "@/lib/api/types";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { formatNumber } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { MoneyTotal } from "@/types/domain";
 
 import { countryCode } from "./countries";
+import { suppliersListFile } from "./supplier-files";
 import { countryOptions, filterSuppliers, moneyText } from "./suppliers-logic";
 
 const PATH = "/suppliers";
@@ -58,6 +62,8 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
   // The supplier waiting for the deactivate confirmation.
   const [deactivating, setDeactivating] = useState<SupplierRow | null>(null);
   const visible = filterSuppliers(suppliers, { query, status, country });
+  // The visible rows in the table's sort order (every page), so the download keeps a header sort.
+  const sorted = useRef<SupplierRow[] | null>(null);
   const yuanOnly = suppliers.every((row) => [...row.ytdValue, ...row.balance].every((total) => total.currency === "CNY"));
   const money = (totals: MoneyTotal[]) => (yuanOnly ? (totals.length ? formatNumber(totals[0]!.amount) : "–") : moneyText(totals));
 
@@ -226,6 +232,19 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
             />
             <FilterSelect label="Status" showLabel size="sm" value={status} options={STATUS_OPTIONS} onValueChange={(value) => setStatus(value as StatusFilter)} />
             <FilterSelect label="Country" showLabel size="sm" value={country} options={countryOptions(suppliers)} onValueChange={setCountry} />
+            <ReportDownload
+              file={() =>
+                suppliersListFile(
+                  sorted.current ?? visible,
+                  describeFilters([
+                    query.trim() && `Search: "${query.trim()}"`,
+                    status !== "All" && `Status: ${status}`,
+                    country !== "all" && `Country: ${country || "Not set"}`,
+                  ]),
+                  todayInIndia(),
+                )
+              }
+            />
             <Button asChild size="header" className="px-[15px]">
               <Link href={addHref(PATH)} replace scroll={false}>
                 <Plus aria-hidden className="size-4" />
@@ -243,6 +262,7 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
           header="tall"
           padding="tight"
           sortable
+          sortedRows={sorted}
           pagination={{ pageSize: 5, itemLabel: "suppliers", pageSizeOptions: PAGE_SIZES }}
           emptyState={suppliers.length === 0 ? "No suppliers yet. Add the first one with Add Supplier." : "No suppliers match these filters."}
           className="border-t"

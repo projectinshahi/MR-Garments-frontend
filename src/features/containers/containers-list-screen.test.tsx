@@ -32,6 +32,8 @@ const row = (id: string, number: string, orders: string[]): ContainerRow => ({
   etaIndia: "2026-10-30",
   etaEstimated: false,
   status: "loading",
+  portOfLoading: "",
+  portOfArrival: "",
 });
 const data = (canDelete: boolean): ContainersListData => ({
   containers: [row("c1", "TCLU6000001", ["PO-2051", "PO-2052"]), row("c2", "TCLU6000002", ["PO-2053"])],

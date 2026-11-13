@@ -56,6 +56,9 @@ describe("toRows", () => {
       status: "paid",
       href: "/orders/PO-3001",
       payeeRole: "agent",
+      // The payment's own rate and INR (the exchange-rate snapshot).
+      rate: 12,
+      amountInr: 3600,
     });
     // A due order deposit is pending in full; a supplier deposit's paid is what was settled; a deposit to give is paid to the supplier.
     expect(rows[0]).toMatchObject({ kind: "order", payee: "Hangzhou Knits", paid: 0, pending: 200, date: "2026-11-30", mode: "", status: "due" });
@@ -98,6 +101,8 @@ describe("order obligations", () => {
       status: "partly paid",
       href: "/orders/PO-3003/payments",
       payments: 1,
+      rate: null,
+      amountInr: null,
     });
     // Nothing paid yet: due, with no date. Everything paid: paid. Without Orders access, no link.
     expect(withObligation({ paidCny: 0, pendingCny: 1000, status: "due", lastPaidOn: null, payments: 0 })[0]).toMatchObject({ status: "due", date: "", paid: 0, pending: 1000, payments: 0 });

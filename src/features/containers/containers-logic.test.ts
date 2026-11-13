@@ -67,6 +67,8 @@ describe("toContainerRow", () => {
       etaIndia: "2026-10-02",
       etaEstimated: true,
       status: "sea",
+      portOfLoading: "",
+      portOfArrival: "",
     });
   });
 });

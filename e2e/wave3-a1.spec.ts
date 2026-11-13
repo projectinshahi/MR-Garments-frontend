@@ -28,6 +28,8 @@ for (const tab of TABS) {
     await expect(add.getByLabel("Status")).toHaveCount(0);
     await add.getByLabel(tab.nameLabel).fill(name);
     await add.getByLabel(tab.cityLabel).fill("Ningbo");
+    // A supplier in a currency other than INR needs its rate (docs/supplier-currency.md).
+    if (tab.noun === "supplier") await add.getByLabel(/^Exchange rate/).fill("12.5");
     await save(add);
     await expect(add).toBeHidden();
     await expect(page.getByText(`${title} added`, { exact: true })).toBeVisible();

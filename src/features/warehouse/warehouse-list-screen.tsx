@@ -12,10 +12,14 @@ import { FilterSelect, SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, PLAIN_ACTIONS_COLUMN_CLASS, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
 import type { WarehouseList, WarehouseListRow } from "@/lib/api/stages-types";
 import { formatDate, formatINR, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 
 import type { WarehouseListData } from "./data/queries";
+import { warehouseFile } from "./warehouse-files";
 import { ALL, filterReceipts, summarizeReceipts, teamLabel, type ReceiptFilters } from "./warehouse-logic";
 
 type Totals = ReturnType<typeof summarizeReceipts>;
@@ -245,6 +249,19 @@ export function WarehouseListScreen({ data }: { data: WarehouseListData }) {
               value={filters.query}
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
+            />
+            <ReportDownload
+              file={() =>
+                warehouseFile(rows, data.rows, data, {
+                  showCosts,
+                  filters: describeFilters([
+                    filters.query.trim() && `Search: "${filters.query.trim()}"`,
+                    `Warehouse: ${data.warehouses.find((w) => w.id === filters.warehouse)?.name ?? "All warehouses"}`,
+                    filters.team !== ALL && `Team: ${teams.find((t) => t.id === filters.team)?.name ?? filters.team}`,
+                  ]),
+                  today: todayInIndia(),
+                })
+              }
             />
             {canEnter ? (
               ready[0] ? (

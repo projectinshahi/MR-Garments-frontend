@@ -1,12 +1,15 @@
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { StatusPill } from "@/components/shared/status-pill";
-import { UrlSelect } from "@/features/reports/report-actions";
+import { ReportDownload, UrlSelect } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
 import { formatINR, formatNumber } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 
 import { listPos } from "./cost-math";
 import type { LandedCostData } from "./data/queries";
 import { LandedCostBody } from "./landed-cost-client";
+import { landedCostFile } from "./landed-cost-files";
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 const options = (all: string, named: { id: string; name: string }[]) => [{ value: "all", label: all }, ...named.map((n) => ({ value: n.id, label: n.name }))];
@@ -21,11 +24,24 @@ export function LandedCostScreen({ data }: { data: LandedCostData }) {
         title="Landed Cost"
         titleAddon={<StatusPill tone="neutral">Management only</StatusPill>}
         actions={
-          // Hidden on phones (an undesigned width), where they would squeeze the page title out of the header.
-          <div className="hidden items-center gap-3.5 sm:flex">
-            <UrlSelect param="supplier" label="Supplier" size="sm" options={options("All suppliers", data.suppliers)} />
-            <UrlSelect param="team" label="Team" size="sm" options={options("All teams", data.teams)} />
-          </div>
+          <>
+            {/* Hidden on phones (an undesigned width), where they would squeeze the page title out of the header. */}
+            <div className="hidden items-center gap-3.5 sm:flex">
+              <UrlSelect param="supplier" label="Supplier" size="sm" options={options("All suppliers", data.suppliers)} />
+              <UrlSelect param="team" label="Team" size="sm" options={options("All teams", data.teams)} />
+            </div>
+            {/* The file is the loaded data (already filtered by the URL), built here on the server. */}
+            <ReportDownload
+              file={landedCostFile(
+                data,
+                describeFilters([
+                  data.supplierId && `Supplier: ${data.suppliers.find((s) => s.id === data.supplierId)?.name ?? "Unknown supplier"}`,
+                  data.teamId && `Team: ${data.teams.find((t) => t.id === data.teamId)?.name ?? "Unknown team"}`,
+                ]),
+                todayInIndia(),
+              )}
+            />
+          </>
         }
       />
       <PageContainer>

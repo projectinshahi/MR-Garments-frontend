@@ -1,13 +1,16 @@
 import { formatDate, formatNumber } from "@/lib/formatters";
 
-import { type Cell, type Column, NO_ROWS, type ReportFile } from "./report-files";
+import { type Cell, type Column, NO_ROWS, type ReportFile, type Section } from "./report-files";
 
-// The PDF of a report: the title, filters and generation time, then each table (its heading when it has one; long text
-// wrapped, the header repeated on every page), on A4 landscape pages numbered in the footer. Written directly (no library) in Helvetica, a PDF
-// standard font every reader has. It draws Western European text (WinAnsi) only, so amounts show their currency code in
-// the header, never ₹ or ¥, and a character it lacks prints as "?".
+// The PDF of a report: the company, title, filters, generation time and notes, then each table (its heading when it
+// has one; long text wrapped, the header repeated on every page), on A4 pages numbered in the footer: portrait when
+// every table fits its width, landscape otherwise. Written directly (no library) in Helvetica, a PDF standard font
+// every reader has. It draws Western European text (WinAnsi) only, so amounts show their currency code in the header,
+// never ₹ or ¥, and a character it lacks prints as "?".
 
-const [WIDTH, HEIGHT, MARGIN] = [842, 595, 36];
+const COMPANY = "MR Garments";
+const A4 = { portrait: [595, 842], landscape: [842, 595] } as const;
+const MARGIN = 36;
 const SIZE = 8; // table text, on 10 pt lines
 const LINE = 10;
 const PAD = 4;
@@ -34,22 +37,23 @@ const encode = (text: string) =>
     return index < 0 ? "?" : String.fromCharCode(0x80 + index);
   }).join("");
 
-/** Width in points of encoded table text (other characters counted 1 em, so wider than they are). */
-const measure = (text: string) => ([...text].reduce((sum, char) => sum + (ADVANCE[char.charCodeAt(0) - 32] ?? 1000), 0) * SIZE) / 1000;
+/** Width in points of encoded text at `size` (other characters counted 1 em, so wider than they are). */
+const measure = (text: string, size = SIZE) => ([...text].reduce((sum, char) => sum + (ADVANCE[char.charCodeAt(0) - 32] ?? 1000), 0) * size) / 1000;
 
-/** Encoded text in lines of at most `room` points: broken at spaces, a longer word anywhere. */
-function wrap(text: string, room: number) {
+/** Encoded text in lines of at most `room` points at `size`: broken at spaces, a longer word anywhere. */
+function wrap(text: string, room: number, size = SIZE) {
   const lines: string[] = [];
   let line = "";
   for (const word of text.split(" ")) {
     let next = line ? `${line} ${word}` : word;
-    if (line && measure(next) > room) {
+    // A hair of slack: a column exactly as wide as its text must not wrap on a rounding error.
+    if (line && measure(next, size) > room + 0.01) {
       lines.push(line);
       next = word;
     }
-    while (next.length > 1 && measure(next) > room) {
+    while (next.length > 1 && measure(next, size) > room + 0.01) {
       let cut = next.length - 1;
-      while (cut > 1 && measure(next.slice(0, cut)) > room) cut--;
+      while (cut > 1 && measure(next.slice(0, cut), size) > room + 0.01) cut--;
       lines.push(next.slice(0, cut));
       next = next.slice(cut);
     }
@@ -58,23 +62,31 @@ function wrap(text: string, room: number) {
   return [...lines, line];
 }
 
-/** Column widths: their natural widths when they fit, else the narrow columns keep theirs and the wide ones share the rest. */
-function share(natural: number[], room: number) {
-  const widths = [...natural];
-  let left = room;
-  const order = natural.map((_, index) => index).sort((a, b) => natural[a] - natural[b]);
+/**
+ * Column widths: their natural widths when they fit. Otherwise each column first gets its longest word (`floor`, when
+ * all those fit), so no word breaks in the middle, then the narrow columns keep the rest of theirs and the wide ones
+ * share what is left.
+ */
+function share(natural: number[], floor: number[], room: number) {
+  const base = floor.reduce((sum, width) => sum + width, 0) <= room ? floor.map((width, index) => Math.min(width, natural[index])) : natural.map(() => 0);
+  const need = natural.map((width, index) => width - base[index]);
+  const widths = [...base];
+  let left = room - base.reduce((sum, width) => sum + width, 0);
+  const order = need.map((_, index) => index).sort((a, b) => need[a] - need[b]);
   order.forEach((index, rank) => {
-    widths[index] = Math.min(natural[index], left / (order.length - rank));
-    left -= widths[index];
+    const extra = Math.min(need[index], left / (order.length - rank));
+    widths[index] += extra;
+    left -= extra;
   });
   return widths;
 }
 
-/** A cell as the screens show it: dates "30 Sep 2026", amounts with two decimals, nothing as "–". */
+/** A cell as the screens show it: dates "30 Sep 2026", amounts with two decimals, rates with four, nothing as "–". */
 function show(value: Cell, column: Column) {
   if (value === null) return "–";
-  if (typeof value === "number") return formatNumber(value, column.currency || !Number.isInteger(value) ? 2 : 0);
-  return column.date ? formatDate(value) : value;
+  if (typeof value === "number") return formatNumber(value, column.rate ? 4 : column.currency || !Number.isInteger(value) ? 2 : 0);
+  // Only a YYYY-MM-DD is a date: a total row's "Total" label under a date column stays text, as in the Excel file.
+  return column.date && /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDate(value) : value;
 }
 
 const num = (value: number) => value.toFixed(2);
@@ -82,7 +94,25 @@ const literal = (encoded: string) => `(${encoded.replace(/[\\()]/g, "\\$&")})`;
 const text = (x: number, y: number, encoded: string, size: number, bold = false) =>
   `BT /F${bold ? 2 : 1} ${size} Tf ${num(x)} ${num(y)} Td ${literal(encoded)} Tj ET`;
 
+/** A table's cells as the PDF writes them (encoded), and each column's natural width: its widest cell and padding. */
+function layoutOf(section: Section) {
+  const { columns } = section;
+  const cells = (row: Cell[]) => row.map((value, index) => encode(show(value, columns[index])));
+  const header = columns.map((column) => encode(column.header));
+  const body = section.rows.length ? section.rows.map(cells) : [[NO_ROWS]];
+  // A total row leaves its empty cells blank: only the totals and the label show.
+  const total = section.total ? section.total.map((value, index) => (value === null ? "" : encode(show(value, columns[index])))) : null;
+  const all = [header, ...body, ...(total ? [total] : [])];
+  const natural = columns.map((_, index) => Math.max(...all.map((row) => measure(row[index] ?? ""))) + 2 * PAD);
+  // The longest word of each column ("No rows" spans the table, so it sets no column's floor).
+  const floor = columns.map((_, index) => Math.max(0, ...[header, ...(section.rows.length ? body : []), ...(total ? [total] : [])].flatMap((row) => (row[index] ?? "").split(" ").map((word) => measure(word)))) + 2 * PAD);
+  return { header, body, total, natural, floor };
+}
+
 export function toPdf(file: ReportFile, generated: string) {
+  const tables = file.sections.map((section) => ({ section, ...layoutOf(section) }));
+  const fits = (width: number) => tables.every((t) => t.natural.reduce((sum, w) => sum + w, 0) <= width - 2 * MARGIN);
+  const [WIDTH, HEIGHT] = fits(A4.portrait[0]) ? A4.portrait : A4.landscape;
   const pages: string[][] = [];
   let ops: string[] = [];
   let y = 0;
@@ -91,10 +121,16 @@ export function toPdf(file: ReportFile, generated: string) {
     y = HEIGHT - MARGIN;
   };
   newPage();
-  ops.push(text(MARGIN, y - 14, encode(file.title), 14, true), text(MARGIN, y - 30, encode(file.filters), 9), text(MARGIN, y - 43, encode(generated), 9));
-  y -= 59;
+  // Company, title, then the filters, generation time and notes at 9 pt, each wrapped to the page.
+  ops.push(text(MARGIN, y - 9, encode(COMPANY), 9, true), text(MARGIN, y - 27, encode(file.title), 14, true));
+  y -= 33;
+  for (const line of [file.filters, generated, ...(file.notes ?? [])].flatMap((part) => wrap(encode(part), WIDTH - 2 * MARGIN, 9))) {
+    ops.push(text(MARGIN, y - 10, line, 9));
+    y -= 13;
+  }
+  y -= 10;
 
-  for (const section of file.sections) {
+  for (const { section, header, body, total, natural, floor } of tables) {
     const { columns } = section;
     if (section.title) {
       // The heading and at least the table's header stay on one page.
@@ -103,15 +139,7 @@ export function toPdf(file: ReportFile, generated: string) {
       y -= 16;
     }
     const right = columns.map((_, index) => section.rows.some((row) => typeof row[index] === "number"));
-    const cells = (row: Cell[]) => row.map((value, index) => encode(show(value, columns[index])));
-    const header = columns.map((column) => encode(column.header));
-    const body = section.rows.length ? section.rows.map(cells) : [[NO_ROWS]];
-    const total = section.total ? cells(section.total) : null;
-    const all = [header, ...body, ...(total ? [total] : [])];
-    const widths = share(
-      columns.map((_, index) => Math.max(...all.map((row) => measure(row[index] ?? ""))) + 2 * PAD),
-      WIDTH - 2 * MARGIN,
-    );
+    const widths = share(natural, floor, WIDTH - 2 * MARGIN);
     const edge = MARGIN + widths.reduce((sum, width) => sum + width, 0);
     const layout = (row: string[]) => row.map((cell, index) => wrap(cell, widths[index] - 2 * PAD));
     const height = (lines: string[][]) => 6 + LINE * Math.max(...lines.map((cell) => cell.length));

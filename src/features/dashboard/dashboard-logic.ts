@@ -38,7 +38,7 @@ function orders(list: OrderListItem[]) {
  * CAL-1 (stage 1-2, due date oldest first) without fully received orders: late ones, then those due within 7 days, as
  * the calendar labels and counts them.
  */
-function deliveries(items: DeliveryItem[], today: string) {
+function deliveries(items: DeliveryItem[], today: string, limit = ROWS) {
   const all = toDeliveries(items, today);
   const late = all.filter((d) => d.status === "late");
   const dueSoon = all.filter((d) => d.status === "due-soon");
@@ -46,7 +46,7 @@ function deliveries(items: DeliveryItem[], today: string) {
     late: late.length,
     dueNext7: dueSoon.length,
     dueSuppliers: new Set(dueSoon.map((d) => d.supplier)).size,
-    rows: [...late, ...dueSoon].slice(0, ROWS).map(
+    rows: [...late, ...dueSoon].slice(0, limit).map(
       (d): DeliveryRow => ({
         po: d.po,
         supplier: d.supplier,
@@ -59,7 +59,7 @@ function deliveries(items: DeliveryItem[], today: string) {
 }
 
 /** Due payments from today to 30 days ahead, as the Payments screen counts them: no INR rate yet, so one total per currency. */
-function paymentsDue({ payments }: PaymentsResponse, today: string) {
+function paymentsDue({ payments }: PaymentsResponse, today: string, limit = ROWS) {
   const until = format(addDays(parseISO(today), PAYMENTS_WINDOW_DAYS), "yyyy-MM-dd");
   const due = payments
     .filter((p): p is typeof p & { dueDate: string } => p.status === "due" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until)
@@ -67,18 +67,18 @@ function paymentsDue({ payments }: PaymentsResponse, today: string) {
   return {
     amounts: sumByCurrency(due, (p) => p.currency, (p) => p.amountCny),
     windowDays: PAYMENTS_WINDOW_DAYS,
-    rows: due.slice(0, ROWS).map((p): PaymentDueRow => ({ id: p.id, payee: p.payee, po: p.po, payment: p.kind, due: p.dueDate, amountCny: p.amountCny, currency: p.currency })),
+    rows: due.slice(0, limit).map((p): PaymentDueRow => ({ id: p.id, payee: p.payee, po: p.po, payment: p.kind, due: p.dueDate, amountCny: p.amountCny, currency: p.currency })),
   };
 }
 
 /** Containers at sea, soonest ETA first; "arriving this week" as the Containers screen counts it. */
-function containersOnTheWay(items: ContainerListItem[], today: string) {
+function containersOnTheWay(items: ContainerListItem[], today: string, limit = ROWS) {
   const rows = items.map(toContainerRow);
   const atSea = rows.filter((r) => r.status === "sea").sort((a, b) => a.etaIndia.localeCompare(b.etaIndia));
   return {
     onTheWay: atSea.length,
     arrivingThisWeek: containerKpis(rows, today).arrivingThisWeek.length,
-    rows: atSea.slice(0, ROWS).map((r): ContainerRow => ({ container: r.number, agent: r.agent, terms: r.terms, etaIndia: r.etaIndia })),
+    rows: atSea.slice(0, limit).map((r): ContainerRow => ({ container: r.number, agent: r.agent, terms: r.terms, etaIndia: r.etaIndia })),
   };
 }
 
@@ -89,9 +89,10 @@ export type DashboardSources = {
   containers: Source<ContainerListItem[]>;
 };
 
-export const toDashboard = (sources: DashboardSources, today: string) => ({
+/** `limit`: rows per card (five on the page; the report download takes every one). */
+export const toDashboard = (sources: DashboardSources, today: string, limit = ROWS) => ({
   orders: map(sources.orders, orders),
-  deliveries: map(sources.deliveries, (items) => deliveries(items, today)),
-  paymentsDue: map(sources.payments, (response) => paymentsDue(response, today)),
-  containers: map(sources.containers, (items) => containersOnTheWay(items, today)),
+  deliveries: map(sources.deliveries, (items) => deliveries(items, today, limit)),
+  paymentsDue: map(sources.payments, (response) => paymentsDue(response, today, limit)),
+  containers: map(sources.containers, (items) => containersOnTheWay(items, today, limit)),
 });

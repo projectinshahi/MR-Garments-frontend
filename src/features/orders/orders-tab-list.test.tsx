@@ -62,8 +62,8 @@ describe("Pending tab", () => {
     expect(within(tabs).getByRole("link", { name: "Pending" })).toHaveAttribute("aria-current", "page");
     expect(within(tabs).getByRole("link", { name: "All orders" })).toHaveAttribute("href", "/orders");
     expect(within(tabs).getByRole("link", { name: "Closed" })).toHaveAttribute("href", "/orders/closed");
-    expect(screen.getByRole("button", { name: "Export Excel" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    // One "Download report" menu (PDF, Excel, CSV) replaces the separate export buttons.
+    expect(screen.getByRole("button", { name: "Download report" })).toBeVisible();
     expect(screen.getByRole("link", { name: "+ New order" })).toHaveAttribute("href", "/orders/new");
 
     expect(screen.getAllByRole("row")).toHaveLength(2);
@@ -115,8 +115,8 @@ describe("Closed Orders page", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Closed Orders" })).toBeVisible();
     expect(screen.queryByRole("navigation", { name: "Orders lists" })).toBeNull();
     expect(screen.queryByRole("link", { name: "+ New order" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Export Excel" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    // One "Download report" menu (PDF, Excel, CSV) replaces the separate export buttons.
+    expect(screen.getByRole("button", { name: "Download report" })).toBeVisible();
     // Only the closed order: not the pending one, not the stage-2 one, not the stage-6 order with nothing of its own stocked.
     expect(screen.getAllByRole("row")).toHaveLength(2);
     expect(cells("PO-2040")).toEqual(["PO-2040", "Foshan Fabrics", "¥1,000.00", "100 pcs", "100 pcs", "¥600.00", "¥400.00", "20 Oct 2026", "Report"]);

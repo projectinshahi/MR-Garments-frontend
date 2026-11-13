@@ -11,8 +11,41 @@ import { cn } from "@/lib/utils";
 
 import type { ReportsHubData, ReportsSummary } from "./data/queries";
 import { OrderReportsDownloads } from "./order-reports/order-reports-downloads";
-import { CardDownloads, UrlSelect } from "./report-actions";
-import type { ReportName } from "./report-files";
+import { filterLabel } from "./data/filters";
+import { CardDownloads, ReportDownload, UrlSelect } from "./report-actions";
+import { amountsText, type ReportFile, type ReportName } from "./report-files";
+
+/**
+ * The hub's own download: the figures of its six cards for the period and supplier chosen, one measure a row (each
+ * report's card has its full file). Payments due are per currency, never added together.
+ */
+export function hubFile(summary: ReportsSummary, today: string): ReportFile {
+  return {
+    title: "Reports summary",
+    filename: `reports-summary-${today}`,
+    filters: filterLabel({ from: summary.filter.from, supplier: summary.filter.supplier }) ?? "All dates · All suppliers",
+    sections: [
+      {
+        title: "Reports summary",
+        columns: [{ header: "Report" }, { header: "Measure" }, { header: "Value" }],
+        rows: [
+          ["Orders", "Orders", summary.orders.total],
+          ["Orders", "At stage 1 (order and deposit)", summary.orders.atStage1],
+          ["Deliveries", "Due in next 7 days", summary.deliveries.dueNext7],
+          ["Deliveries", "Late", summary.deliveries.late],
+          ["Ordered against received", "Orders received short", summary.receiving.shortOrders],
+          ["Ordered against received", "Short (pcs)", summary.receiving.shortPcs],
+          ["Ordered against received", "Short (m)", summary.receiving.shortM],
+          ["Containers", "On the way", summary.containers.onTheWay],
+          ["Containers", "Arriving in 7 days", summary.containers.arrivingIn7Days],
+          ["Payments", "Due in next 30 days", amountsText(summary.payments.dueNext30ByCurrency)],
+          ["Landed cost", "Finished orders", summary.landedCost.finishedOrders],
+          ["Landed cost", "Total landed cost, finished orders (INR)", summary.landedCost.finishedTotalInr],
+        ],
+      },
+    ],
+  };
+}
 
 const plural = (count: number, noun: string) => `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -88,6 +121,7 @@ export function ReportsHub({ data }: { data: ReportsHubData }) {
           <>
             <UrlSelect param="period" size="sm" showLabel label="Period" options={data.periods} className="h-[37px]" />
             <UrlSelect param="supplier" size="sm" label="Supplier" options={suppliers} className="h-[37px]" />
+            <ReportDownload file={hubFile(summary, data.today)} />
           </>
         }
       />

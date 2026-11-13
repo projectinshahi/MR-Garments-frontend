@@ -11,7 +11,7 @@ import type { CurrencyInfo, SupplierRow } from "@/lib/api/types";
 import { currencySymbol } from "@/lib/formatters";
 
 import { ADD_SUPPLIER_HREF, supplierDeletable, SupplierDialog } from "./add-supplier-dialog";
-import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
+import { actionClass, bold, contactSearch, right, SettingsList, type SettingsReport, textColumns } from "./settings-list";
 import { exchangeRateText, type SupplierDraft } from "./settings-logic";
 
 const supplierColumns: ColumnDef<SupplierRow>[] = [
@@ -31,6 +31,18 @@ const depositsLink = (row: SupplierRow) => (
   </Link>
 );
 
+const report: SettingsReport<SupplierRow> = {
+  title: "Suppliers (settings)",
+  slug: "settings-suppliers",
+  columns: [
+    ...textColumns("Supplier code", "Supplier", "Contact person", "Phone", "Email", "City", "Country", "Currency"),
+    { header: "Exchange rate (INR per 1)", rate: true },
+    ...textColumns("Open orders", "Status"),
+  ],
+  row: (r) => [r.code || null, r.name, r.contactPerson || null, r.phone || null, r.email || null, r.city || null, r.country || null, r.currency, r.exchangeRate, r.openOrders, r.status],
+  notes: ["Exchange rate: the supplier's rate now, used by new orders and deposits; each order and deposit keeps the rate saved on it."],
+};
+
 /** 40_15.1_Suppliers.jpeg, plus the Add supplier dialog (53_17.4) at ?dialog=add and Edit supplier at ?dialog=edit&id=. */
 export function SuppliersScreen({ suppliers, draft, currencies }: { suppliers: SupplierRow[]; draft: SupplierDraft; currencies: CurrencyInfo[] }) {
   return (
@@ -41,6 +53,7 @@ export function SuppliersScreen({ suppliers, draft, currencies }: { suppliers: S
         columns={supplierColumns}
         searchText={contactSearch}
         noun="suppliers"
+        report={report}
         deletable={supplierDeletable}
         extraActions={depositsLink}
         footnote="Suppliers appear in the dropdown when a new order is created."

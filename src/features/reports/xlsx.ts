@@ -3,8 +3,9 @@ import { type Cell, type Column, NO_ROWS, type ReportFile, type Section } from "
 // The Excel file of a report: a minimal .xlsx (Office Open XML in an uncompressed zip, no library). One worksheet per
 // `Section.sheet` (the report's title for sections without one), each with the title, filters and generation time,
 // then its tables: a bold heading when the table has one, bold header and total, numbers as numbers, dates as dates
-// ("30 Sep 2026"), amounts with two decimals, and Excel's filter arrows on the sheet's first table. Text is written as
-// text, so it never runs as a formula.
+// ("30 Sep 2026"), amounts with two decimals, exchange rates with four, Excel's filter arrows on the sheet's first table
+// and the rows down to that table's header frozen, so the header stays in view. Text is written as text, so it never
+// runs as a formula.
 
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -12,8 +13,8 @@ const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships
 const PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
 const TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml";
 
-// cellXfs below: 0 text, 1 bold, 2 date, 3 amount, 4 bold amount.
-const STYLES = `${XML}<styleSheet xmlns="${MAIN}"><numFmts count="1"><numFmt numFmtId="164" formatCode="d mmm yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+// cellXfs below: 0 text, 1 bold, 2 date, 3 amount, 4 bold amount, 5 exchange rate.
+const STYLES = `${XML}<styleSheet xmlns="${MAIN}"><numFmts count="2"><numFmt numFmtId="164" formatCode="d mmm yyyy"/><numFmt numFmtId="165" formatCode="#,##0.0000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 
 /** `header`: the row is a table's header (the sheet's first one gets the filter arrows, over its `rows` rows). */
 type Row = { cells: Cell[]; columns?: Column[]; bold?: boolean; header?: number };
@@ -29,7 +30,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function cellXml(value: Cell, ref: string, column: Column | undefined, bold = false) {
   if (value === null) return "";
-  if (typeof value === "number") return `<c r="${ref}" s="${column?.currency ? (bold ? 4 : 3) : bold ? 1 : 0}"><v>${value}</v></c>`;
+  if (typeof value === "number") return `<c r="${ref}" s="${column?.rate ? 5 : column?.currency ? (bold ? 4 : 3) : bold ? 1 : 0}"><v>${value}</v></c>`;
   if (column?.date && ISO_DATE.test(value)) return `<c r="${ref}" s="2"><v>${serial(value)}</v></c>`;
   return `<c r="${ref}" t="inlineStr"${bold ? ' s="1"' : ""}><is><t xml:space="preserve">${escape(value)}</t></is></c>`;
 }
@@ -57,7 +58,11 @@ function sheetXml(rows: Row[]) {
   // Excel allows one filter range per sheet: the first table that has rows.
   const at = rows.findIndex((row) => row.header);
   const filter = at < 0 ? "" : `<autoFilter ref="A${at + 1}:${letter(rows[at].cells.length - 1)}${at + 1 + rows[at].header!}"/>`;
-  return `${XML}<worksheet xmlns="${MAIN}"><cols>${widths
+  // The first table's header row and everything above it stay in view while scrolling.
+  const header = rows.findIndex((row) => row.header !== undefined);
+  const frozen =
+    header < 0 ? "" : `<sheetViews><sheetView workbookViewId="0"><pane ySplit="${header + 1}" topLeftCell="A${header + 2}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
+  return `${XML}<worksheet xmlns="${MAIN}">${frozen}<cols>${widths
     .map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`)
     .join("")}</cols><sheetData>${rows
     .map((row, r) => `<row r="${r + 1}">${row.cells.map((value, c) => cellXml(value, `${letter(c)}${r + 1}`, row.columns?.[c], row.bold)).join("")}</row>`)
@@ -65,7 +70,7 @@ function sheetXml(rows: Row[]) {
 }
 
 export function toXlsx(file: ReportFile, generated: string) {
-  const head: Row[] = [{ cells: [file.title], bold: true }, { cells: [file.filters] }, { cells: [generated] }];
+  const head: Row[] = [{ cells: [file.title], bold: true }, { cells: [file.filters] }, { cells: [generated] }, ...(file.notes ?? []).map((note) => ({ cells: [note] }))];
   // Sections in the order given, grouped on their sheet; a sheet is named once, so two names that trim alike share it.
   const sheets = new Map<string, Section[]>();
   for (const section of file.sections) {

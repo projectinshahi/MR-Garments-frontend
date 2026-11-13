@@ -9,7 +9,7 @@ import type { TeamRow } from "@/lib/api/types";
 import { formatINR, formatNumber } from "@/lib/formatters";
 
 import { addHref } from "./settings-dialog";
-import { actionClass, bold, right, SettingsList } from "./settings-list";
+import { actionClass, bold, right, SettingsList, type SettingsReport, textColumns } from "./settings-list";
 import { averagePerPieceText } from "./settings-logic";
 import { TeamDialog, teamDeletable, TEAMS_PATH } from "./teams-dialog";
 
@@ -30,6 +30,18 @@ const teamColumns: ColumnDef<TeamRow>[] = [
   },
 ];
 
+const report: SettingsReport<TeamRow> = {
+  title: "Teams",
+  slug: "teams",
+  columns: [
+    ...textColumns("Team", "Pieces in stock"),
+    { header: "Landed cost of stock (INR)", currency: "INR" },
+    { header: "Average per piece (INR)", currency: "INR" },
+    ...textColumns("Status"),
+  ],
+  row: (r) => [r.name, r.piecesInStock, r.landedCostOfStockInr, r.averagePerPieceInr, r.status],
+};
+
 /** 45_15.6_Teams.jpeg, plus the add and edit dialogs (?dialog=add, ?dialog=edit&id=). */
 export function TeamsScreen({ rows }: { rows: TeamRow[] }) {
   return (
@@ -40,6 +52,7 @@ export function TeamsScreen({ rows }: { rows: TeamRow[] }) {
         columns={teamColumns}
         searchText={(row) => [row.name]}
         noun="teams"
+        report={report}
         deletable={teamDeletable}
         footnote="Goods are split between these teams when they are received in the warehouse. Team names here are examples."
         action={

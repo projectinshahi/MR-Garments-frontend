@@ -10,8 +10,10 @@ import { SearchInput } from "@/components/shared/filters";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { PLAIN_ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
 import type { OrderOptions } from "@/lib/api/types";
 import { currencySymbol, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
@@ -19,6 +21,7 @@ import { DASH } from "./money";
 import { DeletePaymentMenu } from "./delete-payment";
 import { filterOrders } from "./filter-orders";
 import { PaymentDetailCard } from "./payment-detail";
+import { paymentsFile } from "./payment-files";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
 // 10 px cell padding and column widths as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
@@ -148,6 +151,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
                 className="w-[170px] lg:w-[250px]"
               />
             </form>
+            <ReportDownload file={() => paymentsFile(visible, payments, query, todayInIndia())} />
             {agents ? (
               <RecordPaymentDialog orders={orders} agents={agents}>
                 <Button type="button" size="header">

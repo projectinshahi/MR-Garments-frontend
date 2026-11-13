@@ -14,7 +14,7 @@ import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
 import { rowActionClass } from "@/features/orders/delete-order";
-import { ExportActions } from "@/features/reports/report-actions";
+import { ReportDownload } from "@/features/reports/report-actions";
 import { formatNumber, formatShortDate } from "@/lib/formatters";
 import { orderedCurrencies } from "@/lib/currencies";
 import type { Currency, MoneyTotal } from "@/types/domain";
@@ -168,9 +168,8 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
       <PageHeader
         title="Deposits"
         actions={
-          <ExportActions
+          <ReportDownload
             size="header"
-            formats={["xlsx", "pdf"]}
             file={() => (view === "suppliers" ? suppliersFile(summaries, label, data.today) : depositsFile(view, rows, label, data.today))}
           />
         }

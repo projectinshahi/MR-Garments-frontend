@@ -7,7 +7,7 @@ import type {
   OrderStatusReport,
   PaymentsPerSupplierReport,
 } from "@/lib/api/reports-types";
-import { formatDate, formatDateTime } from "@/lib/formatters";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/formatters";
 import { orderedCurrencies } from "@/lib/currencies";
 import { type Currency, STAGES } from "@/types/domain";
 
@@ -20,15 +20,20 @@ import { monthLabel } from "./report-logic";
 // filters. Nothing is stored. A table the page shows as empty is written as its header and a "No rows" line.
 
 export type Cell = CsvCell;
-/** `date`: the cells are YYYY-MM-DD. `currency`: the cells are amounts in that currency. */
-export type Column = { header: string; date?: true; currency?: Currency };
+/**
+ * `date`: the cells are YYYY-MM-DD. `currency`: the cells are amounts in that currency. `rate`: the cells are exchange
+ * rates (INR per 1 unit), shown with four decimals as they are saved.
+ */
+export type Column = { header: string; date?: true; currency?: Currency; rate?: true };
 /**
  * One table: the header, the rows and an optional total row. `title`: a heading above the table (and its own line in
  * the files). `sheet`: the Excel worksheet the table goes on (tables sharing a name share the sheet; without one, the
- * first sheet, named after the report); the PDF and CSV ignore it.
+ * first sheet, named after the report); the PDF and CSV ignore it. `csv: false`: left out of the CSV, which holds the
+ * report's tables of records (a summary block is Excel and PDF only).
  */
-export type Section = { title?: string; sheet?: string; columns: Column[]; rows: Cell[][]; total?: Cell[] };
-export type ReportFile = { title: string; filename: string; filters: string; sections: Section[] };
+export type Section = { title?: string; sheet?: string; columns: Column[]; rows: Cell[][]; total?: Cell[]; csv?: false };
+/** `notes`: lines under the filters (what the data does not record, how a figure is counted); Excel and PDF only. */
+export type ReportFile = { title: string; filename: string; filters: string; sections: Section[]; notes?: string[] };
 export type FileFormat = "csv" | "xlsx" | "pdf";
 
 export const NO_ROWS = "No rows";
@@ -43,6 +48,24 @@ export function perCurrency<T extends { currency: Currency }>(rows: T[]): [Curre
   const tables = orderedCurrencies(rows.map((row) => row.currency)).map((currency): [Currency, T[]] => [currency, rows.filter((row) => row.currency === currency)]);
   return tables.length ? tables : [["CNY", []]];
 }
+/** An exchange-rate column: "Rate (INR per 1 CNY)", or "Rate (INR per 1)" over several currencies. */
+export const rate = (header = "Exchange rate", currency?: Currency): Column => ({ header: `${header} (INR per 1${currency ? ` ${currency}` : ""})`, rate: true });
+/**
+ * A report's summary block (its KPI figures as the page shows them): one "Summary" sheet in Excel, a table at the top
+ * of the PDF, nothing in the CSV. Values are numbers or text ("CNY 1,200.00 · USD 50.00" for amounts per currency).
+ */
+export const summarySection = (rows: [string, Cell][], title = "Summary"): Section => ({
+  title,
+  sheet: "Summary",
+  columns: [{ header: "Measure" }, { header: "Value" }],
+  rows,
+  csv: false,
+});
+/** The filters in force joined with " · " (false, null and "" parts left out); "No filters" when none. */
+export const describeFilters = (parts: (string | null | false | undefined)[]) => parts.filter(Boolean).join(" · ") || "No filters";
+/** Amounts per currency as text the PDF can print: "CNY 12,000.00 · USD 50.00" (codes, never symbols); "–" for none. */
+export const amountsText = (totals: { currency: Currency; amount: number }[]) =>
+  totals.length ? totals.map((t) => `${t.currency} ${formatNumber(t.amount, 2)}`).join(" · ") : "–";
 const date = (header: string): Column => ({ header, date: true });
 const columns = (...list: (string | Column)[]) => list.map((column) => (typeof column === "string" ? { header: column } : column));
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -141,7 +164,7 @@ export function reportFile<N extends ReportName>(name: N, data: Reports[N], toda
 
 /** CSV lines: each table's title (when it has one), header, rows (or "No rows") and total, with an empty line between tables. */
 export const csvRows = (file: ReportFile): Cell[][] =>
-  file.sections.flatMap((s, index) => [
+  file.sections.filter((s) => s.csv !== false).flatMap((s, index) => [
     ...(index ? [[]] : []),
     ...(s.title ? [[s.title]] : []),
     s.columns.map((c) => c.header),
@@ -169,6 +192,10 @@ export async function downloadReport(file: ReportFile, format: FileFormat) {
   const link = document.createElement("a");
   link.href = url;
   link.download = `${file.filename}.${format}`;
+  document.body.append(link);
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url));
+  link.remove();
+  // The browser reads the file after this task: revoking at once can cancel the download (seen on busy pages), so the
+  // URL lives a minute.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

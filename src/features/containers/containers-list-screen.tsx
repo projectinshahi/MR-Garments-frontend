@@ -9,14 +9,21 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filters";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
+import { todayInIndia } from "@/lib/today";
 import { PoLink } from "@/components/shared/po-link";
 import { StatusPill, TermsBadge } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 
+import { containersFile, fetchAgentPayments } from "./containers-files";
 import { ALL, CONTAINER_STATUS, containerChips, filterContainers, type ContainerChip, type ContainerFilters } from "./containers-logic";
 import type { ContainerRow, ContainersListData } from "./data/queries";
+
+/** The status chips without their counts, for the download's filters line. */
+const CHIP_TITLE: Record<ContainerChip, string> = { active: "Active", sea: "On the way", loading: "Loading", arrived: "Arrived" };
 
 const TERMS_OPTIONS = [
   { value: ALL, label: "All terms" },
@@ -153,6 +160,21 @@ export function ContainersListScreen({ data }: { data: ContainersListData }) {
               value={filters.query}
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
+            />
+            <ReportDownload
+              file={async () =>
+                containersFile(
+                  rows,
+                  describeFilters([
+                    filters.query.trim() && `Search: "${filters.query.trim()}"`,
+                    filters.agent !== ALL && `Shipping agent: ${filters.agent}`,
+                    filters.terms !== ALL && `Terms: ${filters.terms}`,
+                    `Status: ${CHIP_TITLE[filters.chip]}`,
+                  ]),
+                  todayInIndia(),
+                  await fetchAgentPayments(),
+                )
+              }
             />
             {canEnter ? (
               <Button asChild size="header">

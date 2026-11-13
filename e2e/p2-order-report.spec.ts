@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 
 import { closedOrder, expect, kpi, kv, test } from "./live-api";
+import { downloadReport } from "./report-download";
 
 // Phase 2, scenario 8 (backend docs/phase2-contracts.md section 4): an order's Report tab (RPT-O1) with its Excel and
 // PDF, and the Order reports page (RPT-O2) filtered by PO with its downloads. Orders are created through the API, so
@@ -56,18 +57,18 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(kv(page, "Stage")).toHaveText("2. Receiving in China");
   await expect(page.getByRole("heading", { level: 2, name: "Documents" })).toBeVisible();
 
-  const excel = await download(page, page.getByRole("button", { name: "Export Excel" }));
+  const excel = await downloadReport(page, "Excel");
   expect(excel.name).toMatch(new RegExp(`^order-report-${order.po}-\\d{4}-\\d{2}-\\d{2}\\.xlsx$`));
   expect(excel.text.startsWith("PK")).toBe(true);
   for (const sheet of SHEETS) expect(excel.text).toContain(`<sheet name="${sheet}"`);
-  const pdf = await download(page, page.getByRole("button", { name: "Export PDF" }));
+  const pdf = await downloadReport(page, "PDF");
   expect(pdf.name).toMatch(new RegExp(`^order-report-${order.po}-\\d{4}-\\d{2}-\\d{2}\\.pdf$`));
   expect(pdf.text.startsWith("%PDF-")).toBe(true);
   expect(pdf.text).toContain(`(Order report ${order.po}) Tj`);
   expect(pdf.text).toContain("(Cotton fabric) Tj");
   for (const heading of ["Supplier financial summary", "China receipts", "Payment ledger", "Landed cost breakdown", "Timeline"]) expect(pdf.text).toContain(`(${heading}) Tj`);
   expect(pdf.text).toContain("Page 1 of");
-  const csv = await download(page, page.getByRole("button", { name: "Export CSV" }));
+  const csv = await downloadReport(page, "CSV");
   expect(csv.name).toMatch(new RegExp(`^order-report-${order.po}-\\d{4}-\\d{2}-\\d{2}\\.csv$`));
   expect(csv.text).toContain("Supplier code");
   expect(csv.text).toContain("Payment ledger");
@@ -124,7 +125,7 @@ test("Reports › Order Report › a closed PO: every section from the records, 
   }
 
   // The Excel holds one sheet per section.
-  const excel = await download(page, page.getByRole("button", { name: "Export Excel" }));
+  const excel = await downloadReport(page, "Excel");
   for (const sheet of SHEETS) expect(excel.text).toContain(`<sheet name="${sheet}"`);
   expect(excel.text).toContain("BE-CLOSED");
 
@@ -182,17 +183,17 @@ test("Order reports lists the new order, filters by PO from the URL and download
   await page.getByRole("menuitemradio", { name: "Any currency" }).click();
   await expect(page.getByRole("link", { name: `Report: ${order.po}` })).toBeVisible();
 
-  const excel = await download(page, page.getByRole("button", { name: "Export Excel" }));
+  const excel = await downloadReport(page, "Excel");
   expect(excel.name).toMatch(/^order-reports-\d{4}-\d{2}-\d{2}\.xlsx$/);
   expect(excel.text).toContain('<sheet name="Orders"');
   expect(excel.text).toContain('<sheet name="Summary"');
   expect(excel.text).toContain(order.po);
-  const pdf = await download(page, page.getByRole("button", { name: "Export PDF" }));
+  const pdf = await downloadReport(page, "PDF");
   expect(pdf.text).toContain("(Order reports) Tj");
   // Twenty-one columns: a PO may be wrapped over two text runs, so read the runs joined.
   expect(glue(pdf.text)).toContain(order.po);
   expect(pdf.text).toContain(`(PO: ${order.po}`);
-  const csv = await download(page, page.getByRole("button", { name: "Export CSV" }));
+  const csv = await downloadReport(page, "CSV");
   expect(csv.name).toMatch(/^order-reports-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(csv.text).toContain(order.po);
   expect(csv.text).toContain("Supplier code");

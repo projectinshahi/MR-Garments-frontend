@@ -12,11 +12,15 @@ import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { describeFilters } from "@/features/reports/report-files";
+import { ReportDownload } from "@/features/reports/report-actions";
 import { formatDate, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/types/domain";
 
 import type { ReceiptRow, ReceiptState, ReceivingListData } from "./data/queries";
+import { receivingFile } from "./receiving-files";
 import { ALL, filterReceipts, type ReceiptFilters } from "./receiving-logic";
 
 const STATE_TONE: Record<ReceiptState, Tone> = { partly: "warning", complete: "success" };
@@ -154,6 +158,21 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
               value={filters.query}
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
+            />
+            <ReportDownload
+              file={() =>
+                receivingFile(
+                  rows,
+                  kpis,
+                  describeFilters([
+                    filters.query.trim() && `Search: "${filters.query.trim()}"`,
+                    filters.office !== ALL && `Office: ${filters.office}`,
+                    filters.supplier !== ALL && `Supplier: ${filters.supplier}`,
+                    filters.state !== ALL && `Status: ${CHIPS.find((c) => c.value === filters.state)?.label}`,
+                  ]),
+                  todayInIndia(),
+                )
+              }
             />
             {data.canRecord ? (
               <Button asChild size="header">

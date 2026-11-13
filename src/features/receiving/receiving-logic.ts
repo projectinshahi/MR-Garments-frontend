@@ -49,6 +49,9 @@ export function toReceiptRow(r: ReceiptListItem): ReceiptRow {
     statusLabel: complete ? "Complete" : "Partly received",
     received: (r.lines ?? [{ item: r.item, unit: r.unit, quantity: r.thisReceipt }]).map((l) => `${formatQty(l.quantity, l.unit)} ${l.item}`).join(", "),
     containers: r.containers ?? null,
+    lines: (r.lines ?? [{ item: r.item, unit: r.unit, quantity: r.thisReceipt }]).map((l) => ({ item: l.item, unit: l.unit, quantity: l.quantity, ordered: l.ordered ?? null, received: l.received ?? null })),
+    deliveryNote: r.deliveryNote ?? "",
+    shortRemark: r.shortRemark ?? "",
   };
 }
 

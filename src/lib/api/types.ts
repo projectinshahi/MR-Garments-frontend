@@ -239,6 +239,25 @@ export type OrderListItem = {
   depositStatus: DepositStatus;
 };
 
+/**
+ * ORD-7 GET /api/v1/order-lines (backend docs/report-downloads.md): every line of every order, ORD-1's order then
+ * position. `rateCny` is the rate saved on the line (never the item's price now), `valueCny` quantity x rate.
+ */
+export type OrderLineItem = {
+  orderId: string;
+  po: string;
+  currency: Currency;
+  position: number;
+  item: string;
+  unit: Unit;
+  quantity: number;
+  rateCny: number;
+  valueCny: number;
+  /** Received in China over every receipt, and on stocked warehouse receipts in India. */
+  received: number;
+  stocked: number;
+};
+
 /** The order's deposit against what the supplier asked for: none agreed, nothing paid yet, partly paid, or paid in full (more is kept as paid). */
 export type DepositStatus = "none" | "due" | "partly" | "paid";
 
@@ -365,8 +384,14 @@ export type ReceiptListItem = {
   totalSoFar: number;
   bundles: number;
   receivedBy: string;
-  /** This receipt's lines (none received as 0). Optional: a backend before 2026-11-04 leaves it and `containers` out. */
-  lines?: { item: string; unit: Unit; quantity: number }[];
+  /**
+   * This receipt's lines (none received as 0). Optional: a backend before 2026-11-04 leaves it and `containers` out.
+   * `ordered`: the order line's quantity; `received`: that line over every receipt so far (report downloads, 2026-11-12).
+   */
+  lines?: { item: string; unit: Unit; quantity: number; ordered?: number; received?: number }[];
+  /** The receipt's notes (""). Backend docs/report-downloads.md; absent from an older backend. */
+  deliveryNote?: string;
+  shortRemark?: string;
   /** Containers holding goods only this receipt covers: REC-4 refuses while there is any. */
   containers?: string[];
 };
@@ -412,8 +437,11 @@ export type ContainerListItem = {
   etaEstimated: boolean;
   status: ContainerState;
   bundles: number;
-  /** `part`: some line of that order is not fully loaded in this container. */
-  orders: { po: string; part: boolean }[];
+  /** `part`: some line of that order is not fully loaded in this container. `supplier`: Backend docs/report-downloads.md; absent from an older backend. */
+  orders: { po: string; part: boolean; supplier?: string }[];
+  /** "" when not given. Backend docs/report-downloads.md; absent from an older backend. */
+  portOfLoading?: string;
+  portOfArrival?: string;
 };
 
 /** CON-2 GET /api/v1/containers/options */

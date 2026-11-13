@@ -12,10 +12,13 @@ import { FilterChips, FilterSelect, SearchInput } from "@/components/shared/filt
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
 import type { ClearingListRow } from "@/lib/api/stages-types";
 import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
 import type { Tone } from "@/types/domain";
 
+import { clearingFile } from "./clearing-files";
 import { ALL, clearingState, clearingStatusLabel, filterClearings, timeAtPort, type ClearingFilters, type ClearingState } from "./clearing-logic";
 import type { ClearingListData } from "./data/queries";
 import { formatExactINR } from "./stage-form";
@@ -166,6 +169,20 @@ export function ClearingListScreen({ data }: { data: ClearingListData }) {
               value={filters.query}
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
+            />
+            <ReportDownload
+              file={() =>
+                clearingFile(
+                  rows,
+                  kpis,
+                  describeFilters([
+                    filters.query.trim() && `Search: "${filters.query.trim()}"`,
+                    filters.agent !== ALL && `Clearing agent: ${data.agents.find((a) => a.id === filters.agent)?.name ?? filters.agent}`,
+                    filters.state !== ALL && `Status: ${CHIPS.find((c) => c.value === filters.state)?.label}`,
+                  ]),
+                  today,
+                )
+              }
             />
             {canEnter ? (
               next ? (

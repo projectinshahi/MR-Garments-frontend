@@ -10,6 +10,7 @@ import {
   type RowData,
   type Table as TanstackTable,
 } from "@tanstack/react-table";
+import { useEffect } from "react";
 
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,11 @@ type DataTableProps<TData, TValue> = {
   sortable?: boolean;
   /** tight: 10 px side padding in the cells (16 px at the edges), so eleven columns fit a 1440 px page (Suppliers). */
   padding?: "default" | "tight";
+  /**
+   * Given the rows of every page in the order the table shows them (after a header sort), after each render: a page's
+   * report download then keeps the sort the user chose. null until the table has rendered.
+   */
+  sortedRows?: { current: TData[] | null };
   className?: string;
 };
 
@@ -114,6 +120,7 @@ export function DataTable<TData, TValue>({
   pagination,
   sortable = false,
   padding = "default",
+  sortedRows,
   className,
 }: DataTableProps<TData, TValue>) {
   const manual = pagination?.rowCount !== undefined;
@@ -134,6 +141,9 @@ export function DataTable<TData, TValue>({
       : {}),
   });
   const rows = table.getRowModel().rows;
+  useEffect(() => {
+    if (sortedRows) sortedRows.current = table.getPrePaginationRowModel().rows.map((row) => row.original);
+  });
   const hasFooter = columns.some((column) => column.footer !== undefined);
   const dense = density === "dense";
   const sm = size === "sm" && !dense;

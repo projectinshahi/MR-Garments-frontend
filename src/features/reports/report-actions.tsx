@@ -1,20 +1,32 @@
 "use client";
 
+import { ChevronDown, Download, FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useTransition } from "react";
+import { Suspense, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { useNavigate } from "@/components/layout/navigation-progress";
 import { FilterSelect } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import { hrefWith, optionParam } from "@/features/calendar/params";
 import { apiClient } from "@/lib/api/client";
-import { handleApiError } from "@/lib/feedback";
+import { ApiError } from "@/lib/api/errors";
+import { handleApiError, MESSAGES } from "@/lib/feedback";
 import { todayInIndia } from "@/lib/today";
+import { cn } from "@/lib/utils";
 
 import { reportQuery } from "./data/filters";
 import { downloadReport, type FileFormat, type ReportFile, type ReportName, type ReportResponse, reportFile } from "./report-files";
 
-/** Runs one download at a time; a failure (session ended included) is handled as every API call is (E1-E14). */
+/** A failed request is handled as every API call is (E1-E14); a file that could not be written says so. */
+function downloadFailed(error: unknown) {
+  if (error instanceof ApiError) handleApiError(error);
+  else toast.error("The report could not be created.", { description: MESSAGES.tryAgain });
+}
+
+/** Runs one download at a time (hub cards). */
 function useDownload(make: () => Promise<ReportFile>) {
   const [pending, startTransition] = useTransition();
   const download = (format: FileFormat) =>
@@ -22,40 +34,70 @@ function useDownload(make: () => Promise<ReportFile>) {
       try {
         await downloadReport(await make(), format);
       } catch (error) {
-        handleApiError(error);
+        downloadFailed(error);
       }
     });
   return { pending, download };
 }
 
-const FORMAT_LABEL: Record<FileFormat, string> = { csv: "Export CSV", xlsx: "Export Excel", pdf: "Export PDF" };
-const ALL_FORMATS: FileFormat[] = ["csv", "xlsx", "pdf"];
+const FORMATS: { format: FileFormat; label: string; Icon: typeof FileText }[] = [
+  { format: "pdf", label: "Download PDF", Icon: FileText },
+  { format: "xlsx", label: "Download Excel (.xlsx)", Icon: FileSpreadsheet },
+  { format: "csv", label: "Download CSV (.csv)", Icon: Sheet },
+];
 
 /**
- * Header actions on every report (33–38): the report's tables, as the page shows them, as CSV, Excel or PDF. `file`
- * may be a function, built only when a button is clicked (a list's current filtered rows). `formats` narrows the
- * buttons (the orders, deposits and order-report pages offer Excel and PDF); `size` matches the page header's buttons.
+ * The page's "Download report" menu: PDF, Excel or CSV of the page's own report (each page's file builder decides
+ * what it holds: every record matching the page's filters, never only the visible page of the table). `file` may be a
+ * function, run only when a format is chosen (it may load more data). One download runs at a time: the button shows
+ * "Preparing…" and is disabled until the file is saved; a failure is toasted. On a phone only the icon shows (the
+ * accessible name stays "Download report").
  */
-export function ExportActions({
+export function ReportDownload({
   file,
-  formats = ALL_FORMATS,
-  size,
+  size = "header",
+  label = "Download report",
+  className,
 }: {
   file: ReportFile | (() => ReportFile | Promise<ReportFile>);
-  formats?: FileFormat[];
   size?: React.ComponentProps<typeof Button>["size"];
+  label?: string;
+  className?: string;
 }) {
-  const { pending, download } = useDownload(async () => (typeof file === "function" ? file() : file));
+  const [busy, setBusy] = useState(false);
+  // A second choice before React re-renders the disabled button still finds the guard set.
+  const running = useRef(false);
+  const download = async (format: FileFormat) => {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    try {
+      await downloadReport(typeof file === "function" ? await file() : file, format);
+    } catch (error) {
+      downloadFailed(error);
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  };
   return (
-    <>
-      {formats.map((format) => (
-        // "Excel" / "PDF" on a phone, so three header buttons fit beside the title; the accessible name stays the full label.
-        <Button key={format} type="button" variant="outline" size={size} disabled={pending} aria-label={FORMAT_LABEL[format]} onClick={() => download(format)}>
-          <span className="max-sm:hidden">Export </span>
-          {FORMAT_LABEL[format].replace("Export ", "")}
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" size={size} disabled={busy} aria-label={busy ? "Preparing report" : label} className={cn("max-sm:px-2.5", className)}>
+          {busy ? <Spinner aria-hidden role="presentation" /> : <Download aria-hidden className="size-4" />}
+          <span className="max-sm:sr-only">{busy ? "Preparing…" : label}</span>
+          <ChevronDown aria-hidden className="size-3.5 opacity-70 max-sm:hidden" />
         </Button>
-      ))}
-    </>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-auto min-w-56">
+        {FORMATS.map(({ format, label: item, Icon }) => (
+          <DropdownMenuItem key={format} onSelect={() => void download(format)} className="gap-2 py-2">
+            <Icon aria-hidden className="text-muted-foreground" />
+            {item}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

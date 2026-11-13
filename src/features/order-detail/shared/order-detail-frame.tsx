@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/shared/states";
 import { StatusPill } from "@/components/shared/status-pill";
 import { getOrderDetail, type OrderView } from "@/features/order-detail/data/queries";
 import { OrderDetailActions } from "@/features/order-detail/shared/order-detail-actions";
+import { OrderReportDownload } from "@/features/order-detail/shared/order-report-download";
 import { getActiveItems } from "@/features/orders/data/queries";
 import { isEditableStage, orderPermissions } from "@/features/orders/order-permissions";
 import { getMe } from "@/lib/session";
@@ -50,13 +51,16 @@ export async function OrderDetailFrame({ params, children }: { params: Promise<{
         title={order.po}
         parent={{ label: "Orders", href: "/orders" }}
         actions={
-          <OrderDetailActions
-            order={{ po: order.po, stage, orderDate, deliveryDate, currency, supplierPaidCny, depositRequiredCny, lines }}
-            supplier={order.supplier.name}
-            items={items}
-            canEdit={canEdit}
-            canDelete={permissions.canDelete}
-          />
+          <>
+            <OrderReportDownload po={order.po} />
+            <OrderDetailActions
+              order={{ po: order.po, stage, orderDate, deliveryDate, currency, supplierPaidCny, depositRequiredCny, lines }}
+              supplier={order.supplier.name}
+              items={items}
+              canEdit={canEdit}
+              canDelete={permissions.canDelete}
+            />
+          </>
         }
       />
       <RouteTabs tabs={tabs} label="Order sections" />

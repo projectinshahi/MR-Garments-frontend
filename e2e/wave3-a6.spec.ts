@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 
 import { periodLabel } from "../src/features/reports/data/filters";
 import { expect, inr, kpi, test, today, toast } from "./live-api";
+import { downloadReport } from "./report-download";
 
 // Wave 3 A6: Landed Cost (31) and the Reports hub and reports (32–38) on live data. One order is created through the
 // API and walked from order to container, checking each report as it goes; the shared test database holds other specs'
@@ -93,22 +94,22 @@ test("landed cost and every report show the new order's real figures, filters na
     await expect(rowOf(page, "Hangzhou Knits")).toContainText(po);
     await expect(page.getByRole("table").getByRole("row")).toHaveCount(3); // header, Hangzhou Knits, total
 
-    const { name, text: csv } = await download(page, "Export CSV");
+    const { name, text: csv } = await downloadReport(page, "CSV");
     expect(name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(csv).toContain("Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)");
     // Other specs' orders share the cell, and a cell with commas is quoted ("PO-2142, PO-2128").
     expect(csv).toMatch(new RegExp(`^Hangzhou Knits,"?[^\\n]*\\b${po}\\b`, "m"));
     // The .xlsx zip is uncompressed and the PDF's text uncompressed too, so their bytes hold the cell text.
-    const excel = await download(page, "Export Excel");
+    const excel = await downloadReport(page, "Excel");
     expect(excel.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.xlsx$/);
     for (const text of ["Supplier: Hangzhou Knits", "Paid (INR)", ">Hangzhou Knits<", po]) expect(excel.text).toContain(text);
-    const pdf = await download(page, "Export PDF");
+    const pdf = await downloadReport(page, "PDF");
     expect(pdf.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.pdf$/);
     for (const text of ["(Payments per supplier) Tj", "Supplier: Hangzhou Knits", "(Paid \\(INR\\)) Tj", "(Hangzhou Knits) Tj"]) expect(pdf.text).toContain(text);
 
     await page.goto(`/reports/payments-per-supplier?supplier=${id("Yiwu Trims Ltd.")}`);
     await expect(rowOf(page, po)).toHaveCount(0);
-    const other = await download(page, "Export PDF");
+    const other = await downloadReport(page, "PDF");
     expect(other.text).toContain("Supplier: Yiwu Trims Ltd.");
     expect(other.text).not.toContain(po);
   });

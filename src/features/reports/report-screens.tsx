@@ -20,7 +20,7 @@ import type {
   PaymentsPerSupplierReport,
   ReportPage,
 } from "./data/queries";
-import { ExportActions } from "./report-actions";
+import { ReportDownload } from "./report-actions";
 import { type ReportFile, reportFile } from "./report-files";
 import { LandedCostChart, LateOrdersTable, MonthTable, ReceivedTable, SupplierPaymentsTable } from "./report-widgets";
 
@@ -46,7 +46,7 @@ function ReportFrame({ title, page, file, period = true, children }: FrameProps)
         title={title}
         parent={{ label: "Reports", href: `/reports${page.query}` }}
         titleAddon={label ? <StatusPill tone="neutral">{label}</StatusPill> : undefined}
-        actions={<ExportActions file={file} />}
+        actions={<ReportDownload file={file} />}
       />
       <PageContainer>{children}</PageContainer>
     </>

@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { cny, expect, field, shortDate, test, today } from "./live-api";
+import { downloadButton } from "./report-download";
 
 // Orders tabs (phase 2 §5) against the live API: an order is Pending until its first China receipt (REC-3 moves it to
 // stage 2), the All tab keeps it, the Closed tab lists none of these, and every tab offers the Excel/PDF exports. Role
@@ -20,8 +21,7 @@ async function choose(page: Page, current: RegExp, option: string) {
 }
 
 async function expectExports(page: Page) {
-  await expect(page.getByRole("button", { name: "Export Excel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+  await expect(downloadButton(page)).toBeVisible();
 }
 
 test("a new order is pending until its first China receipt; All keeps it, Closed never lists it, every tab exports", async ({ page, api }) => {

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/layout/page-header";
 import type { RouteTab } from "@/components/layout/route-tabs";
 import { TodayPill } from "@/components/shared/cards";
+import { CalendarDownload } from "@/features/calendar/calendar-download";
 import { CalendarTabs, ParamSelect } from "@/features/calendar/controls";
 import { getCalendar } from "@/features/calendar/data/queries";
 import { supplierOptions } from "@/features/calendar/deliveries";
@@ -26,7 +27,11 @@ export default async function CalendarLayout({ children }: LayoutProps<"/calenda
         actions={
           <>
             <ParamSelect param="supplier" label="Supplier" options={supplierOptions(deliveries)} className="h-[38px]" />
-            <TodayPill size="sm" today={today} />
+            <CalendarDownload deliveries={deliveries} today={today} />
+            {/* On a phone the title needs the room: the date pill gives way to the download. */}
+            <span className="max-sm:hidden">
+              <TodayPill size="sm" today={today} />
+            </span>
           </>
         }
       />

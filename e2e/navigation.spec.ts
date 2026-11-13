@@ -133,9 +133,10 @@ test("order detail tabs open", async ({ page, api }) => {
 
 test("every report opens from the Reports hub", async ({ page }) => {
   const problems = watch(settled(page));
-  for (const slug of ["order-status", "deliveries-per-day", "ordered-vs-received", "containers-timeline", "payments-per-supplier", "landed-cost-by-month"]) {
+  // The Order Report card took the Order status card's slot (2597f24): Order status opens by URL only.
+  for (const slug of ["orders", "deliveries-per-day", "ordered-vs-received", "containers-timeline", "payments-per-supplier", "landed-cost-by-month"]) {
     await page.goto("/reports");
-    await page.locator(`a[href^="/reports/${slug}"]`).filter({ visible: true }).click();
+    await page.locator(`a[href^="/reports/${slug}"]`).filter({ visible: true }).first().click();
     await expectOpened(page, `/reports/${slug}`);
     await page.reload();
     await expectOpened(page, `/reports/${slug}`);

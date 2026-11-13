@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { UnitRow } from "@/lib/api/types";
 
 import { addHref, orDash } from "./settings-dialog";
-import { actionClass, bold, SettingsList } from "./settings-list";
+import { actionClass, bold, SettingsList, type SettingsReport, textColumns } from "./settings-list";
 import { UnitDialog, unitDeletable, UNITS_PATH } from "./units-dialog";
 
 const unitColumns: ColumnDef<UnitRow>[] = [
@@ -22,6 +22,13 @@ const unitColumns: ColumnDef<UnitRow>[] = [
   },
 ];
 
+const report: SettingsReport<UnitRow> = {
+  title: "Units",
+  slug: "units",
+  columns: textColumns("Unit", "Symbol", "Used by items", "Status"),
+  row: (r) => [r.name, r.symbol || null, r.usedByItems.join(", ") || null, r.status],
+};
+
 /** Settings tab 8, Units (no reference design; built like Teams), plus the add and edit dialogs (?dialog=add, ?dialog=edit&id=). */
 export function UnitsScreen({ rows }: { rows: UnitRow[] }) {
   return (
@@ -32,6 +39,7 @@ export function UnitsScreen({ rows }: { rows: UnitRow[] }) {
         columns={unitColumns}
         searchText={(row) => [row.name, row.symbol]}
         noun="units"
+        report={report}
         deletable={unitDeletable}
         footnote="Items are counted in these units. The symbol shows after quantities on orders, receipts and reports."
         action={

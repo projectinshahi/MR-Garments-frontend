@@ -30,6 +30,12 @@ export type ClearingListRow = {
   status: ClearingStatus | "waiting";
   /** The four charges; 0 while waiting. */
   clearingCostInr: number;
+  /** CLR-3's figures apart (null while waiting); `clearingCostInr` is the four charges' sum. Backend docs/report-downloads.md; absent from an older backend. */
+  goodsValueInr?: number | null;
+  customsDutyInr?: number | null;
+  otherDutiesInr?: number | null;
+  agentChargesInr?: number | null;
+  portChargesInr?: number | null;
   /** The trip that depends on the clearing (CLR-4 refuses while there is one). Absent from a backend before CLR-4. */
   trip?: { lrNumber: string; status: TripStatus; warehouseReceipt: "draft" | "stocked" | null } | null;
 };
@@ -91,6 +97,13 @@ export type TripListRow = {
   costInr: number;
   /** The warehouse receipt that depends on the trip (TRN-4 refuses while there is one). Absent before TRN-4. */
   warehouseReceipt?: "draft" | "stocked" | null;
+  /** The two parts of `costInr`, the warehouse it went to, the driver, the short remark and the goods per unit. Backend docs/report-downloads.md; absent from an older backend. */
+  freightInr?: number;
+  handlingInr?: number;
+  destination?: string;
+  driverName?: string;
+  shortRemark?: string;
+  quantities?: { unit: string; quantity: number }[];
 };
 
 /** TRN-1 GET /transports. KPIs count trips unloaded today or in the 29 days before (India). */
@@ -167,6 +180,10 @@ export type WarehouseListRow = {
   /** The receipt's trip and bundles (WH-4's confirmation). Absent from a backend before WH-4. */
   lrNumber?: string;
   bundlesReceived?: number;
+  /** The order's lines on this receipt, all teams together, and the trip's bundles loaded and short remark. Backend docs/report-downloads.md; absent from an older backend. */
+  lines?: { orderLineId: string; item: string; unit: string; ordered: number; quantity: number }[];
+  bundlesLoaded?: number;
+  shortRemark?: string;
 };
 
 /** WH-1 GET /warehouse-receipts. `teams`: the active teams (the split columns). */

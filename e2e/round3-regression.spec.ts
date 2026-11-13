@@ -683,7 +683,7 @@ test("390x844: every page and dialog of the five tabs fits without page-level ho
   };
   await page.goto("/payments");
   // The search box is hidden below 640px (reported), so pick the order from the list.
-  await rowOf(page, fresh.po).getByRole("button", { name: fresh.po }).click();
+  await rowOf(page, fresh.po).getByRole("button", { name: fresh.po, exact: true }).click();
   await page.getByRole("button", { name: `+ Record payment for ${fresh.po}` }).click();
   await dialogFits(page.getByRole("dialog", { name: `Record payment for ${fresh.po}` }), "Record payment", "payment dialog");
   await page.keyboard.press("Escape");

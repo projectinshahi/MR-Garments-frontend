@@ -21,6 +21,10 @@ export type LandedCostRow = {
   item: string;
   quantity: number;
   unit: Unit;
+  /** The PO date, its value in `currency` and the rate saved on the order (null for older orders). Backend docs/report-downloads.md; absent from an older backend. */
+  orderDate?: string;
+  orderValueCny?: number;
+  exchangeRate?: number | null;
   /** The terms of every container carrying the order; "mixed" when they differ, null before loading. */
   terms: ContainerTerms | "mixed" | null;
   goodsInr: number;

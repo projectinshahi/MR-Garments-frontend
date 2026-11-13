@@ -2,11 +2,13 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
-import { currencyTitle, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
+import { currencyTitle, formatDate, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
 
 import { filterLabel } from "./data/filters";
 import type { SupplierDetailPage, SupplierPaymentDetail } from "./data/queries";
+import { describeFilters } from "./report-files";
 import { CardSubtitle, Footnote } from "./report-screens";
+import { SupplierDetailDownload } from "./supplier-detail-download";
 import {
   DetailUrlProvider,
   OrderStageFilter,
@@ -81,7 +83,22 @@ export function SupplierDetailScreen({
         title={supplier.name}
         parent={parent ?? { label: "Payments per supplier", href: `/reports/payments-per-supplier${page.query}` }}
         titleAddon={period ? <StatusPill tone="neutral">{period}</StatusPill> : undefined}
-        actions={actions}
+        actions={
+          <>
+            <SupplierDetailDownload
+              supplierId={supplier.id}
+              search={page.search}
+              filters={describeFilters([
+                `Supplier: ${supplier.name}`,
+                period && `Period: ${period}`,
+                (params.get("paymentFrom") || params.get("paymentTo")) &&
+                  `Payment dates: ${params.get("paymentFrom") ? formatDate(params.get("paymentFrom")!) : "start"} to ${params.get("paymentTo") ? formatDate(params.get("paymentTo")!) : "today"}`,
+                /^[1-6]$/.test(params.get("stage") ?? "") && `Orders at stage ${params.get("stage")}`,
+              ])}
+            />
+            {actions}
+          </>
+        }
       />
       <PageContainer>
         <SectionCard title="Supplier overview">

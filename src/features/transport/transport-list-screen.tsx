@@ -13,10 +13,14 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { formatExactINR } from "@/features/clearing/stage-form";
 import { ACTIONS_COLUMN_CLASS, DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { describeFilters } from "@/features/reports/report-files";
 import type { TransportList, TripListRow } from "@/lib/api/stages-types";
 import { formatDate, formatNumber, formatShortDate } from "@/lib/formatters";
+import { todayInIndia } from "@/lib/today";
 
 import type { TransportListData } from "./data/queries";
+import { transportFile } from "./transport-files";
 import { ALL, filterTransports, kpiSubs, transportTotals, type TransportFilters } from "./transport-logic";
 
 const CHIPS = [
@@ -209,6 +213,20 @@ export function TransportListScreen({ data }: { data: TransportListData }) {
               value={filters.query}
               onValueChange={(query) => set({ query })}
               className="hidden w-[170px] sm:flex lg:w-[250px]"
+            />
+            <ReportDownload
+              file={() =>
+                transportFile(
+                  rows,
+                  data,
+                  describeFilters([
+                    filters.query.trim() && `Search: "${filters.query.trim()}"`,
+                    filters.company !== ALL && `Transport company: ${data.companies.find((c) => c.id === filters.company)?.name ?? filters.company}`,
+                    filters.state !== ALL && `Status: ${CHIPS.find((c) => c.value === filters.state)?.label}`,
+                  ]),
+                  todayInIndia(),
+                )
+              }
             />
             {canEnter ? (
               ready[0] ? (

@@ -17,7 +17,7 @@ import { STAGES } from "@/types/domain";
 import type { OrderRow, OrdersListData } from "./data/queries";
 import { DeleteOrderButton, rowActionClass } from "./delete-order";
 import { filterOrders, type OrderChip } from "./filter-orders";
-import { describeFilters, ordersFile } from "./order-files";
+import { describeFilters, fetchOrderLines, ordersFile } from "./order-files";
 import { isEditableStage } from "./order-permissions";
 import { stageLabel } from "./order-status";
 import { OrdersFrame } from "./orders-frame";
@@ -126,8 +126,8 @@ export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }
     chip,
   };
   const rows = filterOrders(orders, filters);
-  // Phase 2 §6: the export holds these rows, as filtered, built on click.
-  const file = () =>
+  // Phase 2 §6: the download holds these rows (every match, not the table's page), built when a format is chosen.
+  const file = async () =>
     ordersFile(
       rows,
       describeFilters([
@@ -137,6 +137,7 @@ export function OrdersList({ orders, counts, supplierNames, canEdit, canDelete }
         chip !== "all" && `Status: ${CHIP_TITLE[chip]}`,
       ]),
       todayInIndia(),
+      await fetchOrderLines(),
     );
 
   return (

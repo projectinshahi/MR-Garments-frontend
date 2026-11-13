@@ -41,7 +41,10 @@ export function SuppliersFrame({
         actions={
           <>
             {actions ?? <DashboardSearch />}
-            <TodayPill size="sm" today={today} />
+            {/* A tab's own actions end with its download; on a phone the date pill gives way to them. */}
+            <span className={actions ? "max-sm:hidden" : undefined}>
+              <TodayPill size="sm" today={today} />
+            </span>
           </>
         }
       />

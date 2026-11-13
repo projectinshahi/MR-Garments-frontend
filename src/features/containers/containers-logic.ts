@@ -32,6 +32,9 @@ export type ContainerRow = {
   /** "Est. 24 Oct" */
   etaEstimated: boolean;
   status: ContainerStatus;
+  /** For the report download; "" when not given (or from an older backend). */
+  portOfLoading: string;
+  portOfArrival: string;
 };
 
 /** CON-1 row -> list row. */
@@ -47,6 +50,8 @@ export const toContainerRow = (item: ContainerListItem): ContainerRow => ({
   etaIndia: item.eta,
   etaEstimated: item.etaEstimated,
   status: item.status,
+  portOfLoading: item.portOfLoading ?? "",
+  portOfArrival: item.portOfArrival ?? "",
 });
 
 /** "active" = every listed container (none is ever finished: clearing isn't built); the others are one status each. */

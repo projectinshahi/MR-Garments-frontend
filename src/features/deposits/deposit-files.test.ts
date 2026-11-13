@@ -10,10 +10,10 @@ import { type DepositRow, EMPTY_FILTERS, supplierSummaries } from "./deposits-lo
 
 const TODAY = "2026-11-10";
 const rows: DepositRow[] = [
-  { id: "o2", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: "PO-3002", currency: "CNY", amount: 1000, paid: 300, pending: 700, date: "2026-11-02", mode: "", reference: "", notes: "", status: "partly paid", href: "/orders/PO-3002/payments", payments: 1 },
-  { id: "p1", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", po: "PO-3001", currency: "CNY", amount: 300, paid: 300, pending: 0, date: "2026-10-21", mode: "Bank transfer", reference: "UTR 9", notes: "Half", status: "paid", href: "/orders/PO-3001", payeeRole: "agent" },
-  { id: "d1", kind: "give", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: null, currency: "USD", amount: 200, paid: 50, pending: 150, date: "2026-10-05", mode: "", reference: "", notes: "", status: "partly settled", href: "/deposits/suppliers/s1" },
-  { id: "d2", kind: "receive", supplierId: "s1", supplier: "Foshan Fabrics", payee: "", po: null, currency: "CNY", amount: 500, paid: 0, pending: 500, date: "2026-10-10", mode: "", reference: "Mould", notes: "", status: "open", href: "/deposits/suppliers/s1" },
+  { id: "o2", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: "PO-3002", currency: "CNY", amount: 1000, paid: 300, pending: 700, date: "2026-11-02", mode: "", reference: "", notes: "", status: "partly paid", href: "/orders/PO-3002/payments", payments: 1, rate: null, amountInr: null },
+  { id: "p1", kind: "order", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Sino Freight", po: "PO-3001", currency: "CNY", amount: 300, paid: 300, pending: 0, date: "2026-10-21", mode: "Bank transfer", reference: "UTR 9", notes: "Half", status: "paid", href: "/orders/PO-3001", payeeRole: "agent", rate: 12.1, amountInr: 3630 },
+  { id: "d1", kind: "give", supplierId: "s1", supplier: "Foshan Fabrics", payee: "Foshan Fabrics", po: null, currency: "USD", amount: 200, paid: 50, pending: 150, date: "2026-10-05", mode: "", reference: "", notes: "", status: "partly settled", href: "/deposits/suppliers/s1", rate: 11.9, amountInr: null },
+  { id: "d2", kind: "receive", supplierId: "s1", supplier: "Foshan Fabrics", payee: "", po: null, currency: "CNY", amount: 500, paid: 0, pending: 500, date: "2026-10-10", mode: "", reference: "Mould", notes: "", status: "open", href: "/deposits/suppliers/s1", rate: null, amountInr: null },
 ];
 const suppliers = [{ id: "s1", name: "Foshan Fabrics" }];
 
@@ -21,17 +21,33 @@ describe("depositsFile", () => {
   it("writes the rows shown as one table per currency, amounts under headers naming the currency", () => {
     const file = depositsFile("pending", rows, "All deposits", TODAY);
     expect(file).toMatchObject({ title: "Pending deposits", filename: `deposits-pending-${TODAY}`, filters: "All deposits" });
-    expect(file.sections).toHaveLength(2);
-    expect(file.sections[0]!.columns.map((c) => c.header)).toEqual(["Supplier", "PO", "Kind", "Paid to", "Amount (CNY)", "Paid / settled (CNY)", "Pending (CNY)", "Date", "Mode", "Reference", "Notes", "Status", "Payments"]);
-    // Payments: the obligation row's count; blank on the others.
+    // The summary block (Excel and PDF only), then one table per currency.
+    expect(file.sections).toHaveLength(3);
+    expect(file.sections[0]).toMatchObject({ sheet: "Summary", csv: false });
     expect(file.sections[0]!.rows).toEqual([
-      ["Foshan Fabrics", "PO-3002", "Order deposit", "Foshan Fabrics", 1000, 300, 700, "2026-11-02", "", "", "", "Partly paid", 1],
-      ["Foshan Fabrics", "PO-3001", "Order deposit (to shipping agent)", "Sino Freight", 300, 300, 0, "2026-10-21", "Bank transfer", "UTR 9", "Half", "Paid", ""],
-      ["Foshan Fabrics", "", "To receive", "", 500, 0, 500, "2026-10-10", "", "Mould", "", "Open", ""],
+      ["Deposits to pay", "3 · CNY 1,300.00 · USD 200.00"],
+      ["Paid", "CNY 600.00 · USD 50.00"],
+      ["Pending to pay", "CNY 700.00 · USD 150.00"],
+      ["Deposits to receive", "1 · CNY 500.00"],
+      ["Received", "CNY 0.00"],
+      ["Pending to receive", "CNY 500.00"],
     ]);
-    expect(file.sections[1]!.rows).toEqual([["Foshan Fabrics", "", "To give", "Foshan Fabrics", 200, 50, 150, "2026-10-05", "", "", "", "Partly settled", ""]]);
-    // Nothing shown: one empty CNY table, written as "No rows".
-    expect(csvRows(depositsFile("all", [], "All deposits", TODAY)).at(-1)).toEqual(["No rows"]);
+    const [, cny, usd] = file.sections;
+    expect(cny!.columns.map((c) => c.header)).toEqual([
+      "Supplier", "PO", "Kind", "Paid to", "Currency", "Amount (CNY)", "Paid / settled (CNY)", "Pending (CNY)", "Exchange rate (INR per 1 CNY)", "INR equivalent (INR)", "Date", "Mode", "Reference", "Notes", "Status", "Payments",
+    ]);
+    expect(cny!.columns[8]).toEqual({ header: "Exchange rate (INR per 1 CNY)", rate: true });
+    // Payments: the obligation row's count; blank on the others. The rate is each row's own snapshot.
+    expect(cny!.rows).toEqual([
+      ["Foshan Fabrics", "PO-3002", "Order deposit", "Foshan Fabrics", "CNY", 1000, 300, 700, null, null, "2026-11-02", "", "", "", "Partly paid", 1],
+      ["Foshan Fabrics", "PO-3001", "Order deposit (to shipping agent)", "Sino Freight", "CNY", 300, 300, 0, 12.1, 3630, "2026-10-21", "Bank transfer", "UTR 9", "Half", "Paid", ""],
+      ["Foshan Fabrics", "", "To receive", "", "CNY", 500, 0, 500, null, null, "2026-10-10", "", "Mould", "", "Open", ""],
+    ]);
+    expect(usd!.rows).toEqual([["Foshan Fabrics", "", "To give", "Foshan Fabrics", "USD", 200, 50, 150, 11.9, null, "2026-10-05", "", "", "", "Partly settled", ""]]);
+    // Nothing shown: one empty CNY table, written as "No rows"; the CSV leaves the summary out.
+    const csv = csvRows(depositsFile("all", [], "All deposits", TODAY));
+    expect(csv.slice(0, 2).map((line) => line[0])).toEqual(["Deposits (CNY)", "Supplier"]);
+    expect(csv.at(-1)).toEqual(["No rows"]);
   });
 
   it("names the filters in force", () => {
@@ -77,8 +93,9 @@ describe("statementFile", () => {
       ["Give", 1000, 300, 700],
       ["Receive", 500, 100, 400],
     ]);
-    expect(file.sections[1]!.rows).toEqual([["2026-10-01", 1000, 300, 700, "Partly settled", "", "Tooling"]]);
-    expect(file.sections[2]!.rows).toEqual([["2026-10-10", 500, 100, 400, "Partly settled", "Mould", ""]]);
+    // The supplier's rate when the deposit was opened (none here: opened before rates were saved).
+    expect(file.sections[1]!.rows).toEqual([["2026-10-01", 1000, 300, 700, null, "Partly settled", "", "Tooling"]]);
+    expect(file.sections[2]!.rows).toEqual([["2026-10-10", 500, 100, 400, null, "Partly settled", "Mould", ""]]);
     expect(file.sections[3]!.columns.map((c) => c.header)).toEqual(["Date", "Deposit", "Amount (CNY)", "Mode", "Reference", "Notes"]);
     expect(file.sections[3]!.rows).toEqual([
       ["2026-10-12", "Receive · opened 10 Oct 2026", 100, "Cash", "", ""],

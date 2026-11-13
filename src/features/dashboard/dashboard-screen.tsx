@@ -6,6 +6,7 @@ import { STAGES } from "@/types/domain";
 
 import type { DashboardData } from "./data/queries";
 import { isAvailable, type Source } from "./dashboard-logic";
+import { DashboardDownload } from "./dashboard-download";
 import { DashboardSearch } from "./dashboard-search";
 import { ContainersTable, DeliveriesTable, PaymentsDueTable, Unavailable } from "./dashboard-tables";
 
@@ -28,7 +29,11 @@ export function DashboardScreen({ data }: { data: DashboardData }) {
         actions={
           <>
             <DashboardSearch />
-            <TodayPill size="sm" today={data.today} />
+            <DashboardDownload />
+            {/* On a phone the title needs the room: the date pill gives way to the download. */}
+            <span className="max-sm:hidden">
+              <TodayPill size="sm" today={data.today} />
+            </span>
           </>
         }
       />

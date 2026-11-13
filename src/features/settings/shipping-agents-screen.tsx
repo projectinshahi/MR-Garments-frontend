@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { ShippingAgentRow } from "@/lib/api/types";
 
-import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
+import { actionClass, bold, contactSearch, right, SettingsList, type SettingsReport, textColumns } from "./settings-list";
 import { ADD_SHIPPING_AGENT_HREF, shippingAgentDeletable, ShippingAgentDialog } from "./shipping-agents-dialog";
 
 const shippingColumns: ColumnDef<ShippingAgentRow>[] = [
@@ -17,6 +17,13 @@ const shippingColumns: ColumnDef<ShippingAgentRow>[] = [
   { accessorKey: "officeCity", header: "Office city" },
   { accessorKey: "activeContainers", header: "Active containers", meta: right },
 ];
+
+const report: SettingsReport<ShippingAgentRow> = {
+  title: "Shipping agents",
+  slug: "shipping-agents",
+  columns: textColumns("Shipping agent", "Contact person", "Phone", "Office city", "Active containers", "Status"),
+  row: (r) => [r.name, r.contactPerson || null, r.phone || null, r.officeCity || null, r.activeContainers, r.status],
+};
 
 /** 41_15.2_Shipping_agents.jpeg, plus the Add and Edit shipping agent dialog at ?dialog=add and ?dialog=edit&id=. */
 export function ShippingAgentsScreen({ rows }: { rows: ShippingAgentRow[] }) {
@@ -28,6 +35,7 @@ export function ShippingAgentsScreen({ rows }: { rows: ShippingAgentRow[] }) {
         columns={shippingColumns}
         searchText={contactSearch}
         noun="shipping agents"
+        report={report}
         deletable={shippingAgentDeletable}
         footnote="The shipping agent looks after the container from China to the Indian port. The agent does not log in."
         action={

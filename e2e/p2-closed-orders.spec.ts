@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { closedOrder, expect, test } from "./live-api";
+import { downloadButton } from "./report-download";
 import { MANAGEMENT_STATE, PROCUREMENT_STATE, STAFF_STATE } from "./sessions";
 
 // Closed Orders (sidebar, right after the Stages group): only the orders whose goods are all stocked in India (phase 2
@@ -26,8 +27,7 @@ test("Closed Orders sits after Warehouse and opens a page that lists closed orde
   await expect(page.getByRole("heading", { level: 1, name: "Closed Orders" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Orders lists" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "+ New order" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Export Excel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+  await expect(downloadButton(page)).toBeVisible();
 
   // The closed order is listed with its stocked pieces and Report link; the pending one never is.
   await expect(async () => {

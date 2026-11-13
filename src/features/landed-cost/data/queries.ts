@@ -13,6 +13,7 @@ export type { LandedCostRow } from "@/lib/api/reports-types";
 export async function getLandedCost(search: SearchParams) {
   const params = toParams(search);
   const team = params.get("team");
+  const supplier = params.get("supplier");
   const data = await apiGet<LandedCostResponse>(`/landed-cost${idQuery(params, { supplier: "supplierId", team: "teamId" })}`);
-  return { ...data, teamId: isId(team) ? team : null };
+  return { ...data, teamId: isId(team) ? team : null, supplierId: isId(supplier) ? supplier : null };
 }

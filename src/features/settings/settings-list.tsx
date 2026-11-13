@@ -12,6 +12,9 @@ import { StatusPill } from "@/components/shared/status-pill";
 import type { RecordStatus } from "@/types/domain";
 
 import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
+import { ReportDownload } from "@/features/reports/report-actions";
+import { type Cell, type Column, describeFilters } from "@/features/reports/report-files";
+import { todayInIndia } from "@/lib/today";
 
 import { type Deletable, DeleteSettingsRecord, editHref } from "./settings-dialog";
 import { filterRecords, type StatusFilter } from "./settings-logic";
@@ -42,6 +45,15 @@ export const actionClass = "px-[15px]";
 export const contactSearch = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 
 type SettingsRecord = { id: string; name: string; status: RecordStatus };
+
+/**
+ * A tab's report download: its title, file name, the columns and one row per record the search and status chips
+ * keep (every one, not only those in view), and notes on what the list does not record.
+ */
+export type SettingsReport<T> = { title: string; slug: string; columns: Column[]; row: (record: T) => Cell[]; notes?: string[] };
+
+/** Plain text columns; amounts and rates are written as Column objects. */
+export const textColumns = (...headers: string[]): Column[] => headers.map((header) => ({ header }));
 
 function trailingColumns<T extends SettingsRecord>(path: string, deletable: (row: T) => Deletable, extraActions?: (row: T) => React.ReactNode): ColumnDef<T>[] {
   return [
@@ -91,6 +103,7 @@ export function SettingsList<T extends SettingsRecord>({
   noun,
   deletable,
   extraActions,
+  report,
 }: {
   /** The tab's own path; Edit opens ?dialog=edit&id=<id> on it. */
   path: string;
@@ -107,6 +120,7 @@ export function SettingsList<T extends SettingsRecord>({
   footnote: string;
   /** Plural record noun for the empty states ("suppliers"). */
   noun: string;
+  report: SettingsReport<T>;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("Active");
@@ -115,7 +129,23 @@ export function SettingsList<T extends SettingsRecord>({
 
   return (
     <>
-      <PageHeader title="Settings" actions={action} />
+      <PageHeader
+        title="Settings"
+        actions={
+          <>
+            <ReportDownload
+              file={() => ({
+                title: report.title,
+                filename: `${report.slug}-${todayInIndia()}`,
+                filters: describeFilters([query.trim() && `Search: "${query.trim()}"`, `Status: ${status}`]),
+                notes: report.notes,
+                sections: [{ title: report.title, columns: report.columns, rows: visible.map(report.row) }],
+              })}
+            />
+            {action}
+          </>
+        }
+      />
       <RouteTabs tabs={SETTINGS_TABS} label="Settings sections" />
       <PageContainer>
         <div className="flex flex-wrap items-center justify-between gap-3">

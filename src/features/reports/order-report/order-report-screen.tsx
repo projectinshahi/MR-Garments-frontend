@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { DepositStatusPill } from "@/features/payments/money";
-import { ExportActions } from "@/features/reports/report-actions";
+import { ReportDownload } from "@/features/reports/report-actions";
 import type { OrderReport, OrderReportContainer, OrderReportDeposit } from "@/lib/api/reports-types";
 import { currencyTitle, formatDate, formatDateTime, formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, rateText, formatRate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -322,7 +322,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
   const agentPayments = payments?.list.filter((payment) => payment.payeeRole === "agent" && payment.status === "paid") ?? [];
   const poDeposits = payments?.list.filter((payment) => payment.payeeRole === "supplier" && payment.kind === "Deposit" && payment.status === "paid") ?? [];
   const breakdown = landedCost ? landedCostBreakdown(landedCost, logistics) : null;
-  const exports = <ExportActions file={orderReportFile(report, today)} formats={["xlsx", "pdf", "csv"]} size="sm" />;
+  const exports = <ReportDownload file={orderReportFile(report, today)} size="sm" />;
   const section = (id: string) => ({ id, className: "scroll-mt-[calc(3.5rem+var(--header-height)+52px)] md:scroll-mt-[calc(var(--header-height)+52px)]" });
 
   return (
@@ -349,12 +349,15 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
             <span className="text-[17px] font-bold text-foreground">Order report</span> · {supplier.name} · Ordered {formatDate(order.orderDate)}
           </p>
           <div className="flex flex-wrap gap-2">
+            {/* The order tabs' header has the download (OrderReportDownload); the Reports frame's strip carries it on phones. */}
             {frame === "reports" ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/reports/orders">Back</Link>
-              </Button>
+              <>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/reports/orders">Back</Link>
+                </Button>
+                {exports}
+              </>
             ) : null}
-            {exports}
           </div>
         </div>
         <SectionNav />

@@ -6,7 +6,7 @@ import type { ContainersTimelineReport, DeliveriesPerDayReport, LandedCostByMont
 
 import { toCsv } from "./csv";
 import { toPdf } from "./pdf";
-import { csvRows, reportFile, type ReportFile } from "./report-files";
+import { amountsText, csvRows, describeFilters, money, rate, reportFile, type ReportFile, summarySection } from "./report-files";
 import { toXlsx } from "./xlsx";
 
 const TODAY = "2026-10-30";
@@ -211,5 +211,60 @@ describe("PDF file", () => {
     expect(text).toMatch(/\/Count [2-9] /);
     expect(text.match(/\(Order value \\\(CNY\\\)\) Tj/g)?.length).toBe(Number(/\/Count (\d)/.exec(text)?.[1]));
     expect(pdf(toPdf(reportFile("deliveries-per-day", noDeliveries, TODAY), "Generated"))).toContain("(No rows) Tj");
+  });
+});
+
+describe("page report additions (docs/report-downloads.md)", () => {
+  const file: ReportFile = {
+    title: "Orders",
+    filename: "orders-2026-11-12",
+    filters: "Supplier: Foshan Fabrics",
+    notes: ["Rates are the ones saved on each order."],
+    sections: [
+      summarySection([["Orders", 1]]),
+      {
+        title: "Orders (CNY)",
+        sheet: "Orders",
+        columns: [{ header: "PO" }, rate("Exchange rate", "CNY"), money("PO total", "CNY")],
+        rows: [["PO-2053", 12.0412, 1500]],
+      },
+    ],
+  };
+
+  it("Excel: notes under the filters, rates with four decimals, the header row frozen on every sheet", () => {
+    const parts = unzip(toXlsx(file, "Generated now"));
+    const orders = parts["xl/worksheets/sheet2.xml"];
+    for (const xml of Object.values(parts)) expect(parseErrors(xml)).toBe(0);
+    expect(parts["xl/workbook.xml"]).toContain('<sheet name="Summary" sheetId="1" r:id="rId1"/><sheet name="Orders" sheetId="2" r:id="rId2"/>');
+    expect(parts["xl/styles.xml"]).toContain('<numFmt numFmtId="165" formatCode="#,##0.0000"/>');
+    // Title, filters, generated, the note, a blank line, the table title, then its header on row 7.
+    expect(orders).toContain('<row r="4"><c r="A4" t="inlineStr"><is><t xml:space="preserve">Rates are the ones saved on each order.</t></is></c></row>');
+    expect(orders).toContain('<pane ySplit="7" topLeftCell="A8" activePane="bottomLeft" state="frozen"/>');
+    expect(orders).toContain('<c r="B8" s="5"><v>12.0412</v></c><c r="C8" s="3"><v>1500</v></c>');
+  });
+
+  it("PDF: the company over the title, the notes, rates with four decimals; portrait when the tables fit, else landscape", () => {
+    const narrow = pdf(toPdf(file, "Generated now"));
+    expect(narrow).toContain("/MediaBox [0 0 595 842]");
+    for (const shown of ["MR Garments", "Orders", "Rates are the ones saved on each order.", "12.0412", "Exchange rate \\(INR per 1 CNY\\)"]) expect(narrow).toContain(`(${shown}) Tj`);
+    const wide: ReportFile = { ...file, sections: [{ columns: Array.from({ length: 14 }, (_, i) => ({ header: `A long column heading ${i}` })), rows: [] }] };
+    expect(pdf(toPdf(wide, "Generated now"))).toContain("/MediaBox [0 0 842 595]");
+  });
+
+  it("PDF: a total row's label under a date column stays text instead of failing as a date", () => {
+    const totals: ReportFile = { ...file, sections: [{ columns: [{ header: "Received on", date: true }, { header: "Pieces" }], rows: [["2026-11-03", 60]], total: ["Total", 60] }] };
+    const text = pdf(toPdf(totals, "Generated now"));
+    expect(text).toContain("(3 Nov 2026) Tj");
+    expect(text).toContain("(Total) Tj");
+  });
+
+  it("CSV: the record tables only, never the summary block", () => {
+    expect(csvRows(file)).toEqual([["Orders (CNY)"], ["PO", "Exchange rate (INR per 1 CNY)", "PO total (CNY)"], ["PO-2053", 12.0412, 1500]]);
+  });
+
+  it("amounts per currency print with codes, never symbols", () => {
+    expect(amountsText([{ currency: "CNY", amount: 1200 }, { currency: "USD", amount: 50.5 }])).toBe("CNY 1,200.00 · USD 50.50");
+    expect(amountsText([])).toBe("–");
+    expect(describeFilters([false, null, undefined, "Supplier: Foshan Fabrics"])).toBe("Supplier: Foshan Fabrics");
   });
 });

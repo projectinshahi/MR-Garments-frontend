@@ -42,7 +42,8 @@ export function MonthView({ today, deliveries: all, linkOrders, params }: Calend
             empty={!deliveries.some((d) => isSameMonth(parseISO(d.due), first))}
             className="mb-3"
           />
-          <div className="overflow-x-auto">
+          {/* relative: the cells' absolute sr-only text must scroll with the grid, not widen the page on a phone. */}
+          <div className="relative overflow-x-auto">
             <div role="table" aria-label={title} className="grid min-w-[640px] grid-cols-7 border-t border-l">
               <div role="row" className="contents">
                 {WEEKDAYS.map((day) => (

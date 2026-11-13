@@ -34,7 +34,7 @@ export type ReportPage<T> = Awaited<ReturnType<typeof report<T>>>;
 /** Reports hub: the stat strips, the supplier options and this year's periods. */
 export async function getReportsHub(search: SearchParams) {
   const { data, today, query } = await report<ReportsSummary>("summary", search);
-  return { summary: data, periods: periodOptions(today), query };
+  return { summary: data, today, periods: periodOptions(today), query };
 }
 export type ReportsHubData = Awaited<ReturnType<typeof getReportsHub>>;
 

@@ -5,7 +5,7 @@ import { CardNote, KpiCard, KpiRow, SectionCard } from "@/components/shared/card
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
-import { ExportActions } from "@/features/reports/report-actions";
+import { ReportDownload } from "@/features/reports/report-actions";
 import type { SupplierDepositRow, SupplierStatement } from "@/lib/api/deposits-types";
 import { currencyTitle, formatDate } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
@@ -39,7 +39,7 @@ export function StatementScreen({ data }: { data: StatementData }) {
         titleAddon={supplier.status === "Inactive" ? <StatusPill tone="neutral">Inactive</StatusPill> : undefined}
         actions={
           <>
-            <ExportActions size="header" formats={["xlsx", "pdf"]} file={() => statementFile(statement, today)} />
+            <ReportDownload size="header" file={() => statementFile(statement, today)} />
             {canEnter ? (
               <NewDepositDialog supplier={supplier}>
                 <Button type="button" size="header">

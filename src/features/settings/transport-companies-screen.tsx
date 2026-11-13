@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import type { TransportCompanyRow } from "@/lib/api/types";
 
-import { actionClass, bold, contactSearch, right, SettingsList } from "./settings-list";
+import { actionClass, bold, contactSearch, right, SettingsList, type SettingsReport, textColumns } from "./settings-list";
 import { ADD_TRANSPORT_COMPANY_HREF, TRANSPORT_COMPANIES_PATH, TransportCompanyDialogs, transportCompanyDeletable } from "./transport-companies-dialog";
 
 // As drawn in 43: the phone column is right-aligned and "Trips so far" left-aligned.
@@ -17,6 +17,13 @@ const transportColumns: ColumnDef<TransportCompanyRow>[] = [
   { accessorKey: "phone", header: "Phone", meta: right },
   { accessorKey: "tripsSoFar", header: "Trips so far" },
 ];
+
+const report: SettingsReport<TransportCompanyRow> = {
+  title: "Transport companies",
+  slug: "transport-companies",
+  columns: textColumns("Transport company", "Contact person", "Phone", "Trips so far", "Status"),
+  row: (r) => [r.name, r.contactPerson || null, r.phone || null, r.tripsSoFar, r.status],
+};
 
 /** 43_15.4_Transport_companies.jpeg, plus the Add and Edit dialogs (no reference) at ?dialog=add and ?dialog=edit&id=. */
 export function TransportCompaniesScreen({ rows }: { rows: TransportCompanyRow[] }) {
@@ -28,6 +35,7 @@ export function TransportCompaniesScreen({ rows }: { rows: TransportCompanyRow[]
         columns={transportColumns}
         searchText={contactSearch}
         noun="transport companies"
+        report={report}
         deletable={transportCompanyDeletable}
         footnote="Transport companies do not log in."
         action={

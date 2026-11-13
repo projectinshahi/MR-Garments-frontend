@@ -35,6 +35,13 @@ export type ReceiptRow = {
   received: string;
   /** Containers holding goods only this receipt covers, so it can't be deleted while any; null: not known. */
   containers: string[] | null;
+  /**
+   * The receipt's lines for the report download: `ordered` is the order line's quantity and `received` that line over
+   * every receipt so far (null from an older backend, as are the notes' "").
+   */
+  lines: { item: string; unit: string; quantity: number; ordered: number | null; received: number | null }[];
+  deliveryNote: string;
+  shortRemark: string;
 };
 
 export type ReceiptLine = {

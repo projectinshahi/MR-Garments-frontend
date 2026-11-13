@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { expect, type Locator, type Page, type Route, test, type TestInfo } from "@playwright/test";
 
+import { downloadReport } from "./report-download";
+
 // W2-reports: Reports hub (32_13_Reports) and the six reports (33–38). Role/label locators only: visited routes
 // stay in the DOM hidden by <Activity>. Since wave 3 the figures, filters and exports are live: wave3-a6.spec.ts
 // checks them on an order it creates, so this file keeps the frame, the links and that every export downloads.
@@ -83,8 +85,8 @@ test("every report's header downloads CSV, Excel and PDF files named after the r
     await page.goto(href);
     await expectReport(page, title);
     const slug = href.slice("/reports/".length);
-    for (const [label, ext] of [["Export CSV", "csv"], ["Export Excel", "xlsx"], ["Export PDF", "pdf"]] as const) {
-      const file = await download(page, page.getByRole("button", { name: label }));
+    for (const [format, ext] of [["CSV", "csv"], ["Excel", "xlsx"], ["PDF", "pdf"]] as const) {
+      const file = await downloadReport(page, format);
       expect(file.name).toMatch(new RegExp(`^${slug}-\\d{4}-\\d{2}-\\d{2}\\.${ext}$`));
       if (ext !== "csv") expect(file.text).toContain(title);
     }

@@ -3,7 +3,7 @@ import { KpiCard, KpiRow } from "@/components/shared/cards";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 
-import { ExportActions } from "../report-actions";
+import { ReportDownload } from "../report-actions";
 import { Footnote } from "../report-screens";
 import { OrderReportsFilters } from "./order-reports-filters";
 import { orderReportsFile } from "./order-reports-file";
@@ -28,7 +28,7 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         title="Order reports"
         parent={{ label: "Reports", href: `/reports${page.query}` }}
         titleAddon={label ? <StatusPill tone="neutral">{label}</StatusPill> : undefined}
-        actions={<ExportActions file={orderReportsFile(data, today)} formats={["xlsx", "pdf", "csv"]} />}
+        actions={<ReportDownload file={orderReportsFile(data, today)} />}
       />
       <PageContainer>
         <OrderReportsFilters options={data.options} currencies={data.rows.map((row) => row.currency)} />

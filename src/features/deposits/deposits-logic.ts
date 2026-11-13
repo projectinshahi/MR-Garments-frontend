@@ -55,6 +55,13 @@ export type DepositRow = {
   payments?: number;
   /** Who an order deposit payment went to; an agent's (sea freight) is shown apart from the supplier's requirement. Absent on other rows. */
   payeeRole?: "supplier" | "agent";
+  /**
+   * The exchange-rate snapshot (INR per 1 of `currency`): a paid order deposit's own rate, or the supplier's rate when a
+   * supplier deposit was opened (0012); null for an obligation, a due deposit or a deposit opened without a rate.
+   * `amountInr`: a paid order deposit at its rate; null otherwise (a supplier deposit has no INR figure).
+   */
+  rate: number | null;
+  amountInr: number | null;
 };
 
 /**
@@ -84,6 +91,8 @@ export function toRows({ orderDeposits, orderObligations = [], supplierDeposits 
         status: o.status === "partly" ? "partly paid" : o.status,
         href: linkPo ? `${orderHref(o.po)}/payments` : null,
         payments: o.payments,
+        rate: null,
+        amountInr: null,
       }),
     ),
     // Payments to the supplier of an order with a requirement are inside its obligation row; an agent's deposit (sea
@@ -109,6 +118,8 @@ export function toRows({ orderDeposits, orderObligations = [], supplierDeposits 
           status: d.status,
           href: linkPo ? orderHref(d.po) : null,
           payeeRole: d.payeeRole,
+          rate: d.rateInr,
+          amountInr: d.amountInr,
         }),
       ),
     ...supplierDeposits.map(
@@ -129,6 +140,8 @@ export function toRows({ orderDeposits, orderObligations = [], supplierDeposits 
         notes: d.notes,
         status: d.status,
         href: statementHref(d.supplierId),
+        rate: d.exchangeRate ?? null,
+        amountInr: null,
       }),
     ),
   ];

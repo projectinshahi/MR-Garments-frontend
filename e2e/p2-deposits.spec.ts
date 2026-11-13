@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { type Api, cny, expect, kpi, longDate, test, today } from "./live-api";
+import { downloadReport } from "./report-download";
 
 // Deposits (docs/phase2-contracts.md section 3, docs/phase2-fixes.md section 2), against the live API as Management.
 // Scenario 6: an order's deposit requirement on the Deposits page, pending until it is paid. Scenario 7: a supplier's
@@ -133,9 +134,7 @@ test("Scenario 7: a deposit to give with a partial payment and one to receive wi
 
   // An export button downloads a file.
   await page.goto(`/deposits/suppliers/${supplier.id}`);
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export Excel" }).click();
-  expect((await download).suggestedFilename()).toMatch(/^supplier-deposits-deposit-test-\d{6}-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  expect((await downloadReport(page, "Excel")).name).toMatch(/^supplier-deposits-deposit-test-\d{6}-\d{4}-\d{2}-\d{2}\.xlsx$/);
 
   // Leave nothing behind (the Suppliers tab pages by 10): each transaction (SD-4), each deposit (SD-5), then the supplier.
   const statement = await api.get<{ deposits: { id: string; transactions: { id: string }[] }[] }>(`/suppliers/${supplier.id}/deposits`);

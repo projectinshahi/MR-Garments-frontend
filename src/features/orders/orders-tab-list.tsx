@@ -11,13 +11,14 @@ import { orderHref } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
 import type { ReportFile } from "@/features/reports/report-files";
+import type { OrderLineItem } from "@/lib/api/types";
 import { formatDate, formatMoney, formatQty, formatShortDate } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 
 import type { OrderRow, OrdersListData } from "./data/queries";
 import { rowActionClass } from "./delete-order";
 import { balanceCny, closedOrders, filterTabOrders, paymentStatus, pendingOrders, pendingQty, type TabFilters } from "./filter-orders";
-import { closedOrdersFile, describeFilters, pendingOrdersFile, rangeLabel } from "./order-files";
+import { closedOrdersFile, describeFilters, fetchOrderLines, pendingOrdersFile, rangeLabel } from "./order-files";
 import { stageLabel } from "./order-status";
 import { ClosedOrdersFrame, OrdersFrame } from "./orders-frame";
 import { PoCell } from "./orders-list";
@@ -37,7 +38,7 @@ type Spec = {
   columns: ColumnDef<OrderRow>[];
   /** Shown when there are orders but none belongs to this tab. */
   empty: string;
-  file: (rows: OrderRow[], filters: string, today: string) => ReportFile;
+  file: (rows: OrderRow[], filters: string, today: string, lines: OrderLineItem[] | null) => ReportFile;
 };
 
 const poColumn: ColumnDef<OrderRow> = { accessorKey: "po", header: "PO", cell: ({ row }) => <PoCell order={row.original} /> };
@@ -138,11 +139,12 @@ function TabList({ spec, orders, supplierNames, canEdit, frame = "orders" }: { s
   const filters: TabFilters = { query, supplier: supplier === ALL ? null : supplier, from, to };
   const members = spec.members(orders);
   const rows = filterTabOrders(members, filters, spec.dateOf);
-  const file = () =>
+  const file = async () =>
     spec.file(
       rows,
       describeFilters([query.trim() && `Search: "${query.trim()}"`, filters.supplier && `Supplier: ${filters.supplier}`, rangeLabel(spec.dateLabel, from, to)]),
       todayInIndia(),
+      await fetchOrderLines(),
     );
 
   const body = (
