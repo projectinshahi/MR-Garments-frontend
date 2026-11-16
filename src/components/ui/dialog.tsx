@@ -60,18 +60,30 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        // Never taller than the screen (16 px clear above and below): the body scrolls inside, the Close button stays
+        // put, and DialogFooter sticks to the bottom, so Save and Cancel are always reachable.
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 rounded-2xl bg-card p-7 text-sm text-foreground shadow-[0_16px_48px_rgb(19_33_60/18%)] duration-100 outline-none sm:max-w-[620px] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-2xl bg-card p-7 text-sm text-foreground shadow-[0_16px_48px_rgb(19_33_60/18%)] duration-100 outline-none sm:max-w-[620px] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
-        {children}
+        {/* The scroll area spans the card's width (scrollbar at the edge); its 4 px of vertical padding, taken back by
+            the margins, keeps focus rings at the top and bottom unclipped. It takes the card's gap (gap-0 and so on).
+            The scroll padding keeps a field that Tab scrolls to clear of the Close button and of the sticky footer
+            (one row of buttons; up to three stacked on a phone). */}
+        <div
+          data-slot="dialog-body"
+          className="-mx-7 -my-1 grid min-h-0 scroll-pt-8 scroll-pb-20 gap-[inherit] overflow-y-auto overscroll-contain px-7 py-1 max-sm:scroll-pb-44"
+        >
+          {children}
+        </div>
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-6 right-6 text-muted-foreground [&_svg:not([class*='size-'])]:size-5"
+              // Opaque, so text scrolling under it doesn't show through.
+              className="absolute top-6 right-6 bg-card text-muted-foreground [&_svg:not([class*='size-'])]:size-5"
               size="icon-sm"
             >
               <XIcon
@@ -107,7 +119,9 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end",
+        // Sticky: in a long dialog the actions stay on screen while the fields scroll under them. The solid shadow
+        // covers the dialog body's 4 px bottom padding, so no field shows through below the buttons.
+        "sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t bg-card pt-5 shadow-[0_4px_0_var(--color-card)] sm:flex-row sm:justify-end",
         className
       )}
       {...props}

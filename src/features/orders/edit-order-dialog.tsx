@@ -111,8 +111,8 @@ export function EditOrderDialog({ order, items, open, onClose }: { order: Editab
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent
-        // Up to 50 lines: the dialog scrolls inside the screen, so Save stays reachable.
-        className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto pb-[26px] sm:max-w-[720px]"
+        // Up to 50 lines: the dialog scrolls inside the screen (DialogContent), so Save stays reachable.
+        className="gap-0 pb-[26px] sm:max-w-[720px]"
         // As the Settings dialogs: the dialog itself takes focus, no field.
         onOpenAutoFocus={(event) => {
           event.preventDefault();
