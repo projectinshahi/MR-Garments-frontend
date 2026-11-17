@@ -34,7 +34,7 @@ const api: DepositsResponse = {
     { id: "s2", name: "Hangzhou Knits" },
   ],
 };
-const data = (access: Partial<DepositsData> = {}): DepositsData => ({ rows: toRows(api), suppliers: api.suppliers, today: "2026-11-10", canEnter: false, canDelete: false, linkPo: true, ...access });
+const data = (access: Partial<DepositsData> = {}): DepositsData => ({ rows: toRows(api), suppliers: api.suppliers, advances: [], today: "2026-11-10", canEnter: false, canDelete: false, linkPo: true, ...access });
 // The KPI tile's label is a <p>; a deposit block's fact labels ("Received") are <dt>s.
 const kpi = (label: string) => screen.getByText(label, { selector: "p" }).nextSibling;
 const rowsOf = (table: HTMLElement) => within(table).getAllByRole("row").slice(1);

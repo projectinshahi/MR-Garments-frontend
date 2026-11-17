@@ -1,6 +1,7 @@
 import { StatusPill } from "@/components/shared/status-pill";
 import type { DepositStatus } from "@/lib/api/types";
-import type { Tone } from "@/types/domain";
+import { formatMoney } from "@/lib/formatters";
+import type { Currency, Tone } from "@/types/domain";
 
 // The payee rules as the API states them (backend docs/phase2-fixes.md 1 and 2): `paidCny`/`paidInr` count every
 // payee, `supplierPaidCny`/`supplierPaidInr` the supplier only, and the balance is what the supplier is still owed.
@@ -35,5 +36,20 @@ export function DepositStatusPill({ status, className }: { status: DepositStatus
     <StatusPill tone={tone} className={className}>
       {label}
     </StatusPill>
+  );
+}
+
+/**
+ * A "Paid to supplier" cell: the supplier payments, with the supplier advance applied to the order on a second line
+ * when there is one (backend docs/supplier-advance.md). The advance is not a payment and is never added into the figure;
+ * the balance beside it counts both. `paid` null (an older API) shows a dash.
+ */
+export function PaidWithAdvance({ paid, advance, currency }: { paid: number | null; advance: number | undefined; currency: Currency }) {
+  const money = (value: number) => formatMoney(value, currency, { decimals: 2 });
+  return (
+    <>
+      {moneyOrDash(paid, money)}
+      {advance ? <span className="block text-xs whitespace-nowrap text-muted-foreground">+ {money(advance)} advance</span> : null}
+    </>
   );
 }

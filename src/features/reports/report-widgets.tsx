@@ -117,7 +117,16 @@ export function SupplierPaymentsTable({ rows, totals, query }: { rows: SupplierR
       accessorKey: "paidCny",
       header: "Paid",
       meta: { align: "right", className: "w-[146px]" },
-      cell: ({ row }) => formatMoney(row.original.paidCny, row.original.currency),
+      // The supplier advance applied shows under paid only when there is one, so the reference layout is unchanged otherwise.
+      cell: ({ row }) =>
+        row.original.advanceCny ? (
+          <span className="inline-flex flex-col items-end">
+            {formatMoney(row.original.paidCny, row.original.currency)}
+            <span className="text-[12.5px] text-muted-foreground">+ {formatMoney(row.original.advanceCny, row.original.currency)} advance</span>
+          </span>
+        ) : (
+          formatMoney(row.original.paidCny, row.original.currency)
+        ),
       footer: each((total) => total.paidCny),
     },
     {

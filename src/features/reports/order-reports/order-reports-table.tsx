@@ -82,6 +82,8 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end">
           {formatMoney(row.original.paidCny, row.original.currency)}
+          {/* The supplier advance applied, apart from paid: balance = value - paid - advance. */}
+          {row.original.advanceCny ? <span className="text-[12.5px] text-muted-foreground">+ {formatMoney(row.original.advanceCny, row.original.currency)} advance</span> : null}
           <StatusPill tone={PAYMENT_TONE[row.original.paymentStatus]}>{PAYMENT_STATE_LABEL[row.original.paymentStatus]}</StatusPill>
         </span>
       ),

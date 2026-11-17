@@ -58,7 +58,7 @@ export function DeleteOrderButton({ po, supplier, inList = false }: { po: string
           description: (
             <p>
               Are you sure you want to delete <strong className="text-foreground">{po}</strong> ({supplier})? This can&apos;t be undone. An order with
-              payments, receipts or container loads can&apos;t be deleted.
+              payments, receipts or container loads can&apos;t be deleted. Any supplier advance applied to it goes back to the supplier&apos;s advance account.
             </p>
           ),
           confirmLabel: "Delete order",

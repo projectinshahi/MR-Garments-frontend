@@ -45,11 +45,13 @@ import {
 // Deposits (docs/phase2-contracts.md 3.3), no reference design: the list pages' parts (header, RouteTabs, filter row,
 // xs KPI tiles, the list table). Every deposit is loaded once (DEP-1); the tabs and filters run on the client.
 
-const TABS: RouteTab[] = [
+export const DEPOSIT_TABS: RouteTab[] = [
   { href: "/deposits", label: "All deposits", chip: "a" },
   { href: "/deposits/pending", label: "Pending", chip: "b" },
   { href: "/deposits/paid", label: "Paid", chip: "c" },
   { href: "/deposits/suppliers", label: "Suppliers", chip: "d" },
+  // The supplier advance account (backend docs/supplier-advance.md): money paid before any order.
+  { href: "/deposits/advance", label: "Supplier advance", chip: "e" },
 ];
 const ALL = "all";
 const PAGE_SIZE = 10;
@@ -170,11 +172,11 @@ export function DepositsScreen({ data, view }: { data: DepositsData; view: Depos
         actions={
           <ReportDownload
             size="header"
-            file={() => (view === "suppliers" ? suppliersFile(summaries, label, data.today) : depositsFile(view, rows, label, data.today))}
+            file={() => (view === "suppliers" ? suppliersFile(summaries, label, data.today) : depositsFile(view, rows, label, data.today, data.advances))}
           />
         }
       />
-      <RouteTabs tabs={TABS} label="Deposits views" />
+      <RouteTabs tabs={DEPOSIT_TABS} label="Deposits views" />
       <PageContainer>
         <div className="flex flex-wrap items-center gap-3">
           <FilterSelect label="Supplier" size="sm" value={filters.supplierId ?? ALL} options={supplierOptions} onValueChange={fromSelect(set("supplierId"))} />

@@ -213,17 +213,20 @@ describe("Supplier detail lists: every amount in its own currency", () => {
           order("PO-2052", { currency: "USD", orderValueCny: 200, paidCny: 50, balanceCny: 150 }),
           order("PO-2053", { currency: "INR", orderValueCny: 1500, paidCny: 1000, balanceCny: 500 }),
           order("PO-2054", { orderValueCny: 120, paidCny: 150, balanceCny: -30 }),
+          // The supplier advance applied has its own column (value - paid - advance = outstanding).
+          order("PO-2055", { orderValueCny: 500, paidCny: 100, advanceCny: 300, balanceCny: 100 }),
         ])}
         linkPos={false}
         today="2026-10-15"
         empty=""
       />,
     );
-    const money = (po: string) => within(rowOf(po)).getAllByRole("cell").slice(3, 7).map((cell) => cell.textContent);
-    expect(money("PO-2051")).toEqual(["100 pcs · 200 m", "¥1,850", "¥1,500", "¥350"]);
-    expect(money("PO-2052")).toEqual(["100 pcs", "$200", "$50", "$150"]);
-    expect(money("PO-2053")).toEqual(["100 pcs", "₹1,500", "₹1,000", "₹500"]);
-    expect(money("PO-2054")).toEqual(["100 pcs", "¥120", "¥150", "−¥30"]);
+    const money = (po: string) => within(rowOf(po)).getAllByRole("cell").slice(3, 8).map((cell) => cell.textContent);
+    expect(money("PO-2051")).toEqual(["100 pcs · 200 m", "¥1,850", "¥1,500", "¥0", "¥350"]);
+    expect(money("PO-2052")).toEqual(["100 pcs", "$200", "$50", "$0", "$150"]);
+    expect(money("PO-2053")).toEqual(["100 pcs", "₹1,500", "₹1,000", "₹0", "₹500"]);
+    expect(money("PO-2054")).toEqual(["100 pcs", "¥120", "¥150", "¥0", "−¥30"]);
+    expect(money("PO-2055")).toEqual(["100 pcs", "¥500", "¥100", "¥300", "¥100"]);
   });
 
   it("products: one row per order line, rate to the cent and total in the order's currency", () => {

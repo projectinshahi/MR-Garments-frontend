@@ -5,7 +5,7 @@ import { toPdf } from "@/features/reports/pdf";
 import { toXlsx } from "@/features/reports/xlsx";
 import type { SupplierStatement } from "@/lib/api/deposits-types";
 
-import { depositsFile, filterLabel, statementFile, suppliersFile } from "./deposit-files";
+import { advanceFile, advanceSections, depositsFile, filterLabel, statementFile, suppliersFile } from "./deposit-files";
 import { type DepositRow, EMPTY_FILTERS, supplierSummaries } from "./deposits-logic";
 
 const TODAY = "2026-11-10";
@@ -113,5 +113,41 @@ describe("statementFile", () => {
     expect(xlsx.byteLength).toBeGreaterThan(1000);
     const pdf = toPdf(file, "Generated 10 Nov 2026, 10:00");
     expect(new TextDecoder("latin1").decode(pdf.slice(0, 8))).toBe("%PDF-1.4");
+  });
+});
+
+// Supplier advance account (backend docs/supplier-advance.md): its own sheets, never netted with the deposits.
+const account: NonNullable<SupplierStatement["advance"]> = {
+  summary: [{ currency: "CNY", receivedCny: 1000, allocatedCny: 600, reversedCny: 200, availableCny: 600, orders: 1 }],
+  entries: [
+    { id: "e3", kind: "reversal", entryDate: "2026-10-20", currency: "CNY", amount: 200, exchangeRate: 12, amountInr: 2400, advanceId: "e1", advancePaidOn: "2026-10-01", advanceReference: "UTR 1", reversalOf: "e2", orderId: null, po: "PO-3001", mode: "", reference: "", notes: "", recordedAt: "2026-10-20T05:00:00Z", recordedBy: "Suresh", balance: 600 },
+    { id: "e2", kind: "allocation", entryDate: "2026-10-10", currency: "CNY", amount: 600, exchangeRate: 12, amountInr: 7200, advanceId: "e1", advancePaidOn: "2026-10-01", advanceReference: "UTR 1", reversalOf: null, orderId: null, po: "PO-3001", mode: "", reference: "", notes: "", recordedAt: "2026-10-10T05:00:00Z", recordedBy: "Priya", balance: 400 },
+    { id: "e1", kind: "receipt", entryDate: "2026-10-01", currency: "CNY", amount: 1000, exchangeRate: 12, amountInr: 12000, advanceId: null, advancePaidOn: null, advanceReference: null, reversalOf: null, orderId: null, po: "", mode: "Bank transfer", reference: "UTR 1", notes: "Season", recordedAt: "2026-10-01T05:00:00Z", recordedBy: "Anita", balance: 1000 },
+  ],
+};
+
+describe("supplier advance in the deposit files", () => {
+  it("writes the account's totals and its ledger (signed, with the balance after each entry) on their own sheets", () => {
+    const file = statementFile({ ...statement, advance: account }, TODAY);
+    expect(file.sections.map((s) => s.sheet)).toEqual(["Summary", "Deposit to Give", "Deposit to Receive", "Transactions", "Advance Summary", "Advance Ledger"]);
+    expect(file.sections[4]!.rows).toEqual([[1000, 600, 200, 600, 1]]);
+    expect(file.sections[5]!.rows.map((r) => [r[1], r[2], r[3], r[6]])).toEqual([
+      ["Returned from order", "PO-3001", 200, 600],
+      ["Applied to order", "PO-3001", -600, 400],
+      ["Advance received", "", 1000, 1000],
+    ]);
+    // advanceFile: the same sections as a standalone report; a filtered ledger keeps the order given.
+    const own = advanceFile({ name: "Foshan Fabrics", currency: "CNY" }, { ...account, entries: account.entries.slice(1) }, "Type: all", TODAY);
+    expect(own).toMatchObject({ title: "Supplier advance: Foshan Fabrics", filename: `supplier-advance-foshan-fabrics-${TODAY}` });
+    expect(own.sections[1]!.rows.map((r) => r[0])).toEqual(["2026-10-10", "2026-10-01"]);
+    expect(advanceSections(undefined)).toEqual([]);
+  });
+
+  it("adds a Supplier Advances sheet to the deposits file only when DEP-1 sent advances", () => {
+    expect(depositsFile("all", rows, "All deposits", TODAY).sections.some((s) => s.sheet === "Supplier Advances")).toBe(false);
+    const file = depositsFile("all", rows, "All deposits", TODAY, [{ supplierId: "s1", supplier: "Foshan Fabrics", ...account.summary[0]! }]);
+    const sheet = file.sections.find((s) => s.sheet === "Supplier Advances")!;
+    expect(sheet.columns.map((c) => c.header)).toEqual(["Supplier", "Received (CNY)", "Applied to orders (CNY)", "Returned from orders (CNY)", "Available (CNY)", "Orders"]);
+    expect(sheet.rows).toEqual([["Foshan Fabrics", 1000, 600, 200, 600, 1]]);
   });
 });

@@ -78,6 +78,15 @@ describe("RecordPaymentDialog", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("says when the payment gave supplier advance back to the supplier's account (PAY-2 advance)", async () => {
+    post.mockResolvedValue({ payment: { id: "p1" }, advance: { appliedCny: 1500, changeCny: -500, availableCny: 8500, balanceCny: 0, status: "full" } });
+    const form = await open();
+    await fill(form);
+    await form.user.click(form.submit);
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    expect(toast.success).toHaveBeenCalledWith("Payment recorded for PO-3002. ¥500.00 of supplier advance went back to the supplier's account");
+  });
+
   it("sends the reference and notes when typed (trimmed), and leaves them out when empty", async () => {
     post.mockResolvedValue({ payment: { id: "p1" } });
     const form = await open();

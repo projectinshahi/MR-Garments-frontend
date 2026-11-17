@@ -114,6 +114,17 @@ describe("report files", () => {
       `Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)\r\nFoshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,120000.5\r\nTotal,2 open orders,160000.5,40000,480000,120000.5\r\n\r\nSupplier,Orders,Order value (USD),Paid (USD),Paid (INR),Balance (USD)\r\nBoston Denim,PO-2050,1200,200,17600,1000\r\nTotal,1 open order,1200,200,17600,1000`,
     );
   });
+
+  it("adds Advance applied before Balance when the API reports the supplier advance (value - paid - advance = balance)", () => {
+    const withAdvance: PaymentsPerSupplierReport = {
+      ...payments,
+      suppliers: [{ ...payments.suppliers[0]!, advanceCny: 20000, balanceCny: 100000.5 }],
+      totalsByCurrency: [{ ...payments.totalsByCurrency[0]!, advanceCny: 20000, balanceCny: 100000.5 }],
+    };
+    expect(toCsv(csvRows(reportFile("payments-per-supplier", withAdvance, TODAY)))).toBe(
+      `Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Advance applied (CNY),Balance (CNY)\r\nFoshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,20000,100000.5\r\nTotal,2 open orders,160000.5,40000,480000,20000,100000.5`,
+    );
+  });
 });
 
 describe("Excel file", () => {

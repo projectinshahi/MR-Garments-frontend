@@ -19,7 +19,10 @@ export const PAYMENT_STATE_LABEL: Record<OrderReportRow["paymentStatus"], string
 /** The row's status as the lists show it (a closed order reads "Closed", section 1.1). */
 export const rowStatus = (row: OrderReportRow, today: string) => orderStatus(row, today);
 
-function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): Section {
+// A backend that reports the supplier advance (backend docs/supplier-advance.md) adds an "Advance applied" column next
+// to Paid, so value - paid - advance = balance can be read on every row; an older one keeps the columns as they were.
+function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, withAdvance: boolean): Section {
+  const advance = <T>(value: T): T[] => (withAdvance ? [value] : []);
   return {
     sheet: "Orders",
     title: `Orders in ${currency}`,
@@ -41,6 +44,7 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
       "Rate (INR per 1)",
       money("Order value", "INR"),
       money("Paid", currency),
+      ...advance(money("Advance applied", currency)),
       money("Balance", currency),
       "Payment status",
       money("Paid", "INR"),
@@ -66,6 +70,7 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
       row.exchangeRate,
       row.orderValueInr,
       row.paidCny,
+      ...advance(row.advanceCny ?? 0),
       row.balanceCny,
       PAYMENT_STATE_LABEL[row.paymentStatus],
       row.paidInr,
@@ -93,6 +98,7 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
           // Only when every order has a saved rate: a part total would read as the whole.
           rows.every((row) => row.orderValueInr !== null) ? sum(rows, (row) => row.orderValueInr ?? 0) : null,
           sum(rows, (row) => row.paidCny),
+          ...advance(sum(rows, (row) => row.advanceCny ?? 0)),
           sum(rows, (row) => row.balanceCny),
           null,
           sum(rows, (row) => row.paidInr),
@@ -108,11 +114,13 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
 export function orderReportsFile(data: OrderReportsResponse, today: string): ReportFile {
   const { rows, summary, filter } = data;
   const currencies = orderedCurrencies(rows.map((row) => row.currency));
+  const withAdvance = rows.some((row) => row.advanceCny !== undefined);
   const tables = (currencies.length ? currencies : ["CNY" as const]).map((currency) =>
     rowsTable(
       currency,
       rows.filter((row) => row.currency === currency),
       today,
+      withAdvance,
     ),
   );
   const summaryTable: Section = {
@@ -124,6 +132,7 @@ export function orderReportsFile(data: OrderReportsResponse, today: string): Rep
       ...summary.byCurrency.flatMap((total) => [
         [`Order value (${total.currency})`, total.orderValueCny],
         [`Paid (${total.currency})`, total.paidCny],
+        ...(total.advanceCny === undefined ? [] : [[`Advance applied (${total.currency})`, total.advanceCny]]),
         [`Balance (${total.currency})`, total.balanceCny],
       ]),
       ["Paid (INR)", summary.paidInr],

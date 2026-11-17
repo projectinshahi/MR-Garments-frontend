@@ -249,7 +249,7 @@ describe("order report file", () => {
   it("writes the payment ledger with the order's currency, the agent's sea freight apart, and no refunds or deposit links", () => {
     const summary = titled("Payment summary").rows;
     expect(summary).toContainEqual(["Sea freight paid to agents (CNY)", 0]);
-    expect(summary).toContainEqual(["Refunds, reversals, credits", "Not recorded in this system"]);
+    expect(summary).toContainEqual(["Payment refunds and credits", "Not recorded in this system (advance returns are under Supplier advance applied)"]);
     expect(titled("Payment ledger").rows[1]).toEqual([null, "", "Balance", null, 200, "CNY", null, null, "Guangzhou Textile Co.", "supplier", null, "", "due", "2026-11-19", "–", "–"]);
   });
 
@@ -289,5 +289,37 @@ describe("order report file", () => {
   it("leaves out the sections the API nulled", () => {
     const limited = orderReportFile({ ...report, payments: null, supplierAccount: null, receipts: null, logistics: null, warehouse: null, landedCost: null }, TODAY);
     expect([...new Set(limited.sections.map((section) => section.sheet))]).toEqual(["Order Overview", "Supplier Details", "Order Items", "Order Timeline"]);
+  });
+
+  it("writes the supplier advance applied apart from paid, signed per entry, and the supplier's advance account", () => {
+    const entry = { currency: "CNY", exchangeRate: 12, advanceId: "a1", advancePaidOn: "2026-10-01", advanceReference: "UTR 1", orderId: "o1", po: report.order.po, mode: "", reference: "", notes: "", recordedAt: "2026-10-10T05:00:00Z", recordedBy: "Priya" };
+    const withAdvance = orderReportFile(
+      {
+        ...report,
+        payments: {
+          ...report.payments!,
+          advanceCny: 400,
+          advanceInr: 4800,
+          advanceStatus: "partial",
+          balanceCny: 200,
+          advanceEntries: [
+            { ...entry, id: "e1", kind: "allocation", entryDate: "2026-10-10", amount: 500, amountInr: 6000, reversalOf: null },
+            { ...entry, id: "e2", kind: "reversal", entryDate: "2026-10-12", amount: 100, amountInr: 1200, reversalOf: "e1" },
+          ],
+        },
+        supplierAccount: { ...report.supplierAccount!, advanceApplied: [{ currency: "CNY", amount: 400 }], advance: [{ currency: "CNY", receivedCny: 1000, allocatedCny: 500, reversedCny: 100, availableCny: 600, orders: 1 }] },
+      },
+      TODAY,
+    );
+    const rows = csvRows(withAdvance);
+    expect(rows).toContainEqual(["Supplier advance applied (CNY)", 400]);
+    expect(rows).toContainEqual(["Advance status", "Partial"]);
+    expect(rows).toContainEqual(["Supplier advance (CNY): received · applied · returned · available", "1000 · 500 · 100 · 600"]);
+    const applied = withAdvance.sections.find((section) => section.title === "Supplier advance applied")!;
+    expect(applied.rows.map((row) => [row[1], row[2], row[4]])).toEqual([
+      ["Applied to order", 500, 6000],
+      ["Returned from order", -100, -1200],
+    ]);
+    expect(applied.total).toEqual([null, "Advance applied", 400, null, 4800, null, "", "", ""]);
   });
 });

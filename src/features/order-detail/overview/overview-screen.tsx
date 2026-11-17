@@ -4,6 +4,7 @@ import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Journey } from "@/components/shared/timeline";
 import type { OrderView } from "@/features/order-detail/data/queries";
+import { AdvanceBreakdown, PartialAdvanceWarning } from "@/features/order-detail/shared/advance-breakdown";
 import { agentPaid, DepositStatusPill } from "@/features/payments/money";
 import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
 
@@ -50,6 +51,8 @@ export function OverviewScreen({ order }: { order: OrderView }) {
         </dl>
       </SectionCard>
 
+      <PartialAdvanceWarning order={order} />
+
       <SectionCard title="Journey of this order" titleGap="none">
         <div className="overflow-x-auto">
           <Journey size="sm" className="mt-3 min-w-[720px]" steps={journeySteps(order)} />
@@ -73,6 +76,7 @@ export function OverviewScreen({ order }: { order: OrderView }) {
             ]}
           />
         </SectionCard>
+        <AdvanceBreakdown order={order} />
       </div>
     </PageContainer>
   );

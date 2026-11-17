@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { canOpen, hasAccess } from "@/config/navigation";
-import type { DepositsResponse, SupplierStatement } from "@/lib/api/deposits-types";
+import type { DepositsResponse, SupplierAdvanceResponse, SupplierStatement } from "@/lib/api/deposits-types";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import { getMe } from "@/lib/session";
@@ -28,7 +28,26 @@ export type DepositsData = Awaited<ReturnType<typeof getDeposits>>;
 export async function getDeposits() {
   const [response, access] = await Promise.all([apiGet<DepositsResponse>("/deposits"), getAccess()]);
   // Order rows link to their order only when the user may open orders (as PoLink does).
-  return { rows: toRows(response, access.linkPo), suppliers: response.suppliers, today: todayInIndia(), ...access };
+  return { rows: toRows(response, access.linkPo), suppliers: response.suppliers, advances: response.advances ?? [], today: todayInIndia(), ...access };
+}
+
+export type AdvanceData = Awaited<ReturnType<typeof getAdvance>>;
+
+/**
+ * Deposits › Supplier advance: DEP-1 for the suppliers and every account's balance, and ADV-1 for the chosen supplier
+ * (null while none is chosen). An unknown supplier id shows the tab as if none was chosen.
+ */
+export async function getAdvance(supplierId: string | null) {
+  const [deposits, account] = await Promise.all([
+    getDeposits(),
+    supplierId
+      ? apiGet<SupplierAdvanceResponse>(`/suppliers/${encodeURIComponent(supplierId)}/advances`).catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        })
+      : Promise.resolve(null),
+  ]);
+  return { suppliers: deposits.suppliers, advances: deposits.advances, account, today: deposits.today, canEnter: deposits.canEnter, canDelete: deposits.canDelete, linkPo: deposits.linkPo };
 }
 
 export type StatementData = Awaited<ReturnType<typeof getStatement>>;

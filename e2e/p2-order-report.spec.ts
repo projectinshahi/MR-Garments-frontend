@@ -47,7 +47,7 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
   await expect(kpi(page, "Total paid to supplier")).toContainText("¥300");
   await expect(kpi(page, "Outstanding balance").first()).toContainText("¥1,100");
-  await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ hasText: "Advance / deposit" })).toContainText("₹3,600");
+  await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ has: page.getByRole("cell", { name: "Deposit", exact: true }) })).toContainText("₹3,600");
   await expect(kv(page, "Supplier code")).toHaveText(/^SUP-\d{3,}$/);
   await expect(kv(page, "Deposit utilised for this PO")).toContainText("Not tracked");
   await expect(page.getByRole("heading", { level: 2, name: "Timeline" })).toBeVisible();

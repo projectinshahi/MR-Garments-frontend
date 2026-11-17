@@ -65,7 +65,12 @@ const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => 
     accessorKey: "supplierPaid",
     header: () => label("Paid to supplier"),
     meta: { align: "right", className: `${PAD} w-[118px]` },
-    cell: ({ row }) => amount(row.original.supplierPaid, row.original),
+    cell: ({ row }) => (
+      <>
+        {amount(row.original.supplierPaid, row.original)}
+        {row.original.advance ? <span className="block text-xs whitespace-nowrap text-muted-foreground">+ {amount(row.original.advance, row.original)} advance</span> : null}
+      </>
+    ),
   },
   {
     accessorKey: "paidInr",

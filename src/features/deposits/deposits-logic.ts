@@ -87,7 +87,8 @@ export function toRows({ orderDeposits, orderObligations = [], supplierDeposits 
         date: o.lastPaidOn ?? "",
         mode: "",
         reference: "",
-        notes: "",
+        // Paid includes the supplier advance applied to the order (backend docs/supplier-advance.md): said here, so it isn't read as deposit payments.
+        notes: o.advanceCny ? `Includes supplier advance ${amountText(o.advanceCny, o.currency)}` : "",
         status: o.status === "partly" ? "partly paid" : o.status,
         href: linkPo ? `${orderHref(o.po)}/payments` : null,
         payments: o.payments,

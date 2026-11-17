@@ -1,6 +1,7 @@
 import type { Currency, MoneyTotal, RecordStatus } from "@/types/domain";
 
-import type { ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, SupplierProfile, Unit } from "./types";
+import type { AdvanceAccount, AdvanceEntry, AdvanceSummary } from "./deposits-types";
+import type { AdvanceStatus, ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, SupplierProfile, Unit } from "./types";
 
 // Landed cost and Reports (backend docs/wave3-contracts.md sections 6.4, 7 and 8). Owner: A6. INR amounts have 2
 // decimals; dates are YYYY-MM-DD; months YYYY-MM. Order-currency amounts (...Cny) come with their `currency`, and their
@@ -139,12 +140,13 @@ export type ContainersTimelineReport = Report<{
   nextArrival: { date: string; number: string } | null;
 }>;
 
-type SupplierTotals = { orders: number; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number };
+/** `advanceCny`: the supplier advance applied (backend docs/supplier-advance.md), apart from paid; absent from an older backend. */
+type SupplierTotals = { orders: number; orderValueCny: number; paidCny: number; paidInr: number; advanceCny?: number; balanceCny: number };
 
 /** GET /api/v1/reports/payments-per-supplier: open orders (stage below 6), supplier payments only. */
 export type PaymentsPerSupplierReport = Report<{
   /** One row per supplier and order currency (CNY, USD, INR, then order value, largest first). */
-  suppliers: { supplierId: string; supplier: string; currency: Currency; orders: string[]; orderValueCny: number; paidCny: number; paidInr: number; balanceCny: number }[];
+  suppliers: { supplierId: string; supplier: string; currency: Currency; orders: string[]; orderValueCny: number; paidCny: number; paidInr: number; advanceCny?: number; balanceCny: number }[];
   /** CNY orders only (older frontends); use totalsByCurrency. */
   totals: SupplierTotals;
   totalsByCurrency: (SupplierTotals & { currency: Currency })[];
@@ -176,7 +178,7 @@ export type SupplierPaymentDetail = {
     /** Distinct items on those lines. */
     products: number;
     /** One entry per order currency present, in CNY, USD, INR order. Empty when there are no orders. Deposits are part of paid. */
-    byCurrency: { currency: Currency; orders: number; orderValueCny: number; paidCny: number; paidInr: number; depositsCny: number; balanceCny: number }[];
+    byCurrency: { currency: Currency; orders: number; orderValueCny: number; paidCny: number; paidInr: number; depositsCny: number; advanceCny?: number; balanceCny: number }[];
   };
   /** Newest first: coalesce(paidOn, dueDate) desc. */
   payments: Page<{
@@ -210,10 +212,13 @@ export type SupplierPaymentDetail = {
     unit: Unit;
     orderValueCny: number;
     paidCny: number;
+    advanceCny?: number;
     balanceCny: number;
   }>;
   /** One row per order line, never merged across orders: order date desc, PO desc, line position asc. */
   lines: Page<{ orderLineId: string; orderId: string; po: string; itemId: string; item: string; unit: Unit; quantity: number; rateCny: number; amountCny: number; currency: Currency }>;
+  /** The supplier's whole advance account (not limited to the period); absent from an older backend. */
+  advance?: AdvanceAccount;
 };
 
 /** GET /api/v1/reports/landed-cost-by-month: finished orders by the month they were stocked. */
@@ -294,7 +299,11 @@ export type OrderReportSupplierAccount = {
   openOrders: number;
   purchaseValue: MoneyTotal[];
   paid: MoneyTotal[];
+  /** The supplier advance applied to the supplier's orders, per currency; absent from an older backend. */
+  advanceApplied?: MoneyTotal[];
   balance: MoneyTotal[];
+  /** The supplier's advance account per currency; absent from an older backend. */
+  advance?: AdvanceSummary[];
   deposits: {
     summary: { currency: Currency; direction: "give" | "receive"; amount: number; settled: number; pending: number }[];
     list: OrderReportDeposit[];
@@ -408,6 +417,11 @@ export type OrderReport = {
   payments: {
     paidCny: number;
     paidInr: number;
+    /** The supplier advance applied (not a payment), its INR, status and entries; absent from an older backend. */
+    advanceCny?: number;
+    advanceInr?: number;
+    advanceStatus?: AdvanceStatus;
+    advanceEntries?: AdvanceEntry[];
     balanceCny: number;
     depositsPaidCny: number;
     dueCny: number;
@@ -469,6 +483,9 @@ export type OrderReportRow = {
   orderValueCny: number;
   paidCny: number;
   paidInr: number;
+  /** The supplier advance applied; absent from an older backend. */
+  advanceCny?: number;
+  advanceInr?: number;
   balanceCny: number;
   paymentStatus: PaymentState;
   /** null while the order has no cost at all. */
@@ -482,7 +499,7 @@ export type OrderReportRow = {
  */
 export type OrderReportsResponse = {
   rows: OrderReportRow[];
-  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; paidCny: number; balanceCny: number }[]; paidInr: number; landedCostInr: number };
+  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; paidCny: number; advanceCny?: number; balanceCny: number }[]; paidInr: number; landedCostInr: number };
   filter: {
     po: string | null;
     /** The supplier-name text filter, as typed. */

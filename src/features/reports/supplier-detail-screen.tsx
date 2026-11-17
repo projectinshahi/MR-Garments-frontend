@@ -2,6 +2,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
+import { AdvanceAccountView } from "@/features/deposits/advance-account-view";
 import { currencyTitle, formatDate, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
 
 import { filterLabel } from "./data/filters";
@@ -128,7 +129,9 @@ export function SupplierDetailScreen({
               </>
             }
           />
-          <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub="order value less paid" />
+          {/* The supplier advance applied to these orders (backend docs/supplier-advance.md): apart from paid, never added to it. */}
+          {data.advance ? <KpiCard size="xs" label="Advance applied" value={each((t) => t.advanceCny ?? 0)} sub="from the supplier advance account" /> : null}
+          <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub={data.advance ? "order value less paid and advance" : "order value less paid"} />
         </KpiRow>
 
         <DetailUrlProvider base={base ?? `/reports/payments-per-supplier/${supplier.id}`} search={page.search}>
@@ -166,6 +169,15 @@ export function SupplierDetailScreen({
             <Footnote>One row per order line: the same product in several orders stays on separate rows.</Footnote>
           </div>
         </DetailUrlProvider>
+
+        {data.advance ? (
+          <SectionCard title="Supplier advance" titleGap="none" className="min-w-0">
+            <CardSubtitle>The whole advance account, not limited to the period: money paid before any order and what orders drew from it</CardSubtitle>
+            <div className="mt-3">
+              <AdvanceAccountView account={data.advance} supplierName={supplier.name} linkPos={linkPos} />
+            </div>
+          </SectionCard>
+        ) : null}
 
         <Footnote>
           Supplier payments only: payments to shipping agents (sea freight) on these orders are not included. Every order is

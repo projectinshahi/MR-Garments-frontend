@@ -171,6 +171,8 @@ export function SupplierOrdersList({ list, linkPos, today, empty }: { list: List
     },
     { accessorKey: "orderValueCny", header: "Order value", meta: { align: "right" }, cell: money((o) => o.orderValueCny) },
     { accessorKey: "paidCny", header: "Paid", meta: { align: "right" }, cell: money((o) => o.paidCny) },
+    // The supplier advance applied (not a payment): outstanding = value - paid - advance.
+    { accessorKey: "advanceCny", header: "Advance applied", meta: { align: "right" }, cell: money((o) => o.advanceCny ?? 0) },
     { accessorKey: "balanceCny", header: "Outstanding", meta: { align: "right" }, cell: money((o) => o.balanceCny) },
     {
       id: "status",

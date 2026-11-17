@@ -36,7 +36,12 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
           <KpiCard size="xs" label="Orders" value={formatNumber(summary.orders)} sub={label ? "matching the filters" : "every order"} />
           <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />
           <KpiCard size="xs" label="Paid to suppliers" value={each((t) => t.paidCny)} sub={`${formatINR(summary.paidInr)} at payment-day rates`} />
-          <KpiCard size="xs" label="Balance" value={each((t) => t.balanceCny)} sub="order value less paid" />
+          <KpiCard
+            size="xs"
+            label="Balance"
+            value={each((t) => t.balanceCny)}
+            sub={summary.byCurrency.some((t) => t.advanceCny) ? `order value less paid and ${each((t) => t.advanceCny ?? 0)} advance applied` : "order value less paid"}
+          />
           <KpiCard size="xs" label="Landed cost" value={formatINR(summary.landedCostInr)} sub="orders with a cost so far" />
         </KpiRow>
         <OrderReportsTable rows={data.rows} today={today} linkPos={linkPos} />

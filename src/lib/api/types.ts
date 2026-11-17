@@ -1,6 +1,7 @@
 // API contracts shared with the backend (MR-Garments-Backend docs/contracts.md). Coordinator-owned.
 
 import type { Currency, MoneyTotal, RecordStatus, Role } from "@/types/domain";
+import type { AdvanceEntry } from "./deposits-types";
 
 export type Access = "None" | "View" | "Enter" | "Full";
 
@@ -232,7 +233,14 @@ export type OrderListItem = {
   paidInr: number;
   /** The deposit the supplier asked for (0009), in the order's currency; null when none was agreed. */
   depositRequiredCny: number | null;
-  /** Paid supplier deposits (kind Deposit, payee the supplier). */
+  /**
+   * The supplier advance applied to the order (backend docs/supplier-advance.md): money already with the supplier, not
+   * a payment. Balance to supplier = value - supplierPaidCny - advanceCny. Absent from an older backend (read as 0).
+   */
+  advanceCny?: number;
+  /** advanceCny in INR at the rate of each advance it came from. */
+  advanceInr?: number;
+  /** Paid supplier deposits (kind Deposit, payee the supplier) plus the supplier advance applied. */
   depositPaidCny: number;
   /** max(0, required - paid); null without a requirement. */
   depositPendingCny: number | null;
@@ -265,7 +273,15 @@ export type DepositStatus = "none" | "due" | "partly" | "paid";
 export type OrderOptions = {
   nextPo: string;
   /** `currency`: the supplier's, which the order is in; `exchangeRate`: the supplier's rate now (null while not set), kept on the order. */
-  suppliers: (Named & { contactPerson: string; phone: string; city: string; currency: Currency; exchangeRate: number | null })[];
+  suppliers: (Named & {
+    contactPerson: string;
+    phone: string;
+    city: string;
+    currency: Currency;
+    exchangeRate: number | null;
+    /** The supplier's advance available in its currency, applied automatically when the order is created; absent from an older backend. */
+    advanceAvailable?: number;
+  })[];
   /** `price`: the item's default rate per unit, offered for the line when the item is chosen; null when none is set. */
   items: (Named & { unit: Unit; price: number | null })[];
   /** Active shipping agents: the other kind of deposit payee. */
@@ -288,7 +304,11 @@ export type CreateOrderBody = {
   /** `rateInr` is left out for an INR order (the server stores 1). `reference` (transaction number, up to 100) and `notes` (up to 1,000) are optional. */
   deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
 };
-export type CreateOrderResponse = { order: { id: string; po: string } };
+/** ORD-3's advance result (backend docs/supplier-advance.md); absent from an older backend. */
+export type AdvanceResult = { appliedCny: number; changeCny: number; availableCny: number; balanceCny: number; status: AdvanceStatus };
+/** none: nothing applied; full: nothing left to pay after the advance and direct payments; partial otherwise. */
+export type AdvanceStatus = "none" | "partial" | "full";
+export type CreateOrderResponse = { order: { id: string; po: string }; advance?: AdvanceResult };
 
 /**
  * ORD-5 PATCH /api/v1/orders/:po (ordersEdit >= Enter; docs/orders-users-contract.md). Any subset, at least one key.
@@ -336,7 +356,9 @@ export type PaymentsResponse = {
     /** Paid to the supplier only. */
     supplierPaidCny: number;
     supplierPaidInr: number;
-    /** What the supplier is still owed: order value less supplier payments (phase 2 fixes, 1). */
+    /** The supplier advance applied (absent from an older backend). */
+    advanceCny?: number;
+    /** What the supplier is still owed: order value less supplier payments and the advance applied. */
     balanceCny: number;
     depositRequiredCny: number | null;
     depositPaidCny: number;
@@ -473,8 +495,14 @@ export type PaymentKind = "Deposit" | "Balance";
  * the signed-in user can't view it (payments, receiving, containers access). Records are oldest first.
  */
 export type OrderDetail = Omit<OrderListItem, "supplier"> & {
-  supplier: Omit<OrderOptions["suppliers"][number], "currency" | "exchangeRate">;
+  supplier: Omit<OrderOptions["suppliers"][number], "currency" | "exchangeRate" | "advanceAvailable">;
   balanceCny: number;
+  /** Absent from an older backend. */
+  advanceStatus?: AdvanceStatus;
+  /** The order's advance allocations and reversals, oldest first; null without payments access, absent from an older backend. */
+  advanceEntries?: AdvanceEntry[] | null;
+  /** The supplier's advance available in the order's currency (ADV-4 can apply it); null without payments access, absent from an older backend. */
+  advanceAvailableCny?: number | null;
   lines: {
     id: string;
     position: number;
@@ -541,7 +569,8 @@ export type CreatePaymentBody = {
   reference?: string;
   notes?: string;
 };
-export type CreatePaymentResponse = { payment: { id: string } };
+/** PAY-2. `advance` (supplier payments, backend docs/supplier-advance.md): the advance the payment now covers went back (changeCny < 0); absent for agent payments and from an older backend. */
+export type CreatePaymentResponse = { payment: { id: string }; advance?: AdvanceResult };
 
 /** CON-4 GET /api/v1/containers/:id */
 export type ContainerDetail = ContainerListItem & {

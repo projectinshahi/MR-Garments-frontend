@@ -1,4 +1,4 @@
-import { statementFile } from "@/features/deposits/deposit-files";
+import { advanceSections, statementFile } from "@/features/deposits/deposit-files";
 import { stageLabel } from "@/features/orders/order-status";
 import type { SupplierStatement } from "@/lib/api/deposits-types";
 import { formatDateTime } from "@/lib/formatters";
@@ -17,8 +17,12 @@ const or = (value: string) => value.trim() || null;
 
 export function supplierDetailFile(data: SupplierPaymentDetail, statement: SupplierStatement | null, filters: string, today: string): ReportFile {
   const { supplier, summary } = data;
+  // The advance account comes from RPT-5D itself, so the statement's own advance sheets are left out (no sheet twice).
+  const advance = advanceSections(data.advance);
   const deposits: Section[] = statement
-    ? statementFile(statement, today).sections.map((section) => ({ ...section, sheet: section.sheet === "Summary" ? "Deposit Summary" : section.sheet }))
+    ? statementFile(statement, today)
+        .sections.filter((section) => !advance.length || !section.sheet?.startsWith("Advance "))
+        .map((section) => ({ ...section, sheet: section.sheet === "Summary" ? "Deposit Summary" : section.sheet }))
     : [];
   return {
     title: `Supplier report: ${supplier.name}`,
@@ -27,6 +31,7 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
     notes: [
       "Paid and balance count payments to the supplier; each payment keeps the exchange rate typed for it (INR per 1 unit).",
       "Supplier deposits belong to the supplier's account and are never counted as payments of a PO.",
+      ...(data.advance ? ["Advance applied is the supplier advance (money paid before any order) drawn by each order; balance = order value - paid - advance applied."] : []),
       ...(statement ? [] : ["Supplier deposits are left out: they need Payments access."]),
     ],
     sections: [
@@ -59,8 +64,16 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
         sheet: "Supplier Overview",
         title: `Money summary (${currency})`,
         csv: false as const,
-        columns: [text("Orders"), money("Order value", currency), money("Paid", currency), money("Of which deposits", currency), money("Paid", "INR"), money("Balance", currency)],
-        rows: list.map((t) => [t.orders, t.orderValueCny, t.paidCny, t.depositsCny, t.paidInr, t.balanceCny]),
+        columns: [
+          text("Orders"),
+          money("Order value", currency),
+          money("Paid", currency),
+          money("Of which deposits", currency),
+          money("Paid", "INR"),
+          money("Advance applied", currency),
+          money("Balance", currency),
+        ],
+        rows: list.map((t) => [t.orders, t.orderValueCny, t.paidCny, t.depositsCny, t.paidInr, t.advanceCny ?? 0, t.balanceCny]),
       })),
       ...perCurrency(data.orders.rows).map(([currency, list]) => ({
         sheet: "Purchase Orders",
@@ -73,9 +86,20 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           text("Quantity"),
           money("Order value", currency),
           money("Paid", currency),
+          money("Advance applied", currency),
           money("Balance", currency),
         ],
-        rows: list.map((o) => [o.po, o.orderDate, o.deliveryDate, stageLabel(o.stage), o.quantities.map((q) => `${q.quantity} ${q.unit}`).join(" · "), o.orderValueCny, o.paidCny, o.balanceCny]),
+        rows: list.map((o) => [
+          o.po,
+          o.orderDate,
+          o.deliveryDate,
+          stageLabel(o.stage),
+          o.quantities.map((q) => `${q.quantity} ${q.unit}`).join(" · "),
+          o.orderValueCny,
+          o.paidCny,
+          o.advanceCny ?? 0,
+          o.balanceCny,
+        ]),
       })),
       ...perCurrency(data.lines.rows).map(([currency, list]) => ({
         sheet: "Order Lines",
@@ -100,6 +124,7 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
         rows: list.map((p) => [p.paidOn, p.dueDate, p.po, p.kind, p.mode, p.amountCny, p.rateInr, p.amountInr, p.status === "paid" ? "Paid" : "Due"]),
       })),
       ...deposits,
+      ...advance,
     ],
   };
 }

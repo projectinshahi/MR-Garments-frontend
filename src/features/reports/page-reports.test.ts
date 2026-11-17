@@ -14,6 +14,7 @@ import { receivingFile } from "@/features/receiving/receiving-files";
 import { suppliersListFile } from "@/features/suppliers/supplier-files";
 import { transportFile } from "@/features/transport/transport-files";
 import { warehouseFile } from "@/features/warehouse/warehouse-files";
+import type { SupplierStatement } from "@/lib/api/deposits-types";
 import type { ClearingListRow, TripListRow, WarehouseListRow } from "@/lib/api/stages-types";
 import type { OrderListItem, PaymentsResponse, SupplierRow } from "@/lib/api/types";
 
@@ -454,6 +455,21 @@ describe("Supplier list and supplier detail", () => {
     expect(file.notes).toContain("Supplier deposits are left out: they need Payments access.");
     // The overview is a key-value block: Excel and PDF only.
     expect(csvRows(file)[0]).toEqual(["Purchase orders (CNY)"]);
+  });
+
+  it("writes the supplier advance apart from paid, and its account once (from RPT-5D, not again from the statement)", () => {
+    const advance: NonNullable<SupplierPaymentDetail["advance"]> = { summary: [{ currency: "CNY", receivedCny: 500, allocatedCny: 300, reversedCny: 0, availableCny: 200, orders: 1 }], entries: [] };
+    const withAdvance: SupplierPaymentDetail = {
+      ...detail,
+      summary: { ...detail.summary, byCurrency: [{ ...detail.summary.byCurrency[0]!, advanceCny: 300, balanceCny: 900 }] },
+      advance,
+    };
+    const statement: SupplierStatement = { supplier: { id: "s1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", status: "Active" }, summary: [], deposits: [], advance };
+    const file = supplierDetailFile(withAdvance, statement, "Supplier: Foshan Fabrics", TODAY);
+    expect(section(file, "Money summary (CNY)").rows).toEqual([[12, 1200, 0, 0, 0, 300, 900]]);
+    expect(section(file, "Purchase orders (CNY)").columns.map((c) => c.header).slice(6)).toEqual(["Paid (CNY)", "Advance applied (CNY)", "Balance (CNY)"]);
+    expect(file.sections.filter((s) => s.sheet === "Advance Summary")).toHaveLength(1);
+    expect(section(file, "Supplier advance (CNY)").rows).toEqual([[500, 300, 0, 200, 1]]);
   });
 });
 

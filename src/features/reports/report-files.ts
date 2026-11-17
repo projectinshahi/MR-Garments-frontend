@@ -129,10 +129,12 @@ const REPORTS: { [N in ReportName]: Spec<Reports[N]> } = {
     sections: (d) =>
       perCurrency(d.suppliers).map(([currency, suppliers]) => {
         const t = d.totalsByCurrency.find((total) => total.currency === currency);
+        // A backend that reports the supplier advance adds "Advance applied" before Balance (value - paid - advance = balance).
+        const advance = <T>(value: T): T[] => (d.suppliers.some((s) => s.advanceCny !== undefined) ? [value] : []);
         return {
-          columns: columns("Supplier", "Orders", money("Order value", currency), money("Paid", currency), money("Paid", "INR"), money("Balance", currency)),
-          rows: suppliers.map((s) => [s.supplier, s.orders.join(", "), s.orderValueCny, s.paidCny, s.paidInr, s.balanceCny]),
-          total: t && suppliers.length ? ["Total", plural(t.orders, "open order"), t.orderValueCny, t.paidCny, t.paidInr, t.balanceCny] : undefined,
+          columns: columns("Supplier", "Orders", money("Order value", currency), money("Paid", currency), money("Paid", "INR"), ...advance(money("Advance applied", currency)), money("Balance", currency)),
+          rows: suppliers.map((s) => [s.supplier, s.orders.join(", "), s.orderValueCny, s.paidCny, s.paidInr, ...advance(s.advanceCny ?? 0), s.balanceCny]),
+          total: t && suppliers.length ? ["Total", plural(t.orders, "open order"), t.orderValueCny, t.paidCny, t.paidInr, ...advance(t.advanceCny ?? 0), t.balanceCny] : undefined,
         };
       }),
   },

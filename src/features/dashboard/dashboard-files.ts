@@ -2,6 +2,7 @@ import { amountsText, type Cell, type Column, money, perCurrency, type ReportFil
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { ContainerListItem, DeliveryItem, OrderListItem, PaymentsResponse } from "@/lib/api/types";
+import { balanceCny } from "@/features/orders/filter-orders";
 import { formatDate, sumByCurrency } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
@@ -58,7 +59,7 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
         ["Payments due in next 30 days", kpi(d.paymentsDue, (p) => amountsText(p.amounts))],
         ["Paid so far, all payees (INR)", kpi(orders, (list) => round2(list.reduce((sum, o) => sum + o.paidInr, 0)))],
         ["PO value", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, (o) => o.orderValueCny)))],
-        ["Outstanding balance to suppliers", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, (o) => o.orderValueCny - o.supplierPaidCny)))],
+        ["Outstanding balance to suppliers", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, balanceCny)))],
       ]),
       ...needs(d.orders, "Orders by stage", "Orders by Stage", (o) => [
         { sheet: "Orders by Stage", title: "Orders by stage", columns: [text("Stage"), text("Orders")], rows: o.byStage.map((s) => [`${s.stage}. ${STAGES[s.stage - 1]}`, s.count]) },

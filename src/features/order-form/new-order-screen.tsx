@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
-import { SectionCard } from "@/components/shared/cards";
+import { Callout, SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { orderHref } from "@/components/shared/po-link";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 import type { NewOrderData } from "./data/queries";
 import { defaultRate, emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
-import { depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
+import { advancePreview, depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
 
 // Measured from 15_4_New_order.jpeg: 12.5 px bold labels 5 px above 42 px fields with 14 px text, 12 px table
 // headers, 38 px item inputs with 10 px padding. Cards use titleGap="none" and place content where the reference has it.
@@ -74,6 +74,10 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
   const numericLines = lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) }));
   const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: inr ? 1 : parseNumber(d.rateInr) }));
   const totals = orderTotals(numericLines, numericDeposits);
+  // The supplier's advance in its currency, applied automatically by ORD-3 (0 from an older API, which applies none).
+  const available = supplier?.advanceAvailable ?? 0;
+  const supplierDeposits = deposits.reduce((sum, d) => sum + (d.payee === SUPPLIER_PAYEE ? parseNumber(d.amountCny) : 0), 0);
+  const advance = advancePreview(totals.orderTotal, supplierDeposits, available);
 
   async function place(order: NewOrderValues) {
     let created: CreateOrderResponse;
@@ -90,7 +94,12 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     }
     // The route stays mounted (Activity): empty the form so a later visit starts fresh.
     reset();
-    notifySuccess(`Order ${created.order.po} placed`);
+    const applied = created.advance?.appliedCny ?? 0;
+    notifySuccess(
+      applied > 0
+        ? `Order ${created.order.po} placed. Supplier advance applied: ${formatMoney(applied, currency, { decimals: 2 })}${created.advance!.status === "partial" ? `; ${formatMoney(created.advance!.balanceCny, currency, { decimals: 2 })} still to pay` : ""}.`
+        : `Order ${created.order.po} placed`,
+    );
     router.push(orderHref(created.order.po));
     router.refresh();
   }
@@ -394,12 +403,27 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   { label: "Order total", value: spaced(totals.orderTotal) },
                   { label: "Deposits paid", value: spaced(totals.depositsPaid) },
                   { label: "Deposits in INR", value: formatINR(totals.depositsINR) },
+                  ...(available > 0 ? [{ label: "Supplier advance to apply", value: spaced(advance.applied) }] : []),
                   {
                     label: <span className="text-base leading-5 font-bold">Balance to pay</span>,
-                    value: <span className="text-base leading-5 font-bold">{spaced(totals.balance)}</span>,
+                    value: <span className="text-base leading-5 font-bold">{spaced(available > 0 ? advance.remaining : totals.balance)}</span>,
                   },
                 ]}
               />
+              {available > 0 ? (
+                <Callout tone={advance.partial ? "warning" : "info"} size="sm" role="status" className="mt-3">
+                  {advance.partial ? (
+                    <>
+                      <strong>Supplier advance is not enough.</strong> {spaced(available)} available covers part of this order; {spaced(advance.remaining)} will still be
+                      to pay.
+                    </>
+                  ) : (
+                    <>
+                      {spaced(available)} supplier advance available. It is applied to this order automatically when it is placed.
+                    </>
+                  )}
+                </Callout>
+              ) : null}
               <FormFooter className="mt-3.5 gap-3">
                 {/* Disabled while the request runs (no spinner is designed), so one click places one order. */}
                 <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]" disabled={formState.isSubmitting}>

@@ -128,6 +128,8 @@ describe("toPaymentsData", () => {
       paid: 4_000,
       paidInr: 48_000,
       supplierPaid: 4_000,
+      // No advanceCny from this API: no supplier advance applied.
+      advance: 0,
       supplierPaidInr: 48_000,
       balance: 6_000,
       depositRequired: null,

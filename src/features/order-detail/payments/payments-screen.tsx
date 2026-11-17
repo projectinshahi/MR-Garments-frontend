@@ -2,6 +2,7 @@ import { PageContainer } from "@/components/layout/page-header";
 import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import type { OrderPayment, OrderView } from "@/features/order-detail/data/queries";
+import { AdvanceBreakdown, AdvanceEntriesCard, PartialAdvanceWarning } from "@/features/order-detail/shared/advance-breakdown";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
 import { agentPaid, DepositStatusPill, moneyOrDash } from "@/features/payments/money";
 import { formatINR, formatMoney, formatRate } from "@/lib/formatters";
@@ -14,7 +15,18 @@ import { PaymentsTable } from "./payments-table";
  * balance the supplier is still owed; agent payments are sea freight, shown apart; the deposit KPI only when the
  * supplier asked for one. The "Balance rule" card is left out: no approved rule reduces a balance yet.
  */
-export function PaymentsScreen({ order, payments, canDelete = false }: { order: OrderView; payments: OrderPayment[]; canDelete?: boolean }) {
+export function PaymentsScreen({
+  order,
+  payments,
+  canDelete = false,
+  canApply = false,
+}: {
+  order: OrderView;
+  payments: OrderPayment[];
+  canDelete?: boolean;
+  /** payments Enter: Apply advance (ADV-4) on the supplier advance card. */
+  canApply?: boolean;
+}) {
   const paid = payments.filter((p) => p.status === "paid");
   const toSupplier = paid.filter((p) => p.payeeRole === "supplier");
   const toAgents = paid.filter((p) => p.payeeRole === "agent");
@@ -34,6 +46,8 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Order value" value={money(order.orderValueCny)} />
         <KpiCard size="xs" label="Paid to supplier" value={money(supplierPaid)} sub={`${count(toSupplier.length)}${agentsCny !== null && agentsCny > 0 ? ` · agents ${money(agentsCny)}` : ""}`} />
+        {/* The supplier advance applied (backend docs/supplier-advance.md): not a payment, so its own tile. */}
+        {order.advanceCny ? <KpiCard size="xs" label="Advance applied" value={money(order.advanceCny)} sub="from the supplier account" /> : null}
         <KpiCard size="xs" label="Balance to supplier" value={money(balance)} sub={balance !== null && balance <= 0 ? "Fully paid" : undefined} />
         {order.depositRequiredCny == null ? null : (
           <KpiCard
@@ -48,6 +62,8 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
           />
         )}
       </KpiRow>
+
+      <PartialAdvanceWarning order={order} />
 
       <div className="grid gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <SectionCard title="Deposits and payments" bottomGap="tight" className="min-w-0">
@@ -64,6 +80,7 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
         </SectionCard>
 
         <div className="flex min-w-0 flex-col gap-(--page-gap)">
+          <AdvanceBreakdown order={order} canApply={canApply} />
           <SectionCard title="How the INR figure is found" titleGap="none">
             <Callout size="sm" className="mt-3.5">
               Each payment is changed to INR at the rate on the day it was paid. A later change in rate does not change an
@@ -80,6 +97,7 @@ export function PaymentsScreen({ order, payments, canDelete = false }: { order: 
               />
             ) : null}
           </SectionCard>
+          <AdvanceEntriesCard order={order} />
         </div>
       </div>
     </PageContainer>

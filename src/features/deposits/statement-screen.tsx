@@ -10,6 +10,7 @@ import type { SupplierDepositRow, SupplierStatement } from "@/lib/api/deposits-t
 import { currencyTitle, formatDate } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
 
+import { AdvanceAccountView } from "./advance-account-view";
 import type { StatementData } from "./data/queries";
 import { DeleteDepositButton, DeleteTransactionButton } from "./delete-deposit";
 import { statementFile } from "./deposit-files";
@@ -26,7 +27,7 @@ const orDash = (value: string) => value.trim() || "–";
 const list = (amounts: MoneyTotal[]) => (amounts.length ? amountList(amounts) : "–");
 
 export function StatementScreen({ data }: { data: StatementData }) {
-  const { statement, today, canEnter, canDelete } = data;
+  const { statement, today, canEnter, canDelete, linkPo } = data;
   const { supplier, summary, deposits } = statement;
   const give = statementTotals(summary, "give");
   const receive = statementTotals(summary, "receive");
@@ -94,6 +95,12 @@ export function StatementScreen({ data }: { data: StatementData }) {
             </ol>
           )}
         </SectionCard>
+        {/* The supplier advance account (backend docs/supplier-advance.md): its own money, never netted with the deposits. */}
+        {statement.advance ? (
+          <SectionCard title="Supplier advance" aside={<CardNote size="sm">Paid before any order · applied to new orders automatically</CardNote>} bottomGap="form">
+            <AdvanceAccountView account={statement.advance} supplierName={supplier.name} linkPos={linkPo} />
+          </SectionCard>
+        ) : null}
       </PageContainer>
     </>
   );

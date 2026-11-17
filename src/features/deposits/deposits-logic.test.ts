@@ -108,6 +108,8 @@ describe("order obligations", () => {
     expect(withObligation({ paidCny: 0, pendingCny: 1000, status: "due", lastPaidOn: null, payments: 0 })[0]).toMatchObject({ status: "due", date: "", paid: 0, pending: 1000, payments: 0 });
     expect(withObligation({ paidCny: 1000, pendingCny: 0, status: "paid", payments: 2 })[0]).toMatchObject({ status: "paid", paid: 1000, pending: 0, payments: 2 });
     expect(withObligation({}, false)[0]!.href).toBeNull();
+    // Paid includes the supplier advance applied to the order: the row says so, so it isn't read as deposit payments.
+    expect(withObligation({ paidCny: 800, advanceCny: 500 })[0]!.notes).toBe("Includes supplier advance ¥500");
   });
 
   it("is pending while something is left and paid once settled; the cards count it once, not its payments again", () => {

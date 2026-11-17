@@ -137,7 +137,7 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(kpiTexts(page, "Paid so far").nth(1)).toHaveText("¥600 · $80");
     await expect(kpiTexts(page, "Paid so far").nth(2)).toContainText("of which deposits ¥500 · $80");
     await expect(kpiTexts(page, "Paid so far").nth(2)).toContainText("₹14,240 at payment-day rates");
-    await expect(kpiTexts(page, "Balance to pay")).toHaveText(["Balance to pay", "¥600 · $120", "order value less paid"]);
+    await expect(kpiTexts(page, "Balance to pay")).toHaveText(["Balance to pay", "¥600 · $120", "order value less paid and advance"]);
   });
 
   const payments = card(page, "Payments");
@@ -184,8 +184,8 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
   await test.step("orders: both, newest first, each in its own currency; the stage filter writes the URL", async () => {
     await expect(orderRows).toHaveCount(3);
     const dates = [longDate(today()), longDate(addDays(today(), 30))];
-    await expect(orderRows.nth(1).getByRole("cell")).toHaveText([usd.po, ...dates, "40 pcs", "$200", "$80", "$120", /\S/]);
-    await expect(orderRows.nth(2).getByRole("cell")).toHaveText([cny.po, ...dates, "100 pcs · 50 m", "¥1,200", "¥600", "¥600", /\S/]);
+    await expect(orderRows.nth(1).getByRole("cell")).toHaveText([usd.po, ...dates, "40 pcs", "$200", "$80", "$0", "$120", /\S/]);
+    await expect(orderRows.nth(2).getByRole("cell")).toHaveText([cny.po, ...dates, "100 pcs · 50 m", "¥1,200", "¥600", "¥0", "¥600", /\S/]);
 
     await orders.getByRole("button", { name: "Stage: All stages" }).click();
     await page.getByRole("menuitemradio", { name: "2. Receiving in China" }).click();

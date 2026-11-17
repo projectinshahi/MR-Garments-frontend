@@ -28,6 +28,8 @@ export type OrderPaymentRow = {
   paidInr: number;
   /** Paid to the supplier only (phase 2 fixes, 1): the balance is the order value less this. Null when the API did not send it (older backend): shown as "–". */
   supplierPaid: number | null;
+  /** The supplier advance applied to the order (not a payment; 0 from an older API). The balance counts it. */
+  advance?: number;
   supplierPaidInr: number | null;
   /** What the supplier is still owed; null with an older API, whose balance counted every payee. */
   balance: number | null;
@@ -91,6 +93,7 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
       paidInr: o.paidInr,
       // Fields an older backend leaves out are null here, never a different figure under the new label.
       supplierPaid: o.supplierPaidCny ?? null,
+      advance: o.advanceCny ?? 0,
       supplierPaidInr: o.supplierPaidInr ?? null,
       balance: o.supplierPaidCny == null ? null : o.balanceCny,
       depositRequired: o.depositRequiredCny ?? null,

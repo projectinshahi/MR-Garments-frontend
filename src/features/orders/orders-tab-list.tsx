@@ -10,6 +10,7 @@ import { FilterSelect, SearchInput, type FilterOption } from "@/components/share
 import { orderHref } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
+import { PaidWithAdvance } from "@/features/payments/money";
 import type { ReportFile } from "@/features/reports/report-files";
 import type { OrderLineItem } from "@/lib/api/types";
 import { formatDate, formatMoney, formatQty, formatShortDate } from "@/lib/formatters";
@@ -95,7 +96,7 @@ const CLOSED: Spec = {
     orderedColumn,
     { accessorKey: "stocked", header: "Warehouse received", meta: right, cell: ({ row }) => formatQty(row.original.stocked, row.original.unit) },
     // Supplier payments only, as the order report and Payments per supplier count them; the All tab's INR figure keeps every payee.
-    { accessorKey: "supplierPaidCny", header: "Paid to supplier", meta: right, cell: ({ row }) => formatMoney(row.original.supplierPaidCny, row.original.currency, { decimals: 2 }) },
+    { accessorKey: "supplierPaidCny", header: "Paid to supplier", meta: right, cell: ({ row }) => <PaidWithAdvance paid={row.original.supplierPaidCny} advance={row.original.advanceCny} currency={row.original.currency} /> },
     { id: "balance", header: "Balance to supplier", meta: right, cell: ({ row }) => formatMoney(balanceCny(row.original), row.original.currency, { decimals: 2 }) },
     { accessorKey: "closedOn", header: "Closed date", cell: ({ row }) => (row.original.closedOn ? formatDate(row.original.closedOn) : "–") },
     {

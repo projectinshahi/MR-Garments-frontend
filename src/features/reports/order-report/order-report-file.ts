@@ -1,5 +1,6 @@
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { stageLabel } from "@/features/orders/order-status";
+import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL } from "@/features/deposits/advance-logic";
 import { DEPOSIT_STATUS } from "@/features/payments/money";
 import type { OrderReport, OrderTimelineStep } from "@/lib/api/reports-types";
 import { formatDate, formatDateTime } from "@/lib/formatters";
@@ -72,7 +73,11 @@ export function landedCostBreakdown(cost: NonNullable<OrderReport["landedCost"]>
   const cnf = carriers.length > 0 && carriers.every((container) => container.terms === "CNF");
   const notTracked = (label: string): CostComponent => ({ label, inr: null, status: "not tracked" });
   const components: CostComponent[] = [
-    { label: "Original purchase value (supplier payments, INR at each payment's rate)", inr: cost.goodsInr, status: cost.waitingFor === "supplier payment" ? "partial" : "recorded" },
+    {
+      label: "Original purchase value (supplier payments and supplier advance applied, INR at each one's own rate)",
+      inr: cost.goodsInr,
+      status: cost.waitingFor === "supplier payment" ? "partial" : "recorded",
+    },
     notTracked("Supplier-side charges"),
     notTracked("China receiving charges"),
     notTracked("China transportation charges"),
@@ -123,7 +128,15 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Products", order.products],
         [`Original PO value (${cur})`, order.orderValueCny],
         ["PO value (INR, at the PO rate)", order.orderValueInr],
-        ...(payments ? ([[`Total paid to supplier (${cur})`, payments.paidCny], ["Paid (INR)", payments.paidInr], [`Outstanding balance (${cur})`, payments.balanceCny]] as Cell[][]) : []),
+        ...(payments
+          ? ([
+              [`Total paid to supplier (${cur})`, payments.paidCny],
+              ["Paid (INR)", payments.paidInr],
+              // The supplier advance applied (not a payment), only from a backend that reports it.
+              ...(payments.advanceCny === undefined ? [] : [[`Supplier advance applied (${cur})`, payments.advanceCny]]),
+              [`Outstanding balance (${cur})`, payments.balanceCny],
+            ] as Cell[][])
+          : []),
         ["Ordered", perUnit((t) => t.ordered)],
         ["Received in China", perUnit((t) => t.received)],
         ["Pending", perUnit((t) => t.pending)],
@@ -175,6 +188,14 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         [`Amount paid for this PO (${cur})`, payments.paidCny],
         [`Outstanding balance for this PO (${cur})`, payments.balanceCny],
         [`Deposits paid on this PO (${cur})`, payments.depositsPaidCny],
+        ...(payments.advanceCny === undefined ? [] : ([[`Supplier advance applied to this PO (${cur})`, payments.advanceCny]] as Cell[][])),
+        ...(supplierAccount.advanceApplied ? ([["Supplier advance applied (every order)", moneyList(supplierAccount.advanceApplied)]] as Cell[][]) : []),
+        ...(supplierAccount.advance ?? []).map(
+          (line): Cell[] => [
+            `Supplier advance (${line.currency}): received · applied · returned · available`,
+            `${line.receivedCny} · ${line.allocatedCny} · ${line.reversedCny} · ${line.availableCny}`,
+          ],
+        ),
         ...supplierAccount.deposits.summary.map(
           (line): Cell[] => [
             `Supplier deposit ${line.direction === "give" ? "to give" : "to receive"} (${line.currency}): agreed · settled · remaining`,
@@ -364,6 +385,13 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
           ["Paid (INR)", payments.paidInr],
           [`Deposits paid on this PO (${cur})`, payments.depositsPaidCny],
           [`Due (${cur})`, payments.dueCny],
+          ...(payments.advanceCny === undefined
+            ? []
+            : ([
+                [`Supplier advance applied (${cur})`, payments.advanceCny],
+                ["Supplier advance applied (INR)", payments.advanceInr ?? null],
+                ["Advance status", payments.advanceStatus ? ADVANCE_STATUS_LABEL[payments.advanceStatus] : ""],
+              ] as Cell[][])),
           [`Outstanding balance (${cur})`, payments.balanceCny],
           [`Sea freight paid to agents (${cur})`, payments.agentPaidCny],
           ["Sea freight paid (INR)", payments.agentPaidInr],
@@ -375,7 +403,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
                 [`Deposit pending (${cur})`, payments.depositPendingCny ?? null],
                 ["Deposit status", DEPOSIT_STATUS[payments.depositStatus]?.label ?? ""],
               ] as Cell[][])),
-          ["Refunds, reversals, credits", "Not recorded in this system"],
+          ["Payment refunds and credits", "Not recorded in this system (advance returns are under Supplier advance applied)"],
         ],
       },
       {
@@ -385,7 +413,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         rows: payments.list.map((p) => [
           p.paidOn,
           p.reference,
-          p.kind === "Deposit" ? "Advance / deposit" : "Balance",
+          p.kind,
           p.mode,
           p.amountCny,
           cur,
@@ -402,6 +430,19 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ]),
       },
     );
+    // The order's supplier advance allocations (+) and reversals (-), each at the rate of the advance it came from.
+    if (payments.advanceEntries?.length) {
+      sections.push({
+        sheet: "Payment History",
+        title: "Supplier advance applied",
+        columns: columns(date("Date"), "Type", money("Amount (+ applied, - returned)", cur), "Rate (INR)", money("Amount", "INR"), date("From advance paid on"), "Advance reference", "Recorded by", "Recorded"),
+        rows: payments.advanceEntries.map((e) => {
+          const sign = e.kind === "reversal" ? -1 : 1;
+          return [e.entryDate, ADVANCE_KIND_LABEL[e.kind], sign * e.amount, e.exchangeRate, sign * e.amountInr, e.advancePaidOn, e.advanceReference ?? "", orDash(e.recordedBy), when(e.recordedAt)];
+        }),
+        total: [null, "Advance applied", payments.advanceCny ?? null, null, payments.advanceInr ?? null, null, "", "", ""],
+      });
+    }
   }
   if (payments && supplierAccount) {
     // Paid deposits only (the total is `depositsPaidCny`); a due deposit stays in the payment ledger.

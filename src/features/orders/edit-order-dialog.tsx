@@ -29,7 +29,8 @@ import { cn } from "@/lib/utils";
 
 /** What the dialog needs from ORD-4. */
 /** What the dialog needs from ORD-4. `supplierPaidCny`: the ORD-5 guard counts supplier payments only (agent payments are sea freight). */
-export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "supplierPaidCny" | "depositRequiredCny" | "lines">;
+export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "supplierPaidCny" | "depositRequiredCny" | "lines"> &
+  Partial<Pick<OrderDetail, "advanceCny">>;
 /** ORD-2's active items. */
 export type ItemOption = OrderOptions["items"][number];
 
@@ -327,6 +328,12 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
         <span className="text-sm leading-4 text-muted-foreground">Paid to supplier {moneyOrDash(order.supplierPaidCny, (v) => formatMoney(v, order.currency, { decimals: 2, spaced: true }))}</span>
+        {/* A new total re-applies the supplier advance (backend docs/supplier-advance.md): more if available, the excess back. */}
+        {order.advanceCny ? (
+          <span className="text-sm leading-4 text-muted-foreground" title="A new total re-applies the supplier advance: more when the order grows, the excess back when it shrinks.">
+            Supplier advance {formatMoney(order.advanceCny, order.currency, { decimals: 2, spaced: true })}
+          </span>
+        ) : null}
         <span className="text-[15px] leading-4">Order total</span>
         <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
           {formatMoney(total, order.currency, { decimals: 2, spaced: true })}

@@ -40,7 +40,7 @@ export function DeleteRecordButton({
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
-  noun: "receipt" | "container" | "clearing" | "trip" | "warehouse receipt" | "deposit" | "payment";
+  noun: "receipt" | "container" | "clearing" | "trip" | "warehouse receipt" | "deposit" | "payment" | "advance";
   /** The button's accessible name, naming the record ("Delete receipt of 3 Oct 2026"). */
   label: string;
   title: string;

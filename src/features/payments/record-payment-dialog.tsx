@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import type { CreatePaymentResponse, OrderOptions } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { currencySymbol, formatINR, rateText } from "@/lib/formatters";
+import { currencySymbol, formatINR, formatMoney, rateText } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
@@ -68,8 +68,8 @@ export function RecordPaymentDialog({ orders, fixed = false, agents, children }:
           fixed={fixed}
           agents={agents}
           onCancel={() => setOpen(false)}
-          onSaved={(po) => {
-            notifySuccess(`Payment recorded for ${po}`);
+          onSaved={(message) => {
+            notifySuccess(message);
             setOpen(false);
             router.refresh();
           }}
@@ -91,7 +91,8 @@ function RecordPaymentForm({
   fixed: boolean;
   agents: OrderOptions["agents"];
   onCancel: () => void;
-  onSaved: (po: string) => void;
+  /** The success message: the payment's PO, and the supplier advance it gave back, if any. */
+  onSaved: (message: string) => void;
 }) {
   const [today] = useState(() => todayInIndia());
   const { register, handleSubmit, setError, setValue, control, formState } = useForm<RecordPaymentInput, unknown, RecordPaymentValues>({
@@ -109,8 +110,9 @@ function RecordPaymentForm({
   const inr = order?.currency === "INR";
 
   async function save(values: RecordPaymentValues) {
+    let response: CreatePaymentResponse;
     try {
-      await apiClient.post<CreatePaymentResponse>("/payments", toCreatePaymentBody(values));
+      response = await apiClient.post<CreatePaymentResponse>("/payments", toCreatePaymentBody(values));
     } catch (error) {
       // 422: each message under its field, the first focused. A message for a field the form doesn't have is toasted.
       Object.entries(handleApiError(error) ?? {}).forEach(([key, message], index) => {
@@ -120,7 +122,12 @@ function RecordPaymentForm({
       });
       return;
     }
-    onSaved(orders.find((o) => o.orderId === values.orderId)?.po ?? "");
+    const paid = orders.find((o) => o.orderId === values.orderId);
+    // A supplier payment gives back the advance it now covers (backend docs/supplier-advance.md, PAY-2).
+    const returned = -(response.advance?.changeCny ?? 0);
+    onSaved(
+      `Payment recorded for ${paid?.po ?? ""}${returned > 0 && paid ? `. ${formatMoney(returned, paid.currency, { decimals: 2 })} of supplier advance went back to the supplier's account` : ""}`,
+    );
   }
 
   return (

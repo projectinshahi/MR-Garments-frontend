@@ -108,4 +108,22 @@ describe("order reports file", () => {
     expect(empty.sections[0]).toMatchObject({ title: "Orders in CNY", rows: [], total: undefined });
     expect(empty.sections).toHaveLength(2);
   });
+
+  it("adds Advance applied next to Paid when the API reports the supplier advance (value - paid - advance = balance)", () => {
+    const withAdvance = orderReportsFile(
+      {
+        ...data,
+        rows: [row({ advanceCny: 300, balanceCny: 300 })],
+        summary: { orders: 1, byCurrency: [{ currency: "CNY", orderValueCny: 1400, paidCny: 800, advanceCny: 300, balanceCny: 300 }], paidInr: 9850, landedCostInr: 49550 },
+      },
+      TODAY,
+    );
+    const [table, summary] = withAdvance.sections;
+    const headers = table!.columns.map((column) => column.header);
+    const at = headers.indexOf("Advance applied (CNY)");
+    expect(headers.slice(at - 1, at + 2)).toEqual(["Paid (CNY)", "Advance applied (CNY)", "Balance (CNY)"]);
+    expect(table!.rows[0]!.slice(at - 1, at + 2)).toEqual([800, 300, 300]);
+    expect(table!.total!.slice(at - 1, at + 2)).toEqual([800, 300, 300]);
+    expect(summary!.rows).toContainEqual(["Advance applied (CNY)", 300]);
+  });
 });

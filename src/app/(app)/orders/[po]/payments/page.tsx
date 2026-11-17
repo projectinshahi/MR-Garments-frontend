@@ -13,6 +13,13 @@ export default async function OrderPaymentsPage({ params }: PageProps<"/orders/[
   const [order, me] = await Promise.all([getOrderDetail(po), getMe()]);
   // null: the user can't view payments, so the tab doesn't exist for them.
   if (!order?.payments) notFound();
-  // PAY-3 needs payments Full (Management); the API refuses anyone else too.
-  return <PaymentsScreen order={order} payments={order.payments} canDelete={!!me && hasAccess(me, "payments", "Full")} />;
+  // PAY-3 needs payments Full (Management), ADV-4 payments Enter; the API refuses anyone else too.
+  return (
+    <PaymentsScreen
+      order={order}
+      payments={order.payments}
+      canDelete={!!me && hasAccess(me, "payments", "Full")}
+      canApply={!!me && hasAccess(me, "payments", "Enter")}
+    />
+  );
 }

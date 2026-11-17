@@ -16,3 +16,14 @@ export function orderTotals(lines: { rate: number; quantity: number }[], deposit
   const depositsINR = cents(deposits.reduce((sum, d) => sum + depositINR(d), 0));
   return { orderTotal, depositsPaid, depositsINR, balance: cents(orderTotal - depositsPaid) };
 }
+
+/**
+ * What the supplier's advance will cover when the order is placed (ORD-3 applies it; backend docs/supplier-advance.md):
+ * the smaller of the advance available and what the order owes after the supplier deposits typed here (agent deposits
+ * are sea freight). `remaining` is still to pay after both. The server's figure is the one saved.
+ */
+export function advancePreview(orderTotal: number, supplierDeposits: number, available: number) {
+  const owed = Math.max(0, cents(orderTotal - supplierDeposits));
+  const applied = Math.min(Math.max(0, available), owed);
+  return { applied: cents(applied), remaining: cents(owed - applied), partial: applied > 0 && applied < owed };
+}
