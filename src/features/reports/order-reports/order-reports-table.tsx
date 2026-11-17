@@ -12,7 +12,7 @@ import { stageLabel } from "@/features/orders/order-status";
 import type { OrderReportRow } from "@/lib/api/reports-types";
 import { formatDate, formatINR, formatMoney, formatNumber, formatQty, formatRateInr } from "@/lib/formatters";
 
-import { PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
+import { outstanding, PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
 
 // The Order reports table (RPT-O2, docs/order-report.md): one row per order with its supplier (name and code), items,
 // ordered quantity per unit, currency, PO value, paid, balance, stage and status, and the link to the order's detailed
@@ -88,7 +88,8 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
         </span>
       ),
     },
-    { accessorKey: "balanceCny", header: "Balance", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money((row) => row.balanceCny) },
+    // Never below 0 (an overpaid order reads 0); sorts by the figure shown.
+    { id: "balanceCny", accessorFn: outstanding, header: "Balance", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money(outstanding) },
     { accessorKey: "stage", header: "Order Stage", meta: { className: `w-[108px] ${wrap}` }, cell: ({ row }) => stageLabel(row.original.stage) },
     {
       id: "status",

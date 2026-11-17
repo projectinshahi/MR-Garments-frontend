@@ -6,7 +6,7 @@ import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 import { ReportDownload } from "../report-actions";
 import { Footnote } from "../report-screens";
 import { OrderReportsFilters } from "./order-reports-filters";
-import { orderReportsFile } from "./order-reports-file";
+import { orderReportsFile, outstandingTotal } from "./order-reports-file";
 import { OrderReportsTable } from "./order-reports-table";
 import { orderReportsFilterLabel } from "./params";
 import type { OrderReportsPage } from "./queries";
@@ -39,7 +39,8 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
           <KpiCard
             size="xs"
             label="Balance"
-            value={each((t) => t.balanceCny)}
+            // The rows' balances floored at 0 and added up per currency, as the table and the files show them.
+            value={each((t) => outstandingTotal(data.rows, t.currency))}
             sub={summary.byCurrency.some((t) => t.advanceCny) ? `order value less paid and ${each((t) => t.advanceCny ?? 0)} advance applied` : "order value less paid"}
           />
           <KpiCard size="xs" label="Landed cost" value={formatINR(summary.landedCostInr)} sub="orders with a cost so far" />
@@ -47,7 +48,8 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         <OrderReportsTable rows={data.rows} today={today} linkPos={linkPos} />
         <Footnote>
           Paid and balance count payments to the supplier only; payments to shipping agents are sea freight in the landed cost. Landed cost is the
-          order&apos;s allocated share so far, final or estimate; the Report link opens the order&apos;s full report.
+          order&apos;s allocated share so far, final or estimate; the Report link opens the order&apos;s full report. An overpaid order&apos;s balance
+          shows 0 and adds nothing to the totals.
         </Footnote>
       </PageContainer>
     </>

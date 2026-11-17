@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { OrderReportRow, OrderReportsResponse } from "@/lib/api/reports-types";
 
-import { orderReportsFile } from "./order-reports-file";
+import { toCsv } from "../csv";
+import { toPdf } from "../pdf";
+import { csvRows } from "../report-files";
+import { toXlsx } from "../xlsx";
+import { orderReportsFile, OUTSTANDING_NOTE, outstanding, outstandingTotal } from "./order-reports-file";
 
 const TODAY = "2026-11-09";
 const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
@@ -125,5 +129,102 @@ describe("order reports file", () => {
     expect(table!.rows[0]!.slice(at - 1, at + 2)).toEqual([800, 300, 300]);
     expect(table!.total!.slice(at - 1, at + 2)).toEqual([800, 300, 300]);
     expect(summary!.rows).toContainEqual(["Advance applied (CNY)", 300]);
+  });
+});
+
+// The report's Balance (outstanding) never goes below 0: an overpaid order shows 0 and adds nothing to a total. The
+// API's balanceCny keeps the true signed figure; only this report's page and files floor it.
+describe("order reports outstanding balance (zero floor)", () => {
+  it("shows a positive outstanding as it is, and 0 for zero or negative", () => {
+    expect(outstanding({ balanceCny: 1000 })).toBe(1000);
+    expect(outstanding({ balanceCny: 0 })).toBe(0);
+    expect(outstanding({ balanceCny: -500 })).toBe(0);
+    expect(outstanding({ balanceCny: 0.01 })).toBe(0.01);
+  });
+
+  const owing = row({ id: "a", po: "PO-3001", orderValueCny: 2000, paidCny: 1000, paidInr: 12000, balanceCny: 1000 });
+  const settled = row({ id: "b", po: "PO-3002", orderValueCny: 800, paidCny: 800, paidInr: 9600, balanceCny: 0, paymentStatus: "paid" });
+  const overpaid = row({ id: "c", po: "PO-3003", orderValueCny: 1000, paidCny: 1500, paidInr: 18000, balanceCny: -500, paymentStatus: "paid" });
+  const usdOwing = row({ id: "d", po: "PO-3004", currency: "USD", exchangeRate: 88, orderValueCny: 300, orderValueInr: 26400, paidCny: 0, paidInr: 0, balanceCny: 300, paymentStatus: "unpaid" });
+  const usdOverpaid = row({ id: "e", po: "PO-3005", currency: "USD", exchangeRate: 88, orderValueCny: 100, orderValueInr: 8800, paidCny: 150.5, paidInr: 13244, balanceCny: -50.5, paymentStatus: "paid" });
+  const mixed: OrderReportsResponse = {
+    ...data,
+    rows: [owing, settled, overpaid, usdOwing, usdOverpaid],
+    summary: {
+      orders: 5,
+      // As the API sends it: signed sums (1000 + 0 - 500, 300 - 50.5). The report must not show these.
+      byCurrency: [
+        { currency: "CNY", orderValueCny: 3800, paidCny: 3300, balanceCny: 500 },
+        { currency: "USD", orderValueCny: 400, paidCny: 150.5, balanceCny: 249.5 },
+      ],
+      paidInr: 52844,
+      landedCostInr: 0,
+    },
+  };
+  const file = orderReportsFile(mixed, TODAY);
+  const [cny, usd, summary] = file.sections;
+  const balanceAt = cny!.columns.findIndex((column) => column.header === "Balance (CNY)");
+
+  it("floors each row and totals only what is owed, per currency (negatives add 0)", () => {
+    expect(cny!.rows.map((cells) => [cells[0], cells[balanceAt]])).toEqual([
+      ["PO-3001", 1000],
+      ["PO-3002", 0],
+      ["PO-3003", 0],
+    ]);
+    expect(cny!.total![balanceAt]).toBe(1000);
+    expect(usd!.rows.map((cells) => cells[balanceAt])).toEqual([300, 0]);
+    expect(usd!.total![balanceAt]).toBe(300);
+    expect(outstandingTotal(mixed.rows, "CNY")).toBe(1000);
+    expect(outstandingTotal(mixed.rows, "USD")).toBe(300);
+  });
+
+  it("keeps every other figure, the currencies and the rates exactly as the API sent them", () => {
+    const paidAt = cny!.columns.findIndex((column) => column.header === "Paid (CNY)");
+    expect(cny!.rows[2]!.slice(13, 17)).toEqual([1000, null, null, 1500]);
+    expect(cny!.total![paidAt]).toBe(3300);
+    expect(usd!.rows[1]!.slice(13, 17)).toEqual([100, 88, 8800, 150.5]);
+    expect(usd!.total!.slice(13, 17)).toEqual([400, null, 35200, 150.5]);
+    expect(mixed.rows[2]!.balanceCny).toBe(-500);
+  });
+
+  it("puts the floored totals in the Summary sheet and says why in a note", () => {
+    expect(summary!.rows).toEqual([
+      ["Orders", 5],
+      ["Order value (CNY)", 3800],
+      ["Paid (CNY)", 3300],
+      ["Balance (CNY)", 1000],
+      ["Order value (USD)", 400],
+      ["Paid (USD)", 150.5],
+      ["Balance (USD)", 300],
+      ["Paid (INR)", 52844],
+      ["Landed cost (INR)", 0],
+    ]);
+    expect(file.notes).toEqual([OUTSTANDING_NOTE]);
+  });
+
+  it("writes the floored balances into the CSV, Excel and PDF files, with no negative balance anywhere", () => {
+    const lines = toCsv(csvRows(file)).split("\r\n");
+    const cellsOf = (start: string) => lines.find((line) => line.startsWith(start))!.split(",");
+    expect(cellsOf("PO-3001")[balanceAt]).toBe("1000");
+    expect(cellsOf("PO-3002")[balanceAt]).toBe("0");
+    expect(cellsOf("PO-3003")[balanceAt]).toBe("0");
+    expect(cellsOf("Total,3 orders")[balanceAt]).toBe("1000");
+    expect(cellsOf("PO-3005")[balanceAt]).toBe("0");
+    expect(cellsOf("Total,2 orders")[balanceAt]).toBe("300");
+
+    // The workbook is a stored (uncompressed) zip, so its sheet XML reads as text.
+    const xlsx = new TextDecoder().decode(toXlsx(file, "Generated"));
+    expect(xlsx).toContain(OUTSTANDING_NOTE);
+    for (const signed of ["-500", "-50.5", "500", "249.5"]) expect(xlsx).not.toContain(`<v>${signed}</v>`);
+    expect(xlsx).toContain("<v>1000</v>");
+
+    // The PDF's text runs in drawing order (a narrow amount cell wraps, "1,000." then "00"); the Summary's whole
+    // numbers read in one run, right after their label.
+    const pdf = Array.from(toPdf(file, "Generated"), (byte) => String.fromCharCode(byte)).join("");
+    const runs = [...pdf.matchAll(/\(((?:[^()\\]|\\.)*)\) Tj/g)].map((match) => match[1]!);
+    expect(runs[runs.lastIndexOf("Balance \\(CNY\\)") + 1]).toBe("1,000");
+    expect(runs[runs.lastIndexOf("Balance \\(USD\\)") + 1]).toBe("300");
+    expect(runs.filter((run) => /^-\d/.test(run))).toEqual([]);
+    expect(runs).not.toContain("249.50");
   });
 });
