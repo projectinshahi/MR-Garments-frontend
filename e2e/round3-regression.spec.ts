@@ -330,11 +330,11 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
 // ---------------------------------------------------------------------------------------------------------------
 
 const ROLES = [
-  { name: "Management", email: "suresh@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Receiving (China)", "Containers"], pages: ["/orders", "/payments", "/calendar", "/receiving", "/containers"] },
-  { name: "Procurement", email: "priya@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Receiving (China)"], pages: ["/orders", "/payments", "/calendar", "/receiving"] },
+  { name: "Management", email: "suresh@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Received (China)", "Containers"], pages: ["/orders", "/payments", "/calendar", "/receiving", "/containers"] },
+  { name: "Procurement", email: "priya@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Received (China)"], pages: ["/orders", "/payments", "/calendar", "/receiving"] },
   { name: "Accounts", email: "anita@mrgarments.com", menu: ["Orders", "Deposits & Payments"], pages: ["/orders", "/payments"] },
-  { name: "China staff (Chen)", email: "chen@mrgarments.com", menu: ["Receiving (China)"], pages: ["/receiving"] },
-  { name: "Loading staff (Wang)", email: "wang@mrgarments.com", menu: ["Receiving (China)", "Containers"], pages: ["/receiving", "/containers"] },
+  { name: "China staff (Chen)", email: "chen@mrgarments.com", menu: ["Received (China)"], pages: ["/receiving"] },
+  { name: "Loading staff (Wang)", email: "wang@mrgarments.com", menu: ["Received (China)", "Containers"], pages: ["/receiving", "/containers"] },
 ];
 const ALL_PAGES = ["/orders", "/payments", "/calendar", "/receiving", "/containers"];
 const MENU_LABEL: Record<string, string> = {

@@ -49,7 +49,7 @@ test.describe("staff session", () => {
   test("staff sidebar shows only Home and the staff member's stage (N-b)", async ({ page }) => {
     await page.goto("/home");
     const nav = page.getByRole("navigation", { name: "Main" });
-    await expect(nav.getByRole("link")).toHaveText(["Home", "Receiving (China)"]);
+    await expect(nav.getByRole("link")).toHaveText(["Home", "Received (China)"]);
   });
 
   test("a page the role can't open goes to the landing page (P-b)", async ({ page }) => {

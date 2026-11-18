@@ -4,7 +4,7 @@ import { formatDate } from "@/lib/formatters";
 import { orderedCurrencies } from "@/lib/currencies";
 import type { Currency } from "@/types/domain";
 
-import { ADVANCE_KIND_LABEL, signedAdvance } from "./advance-logic";
+import { ADVANCE_KIND_LABEL, netApplied, signedAdvance, type SupplierAdvanceRow } from "./advance-logic";
 import { type DepositFilters, type DepositRow, type DepositView, KIND_LABEL, STATUS_LABEL, type SupplierSummary, totals } from "./deposits-logic";
 
 // The Deposits pages' Excel and PDF files (docs/phase2-contracts.md section 6): built from the rows the page shows after
@@ -83,6 +83,30 @@ export function advanceSections(account: AdvanceAccount | undefined): Section[] 
       rows: list.map((e) => [e.entryDate, ADVANCE_KIND_LABEL[e.kind], e.po, signedAdvance(e), e.exchangeRate, e.amountInr, e.balance, e.mode, e.reference, e.notes, e.advancePaidOn, e.advanceReference ?? ""]),
     })),
   ];
+}
+
+/**
+ * The supplier-wise overview (Deposits › Supplier advance) as shown (filtered): one row per supplier and currency it holds
+ * an advance in, then the suppliers without one. Never a total across suppliers or currencies.
+ */
+export function advanceOverviewFile(rows: SupplierAdvanceRow[], filters: string, today: string): ReportFile {
+  return {
+    title: "Supplier advance by supplier",
+    filename: `supplier-advance-${today}`,
+    filters,
+    notes: [ADVANCE_NOTE, "Each supplier and currency on its own row: amounts in different currencies or of different suppliers are never added together."],
+    sections: [
+      {
+        title: "Supplier advance by supplier",
+        columns: [{ header: "Supplier" }, { header: "Currency" }, { header: "Advance recorded" }, { header: "Applied to orders" }, { header: "Returned from orders" }, { header: "Applied to orders (net)" }, { header: "Available balance" }, { header: "Orders" }],
+        rows: rows.flatMap((row) =>
+          row.accounts.length
+            ? row.accounts.map((a) => [row.supplier, a.currency, a.receivedCny, a.allocatedCny, a.reversedCny, netApplied(a), a.availableCny, a.orders])
+            : [[row.supplier, null, null, null, null, null, null, 0]],
+        ),
+      },
+    ],
+  };
 }
 
 /** One supplier's advance account as its own report (Deposits › Supplier advance): pass the entries as shown (filtered). */

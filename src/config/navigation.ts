@@ -20,9 +20,9 @@ export const MANAGEMENT_NAV: NavSection[] = [
   {
     label: "Stages",
     items: [
-      { title: "Receiving (China)", href: "/receiving" },
+      { title: "Received (China)", href: "/receiving" },
       { title: "Containers", href: "/containers" },
-      { title: "Clearing (India)", href: "/clearing" },
+      { title: "Cleared (India)", href: "/clearing" },
       { title: "Transport", href: "/transport" },
       { title: "Warehouse", href: "/warehouse" },
     ],

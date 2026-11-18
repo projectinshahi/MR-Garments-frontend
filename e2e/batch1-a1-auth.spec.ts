@@ -134,7 +134,7 @@ const ROLES = [
     detail: "Procurement",
     landing: "/",
     heading: "Dashboard",
-    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Delivery Calendar", "Receiving (China)", "Closed Orders"],
+    links: ["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Delivery Calendar", "Received (China)", "Closed Orders"],
     blocked: "/users",
   },
   {
@@ -156,7 +156,7 @@ const ROLES = [
     detail: "China office · Entry only",
     landing: "/home",
     heading: "Home",
-    links: ["Home", "Receiving (China)"],
+    links: ["Home", "Received (China)"],
     blocked: "/payments",
   },
   {
@@ -167,7 +167,7 @@ const ROLES = [
     detail: "India office · Entry only",
     landing: "/clearing",
     heading: "Clearing (India)",
-    links: ["Home", "Clearing (India)", "Transport"],
+    links: ["Home", "Cleared (India)", "Transport"],
     blocked: "/payments",
   },
 ];

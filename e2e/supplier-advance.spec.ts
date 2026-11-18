@@ -19,7 +19,7 @@ const noSideScroll = async (page: Page) =>
 
 /** A CNY supplier at ¥1 = ₹12.50 with its own advance account (never deleted: advance records keep it). */
 async function newSupplier(api: Api) {
-  const response = await api.post("/suppliers", { name: `Advance Mills ${tag()}`, currency: "CNY", exchangeRate: 12.5 });
+  const response = await api.post("/suppliers", { name: `Advance Supply ${tag()}`, currency: "CNY", exchangeRate: 12.5 });
   expect(response.status(), await response.text()).toBe(201);
   return ((await response.json()) as { supplier: SupplierRow }).supplier;
 }
@@ -35,18 +35,19 @@ test.describe("desktop", () => {
     test.setTimeout(180_000);
     const supplier = await newSupplier(api);
 
-    await test.step("choose the supplier on the tab", async () => {
+    await test.step("open the supplier from the supplier-wise tab", async () => {
       await page.goto("/deposits/advance");
       await expect(page.getByRole("link", { name: /Supplier advance/ })).toHaveAttribute("aria-current", "page");
-      await page.getByRole("button", { name: /^Supplier:/ }).click();
-      await page.getByRole("menuitemradio", { name: supplier.name }).click();
-      await expect(page).toHaveURL(new RegExp(`supplier=${supplier.id}`));
-      await expect(page.getByRole("heading", { name: supplier.name })).toBeVisible();
+      await page.getByRole("searchbox", { name: "Search supplier" }).fill(supplier.name);
+      await expect(page.getByRole("row", { name: new RegExp(supplier.name) })).toContainText("No advance yet");
+      await page.getByRole("link", { name: supplier.name, exact: true }).click();
+      await expect(page).toHaveURL(`/deposits/advance/${supplier.id}`);
+      await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
       await expect(page.getByText("No advance recorded for this supplier yet.")).toBeVisible();
     });
 
     await test.step("Add advance: checks, then saves without an order", async () => {
-      await page.getByRole("button", { name: "+ Add advance" }).click();
+      await page.getByRole("button", { name: "+ Add advance" }).first().click();
       const dialog = page.getByRole("dialog", { name: `Add advance for ${supplier.name}` });
       await expect(field(dialog, /^Rate/)).toHaveValue("12.5");
       await dialog.getByRole("button", { name: "Add advance" }).click();
@@ -59,7 +60,7 @@ test.describe("desktop", () => {
       await shot(page, testInfo, "add-advance-dialog-1440.png", false);
       await dialog.getByRole("button", { name: "Add advance" }).click();
       await expect(toast(page, "Advance added")).toBeVisible();
-      await expect(kpi(page, "Available advance")).toContainText("¥3,000");
+      await expect(kpi(page, "Available balance")).toContainText("¥3,000");
     });
 
     let po = "";
@@ -76,9 +77,11 @@ test.describe("desktop", () => {
 
     await test.step("the ledger: received, applied, returned, applied; filters narrow it", async () => {
       await page.reload();
-      await expect(kpi(page, "Available advance")).toContainText("¥0");
-      await expect(kpi(page, "Applied to orders")).toContainText("¥4,000");
-      await expect(kpi(page, "Returned from orders")).toContainText("¥1,000");
+      await expect(kpi(page, "Available balance")).toContainText("¥0");
+      // Applied net: ¥4,000 applied, ¥1,000 back from the deleted order.
+      await expect(kpi(page, "Applied to orders (net)")).toContainText("¥3,000");
+      await expect(kpi(page, "Applied to orders (net)")).toContainText("after ¥1,000 returned from orders");
+      await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥4,000¥1,000¥3,000¥0");
       await expect(ledgerRows(page)).toHaveCount(4);
       await expect(ledgerRows(page).first()).toContainText("Applied to order");
       await expect(ledgerRows(page).nth(1)).toContainText("Returned from order");
@@ -88,7 +91,7 @@ test.describe("desktop", () => {
       await page.getByRole("menuitemradio", { name: "Applied to order" }).click();
       await expect(ledgerRows(page)).toHaveCount(2);
       // A deleted order's PO number may go to the next order: then both orders' rows match it.
-      await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
+      await page.getByRole("searchbox", { name: "Search reference or PO" }).fill(po);
       await expect(ledgerRows(page)).toHaveCount(coveredPo === po ? 2 : 1);
       await page.getByRole("button", { name: "Clear filters" }).click();
       await expect(ledgerRows(page)).toHaveCount(4);
@@ -120,8 +123,10 @@ test.describe("desktop", () => {
     });
 
     await test.step("an advance recorded after the order: Apply advance from the tab's open orders", async () => {
-      // The ¥1,000 added above came after the order (balance ¥2,000), so nothing applied it yet.
+      // The ¥1,000 added above came after the order (balance ¥2,000), so nothing applied it yet. The older
+      // ?supplier= address still leads to the supplier's page.
       await page.goto(`/deposits/advance?supplier=${supplier.id}`);
+      await expect(page).toHaveURL(`/deposits/advance/${supplier.id}`);
       await expect(page.getByRole("heading", { name: "Orders still to pay" })).toBeVisible();
       const openOrders = page.locator("section").filter({ has: page.getByRole("heading", { name: "Orders still to pay" }) });
       await expect(openOrders.getByRole("row", { name: new RegExp(po) })).toContainText("¥2,000");
@@ -133,7 +138,7 @@ test.describe("desktop", () => {
       await shot(page, testInfo, "apply-advance-dialog-1440.png", false);
       await confirm.getByRole("button", { name: "Apply ¥1,000.00" }).click();
       await expect(toast(page, `¥1,000.00 of supplier advance applied to ${po}`)).toBeVisible();
-      await expect(kpi(page, "Available advance")).toContainText("¥0");
+      await expect(kpi(page, "Available balance")).toContainText("¥0");
       expect(await api.order(po)).toMatchObject({ advanceCny: 4000, balanceCny: 1000, advanceStatus: "partial" });
     });
 
@@ -155,6 +160,53 @@ test.describe("desktop", () => {
       await shot(page, testInfo, "order-payments-after-direct-payment-1440.png");
     });
   });
+
+  test("supplier-wise: each supplier on its own row, currencies apart; deposits and agent payments never count", async ({ page, api }, testInfo) => {
+    test.setTimeout(120_000);
+    const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+    // Two currencies for one supplier: CNY advance and order, then its currency changes to USD and a USD advance.
+    const mixed = await newSupplier(api);
+    await addAdvance(api, mixed.id, 3000);
+    const order = await api.createOrder({ supplier: mixed.name, lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }] });
+    expect((await api.patch(`/suppliers/${mixed.id}`, { currency: "USD", exchangeRate: 84 })).status()).toBe(200);
+    expect((await api.post(`/suppliers/${mixed.id}/advances`, { amount: 500, paidOn: today, rateInr: 84, mode: "Bank transfer", reference: "USD-ADV" })).status()).toBe(201);
+    const single = await newSupplier(api);
+    await addAdvance(api, single.id, 2000);
+    const none = await newSupplier(api);
+    // Separate records that must not move any advance figure: a supplier deposit and an agent payment on the order.
+    expect((await api.post(`/suppliers/${mixed.id}/deposits`, { direction: "give", amount: 700, openedOn: today, reference: "", notes: "" })).status()).toBe(201);
+    const agent = (await api.options()).agents[0]!;
+    await api.pay(order.id, { amountCny: 50, rateInr: 12.5, payeeRole: "agent", agentId: agent.id });
+
+    await page.goto("/deposits/advance");
+    await page.getByRole("button", { name: /^Show:/ }).click();
+    await page.getByRole("menuitemradio", { name: "With an advance" }).click();
+    const row = (name: string) => page.getByRole("row", { name: new RegExp(name) });
+    // Recorded ¥3,000 and $500; applied ¥1,000 and $0; available ¥2,000 and $500: never added together.
+    await expect(row(mixed.name)).toContainText("CNY · USD · 1 order used it");
+    await expect(row(mixed.name)).toContainText("¥3,000$500¥1,000$0¥2,000$500");
+    await expect(row(single.name)).toContainText("¥2,000¥0¥2,000");
+    await expect(row(none.name)).toHaveCount(0);
+    await shot(page, testInfo, "advance-overview-1440.png");
+
+    await row(mixed.name).getByRole("link", { name: `Open ${mixed.name}'s advance` }).click();
+    await expect(page).toHaveURL(`/deposits/advance/${mixed.id}`);
+    await expect(kpi(page, "Advance recorded")).toContainText("¥3,000 · $500");
+    await expect(kpi(page, "Available balance")).toContainText("¥2,000 · $500");
+    await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥1,000¥0¥1,000¥2,000");
+    await expect(page.getByRole("row", { name: /^USD/ })).toContainText("$500$0$0$0$500");
+    await expect(ledgerRows(page)).toHaveCount(3);
+    await expect(ledgerRows(page).filter({ hasText: "USD-ADV" })).toContainText("1 USD = ₹84.00");
+    await shot(page, testInfo, "advance-supplier-1440.png");
+
+    await page.getByRole("link", { name: "Supplier advance" }).click();
+    await expect(page).toHaveURL("/deposits/advance");
+    // A supplier without an advance: its page offers Add advance in the empty history.
+    await page.goto(`/deposits/advance/${none.id}`);
+    await expect(page.getByText("No advance recorded for this supplier yet.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ Add advance" })).toHaveCount(2);
+    await shot(page, testInfo, "advance-supplier-empty-1440.png");
+  });
 });
 
 for (const viewport of [
@@ -174,11 +226,17 @@ for (const viewport of [
       // Recorded after the order: the order is listed as still to pay, with Apply advance.
       await addAdvance(api, supplier.id, 1000);
 
-      await page.goto(`/deposits/advance?supplier=${supplier.id}`);
-      await expect(page.getByRole("heading", { name: supplier.name })).toBeVisible();
+      // The supplier-wise tab, then the supplier's page from its row.
+      await page.goto("/deposits/advance");
+      await page.getByRole("searchbox", { name: "Search supplier" }).fill(supplier.name);
+      await noSideScroll(page);
+      await shot(page, testInfo, `advance-overview-${w}.png`);
+      await page.getByRole("link", { name: supplier.name, exact: true }).click();
+      await expect(page).toHaveURL(`/deposits/advance/${supplier.id}`);
+      await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
       await expect(page.getByRole("button", { name: `Apply supplier advance to ${po}` })).toBeAttached();
       await noSideScroll(page);
-      await shot(page, testInfo, `deposits-advance-tab-${w}.png`);
+      await shot(page, testInfo, `advance-supplier-${w}.png`);
 
       await page.getByRole("button", { name: "+ Add advance" }).click();
       const dialog = page.getByRole("dialog", { name: `Add advance for ${supplier.name}` });

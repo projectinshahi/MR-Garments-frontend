@@ -31,23 +31,36 @@ export async function getDeposits() {
   return { rows: toRows(response, access.linkPo), suppliers: response.suppliers, advances: response.advances ?? [], today: todayInIndia(), ...access };
 }
 
-export type AdvanceData = Awaited<ReturnType<typeof getAdvance>>;
+export type AdvanceOverviewData = Awaited<ReturnType<typeof getAdvanceOverview>>;
 
 /**
- * Deposits › Supplier advance: DEP-1 for the suppliers and every account's balance, and ADV-1 for the chosen supplier
- * (null while none is chosen). An unknown supplier id shows the tab as if none was chosen.
+ * Deposits › Supplier advance, supplier-wise: DEP-1's suppliers (active ones, and any inactive one with records) and
+ * each one's advance account per currency (`advances`, the ledger's totals). Nothing else is added in.
  */
-export async function getAdvance(supplierId: string | null) {
-  const [deposits, account] = await Promise.all([
-    getDeposits(),
-    supplierId
-      ? apiGet<SupplierAdvanceResponse>(`/suppliers/${encodeURIComponent(supplierId)}/advances`).catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 404) return null;
-          throw error;
-        })
-      : Promise.resolve(null),
-  ]);
-  return { suppliers: deposits.suppliers, advances: deposits.advances, account, today: deposits.today, canEnter: deposits.canEnter, canDelete: deposits.canDelete, linkPo: deposits.linkPo };
+export async function getAdvanceOverview() {
+  const deposits = await getDeposits();
+  return { suppliers: deposits.suppliers, advances: deposits.advances, today: deposits.today, canEnter: deposits.canEnter };
+}
+
+export type AdvanceSupplierData = Awaited<ReturnType<typeof getAdvanceSupplier>>;
+
+/**
+ * One supplier's advance page: ADV-1 (the ledger: totals per currency, every entry with its balance, the orders still
+ * owing) and SD-1's supplier details (contact, phone, city). An unknown supplier renders the not-found page.
+ */
+export async function getAdvanceSupplier(supplierId: string) {
+  let account: SupplierAdvanceResponse;
+  let details: SupplierStatement["supplier"];
+  try {
+    [account, { supplier: details }] = await Promise.all([
+      apiGet<SupplierAdvanceResponse>(`/suppliers/${encodeURIComponent(supplierId)}/advances`),
+      apiGet<SupplierStatement>(`/suppliers/${encodeURIComponent(supplierId)}/deposits`),
+    ]);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
+  }
+  return { account, details, today: todayInIndia(), ...(await getAccess()) };
 }
 
 export type StatementData = Awaited<ReturnType<typeof getStatement>>;

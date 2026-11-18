@@ -214,7 +214,7 @@ test("AT-U3 and AT-T2: unticking a stage saves, and the signed-in user sees it o
     await expect(field.stage(page, "Receiving (China)")).toBeChecked();
 
     await wang.page.reload();
-    await expect(wangNav.getByRole("link", { name: "Receiving (China)" })).toBeVisible();
+    await expect(wangNav.getByRole("link", { name: "Received (China)" })).toBeVisible();
     await expect(wangNav.getByRole("link", { name: "Containers" })).toHaveCount(0);
     await expect(wang.page).toHaveURL("/home");
   } finally {
