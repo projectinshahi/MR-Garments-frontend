@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { LinkPending } from "@/components/layout/navigation-progress";
 import { usePathname } from "next/navigation";
-import { Suspense } from "react";
+import { type RefObject, Suspense, useEffect, useRef } from "react";
 
 import { cn, decodePath } from "@/lib/utils";
 
@@ -16,17 +16,30 @@ export type RouteTab = { href: string; label: string; /** Letter or number chip:
  * filters, is ignored).
  */
 export function RouteTabs({ tabs, label }: { tabs: RouteTab[]; label: string }) {
+  const bar = useRef<HTMLElement>(null);
   return (
-    <nav aria-label={label} className="flex h-(--tabs-height) shrink-0 items-stretch gap-1 overflow-x-auto border-b bg-card px-4 md:px-(--page-padding)">
+    <nav ref={bar} aria-label={label} className="flex h-(--tabs-height) shrink-0 items-stretch gap-1 overflow-x-auto border-b bg-card px-4 md:px-(--page-padding)">
       <Suspense fallback={<Tabs tabs={tabs} pathname={null} />}>
-        <ActiveTabs tabs={tabs} />
+        <ActiveTabs tabs={tabs} bar={bar} />
       </Suspense>
     </nav>
   );
 }
 
-function ActiveTabs({ tabs }: { tabs: RouteTab[] }) {
-  return <Tabs tabs={tabs} pathname={usePathname()} />;
+function ActiveTabs({ tabs, bar }: { tabs: RouteTab[]; bar: RefObject<HTMLElement | null> }) {
+  const pathname = usePathname();
+  // On a narrow screen the bar scrolls sideways: bring the current tab into view (Deposits opens on its last tab).
+  // Only the bar scrolls, never the page.
+  useEffect(() => {
+    const nav = bar.current;
+    const tab = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !tab) return;
+    const outer = nav.getBoundingClientRect();
+    const inner = tab.getBoundingClientRect();
+    if (inner.right > outer.right) nav.scrollBy({ left: inner.right - outer.right });
+    else if (inner.left < outer.left) nav.scrollBy({ left: inner.left - outer.left });
+  }, [pathname, bar]);
+  return <Tabs tabs={tabs} pathname={pathname} />;
 }
 
 function Tabs({ tabs, pathname }: { tabs: RouteTab[]; pathname: string | null }) {

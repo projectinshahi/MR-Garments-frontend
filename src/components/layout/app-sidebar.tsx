@@ -15,7 +15,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useNavigate, useReportPending } from "@/components/layout/navigation-progress";
 import { SignOutMenuItem } from "@/components/layout/sign-out";
-import { isActivePath, type NavSection, USER_MENU } from "@/config/navigation";
+import { isActiveItem, type NavSection, USER_MENU } from "@/config/navigation";
 import { NotificationBell } from "@/features/notifications/notification-bell";
 import type { Me } from "@/lib/api/types";
 import { APP_NAME } from "@/lib/constants";
@@ -140,7 +140,7 @@ function NavSections({ sections, pathname, navigate }: { sections: NavSection[];
           ) : null}
           <ul className="flex flex-col gap-0.5">
             {section.items.map((item) => {
-              const active = isActivePath(pathname, item.href);
+              const active = isActiveItem(pathname, item);
               return (
                 <li key={item.href}>
                   <Link

@@ -4,7 +4,8 @@
 
 import type { Access, Capability, Me } from "@/lib/api/types";
 
-export type NavItem = { title: string; href: string };
+/** `match`: the path that keeps the item highlighted, when wider than `href` (Deposits opens one tab, lit on every tab). */
+export type NavItem = { title: string; href: string; match?: string };
 export type NavSection = { label?: string; items: NavItem[] };
 
 export const MANAGEMENT_NAV: NavSection[] = [
@@ -13,7 +14,8 @@ export const MANAGEMENT_NAV: NavSection[] = [
       { title: "Dashboard", href: "/" },
       { title: "Orders", href: "/orders" },
       { title: "Deposits & Payments", href: "/payments" },
-      { title: "Deposits", href: "/deposits" },
+      // Opens the Supplier advance tab; the other Deposits tabs keep their own addresses (/deposits is All deposits).
+      { title: "Deposits", href: "/deposits/advance", match: "/deposits" },
       { title: "Delivery Calendar", href: "/calendar" },
     ],
   },
@@ -57,6 +59,9 @@ export const USER_MENU: NavItem[] = [
 
 export const isActivePath = (pathname: string | null, href: string) =>
   pathname === href || (href !== "/" && !!pathname?.startsWith(`${href}/`));
+
+/** Whether a sidebar item is the current page: by its `match` path when it has one, else by its `href`. */
+export const isActiveItem = (pathname: string | null, item: NavItem) => isActivePath(pathname, item.match ?? item.href);
 
 /** The session cookie set by the API (B9.7). */
 export const SESSION_COOKIE = "mrg.sid";

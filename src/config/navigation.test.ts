@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Access, Capability, Me } from "@/lib/api/types";
 
-import { canOpen, MANAGEMENT_NAV, navFor } from "./navigation";
+import { canOpen, isActiveItem, MANAGEMENT_NAV, navFor } from "./navigation";
 
 // The Closed Orders entry (sidebar, right after the Stages group): it follows the orders permission, not a stage's.
 
@@ -34,5 +34,25 @@ describe("Closed Orders in the sidebar", () => {
     const staff = { ...me({ warehouse: "Full" }, "staff"), stages: [6] };
     expect(titles(navFor(staff))).toEqual(["Home", "Warehouse"]);
     expect(canOpen(staff, "/closed-orders")).toBe(false);
+  });
+});
+
+describe("Deposits in the sidebar opens its Supplier advance tab", () => {
+  const deposits = MANAGEMENT_NAV.flatMap((section) => section.items).find((item) => item.title === "Deposits")!;
+
+  it("links to /deposits/advance, open to the same people as every Deposits tab", () => {
+    expect(deposits.href).toBe("/deposits/advance");
+    expect(canOpen(me({ payments: "View" }), deposits.href)).toBe(true);
+    expect(canOpen(me({ payments: "None", dashboard: "Full" }), deposits.href)).toBe(false);
+    expect(titles(navFor(me({ payments: "View" })))).toContain("Deposits");
+  });
+
+  it("stays highlighted on every Deposits tab and a supplier's advance page, and nowhere else", () => {
+    for (const path of ["/deposits", "/deposits/pending", "/deposits/paid", "/deposits/suppliers", "/deposits/suppliers/s1", "/deposits/advance", "/deposits/advance/s1"]) {
+      expect(isActiveItem(path, deposits), path).toBe(true);
+    }
+    for (const path of ["/payments", "/depositsx", "/"]) expect(isActiveItem(path, deposits), path).toBe(false);
+    // Items without a `match` keep matching by their own address.
+    expect(isActiveItem("/orders/PO-1", { title: "Orders", href: "/orders" })).toBe(true);
   });
 });
