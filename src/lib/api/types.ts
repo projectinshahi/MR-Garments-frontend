@@ -316,6 +316,8 @@ export type CreateOrderResponse = { order: { id: string; po: string }; advance?:
  * replaces the whole list in order: a line with `id` updates that line, one without is added, one left out is removed.
  */
 export type UpdateOrderBody = {
+  /** A new PO number (ORD-5): the same order, renumbered; 422 `po` when another order uses it. */
+  po?: string;
   orderDate?: string;
   deliveryDate?: string;
   lines?: { id?: string; itemId: string; quantity: number; rateCny: number }[];

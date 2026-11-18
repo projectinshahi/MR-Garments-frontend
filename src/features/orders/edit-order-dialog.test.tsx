@@ -10,7 +10,8 @@ import type { OrderDetail } from "@/lib/api/types";
 import { EditOrderDialog, type EditableOrder, type ItemOption } from "./edit-order-dialog";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+const path = vi.hoisted(() => ({ current: "/orders/PO-2051/payments" }));
+vi.mock("next/navigation", () => ({ useRouter: () => router, usePathname: () => path.current }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { patch: vi.fn() } }));
 const patch = vi.mocked(apiClient.patch);
@@ -213,12 +214,12 @@ describe("Edit order at stages 2-5", () => {
     patch.mockResolvedValue({});
     const { user, date, setDate, box, save } = open({ ...ORDER, stage: 2 });
     expect(screen.getByRole("dialog", { name: "Edit order" })).toHaveTextContent(
-      "Goods have been received for this order, so only the delivery date and the deposit required can change.",
+      "Goods have been received for this order, so only the PO number, the delivery date and the deposit required can change.",
     );
     expect(date(/^Order date/)).toHaveAttribute("readonly");
     expect(screen.getByText("Silk scarves")).toBeVisible();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getAllByRole("textbox")).toEqual([box("Deposit required (¥)")]);
+    expect(screen.getAllByRole("textbox")).toEqual([box("PO number"), box("Deposit required (¥)")]);
     expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Remove line/ })).toBeNull();
 
@@ -226,5 +227,70 @@ describe("Edit order at stages 2-5", () => {
     await user.type(box("Deposit required (¥)"), "300");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-12-01", depositRequiredCny: 300 }));
+  });
+});
+
+describe("PO number (ORD-5 po)", () => {
+  const TAKEN = "This PO number is already used by another order.";
+
+  it("is prefilled with the order's number and left out of the body when unchanged", async () => {
+    patch.mockResolvedValue({ order: { id: "o-1", po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-20" } });
+    const { user, setDate, box, save } = open();
+    expect(box("PO number")).toHaveValue("PO-2051");
+    expect(box("PO number")).toBeRequired();
+    setDate(/^Delivery date/, "2026-11-20");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-11-20" }));
+    expect(toast.success).toHaveBeenCalledWith("Order saved");
+    expect(router.refresh).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("sends a new number (trimmed), then opens the same tab at the order's new address with the new number", async () => {
+    path.current = "/orders/PO-2051/payments";
+    patch.mockResolvedValue({ order: { id: "o-1", po: "MR/2026/001", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15" } });
+    const { user, onClose, box, save } = open();
+    await user.clear(box("PO number"));
+    await user.type(box("PO number"), "  MR/2026/001 ");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { po: "MR/2026/001" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith("Order saved. Its PO number is now MR/2026/001.");
+    expect(router.replace).toHaveBeenCalledWith("/orders/MR%2F2026%2F001/payments");
+  });
+
+  it("works from the order's overview (no tab) and at stages 2-5", async () => {
+    path.current = "/orders/PO-2051";
+    patch.mockResolvedValue({ order: { id: "o-1", po: "PO-9001", stage: 3, orderDate: "2026-10-01", deliveryDate: "2026-11-15" } });
+    const { user, box, save } = open({ ...ORDER, stage: 3 });
+    await user.clear(box("PO number"));
+    await user.type(box("PO number"), "PO-9001");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { po: "PO-9001" }));
+    expect(router.replace).toHaveBeenCalledWith("/orders/PO-9001");
+  });
+
+  it("refuses an empty number before calling the API", async () => {
+    const { user, box, save } = open();
+    await user.clear(box("PO number"));
+    await user.type(box("PO number"), "   ");
+    await user.click(save);
+    expect(await screen.findByText("Enter the PO number.")).toBeVisible();
+    expect(box("PO number")).toHaveAttribute("aria-invalid", "true");
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("shows the API's duplicate message under the field, focused, and keeps the dialog and the typed number", async () => {
+    patch.mockRejectedValue(new ApiError(422, "validation_failed", "Some fields need attention.", { po: TAKEN }));
+    const { user, onClose, box, save } = open();
+    await user.clear(box("PO number"));
+    await user.type(box("PO number"), "PO-2050");
+    await user.click(save);
+    expect(await screen.findByText(TAKEN)).toBeVisible();
+    expect(box("PO number")).toHaveFocus();
+    expect(box("PO number")).toHaveValue("PO-2050");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

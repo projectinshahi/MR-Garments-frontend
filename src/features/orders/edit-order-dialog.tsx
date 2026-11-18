@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { XIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useId } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -24,7 +25,8 @@ import type { Currency } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
 // Edit order (ORD-5, D2). No reference design: the Settings dialog frame (53) with the New order lines table (15).
-// Stage 1: both dates, the deposit required and the lines; stages 2-5: the delivery date and the deposit required only.
+// Stage 1: the PO number, both dates, the deposit required and the lines; stages 2-5: the PO number, the delivery date
+// and the deposit required only.
 // Messages are proposed wording, the field checks the same as New order's.
 
 /** What the dialog needs from ORD-4. */
@@ -36,8 +38,11 @@ export type ItemOption = OrderOptions["items"][number];
 
 export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
-  linesEditable: "Change the dates or the items. The supplier can't change, and the order total can't be less than what's already paid to the supplier.",
-  receivedOnly: "Goods have been received for this order, so only the delivery date and the deposit required can change.",
+  /** After a new PO number: the order is the same one, now under that number. */
+  renumbered: (po: string) => `Order saved. Its PO number is now ${po}.`,
+  linesEditable:
+    "Change the PO number, the dates or the items. The supplier can't change, and the order total can't be less than what's already paid to the supplier.",
+  receivedOnly: "Goods have been received for this order, so only the PO number, the delivery date and the deposit required can change.",
   belowPaid: (paid: number, currency: Currency) => `The order total can't be less than the ${formatMoney(paid, currency, { decimals: 2 })} already paid to the supplier.`,
 };
 
@@ -65,6 +70,8 @@ const totalOf = (lines: Pick<LineValues, "rateCny" | "quantity">[]) =>
 const editSchema = (paid: number, linesEditable: boolean, currency: Currency) =>
   z
     .object({
+      /** As New order's PO number (and ORD-3/ORD-5): any format, trimmed, 1-50 characters. */
+      po: z.string().trim().min(1, "Enter the PO number.").max(50, "Use 50 characters or fewer."),
       orderDate: z.string().min(1, "Choose the order date."),
       deliveryDate: z.string().min(1, "Choose the delivery date."),
       /** The deposit the supplier asked for; blank clears it. */
@@ -81,6 +88,8 @@ type EditValues = z.infer<ReturnType<typeof editSchema>>;
 /** The ORD-5 body: only the keys that changed; `lines` is the whole list (kept rows with their id) when any row changed. */
 function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditable: boolean): UpdateOrderBody {
   const body: UpdateOrderBody = {};
+  // The schema trims the number; the same one as saved is no change. Allowed at every stage the dialog opens at.
+  if (values.po !== order.po) body.po = values.po;
   if (values.deliveryDate !== order.deliveryDate) body.deliveryDate = values.deliveryDate;
   const depositRequired = values.depositRequiredCny.trim() ? parseNumber(values.depositRequiredCny) : null;
   // An older API leaves the requirement out (undefined): that is "none", so an untouched field sends nothing.
@@ -104,8 +113,9 @@ function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditab
 }
 
 /**
- * The Edit order dialog. Save sends only what changed, then toasts, closes and reloads the page; the API's field
- * errors go under their fields (the lines one under the table); a refusal without fields toasts and keeps the dialog.
+ * The Edit order dialog. Save sends only what changed, then toasts, closes and reloads the page (moving to the order's
+ * new address after a new PO number); the API's field errors go under their fields (the lines one under the table); a
+ * refusal without fields toasts and keeps the dialog.
  */
 export function EditOrderDialog({ order, items, open, onClose }: { order: EditableOrder; items: ItemOption[]; open: boolean; onClose: () => void }) {
   const linesEditable = order.stage === 1;
@@ -133,9 +143,14 @@ export function EditOrderDialog({ order, items, open, onClose }: { order: Editab
 
 function EditOrderForm({ order, items, linesEditable, onClose }: { order: EditableOrder; items: ItemOption[]; linesEditable: boolean; onClose: () => void }) {
   const router = useRouter();
+  const pathname = usePathname();
+  // Unique per dialog: after a new PO number the old order page stays mounted (hidden, <Activity>), and a fixed id
+  // would tie these labels to its copy of the form instead.
+  const id = useId();
   const { register, control, handleSubmit, setError, formState } = useForm<EditValues>({
     resolver: zodResolver(editSchema(order.supplierPaidCny ?? 0, linesEditable, order.currency)),
     defaultValues: {
+      po: order.po,
       orderDate: order.orderDate,
       deliveryDate: order.deliveryDate,
       // Kept exactly as saved, in the order's currency; empty when none was agreed (or an older API left it out).
@@ -157,21 +172,29 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
     const body = toUpdateOrderBody(values, order, linesEditable);
     // Nothing changed, so nothing to send (ORD-5 needs at least one key).
     if (Object.keys(body).length === 0) return onClose();
+    let saved: UpdateOrderResponse;
     try {
-      await apiClient.patch<UpdateOrderResponse>(`/orders/${encodeURIComponent(order.po)}`, body);
+      saved = await apiClient.patch<UpdateOrderResponse>(`/orders/${encodeURIComponent(order.po)}`, body);
     } catch (error) {
       // 422: under its field, the first focused; a field this form doesn't show is toasted, never dropped. Anything
       // else (409 without fields, 5xx, network) toasts in handleApiError, and the dialog keeps the values.
       Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) => {
-        if (field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
+        if (field === "po" || field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
           setError(field, { message }, { shouldFocus: index === 0 });
         else notifyError(message);
       });
       return;
     }
-    notifySuccess(EDIT_ORDER_TEXT.saved);
+    const po = saved?.order?.po ?? body.po ?? order.po;
     onClose();
-    router.refresh();
+    if (po === order.po) {
+      notifySuccess(EDIT_ORDER_TEXT.saved);
+      return router.refresh();
+    }
+    // A new number moves the order's pages: the same tab at /orders/<new PO>/..., which loads with the new number.
+    notifySuccess(EDIT_ORDER_TEXT.renumbered(po));
+    const segments = pathname.split("/");
+    router.replace(segments[1] === "orders" && segments[2] ? [...segments.slice(0, 2), encodeURIComponent(po), ...segments.slice(3)].join("/") : `/orders/${encodeURIComponent(po)}`);
   }
 
   const lineErrors = rows.fields.flatMap((_, i) => {
@@ -183,26 +206,33 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
     // min-w-0: the lines table scrolls inside the dialog on a phone instead of widening it.
     <form noValidate onSubmit={handleSubmit(save)} className="mt-[14px] min-w-0">
       <div className="grid gap-x-4 gap-y-[14px] sm:grid-cols-2">
+        <Field className={fieldClass} data-invalid={!!errors.po}>
+          <FieldLabel htmlFor={`${id}-po`} className={labelClass}>
+            PO number <RequiredMark />
+          </FieldLabel>
+          <Input id={`${id}-po`} size="sm" required maxLength={50} autoComplete="off" spellCheck={false} aria-invalid={!!errors.po} {...register("po")} />
+          <FieldError errors={[errors.po]} />
+        </Field>
         <Field className={fieldClass} data-invalid={!!errors.orderDate}>
-          <FieldLabel htmlFor="edit-order-date" className={labelClass}>
+          <FieldLabel htmlFor={`${id}-order-date`} className={labelClass}>
             Order date
           </FieldLabel>
-          <Input id="edit-order-date" type="date" size="sm" readOnly={!linesEditable} aria-invalid={!!errors.orderDate} {...register("orderDate")} />
+          <Input id={`${id}-order-date`} type="date" size="sm" readOnly={!linesEditable} aria-invalid={!!errors.orderDate} {...register("orderDate")} />
           <FieldError errors={[errors.orderDate]} />
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.deliveryDate}>
-          <FieldLabel htmlFor="edit-delivery-date" className={labelClass}>
+          <FieldLabel htmlFor={`${id}-delivery-date`} className={labelClass}>
             Delivery date <RequiredMark />
           </FieldLabel>
-          <Input id="edit-delivery-date" type="date" size="sm" required aria-invalid={!!errors.deliveryDate} {...register("deliveryDate")} />
+          <Input id={`${id}-delivery-date`} type="date" size="sm" required aria-invalid={!!errors.deliveryDate} {...register("deliveryDate")} />
           <FieldError errors={[errors.deliveryDate]} />
         </Field>
         <Field className={fieldClass} data-invalid={!!errors.depositRequiredCny}>
-          <FieldLabel htmlFor="edit-deposit-required" className={labelClass}>
+          <FieldLabel htmlFor={`${id}-deposit-required`} className={labelClass}>
             Deposit required ({symbol})
           </FieldLabel>
           <Input
-            id="edit-deposit-required"
+            id={`${id}-deposit-required`}
             size="sm"
             inputMode="decimal"
             placeholder="None agreed"
