@@ -270,8 +270,18 @@ export function statementFile({ supplier, summary, deposits, advance }: Supplier
     perCurrency(deposits.filter((d) => d.direction === direction)).map(([currency, list]) => ({
       sheet,
       title: `Deposit to ${DIRECTION_LABEL[direction].toLowerCase()} (${currency})`,
-      columns: [date("Opened on"), money("Amount", currency), money("Settled", currency), money("Pending", currency), rate("Rate when opened", currency), text("Status"), text("Reference"), text("Notes")],
-      rows: list.map((d) => [d.openedOn, d.amount, d.settled, d.pending, d.exchangeRate ?? null, STATUS_LABEL[d.status], d.reference, d.notes]),
+      columns: [
+        date("Opened on"),
+        money("Amount", currency),
+        money("Settled", currency),
+        money("Pending", currency),
+        rate("Rate when opened", currency),
+        money("INR equivalent", "INR"),
+        text("Status"),
+        text("Reference"),
+        text("Notes"),
+      ],
+      rows: list.map((d) => [d.openedOn, d.amount, d.settled, d.pending, d.exchangeRate ?? null, d.amountInr ?? null, STATUS_LABEL[d.status], d.reference, d.notes]),
     }));
   const transactions = deposits.flatMap((d) => d.transactions.map((t) => ({ ...t, currency: d.currency, deposit: `${DIRECTION_LABEL[d.direction]} · opened ${formatDate(d.openedOn)}` })));
   return {

@@ -45,6 +45,8 @@ const ROWS: SupplierRow[] = [
   { ...saved.supplier, id: "s-7", code: "SUP-007", name: "Wenzhou Buttons", status: "Inactive" },
   // Has orders or deposits: a new currency or rate asks first (the code is outside SUP-nnn, so the next code stays SUP-008).
   { ...saved.supplier, id: "s-8", code: "HZ-01", name: "Hangzhou Knits", hasTransactions: true },
+  // No exchange rate yet (it is optional): the code is outside SUP-nnn, so the next code stays SUP-008.
+  { ...saved.supplier, id: "s-9", code: "RL-01", name: "Rateless Mills", exchangeRate: null, rateUpdatedAt: null },
 ];
 
 function open(query = "dialog=add") {
@@ -352,5 +354,39 @@ describe("Currency and exchange rate (docs/supplier-currency.md)", () => {
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(patch).toHaveBeenCalledWith("/suppliers/s-8", expect.objectContaining({ exchangeRate: 11.5, notes: "Denim only more" }));
+  });
+});
+
+describe("the exchange rate is optional (blank = not set, never 0 or 1)", () => {
+  it("Add: a supplier is created without a rate; the body leaves the rate out", async () => {
+    const { user, field, save } = open();
+    expect(field("Exchange rate")).not.toBeRequired();
+    expect(screen.getByText(/Optional: leave it blank if not known yet/)).toBeVisible();
+    await user.type(field("Supplier name"), NINGBO.name);
+    post.mockResolvedValueOnce(saved);
+    await user.click(save);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("exchangeRate");
+    expect(toast.success).toHaveBeenCalledWith("Supplier added");
+  });
+
+  it("Edit: a saved rate can be changed but not removed", async () => {
+    const { user, field, save } = open("dialog=edit&id=s-6");
+    expect(field("Exchange rate")).toBeRequired();
+    await user.clear(field("Exchange rate"));
+    await user.click(save);
+    expect(await screen.findByText("Enter the exchange rate: a saved rate can be changed, not removed.")).toBeVisible();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("Edit: a supplier without a rate is saved as it is, and the rate can be added later", async () => {
+    const { user, field, save } = open("dialog=edit&id=s-9");
+    expect(field("Exchange rate")).toHaveValue("");
+    expect(field("Exchange rate")).not.toBeRequired();
+    await user.type(field("Exchange rate"), "12.4");
+    patch.mockResolvedValueOnce(saved);
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    expect(patch.mock.calls[0]![1]).toMatchObject({ currency: "CNY", exchangeRate: 12.4 });
   });
 });

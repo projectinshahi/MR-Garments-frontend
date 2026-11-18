@@ -77,10 +77,17 @@ test("Scenario 7: a deposit to give with a partial payment and one to receive wi
   await dialog.getByLabel(/^Direction/).selectOption("give");
   await dialog.getByLabel(/^Amount/).fill("1000");
   await dialog.getByLabel(/^Reference/).fill("Tooling advance");
+  // The supplier has no saved rate (it is optional): the deposit asks for its own before it opens.
+  await dialog.getByRole("button", { name: "Open deposit" }).click();
+  await expect(dialog.getByText("Enter the exchange rate: a number above 0 with at most 4 decimals.")).toBeVisible();
+  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
   await dialog.getByRole("button", { name: "Open deposit" }).click();
   await expect(dialog).toBeHidden();
   const give = page.getByRole("article", { name: /^To give/ });
   await expect(give).toContainText("Open");
+  // The rate typed for the deposit, and its INR at that rate: 1,000 x 12.5.
+  await expect(give).toContainText("Rate when opened1 CNY = ₹12.50");
+  await expect(give).toContainText("INR equivalent₹12,500.00");
 
   // Pay ¥300 of it: the amount comes prefilled with the pending ¥1,000.
   await give.getByRole("button", { name: "Record payment" }).click();
@@ -98,6 +105,7 @@ test("Scenario 7: a deposit to give with a partial payment and one to receive wi
   dialog = page.getByRole("dialog", { name: `New deposit for ${supplier.name}` });
   await dialog.getByLabel(/^Direction/).selectOption("receive");
   await dialog.getByLabel(/^Amount/).fill("500");
+  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
   await dialog.getByRole("button", { name: "Open deposit" }).click();
   await expect(dialog).toBeHidden();
   const receive = page.getByRole("article", { name: /^To receive/ });

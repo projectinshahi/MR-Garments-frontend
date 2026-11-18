@@ -404,7 +404,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   { label: "Stage", value: stageLabel(order.stage) },
                   { label: "Currency", value: currencyTitle(cur) },
                   // The rate saved when the PO was placed, never the supplier's current one (docs/supplier-currency.md).
-                  { label: "Exchange rate on this PO", value: order.exchangeRate === null ? "Not saved (placed before rates were kept)" : rateText(cur, order.exchangeRate) },
+                  { label: "Exchange rate on this PO", value: order.exchangeRate === null ? "Not set (the supplier had no rate when it was placed)" : rateText(cur, order.exchangeRate) },
                   { label: "PO value in INR", value: order.orderValueInr === null ? DASH : `${formatINR(order.orderValueInr, 2)} at the PO rate` },
                   { label: "Products", value: formatNumber(order.products) },
                   { label: "Ordered", value: quantities((t) => t.ordered) },

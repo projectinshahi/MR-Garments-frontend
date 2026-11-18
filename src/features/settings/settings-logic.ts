@@ -33,8 +33,9 @@ const RATE = /^\d{1,8}(\.\d{1,4})?$/;
 /**
  * Add / Edit supplier (53_17.4, and the Suppliers page), the fields of the MD-2 body. The code and the name are
  * required (the code is offered as the next SUP-nnn); the currency (CNY, USD or INR) is the one currency of the
- * supplier's new orders and deposits, and the exchange rate (INR per 1 unit of it) is required unless the currency is
- * INR, whose rate is fixed at 1 (checkExchangeRate); email and phone are checked for shape when given. The API applies
+ * supplier's new orders and deposits, and the exchange rate (INR per 1 unit of it) is optional: left blank it is "not
+ * set" (each payment, deposit and advance then asks for its own rate), given it is checked (checkExchangeRate); INR's is
+ * fixed at 1. Email and phone are checked for shape when given. The API applies
  * the same rules (backend docs/suppliers.md, docs/supplier-currency.md).
  */
 export const supplierFields = z.object({
@@ -57,9 +58,27 @@ export const supplierFields = z.object({
 });
 export type SupplierDraft = z.infer<typeof supplierFields>;
 
-/** What is wrong with the rate for `currency`, or null: INR takes any (it is stored as 1); the rest need 0 < rate with at most 4 decimals. */
+/**
+ * What is wrong with the rate for `currency`, or null: INR takes any (it is stored as 1); blank is allowed (not set yet);
+ * a typed rate needs 0 < rate with at most 4 decimals.
+ */
 export const exchangeRateProblem = (currency: Currency, exchangeRate: string) =>
-  currency === "INR" || (RATE.test(exchangeRate) && Number(exchangeRate) > 0) ? null : MESSAGES.exchangeRate;
+  currency === "INR" || exchangeRate.trim() === "" || (RATE.test(exchangeRate) && Number(exchangeRate) > 0) ? null : MESSAGES.exchangeRate;
+/** The typed rate as a number, or null while blank (never 0 or 1). */
+export const typedRate = (exchangeRate: string) => (exchangeRate.trim() === "" ? null : Number(exchangeRate));
+/**
+ * On Edit supplier, a blank rate is refused when the supplier already has one (a saved rate can be changed, not
+ * removed) or when the currency changes (the old rate means nothing for the new currency): the message, or null.
+ */
+export const RATE_REQUIRED = {
+  keep: "Enter the exchange rate: a saved rate can be changed, not removed.",
+  newCurrency: (currency: string) => `Enter the exchange rate for ${currency}: a new currency needs its own rate.`,
+};
+export const editRateProblem = (saved: { currency: Currency; exchangeRate: number | null }, values: { currency: Currency; exchangeRate: string }) => {
+  if (values.currency === "INR" || typedRate(values.exchangeRate) !== null) return null;
+  if (saved.currency !== values.currency) return RATE_REQUIRED.newCurrency(values.currency);
+  return saved.exchangeRate !== null ? RATE_REQUIRED.keep : null;
+};
 /** The rate rule as a refinement, for the fields or a form that extends them. */
 export const checkExchangeRate = (values: { currency: Currency; exchangeRate: string }, ctx: { addIssue: (issue: { code: "custom"; path: string[]; message: string }) => void }) => {
   const message = exchangeRateProblem(values.currency, values.exchangeRate);
@@ -67,11 +86,11 @@ export const checkExchangeRate = (values: { currency: Currency; exchangeRate: st
 };
 export const supplierSchema = supplierFields.superRefine(checkExchangeRate);
 
-/** The MD-2 body: the rate as a number, 1 for an INR supplier whatever its field says. */
-export const toSupplierBody = ({ exchangeRate, ...values }: SupplierDraft): CreateSupplierBody => ({
-  ...values,
-  exchangeRate: values.currency === "INR" ? 1 : Number(exchangeRate),
-});
+/** The MD-2 body: the rate as a number, 1 for an INR supplier whatever its field says, left out while blank (not set). */
+export const toSupplierBody = ({ exchangeRate, ...values }: SupplierDraft): CreateSupplierBody => {
+  const rate = values.currency === "INR" ? 1 : typedRate(exchangeRate);
+  return rate === null ? values : { ...values, exchangeRate: rate };
+};
 
 /** A list's "Exchange rate" cell: "₹12.50" (INR per 1 unit), "1.00" for an INR supplier, "Not set" while there is none. */
 export const exchangeRateText = (currency: Currency, exchangeRate: number | null) =>

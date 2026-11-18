@@ -29,7 +29,7 @@ import {
   SettingsDialogFooter,
   useSettingsDialog,
 } from "./settings-dialog";
-import { checkExchangeRate, exchangeRateProblem, exchangeRateText, suggestSupplierCode, supplierFields, toSupplierBody, type SupplierDraft } from "./settings-logic";
+import { checkExchangeRate, editRateProblem, exchangeRateProblem, exchangeRateText, suggestSupplierCode, supplierFields, toSupplierBody, typedRate, type SupplierDraft } from "./settings-logic";
 
 const PATH = "/settings/suppliers";
 export const ADD_SUPPLIER_HREF = addHref(PATH);
@@ -65,7 +65,7 @@ export const RATE_CHANGE_TEXT = {
 };
 /** A currency or rate the saved row doesn't have (an INR supplier's rate is 1 whatever the field says). */
 const moneyChanged = (row: SupplierRow, values: { currency: SupplierRow["currency"]; exchangeRate: string }) =>
-  row.currency !== values.currency || (values.currency !== "INR" && row.exchangeRate !== Number(values.exchangeRate));
+  row.currency !== values.currency || (values.currency !== "INR" && row.exchangeRate !== typedRate(values.exchangeRate));
 type SupplierValues = z.infer<typeof formSchema>;
 // The API's length limits (backend docs/suppliers.md), so its length errors can't come from this form.
 const SHORT = 200;
@@ -139,7 +139,18 @@ function SupplierForm({
   const [currency, exchangeRate] = useWatch({ control, name: ["currency", "exchangeRate"] });
   const inr = currency === "INR";
   // "1 CNY = ₹12.50" once the typed rate is valid, else what to type; INR needs no rate.
-  const rateHint = inr ? "INR is the base currency: the rate is fixed at 1." : exchangeRateProblem(currency, exchangeRate) ? `INR for 1 ${currency}, e.g. 12.5` : rateText(currency, Number(exchangeRate));
+  // Optional: blank is "not set" (each payment, deposit and advance asks for its own rate). Required on Edit when the
+  // supplier has a rate already or the currency changes (editRateProblem).
+  const rateRequired = !!supplier && (supplier.exchangeRate !== null || supplier.currency !== currency);
+  const rateHint = inr
+    ? "INR is the base currency: the rate is fixed at 1."
+    : typedRate(exchangeRate) === null
+      ? rateRequired
+        ? `INR for 1 ${currency}, e.g. 12.5`
+        : "Optional: leave it blank if not known yet. Payments, deposits and advances ask for their own rate."
+      : exchangeRateProblem(currency, exchangeRate)
+        ? `INR for 1 ${currency}, e.g. 12.5`
+        : rateText(currency, Number(exchangeRate));
   // A stored country outside the list stays selectable, so saving never drops it.
   const countries = supplier?.country && !COUNTRIES.some((country) => country.name === supplier.country) ? [{ name: supplier.country, code: "" }, ...COUNTRIES] : COUNTRIES;
 
@@ -160,6 +171,8 @@ function SupplierForm({
 
   // Deactivating asks first; so does a new currency or rate on a supplier that already has orders or deposits.
   const submit = (values: SupplierValues) => {
+    const rateMissing = supplier ? editRateProblem(supplier, values) : null;
+    if (rateMissing) return setError("exchangeRate", { message: rateMissing }, { shouldFocus: true });
     if (supplier?.status === "Active" && values.status === "Inactive") return setConfirming(values);
     if (supplier?.hasTransactions && moneyChanged(supplier, values)) return setMoneyConfirm(values);
     return save(values);
@@ -242,12 +255,12 @@ function SupplierForm({
           </Field>
           <Field className={fieldClass} data-invalid={!!errors.exchangeRate}>
             <FieldLabel htmlFor="supplier-rate" className={labelClass}>
-              Exchange rate (1 {currency} = ? INR) <RequiredMark />
+              Exchange rate (1 {currency} = ? INR) {rateRequired ? <RequiredMark /> : null}
             </FieldLabel>
             <div className="flex items-center gap-2">
               <Input
                 id="supplier-rate"
-                required
+                required={rateRequired}
                 inputMode="decimal"
                 readOnly={inr}
                 aria-invalid={!!errors.exchangeRate}

@@ -41,6 +41,8 @@ export type SupplierDepositRow = {
   /** The supplier's rate (INR per 1 of `currency`) when the deposit was opened; null before migration 0012 or without a rate then. */
   exchangeRate: number | null;
   amount: number;
+  /** The amount in INR at the deposit's own rate (2 decimals); null without a rate; absent from an older backend. */
+  amountInr?: number | null;
   settled: number;
   pending: number;
   status: SupplierDepositStatus;
@@ -87,7 +89,8 @@ export type DepositTransaction = { id: string; paidOn: string; amount: number; m
 
 /** SD-1 GET /api/v1/suppliers/:supplierId/deposits. `summary`: one line per (currency, direction); never netted. */
 export type SupplierStatement = {
-  supplier: { id: string; name: string; contactPerson: string; phone: string; city: string; currency: Currency; status: RecordStatus };
+  /** `exchangeRate`: the supplier's rate now, null while not set (absent from an older backend). */
+  supplier: { id: string; name: string; contactPerson: string; phone: string; city: string; currency: Currency; exchangeRate?: number | null; status: RecordStatus };
   /** The supplier advance account beside the deposits, never netted with them; absent from an older backend. */
   advance?: AdvanceAccount;
   summary: { currency: Currency; direction: DepositDirection; amount: number; settled: number; pending: number }[];
@@ -100,6 +103,8 @@ export type CreateSupplierDepositBody = {
   direction: DepositDirection;
   amount: number;
   currency?: Currency;
+  /** INR per 1 unit, sent only for a supplier with no saved rate (SD-2 asks for it then). */
+  rateInr?: number;
   openedOn: string;
   reference?: string;
   notes?: string;

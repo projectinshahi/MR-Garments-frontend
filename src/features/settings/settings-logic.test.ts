@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { suppliers } from "@/mocks/data/master";
 
 import { supplierDraft } from "./data/fixtures";
-import { averagePerPieceText, exchangeRateProblem, exchangeRateText, filterRecords, itemPriceText, supplierSchema, toSupplierBody } from "./settings-logic";
+import { averagePerPieceText, editRateProblem, exchangeRateProblem, exchangeRateText, filterRecords, itemPriceText, RATE_REQUIRED, supplierSchema, toSupplierBody } from "./settings-logic";
 
 const search = (row: { name: string; contactPerson: string; phone: string }) => [row.name, row.contactPerson, row.phone];
 const names = (rows: { name: string }[]) => rows.map((row) => row.name);
@@ -85,16 +85,26 @@ describe("add supplier", () => {
   });
 
   // docs/supplier-currency.md: the rate is INR per 1 unit of the currency; INR is the base currency, so its rate is 1.
-  it("requires the exchange rate above 0 with at most 4 decimals unless the currency is INR, whose rate is 1", () => {
+  it("the exchange rate is optional: blank is not set (left out of the body, never 0 or 1); a typed one is checked; INR is 1", () => {
     const message = "Enter the exchange rate: INR per 1 unit, above 0, with at most 4 decimals.";
-    for (const rate of ["", "0", "0.0000", "-1", "abc", "12.12345", "1e3"]) expect(exchangeRateProblem("CNY", rate), rate).toBe(message);
-    for (const rate of ["1", "11.5", "88.2500", "0.0001", "99999999"]) expect(exchangeRateProblem("USD", rate), rate).toBeNull();
+    for (const rate of ["0", "0.0000", "-1", "abc", "12.12345", "1e3"]) expect(exchangeRateProblem("CNY", rate), rate).toBe(message);
+    for (const rate of ["", "  ", "1", "11.5", "88.2500", "0.0001", "99999999"]) expect(exchangeRateProblem("USD", rate), rate).toBeNull();
     for (const rate of ["", "0", "anything"]) expect(exchangeRateProblem("INR", rate), rate).toBeNull();
-    const problems = supplierSchema.safeParse({ ...ningbo, exchangeRate: "" }).error?.issues.map((issue) => `${String(issue.path[0])}: ${issue.message}`);
+    expect(supplierSchema.safeParse({ ...ningbo, exchangeRate: "" }).success).toBe(true);
+    const problems = supplierSchema.safeParse({ ...ningbo, exchangeRate: "0" }).error?.issues.map((issue) => `${String(issue.path[0])}: ${issue.message}`);
     expect(problems).toEqual([`exchangeRate: ${message}`]);
-    expect(supplierSchema.safeParse({ ...ningbo, currency: "INR", exchangeRate: "" }).success).toBe(true);
+    const blank = toSupplierBody({ ...ningbo, currency: "USD", exchangeRate: "" });
+    expect("exchangeRate" in blank).toBe(false);
     expect(toSupplierBody({ ...ningbo, currency: "INR", exchangeRate: "" })).toMatchObject({ currency: "INR", exchangeRate: 1 });
     expect(toSupplierBody({ ...ningbo, currency: "USD", exchangeRate: "88.25" })).toMatchObject({ currency: "USD", exchangeRate: 88.25 });
+  });
+
+  it("on Edit, a saved rate can be changed but not removed, and a new currency needs its own rate", () => {
+    expect(editRateProblem({ currency: "USD", exchangeRate: null }, { currency: "USD", exchangeRate: "" })).toBeNull();
+    expect(editRateProblem({ currency: "USD", exchangeRate: null }, { currency: "USD", exchangeRate: "84" })).toBeNull();
+    expect(editRateProblem({ currency: "USD", exchangeRate: 84 }, { currency: "USD", exchangeRate: "" })).toBe(RATE_REQUIRED.keep);
+    expect(editRateProblem({ currency: "USD", exchangeRate: null }, { currency: "CNY", exchangeRate: "" })).toBe(RATE_REQUIRED.newCurrency("CNY"));
+    expect(editRateProblem({ currency: "USD", exchangeRate: 84 }, { currency: "INR", exchangeRate: "" })).toBeNull();
   });
 
   it("writes the list's Exchange rate cell: ₹ per unit, 1.00 for INR, Not set without one", () => {

@@ -142,7 +142,8 @@ export function toRows({ orderDeposits, orderObligations = [], supplierDeposits 
         status: d.status,
         href: statementHref(d.supplierId),
         rate: d.exchangeRate ?? null,
-        amountInr: null,
+        // At the deposit's own rate (SD-1/DEP-1); null without one, never a guessed rate.
+        amountInr: d.amountInr ?? null,
       }),
     ),
   ];

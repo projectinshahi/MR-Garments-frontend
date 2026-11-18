@@ -8,7 +8,7 @@ import { type FieldValues, type Path, useForm, type UseFormSetError, useWatch } 
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
@@ -81,7 +81,8 @@ function Extras({ id, errors, register }: { id: string; errors: { reference?: { 
   );
 }
 
-export type StatementSupplier = { id: string; name: string; currency: Currency };
+/** `exchangeRate`: null while the supplier has none (New deposit then asks for the deposit's rate). */
+export type StatementSupplier = { id: string; name: string; currency: Currency; exchangeRate?: number | null };
 
 /** "+ New deposit" (SD-2): a deposit agreed with the supplier, to give or to receive, in the supplier's currency (the API refuses another). */
 export function NewDepositDialog({ supplier, children }: { supplier: StatementSupplier; children: React.ReactElement }) {
@@ -112,8 +113,10 @@ export function NewDepositDialog({ supplier, children }: { supplier: StatementSu
 // Rendered inside DialogContent, which unmounts on close, so the form opens empty every time.
 function NewDepositForm({ supplier, onCancel, onSaved }: { supplier: StatementSupplier; onCancel: () => void; onSaved: () => void }) {
   const [today] = useState(() => todayInIndia());
+  // The rate is optional on a supplier: without one (and not INR) the deposit's rate is typed here (SD-2 needs it).
+  const needsRate = supplier.currency !== "INR" && supplier.exchangeRate === null;
   const form = useForm<NewDepositInput, unknown, NewDepositValues>({
-    resolver: zodResolver(newDepositSchema(today)),
+    resolver: zodResolver(newDepositSchema(today, needsRate)),
     defaultValues: emptyDeposit(supplier.currency, today),
   });
   const { register, handleSubmit, control, formState } = form;
@@ -124,7 +127,7 @@ function NewDepositForm({ supplier, onCancel, onSaved }: { supplier: StatementSu
     try {
       await apiClient.post<CreateSupplierDepositResponse>(`/suppliers/${encodeURIComponent(supplier.id)}/deposits`, toCreateDepositBody(values));
     } catch (error) {
-      showFieldErrors(form.setError, handleApiError(error), ["direction", "amount", "currency", "openedOn", "reference", "notes"]);
+      showFieldErrors(form.setError, handleApiError(error), ["direction", "amount", "currency", "openedOn", "reference", "notes", "rateInr"]);
       return;
     }
     onSaved();
@@ -167,6 +170,16 @@ function NewDepositForm({ supplier, onCancel, onSaved }: { supplier: StatementSu
           <Input id="deposit-opened-on" required type="date" max={today} size="sm" aria-invalid={!!errors.openedOn} {...register("openedOn")} />
           <FieldError errors={[errors.openedOn]} />
         </Field>
+        {needsRate ? (
+          <Field className={fieldClass} data-invalid={!!errors.rateInr}>
+            <FieldLabel htmlFor="deposit-rate" className={labelClass}>
+              Exchange rate (1 {supplier.currency} = ? INR) <RequiredMark />
+            </FieldLabel>
+            <Input id="deposit-rate" required inputMode="decimal" size="sm" aria-invalid={!!errors.rateInr} {...register("rateInr")} />
+            <FieldDescription className="text-xs">This supplier has no exchange rate yet: enter this deposit&apos;s, or set it on the supplier.</FieldDescription>
+            <FieldError errors={[errors.rateInr]} />
+          </Field>
+        ) : null}
         <Extras id="deposit" errors={errors} register={register} />
       </div>
       <Footer label="Open deposit" pending={formState.isSubmitting} onCancel={onCancel} />

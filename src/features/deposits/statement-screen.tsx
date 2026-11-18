@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { ReportDownload } from "@/features/reports/report-actions";
 import type { SupplierDepositRow, SupplierStatement } from "@/lib/api/deposits-types";
-import { currencyTitle, formatDate } from "@/lib/formatters";
+import { currencyTitle, formatDate, formatINR, rateText } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
 
 import { AdvanceAccountView } from "./advance-account-view";
@@ -112,6 +112,10 @@ function DepositBlock({ deposit, canEnter, canDelete }: { deposit: Deposit; canE
   const facts = [
     { label: "Agreed on", value: formatDate(deposit.openedOn) },
     { label: "Amount", value: money(deposit.amount) },
+    // The deposit's own rate and the INR it makes (an INR deposit is its own INR); not shown without a rate.
+    ...(deposit.currency !== "INR" && deposit.exchangeRate != null
+      ? [{ label: "Rate when opened", value: rateText(deposit.currency, deposit.exchangeRate) }, { label: "INR equivalent", value: deposit.amountInr == null ? "–" : formatINR(deposit.amountInr, 2) }]
+      : []),
     { label: give ? "Paid" : "Received", value: money(deposit.settled) },
     { label: "Pending", value: money(deposit.pending) },
     ...(deposit.reference ? [{ label: "Reference", value: deposit.reference }] : []),

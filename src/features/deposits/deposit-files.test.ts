@@ -85,6 +85,14 @@ const statement: SupplierStatement = {
 };
 
 describe("statementFile", () => {
+  it("writes each deposit's rate when opened and its INR equivalent at that rate", () => {
+    const rated = { ...statement, deposits: [{ ...statement.deposits[1]!, currency: "USD" as const, exchangeRate: 84.1234, amount: 1234.5, amountInr: 103850.34 }] };
+    const file = statementFile(rated, TODAY);
+    const give = file.sections.find((s) => s.sheet === "Deposit to Give")!;
+    expect(give.columns.map((c) => c.header).slice(4, 6)).toEqual(["Rate when opened (INR per 1 USD)", "INR equivalent (INR)"]);
+    expect(give.rows[0]!.slice(4, 6)).toEqual([84.1234, 103850.34]);
+  });
+
   it("has the Summary, Deposit to Give, Deposit to Receive and Transactions sheets, never netting the directions", () => {
     const file = statementFile(statement, TODAY);
     expect(file).toMatchObject({ title: "Supplier deposits: Foshan Fabrics", filename: `supplier-deposits-foshan-fabrics-${TODAY}`, filters: "Supplier: Foshan Fabrics" });
@@ -94,8 +102,9 @@ describe("statementFile", () => {
       ["Receive", 500, 100, 400],
     ]);
     // The supplier's rate when the deposit was opened (none here: opened before rates were saved).
-    expect(file.sections[1]!.rows).toEqual([["2026-10-01", 1000, 300, 700, null, "Partly settled", "", "Tooling"]]);
-    expect(file.sections[2]!.rows).toEqual([["2026-10-10", 500, 100, 400, null, "Partly settled", "Mould", ""]]);
+    // Rate when opened and INR equivalent: none on these (opened without a rate).
+    expect(file.sections[1]!.rows).toEqual([["2026-10-01", 1000, 300, 700, null, null, "Partly settled", "", "Tooling"]]);
+    expect(file.sections[2]!.rows).toEqual([["2026-10-10", 500, 100, 400, null, null, "Partly settled", "Mould", ""]]);
     expect(file.sections[3]!.columns.map((c) => c.header)).toEqual(["Date", "Deposit", "Amount (CNY)", "Mode", "Reference", "Notes"]);
     expect(file.sections[3]!.rows).toEqual([
       ["2026-10-12", "Receive · opened 10 Oct 2026", 100, "Cash", "", ""],

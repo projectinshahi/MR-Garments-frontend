@@ -38,7 +38,8 @@ export function PaymentsScreen({
   const money = (value: number | null) => moneyOrDash(value, (v) => formatMoney(v, order.currency));
   const count = (n: number) => `${n} ${n === 1 ? "payment" : "payments"}`;
   // INR per payment is the API's `amountInr` (rounded in SQL like every total), never recomputed here.
-  const working = (p: OrderPayment) => ({ label: `${money(p.amountCny)} × ${formatRate(p.rateInr ?? 0)}`, value: moneyOrDash(p.amountInr, formatINR) });
+  // Paid payments always carry their typed rate; a missing one shows as such, never as 0.
+  const working = (p: OrderPayment) => ({ label: `${money(p.amountCny)} × ${p.rateInr === null ? "rate not set" : formatRate(p.rateInr)}`, value: moneyOrDash(p.amountInr, formatINR) });
 
   return (
     <PageContainer>

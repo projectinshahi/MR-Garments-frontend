@@ -16,6 +16,8 @@ export const MESSAGES = {
   modeTooLong: "Use 100 characters or fewer for the mode.",
   referenceTooLong: "Use 100 characters or fewer for the reference.",
   notesTooLong: "Use 1,000 characters or fewer for the notes.",
+  /** A supplier with no saved rate: the deposit needs its own (SD-2). */
+  rateInr: "Enter the exchange rate: a number above 0 with at most 4 decimals.",
 };
 const M = MESSAGES;
 
@@ -31,7 +33,8 @@ const reference = z.string().trim().max(100, M.referenceTooLong);
 const notes = z.string().trim().max(1000, M.notesTooLong);
 
 /** `today` is the date in India (YYYY-MM-DD): a deposit can't be agreed after it. */
-export const newDepositSchema = (today: string) =>
+/** `needsRate`: the supplier has no saved rate and is not INR, so the deposit's rate is typed here (SD-2 requires it). */
+export const newDepositSchema = (today: string, needsRate = false) =>
   z.object({
     direction: z.string().pipe(z.enum(["give", "receive"], { error: M.direction })),
     amount,
@@ -39,17 +42,28 @@ export const newDepositSchema = (today: string) =>
     openedOn: notAfter(today, M.openedOn),
     reference,
     notes,
+    rateInr: needsRate
+      ? z
+          .string()
+          .optional()
+          .refine((text) => text !== undefined && /^\d{1,8}(\.\d{1,4})?$/.test(text.trim()) && Number(text) > 0, M.rateInr)
+          .transform((text) => Number(text))
+      : z
+          .string()
+          .optional()
+          .transform(() => undefined),
   });
 export type NewDepositInput = z.input<ReturnType<typeof newDepositSchema>>;
 export type NewDepositValues = z.output<ReturnType<typeof newDepositSchema>>;
 
-export const emptyDeposit = (currency: string, today: string): NewDepositInput => ({ direction: "", amount: "", currency, openedOn: today, reference: "", notes: "" });
+export const emptyDeposit = (currency: string, today: string): NewDepositInput => ({ direction: "", amount: "", currency, openedOn: today, reference: "", notes: "", rateInr: "" });
 
 /** The SD-2 body: an empty reference or notes are left out (the API stores ""). */
-export const toCreateDepositBody = ({ reference, notes, ...values }: NewDepositValues): CreateSupplierDepositBody => ({
+export const toCreateDepositBody = ({ reference, notes, rateInr, ...values }: NewDepositValues): CreateSupplierDepositBody => ({
   ...values,
   ...(reference ? { reference } : {}),
   ...(notes ? { notes } : {}),
+  ...(rateInr === undefined ? {} : { rateInr }),
 });
 
 export const settlementSchema = (today: string) =>

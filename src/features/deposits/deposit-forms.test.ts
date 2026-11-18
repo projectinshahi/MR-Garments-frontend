@@ -19,8 +19,17 @@ describe("newDepositSchema", () => {
 
   it("starts with the supplier's currency and today, and says what each field needs", () => {
     const empty = emptyDeposit("CNY", today);
-    expect(empty).toEqual({ direction: "", amount: "", currency: "CNY", openedOn: today, reference: "", notes: "" });
+    expect(empty).toEqual({ direction: "", amount: "", currency: "CNY", openedOn: today, reference: "", notes: "", rateInr: "" });
     expect(errorsOf(schema.safeParse(empty))).toEqual({ direction: MESSAGES.direction, amount: MESSAGES.amount });
+  });
+
+  it("a supplier without a saved rate: the deposit's rate is required, checked and sent; otherwise none is sent", () => {
+    const withRate = newDepositSchema(today, true);
+    const base = { ...emptyDeposit("USD", today), direction: "give", amount: "500" };
+    expect(errorsOf(withRate.safeParse(base))).toEqual({ rateInr: MESSAGES.rateInr });
+    for (const bad of ["0", "abc", "1.23456"]) expect(errorsOf(withRate.safeParse({ ...base, rateInr: bad })), bad).toEqual({ rateInr: MESSAGES.rateInr });
+    expect(toCreateDepositBody(withRate.parse({ ...base, rateInr: "84.25" }))).toEqual({ direction: "give", amount: 500, currency: "USD", openedOn: today, rateInr: 84.25 });
+    expect(toCreateDepositBody(newDepositSchema(today).parse({ ...base, rateInr: "84.25" }))).toEqual({ direction: "give", amount: 500, currency: "USD", openedOn: today });
   });
 
   it("mirrors the API's rules", () => {

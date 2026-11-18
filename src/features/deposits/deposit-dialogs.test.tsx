@@ -44,9 +44,9 @@ async function openDialog(ui: React.ReactElement, submitLabel: string) {
   const field = (label: string) => within(dialog).getByLabelText((text) => text.startsWith(label));
   return { user, dialog, field, submit: within(dialog).getByRole("button", { name: submitLabel }) };
 }
-const newDeposit = () =>
+const newDeposit = (supplier: { id: string; name: string; currency: "USD"; exchangeRate?: number | null } = SUPPLIER) =>
   openDialog(
-    <NewDepositDialog supplier={SUPPLIER}>
+    <NewDepositDialog supplier={supplier}>
       <Button>Open</Button>
     </NewDepositDialog>,
     "Open deposit",
@@ -81,6 +81,25 @@ describe("NewDepositDialog (SD-2)", () => {
     expect(post).toHaveBeenCalledWith("/suppliers/s1/deposits", { direction: "receive", amount: 1234.5, currency: "USD", openedOn: "2026-11-01", reference: "INV-7", notes: "Returned mould" });
     expect(toast.success).toHaveBeenCalledWith("Deposit opened");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("a supplier with a saved rate: no rate field (the deposit takes the supplier's)", async () => {
+    const form = await newDeposit({ ...SUPPLIER, exchangeRate: 84 });
+    expect(within(form.dialog).queryByLabelText(/^Exchange rate/)).toBeNull();
+  });
+
+  it("asks for the deposit's rate when the supplier has none (the rate is optional on the supplier), and sends it", async () => {
+    post.mockResolvedValue({ deposit: DEPOSIT });
+    const form = await newDeposit({ ...SUPPLIER, exchangeRate: null });
+    expect(form.field("Exchange rate")).toBeRequired();
+    await form.user.selectOptions(form.field("Direction"), "give");
+    await form.user.type(form.field("Amount ($)"), "500");
+    await form.user.click(form.submit);
+    expect(await within(form.dialog).findByText(MESSAGES.rateInr)).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+    await form.user.type(form.field("Exchange rate"), "84.25");
+    await form.user.click(form.submit);
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/suppliers/s1/deposits", { direction: "give", amount: 500, currency: "USD", openedOn: "2026-11-10", rateInr: 84.25 }));
   });
 
   it("checks the form before posting, and shows the API's field messages under their fields", async () => {
