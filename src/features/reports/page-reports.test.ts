@@ -469,7 +469,7 @@ describe("Supplier list and supplier detail", () => {
     expect(section(file, "Money summary (CNY)").rows).toEqual([[12, 1200, 0, 0, 0, 300, 900]]);
     expect(section(file, "Purchase orders (CNY)").columns.map((c) => c.header).slice(6)).toEqual(["Paid (CNY)", "Advance applied (CNY)", "Balance (CNY)"]);
     expect(file.sections.filter((s) => s.sheet === "Advance Summary")).toHaveLength(1);
-    expect(section(file, "Supplier advance (CNY)").rows).toEqual([[500, 300, 0, 200, 1]]);
+    expect(section(file, "Supplier advance (CNY)").rows).toEqual([[500, 500, 0, 0, 300, 0, 300, 200, 1]]);
   });
 });
 

@@ -8,7 +8,7 @@ import { Timeline } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
-import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL, ADVANCE_STATUS_TONE } from "@/features/deposits/advance-logic";
+import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL, ADVANCE_STATUS_TONE, depositsOf, netApplied, recordedOf } from "@/features/deposits/advance-logic";
 import { DepositStatusPill } from "@/features/payments/money";
 import { ReportDownload } from "@/features/reports/report-actions";
 import type { OrderReport, OrderReportContainer, OrderReportDeposit } from "@/lib/api/reports-types";
@@ -476,6 +476,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                     { label: "Supplier's overall balance (every order)", value: moneyList(supplierAccount.balance) },
                     { label: "Amount paid for this PO", value: money(payments.paidCny, 2) },
                     ...(advance === undefined ? [] : [{ label: "Supplier advance applied to this PO", value: money(advance, 2) }]),
+                    ...(payments?.excessCny ? [{ label: "Paid beyond the order value (to supplier advance)", value: money(payments.excessCny, 2) }] : []),
                     { label: "Outstanding balance for this PO", value: money(payments.balanceCny, 2) },
                   ]}
                 />
@@ -493,7 +494,8 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                     ...(supplierAccount.advanceApplied ? [{ label: "Supplier advance applied (every order)", value: moneyList(supplierAccount.advanceApplied) }] : []),
                     ...(supplierAccount.advance ?? []).map((line) => ({
                       label: `Supplier advance (${line.currency})`,
-                      value: `${formatMoney(line.receivedCny, line.currency, { decimals: 2 })} received · ${formatMoney(line.allocatedCny, line.currency, { decimals: 2 })} applied · ${formatMoney(line.reversedCny, line.currency, { decimals: 2 })} returned · ${formatMoney(line.availableCny, line.currency, { decimals: 2 })} available`,
+                      // Recorded = added as advance + order deposits; applied (net) includes the deposits; available is the ledger's.
+                      value: `${formatMoney(recordedOf(line), line.currency, { decimals: 2 })} recorded (${formatMoney(line.receivedCny, line.currency, { decimals: 2 })} added · ${formatMoney(depositsOf(line), line.currency, { decimals: 2 })} order deposits) · ${formatMoney(netApplied(line), line.currency, { decimals: 2 })} applied · ${formatMoney(line.availableCny, line.currency, { decimals: 2 })} available`,
                     })),
                     { label: "Deposit utilised for this PO", value: "Not tracked: account deposits are not linked to orders" },
                   ]}

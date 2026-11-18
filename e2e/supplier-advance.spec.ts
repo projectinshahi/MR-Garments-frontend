@@ -81,7 +81,7 @@ test.describe("desktop", () => {
       // Applied net: ¥4,000 applied, ¥1,000 back from the deleted order.
       await expect(kpi(page, "Applied to orders (net)")).toContainText("¥3,000");
       await expect(kpi(page, "Applied to orders (net)")).toContainText("after ¥1,000 returned from orders");
-      await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥4,000¥1,000¥3,000¥0");
+      await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥0¥0¥4,000¥1,000¥3,000¥0");
       await expect(ledgerRows(page)).toHaveCount(4);
       await expect(ledgerRows(page).first()).toContainText("Applied to order");
       await expect(ledgerRows(page).nth(1)).toContainText("Returned from order");
@@ -161,7 +161,7 @@ test.describe("desktop", () => {
     });
   });
 
-  test("supplier-wise: each supplier on its own row, currencies apart; deposits and agent payments never count", async ({ page, api }, testInfo) => {
+  test("supplier-wise: each supplier on its own row, currencies apart; supplier deposits and agent payments never count", async ({ page, api }, testInfo) => {
     test.setTimeout(120_000);
     const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
     // Two currencies for one supplier: CNY advance and order, then its currency changes to USD and a USD advance.
@@ -193,8 +193,8 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(`/deposits/advance/${mixed.id}`);
     await expect(kpi(page, "Advance recorded")).toContainText("¥3,000 · $500");
     await expect(kpi(page, "Available balance")).toContainText("¥2,000 · $500");
-    await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥1,000¥0¥1,000¥2,000");
-    await expect(page.getByRole("row", { name: /^USD/ })).toContainText("$500$0$0$0$500");
+    await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥3,000¥0¥0¥1,000¥0¥1,000¥2,000");
+    await expect(page.getByRole("row", { name: /^USD/ })).toContainText("$500$0$0$0$0$0$500");
     await expect(ledgerRows(page)).toHaveCount(3);
     await expect(ledgerRows(page).filter({ hasText: "USD-ADV" })).toContainText("1 USD = ₹84.00");
     await shot(page, testInfo, "advance-supplier-1440.png");
@@ -206,6 +206,77 @@ test.describe("desktop", () => {
     await expect(page.getByText("No advance recorded for this supplier yet.")).toBeVisible();
     await expect(page.getByRole("button", { name: "+ Add advance" })).toHaveCount(2);
     await shot(page, testInfo, "advance-supplier-empty-1440.png");
+  });
+
+  test("a deposit entered on New order is the supplier's advance, applied to its order and counted once", async ({ page, api }, testInfo) => {
+    test.setTimeout(120_000);
+    const supplier = await newSupplier(api);
+    // ¥3,000 order with a ¥1,200 deposit at ₹12.40 entered with it (ORD-3).
+    const { po } = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 300, rateCny: 10 }], deposits: [{ amountCny: 1200, rateInr: 12.4 }] });
+    expect(await api.order(po)).toMatchObject({ supplierPaidCny: 1200, advanceCny: 0, balanceCny: 1800 });
+
+    await page.goto("/deposits/advance");
+    await page.getByRole("searchbox", { name: "Search supplier" }).fill(supplier.name);
+    const row = page.getByRole("row", { name: new RegExp(supplier.name) });
+    // Recorded ¥1,200, applied ¥1,200 (to its own order), available ¥0: nothing to enter again through Add advance.
+    await expect(row).toContainText("CNY · 1 order used it");
+    await expect(row).toContainText("¥1,200¥1,200¥0");
+    await shot(page, testInfo, "order-deposit-overview-1440.png");
+
+    await row.getByRole("link", { name: supplier.name, exact: true }).click();
+    await expect(kpi(page, "Advance recorded")).toContainText("¥1,200");
+    await expect(kpi(page, "Advance recorded")).toContainText("¥0 added · ¥1,200 order deposits");
+    await expect(kpi(page, "Available balance")).toContainText("¥0");
+    const deposit = ledgerRows(page).filter({ hasText: "Order deposit" });
+    await expect(deposit).toHaveCount(1);
+    await expect(deposit).toContainText(po);
+    await expect(deposit).toContainText("Paid with the order");
+    await expect(deposit).toContainText("1 CNY = ₹12.40");
+    await expect(deposit).toContainText("₹14,880.00");
+
+    // An advance added later goes to the order's remaining ¥1,800 only (Apply advance), never to the deposit's part.
+    await addAdvance(api, supplier.id, 2000);
+    expect((await api.post(`/orders/${encodeURIComponent(po)}/advance`, {})).status()).toBe(200);
+    expect(await api.order(po)).toMatchObject({ supplierPaidCny: 1200, advanceCny: 1800, balanceCny: 0 });
+    await page.reload();
+    await expect(kpi(page, "Advance recorded")).toContainText("¥3,200");
+    await expect(kpi(page, "Applied to orders (net)")).toContainText("¥3,000");
+    await expect(kpi(page, "Available balance")).toContainText("¥200");
+    await expect(page.getByRole("row", { name: /^CNY/ })).toContainText("¥2,000¥0¥1,200¥1,800¥0¥3,000¥200");
+    await expect(ledgerRows(page)).toHaveCount(3);
+    await shot(page, testInfo, "order-deposit-supplier-1440.png");
+  });
+
+  test("a payment beyond the order value settles the order and the excess becomes available advance", async ({ page, api }, testInfo) => {
+    test.setTimeout(120_000);
+    const supplier = await newSupplier(api);
+    expect((await api.patch(`/suppliers/${supplier.id}`, { currency: "USD", exchangeRate: 100 })).status()).toBe(200);
+    // $8,350 order paid $8,620.14 at ₹102.25: $8,350 settles it, $270.14 is the supplier's available advance.
+    const { po, id } = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 835, rateCny: 10 }] });
+    await api.pay(id, { amountCny: 8620.14, rateInr: 102.25, mode: "Wire", reference: "UTR-9" });
+    expect(await api.order(po)).toMatchObject({ supplierPaidCny: 8350, excessCny: 270.14, balanceCny: 0 });
+
+    await page.goto("/deposits/advance");
+    await page.getByRole("searchbox", { name: "Search supplier" }).fill(supplier.name);
+    const row = page.getByRole("row", { name: new RegExp(supplier.name) });
+    await expect(row).toContainText("$270.14$0$270.14");
+    await shot(page, testInfo, "excess-overview-1440.png");
+    await row.getByRole("link", { name: supplier.name, exact: true }).click();
+    await expect(kpi(page, "Available balance")).toContainText("$270.14");
+    await expect(kpi(page, "Advance recorded")).toContainText("$0 added · $270.14 excess");
+    const excess = ledgerRows(page).filter({ hasText: "Excess payment" });
+    await expect(excess).toContainText(po);
+    await expect(excess).toContainText("Paid beyond the order value · UTR-9 · Wire");
+    await expect(excess).toContainText("1 USD = ₹102.25");
+    await expect(excess).toContainText("₹27,621.82");
+    await shot(page, testInfo, "excess-supplier-1440.png");
+
+    await page.goto(`/orders/${encodeURIComponent(po)}/payments`);
+    await expect(kpi(page, "Paid to supplier")).toContainText("$8,350");
+    // Whole units, as the other tiles on the tab.
+    await expect(kpi(page, "Excess to supplier advance")).toContainText("$270");
+    await expect(kpi(page, "Balance to supplier")).toContainText("$0");
+    await shot(page, testInfo, "excess-order-payments-1440.png");
   });
 });
 
@@ -220,7 +291,8 @@ for (const viewport of [
       test.setTimeout(120_000);
       const supplier = await newSupplier(api);
       await addAdvance(api, supplier.id, 3000);
-      const { po } = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 500, rateCny: 10 }] });
+      // With a ¥500 deposit entered on the order: it shows in the supplier's advance history too.
+      const { po } = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 500, rateCny: 10 }], deposits: [{ amountCny: 500, rateInr: 12.5 }] });
       const w = viewport.width;
 
       // Recorded after the order: the order is listed as still to pay, with Apply advance.
@@ -235,6 +307,7 @@ for (const viewport of [
       await expect(page).toHaveURL(`/deposits/advance/${supplier.id}`);
       await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
       await expect(page.getByRole("button", { name: `Apply supplier advance to ${po}` })).toBeAttached();
+      await expect(ledgerRows(page).filter({ hasText: "Order deposit" })).toHaveCount(1);
       await noSideScroll(page);
       await shot(page, testInfo, `advance-supplier-${w}.png`);
 

@@ -48,6 +48,8 @@ export function PaymentsScreen({
         <KpiCard size="xs" label="Paid to supplier" value={money(supplierPaid)} sub={`${count(toSupplier.length)}${agentsCny !== null && agentsCny > 0 ? ` · agents ${money(agentsCny)}` : ""}`} />
         {/* The supplier advance applied (backend docs/supplier-advance.md): not a payment, so its own tile. */}
         {order.advanceCny ? <KpiCard size="xs" label="Advance applied" value={money(order.advanceCny)} sub="from the supplier account" /> : null}
+        {/* Paid beyond the order's value (0016): the supplier's available advance, left out of Paid to supplier. */}
+        {order.excessCny ? <KpiCard size="xs" label="Excess to supplier advance" value={money(order.excessCny)} sub="paid beyond the order value" /> : null}
         <KpiCard size="xs" label="Balance to supplier" value={money(balance)} sub={balance !== null && balance <= 0 ? "Fully paid" : undefined} />
         {order.depositRequiredCny == null ? null : (
           <KpiCard
@@ -69,7 +71,8 @@ export function PaymentsScreen({
         <SectionCard title="Deposits and payments" bottomGap="tight" className="min-w-0">
           <PaymentsTable
             rows={payments}
-            totals={{ paidCny: order.paidCny, paidInr: order.paidInr, currency: order.currency }}
+            // The rows as paid: the order's paid figures plus its excess (money paid beyond the value, now supplier advance).
+            totals={{ paidCny: order.paidCny + (order.excessCny ?? 0), paidInr: order.paidInr + (order.excessInr ?? 0), currency: order.currency }}
             // PAY-3: each payment's Delete, with the figures it changes.
             remove={
               canDelete
@@ -86,7 +89,17 @@ export function PaymentsScreen({
               Each payment is changed to INR at the rate on the day it was paid. A later change in rate does not change an
               old payment.
             </Callout>
-            <KeyValueList size="sm" className="mt-3" boldValues items={toSupplier.map(working)} total={{ label: "Paid to supplier in INR", value: moneyOrDash(order.supplierPaidInr, formatINR) }} />
+            <KeyValueList
+              size="sm"
+              className="mt-3"
+              boldValues
+              items={[
+                ...toSupplier.map(working),
+                // Paid beyond the order's value (0016): the supplier's advance, at each payment's rate, so not this order's cost.
+                ...(order.excessCny ? [{ label: `Less ${money(order.excessCny)} beyond the order value (supplier advance)`, value: `−⁠${moneyOrDash(order.excessInr ?? 0, formatINR)}` }] : []),
+              ]}
+              total={{ label: "Paid to supplier in INR", value: moneyOrDash(order.supplierPaidInr, formatINR) }}
+            />
             {toAgents.length ? (
               <KeyValueList
                 size="sm"

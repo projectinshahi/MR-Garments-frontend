@@ -314,7 +314,8 @@ describe("order report file", () => {
     const rows = csvRows(withAdvance);
     expect(rows).toContainEqual(["Supplier advance applied (CNY)", 400]);
     expect(rows).toContainEqual(["Advance status", "Partial"]);
-    expect(rows).toContainEqual(["Supplier advance (CNY): received · applied · returned · available", "1000 · 500 · 100 · 600"]);
+    // Recorded (added + order deposits) · added · order deposits · applied net (500 - 100 + 0) · available.
+    expect(rows).toContainEqual(["Supplier advance (CNY): recorded · added · order deposits · applied (net) · available", "1000 · 1000 · 0 · 400 · 600"]);
     const applied = withAdvance.sections.find((section) => section.title === "Supplier advance applied")!;
     expect(applied.rows.map((row) => [row[1], row[2], row[4]])).toEqual([
       ["Applied to order", 500, 6000],

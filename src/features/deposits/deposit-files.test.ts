@@ -130,14 +130,15 @@ describe("supplier advance in the deposit files", () => {
   it("writes the account's totals and its ledger (signed, with the balance after each entry) on their own sheets", () => {
     const file = statementFile({ ...statement, advance: account }, TODAY);
     expect(file.sections.map((s) => s.sheet)).toEqual(["Summary", "Deposit to Give", "Deposit to Receive", "Transactions", "Advance Summary", "Advance Ledger"]);
-    expect(file.sections[4]!.rows).toEqual([[1000, 600, 200, 600, 1]]);
+    // Recorded, added, excess, order deposits, applied from added, returned, applied net, available, orders.
+    expect(file.sections[4]!.rows).toEqual([[1000, 1000, 0, 0, 600, 200, 400, 600, 1]]);
     expect(file.sections[5]!.rows.map((r) => [r[1], r[2], r[3], r[6]])).toEqual([
       ["Returned from order", "PO-3001", 200, 600],
       ["Applied to order", "PO-3001", -600, 400],
       ["Advance received", "", 1000, 1000],
     ]);
     // advanceFile: the same sections as a standalone report; a filtered ledger keeps the order given.
-    const own = advanceFile({ name: "Foshan Fabrics", currency: "CNY" }, { ...account, entries: account.entries.slice(1) }, "Type: all", TODAY);
+    const own = advanceFile({ name: "Foshan Fabrics", currency: "CNY" }, account, account.entries.slice(1), "Type: all", TODAY);
     expect(own).toMatchObject({ title: "Supplier advance: Foshan Fabrics", filename: `supplier-advance-foshan-fabrics-${TODAY}` });
     expect(own.sections[1]!.rows.map((r) => r[0])).toEqual(["2026-10-10", "2026-10-01"]);
     expect(advanceSections(undefined)).toEqual([]);
@@ -147,7 +148,54 @@ describe("supplier advance in the deposit files", () => {
     expect(depositsFile("all", rows, "All deposits", TODAY).sections.some((s) => s.sheet === "Supplier Advances")).toBe(false);
     const file = depositsFile("all", rows, "All deposits", TODAY, [{ supplierId: "s1", supplier: "Foshan Fabrics", ...account.summary[0]! }]);
     const sheet = file.sections.find((s) => s.sheet === "Supplier Advances")!;
-    expect(sheet.columns.map((c) => c.header)).toEqual(["Supplier", "Received (CNY)", "Applied to orders (CNY)", "Returned from orders (CNY)", "Available (CNY)", "Orders"]);
-    expect(sheet.rows).toEqual([["Foshan Fabrics", 1000, 600, 200, 600, 1]]);
+    expect(sheet.columns.map((c) => c.header)).toEqual([
+      "Supplier",
+      "Advance recorded (CNY)",
+      "Added as advance (CNY)",
+      "Excess payments (CNY)",
+      "Order deposits (CNY)",
+      "Applied from added advance (CNY)",
+      "Returned from orders (CNY)",
+      "Applied to orders (net) (CNY)",
+      "Available (CNY)",
+      "Orders",
+    ]);
+    expect(sheet.rows).toEqual([["Foshan Fabrics", 1000, 1000, 0, 0, 600, 200, 400, 600, 1]]);
+  });
+
+  it("order deposits: in the totals as recorded and applied, in the history once, unsigned, never moving the balance", () => {
+    const withDeposit = {
+      ...account,
+      summary: [{ ...account.summary[0]!, depositsCny: 500, orders: 2 }],
+      deposits: [
+        { id: "p1", orderId: "o2", po: "PO-3002", paidOn: "2026-10-15", currency: "CNY" as const, amount: 500, exchangeRate: 12.2, amountInr: 6100, mode: "Bank transfer", reference: "DEP 9", notes: "", recordedAt: "2026-10-15T05:00:00Z", recordedBy: "Priya", balance: 400 },
+      ],
+    };
+    const file = statementFile({ ...statement, advance: withDeposit }, TODAY);
+    // Recorded 1,000 + 500; applied net 600 - 200 + 500; available stays the ledger's 600.
+    expect(file.sections[4]!.rows).toEqual([[1500, 1000, 0, 500, 600, 200, 900, 600, 2]]);
+    expect(file.sections[5]!.rows.map((r) => [r[0], r[1], r[2], r[3], r[6]])).toEqual([
+      ["2026-10-20", "Returned from order", "PO-3001", 200, 600],
+      ["2026-10-15", "Order deposit", "PO-3002", 500, 400],
+      ["2026-10-10", "Applied to order", "PO-3001", -600, 400],
+      ["2026-10-01", "Advance received", "", 1000, 1000],
+    ]);
+  });
+
+  it("excess payments: recorded and available, never applied twice; taken back with a minus", () => {
+    const withExcess = {
+      summary: [{ currency: "USD" as const, receivedCny: 0, excessCny: 270.14, allocatedCny: 100, reversedCny: 0, availableCny: 170.14, depositsCny: 0, orders: 1 }],
+      entries: [
+        { ...account.entries[1]!, id: "x2", currency: "USD" as const, amount: 100, exchangeRate: 102.25, amountInr: 10225, advanceId: "x1", po: "PO-12000", balance: 170.14 },
+        { ...account.entries[2]!, id: "x1", kind: "excess" as const, currency: "USD" as const, amount: 270.14, exchangeRate: 102.25, amountInr: 27621.82, po: "PO-11218", mode: "Wire", reference: "UTR-9", balance: 270.14 },
+      ],
+    };
+    const file = statementFile({ ...statement, advance: withExcess }, TODAY);
+    // Recorded 270.14 (all excess); applied 100; available 170.14 = recorded - applied.
+    expect(file.sections[4]!.rows).toEqual([[270.14, 0, 270.14, 0, 100, 0, 100, 170.14, 1]]);
+    expect(file.sections[5]!.rows.map((r) => [r[1], r[2], r[3], r[6]])).toEqual([
+      ["Applied to order", "PO-12000", -100, 170.14],
+      ["Excess payment", "PO-11218", 270.14, 270.14],
+    ]);
   });
 });

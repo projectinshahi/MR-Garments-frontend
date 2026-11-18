@@ -422,6 +422,9 @@ export type OrderReport = {
     advanceInr?: number;
     advanceStatus?: AdvanceStatus;
     advanceEntries?: AdvanceEntry[];
+    /** Supplier payments beyond the order's value, moved to the supplier's available advance (0016). */
+    excessCny?: number;
+    excessInr?: number;
     balanceCny: number;
     depositsPaidCny: number;
     dueCny: number;

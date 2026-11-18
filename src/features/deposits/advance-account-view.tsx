@@ -10,13 +10,25 @@ import { StatusPill } from "@/components/shared/status-pill";
 import type { AdvanceAccount } from "@/lib/api/deposits-types";
 import { formatDate, formatINR, formatRateInr } from "@/lib/formatters";
 
-import { ADVANCE_KIND_LABEL, ADVANCE_KIND_TONE, signedAdvance, summaryTotals } from "./advance-logic";
+import {
+  ADVANCE_KIND_LABEL,
+  ADVANCE_KIND_TONE,
+  advanceHistory,
+  type AdvanceHistoryRow,
+  depositsOf,
+  excessOf,
+  netApplied,
+  recordedOf,
+  signedAdvance,
+  summaryTotals,
+} from "./advance-logic";
 import { amountList, amountText } from "./deposits-logic";
 
 // A supplier's advance account (backend docs/supplier-advance.md) as the statement and the supplier report show it:
-// the totals per currency, then every entry newest first with the available advance right after it. Read only.
+// the totals per currency, then its history newest first (ledger entries and order deposits) with the available advance
+// right after each. Read only.
 
-type Entry = AdvanceAccount["entries"][number];
+type Entry = AdvanceHistoryRow;
 const DASH = "–";
 
 const columns = (linkPos: boolean): ColumnDef<Entry>[] => [
@@ -29,6 +41,8 @@ const columns = (linkPos: boolean): ColumnDef<Entry>[] => [
     header: "Amount",
     meta: { align: "right" },
     cell: ({ row }) => {
+      // An order deposit: recorded and applied at once, unsigned.
+      if (row.original.kind === "deposit") return amountText(row.original.amount, row.original.currency);
       const signed = signedAdvance(row.original);
       return `${signed < 0 ? "−" : "+"}${amountText(Math.abs(signed), row.original.currency)}`;
     },
@@ -47,14 +61,27 @@ const columns = (linkPos: boolean): ColumnDef<Entry>[] => [
 ];
 
 export function AdvanceAccountView({ account, supplierName, linkPos }: { account: AdvanceAccount; supplierName: string; linkPos: boolean }) {
-  const { summary, entries } = account;
+  const { summary } = account;
+  const entries = advanceHistory(account);
   const each = (pick: Parameters<typeof summaryTotals>[1]) => amountList(summaryTotals(summary, pick));
+  const deposits = summary.some((s) => depositsOf(s) > 0);
+  const excess = summary.some((s) => excessOf(s) > 0);
+  const parts = [
+    `${amountList(summaryTotals(summary, (s) => s.receivedCny))} added`,
+    excess ? `${amountList(summaryTotals(summary, excessOf))} excess` : null,
+    deposits ? `${amountList(summaryTotals(summary, depositsOf))} order deposits` : null,
+  ];
   return (
     <div className="flex flex-col gap-3">
       <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
-        <KpiCard size="xs" label="Available advance" value={each((s) => s.availableCny)} sub="received less applied, plus returned" />
-        <KpiCard size="xs" label="Advance received" value={each((s) => s.receivedCny)} sub="paid to the supplier before any order" />
-        <KpiCard size="xs" label="Applied to orders" value={each((s) => s.allocatedCny)} sub={`${summary.reduce((n, s) => n + s.orders, 0)} order(s)`} />
+        <KpiCard size="xs" label="Available advance" value={each((s) => s.availableCny)} sub="recorded less applied to orders" />
+        <KpiCard
+          size="xs"
+          label="Advance recorded"
+          value={each(recordedOf)}
+          sub={deposits || excess ? parts.filter(Boolean).join(" · ") : "paid to the supplier before any order"}
+        />
+        <KpiCard size="xs" label="Applied to orders (net)" value={each(netApplied)} sub={`${summary.reduce((n, s) => n + s.orders, 0)} order(s)`} />
         <KpiCard size="xs" label="Returned from orders" value={each((s) => s.reversedCny)} sub="orders edited down or deleted" />
       </KpiRow>
       {/* No entries: the empty state alone, as the report's other lists (no empty table). */}

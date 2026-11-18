@@ -44,7 +44,7 @@ export function AddAdvanceDialog({ supplier, children }: { supplier: Supplier; c
           <DialogTitle className="text-[21px] leading-[19px]">Add advance for {supplier.name}</DialogTitle>
           <DialogDescription className="text-sm leading-5">
             Money already paid to the supplier before any order. New orders for this supplier use it automatically; an existing order takes it
-            when you apply it.
+            when you apply it. A deposit paid with an order is part of the advance already: don&apos;t add it again here.
           </DialogDescription>
         </DialogHeader>
         <AdvanceForm

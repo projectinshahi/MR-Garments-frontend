@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { rowActionClass } from "@/features/orders/delete-order";
 import { ReportDownload } from "@/features/reports/report-actions";
-import type { AdvanceAccount, AdvanceKind, AdvanceOpenOrder, AdvanceSummary } from "@/lib/api/deposits-types";
+import type { AdvanceAccount, AdvanceEntry, AdvanceHistoryKind, AdvanceOpenOrder, AdvanceSummary } from "@/lib/api/deposits-types";
 import { currencyLabel, currencyTitle, formatDate, formatINR, formatNumber, rateText } from "@/lib/formatters";
 
 import type { AdvanceSupplierData } from "./data/queries";
@@ -25,29 +25,35 @@ import {
   ADVANCE_KIND_LABEL,
   ADVANCE_KIND_TONE,
   type AdvanceFilters,
+  advanceHistory,
+  type AdvanceHistoryRow,
+  depositsOf,
   EMPTY_ADVANCE_FILTERS,
+  excessOf,
   filterAdvanceEntries,
   isAdvanceFiltered,
   isUnusedReceipt,
   netApplied,
+  recordedOf,
   signedAdvance,
   summaryTotals,
 } from "./advance-logic";
 import { amountList, amountText } from "./deposits-logic";
 
 // One supplier's advance (backend docs/supplier-advance.md), opened from the supplier-wise overview: the supplier, its
-// account per currency (recorded, applied to orders, available: the ledger's totals, ADV-1), the orders still owing it
-// with Apply advance (ADV-4), and every ledger entry with its balance after it, filtered and sortable. Add advance
-// (ADV-2) records money paid before any order. Order payments and supplier deposits are never part of these figures.
+// account per currency (ADV-1: added as advance, order deposits, applied, available), the orders still owing it with
+// Apply advance (ADV-4), and its history (every ledger entry and order deposit, with the available balance after it),
+// filtered and sortable. Add advance (ADV-2) records money paid before any order. A deposit paid with an order is part of
+// the advance already (applied in full to that order), counted once; balance payments and supplier deposits are not.
 
 const ALL = "all";
 const PAGE_SIZE = 10;
 const DATE_INPUT = "h-10 w-[150px] bg-card text-sm";
 const option = <T extends string>(value: T, label: string): FilterOption => ({ value, label });
-const KIND_OPTIONS = [option(ALL, "All transactions"), ...(Object.keys(ADVANCE_KIND_LABEL) as AdvanceKind[]).map((k) => option(k, ADVANCE_KIND_LABEL[k]))];
+const KIND_OPTIONS = [option(ALL, "All transactions"), ...(Object.keys(ADVANCE_KIND_LABEL) as AdvanceHistoryKind[]).map((k) => option(k, ADVANCE_KIND_LABEL[k]))];
 const orDash = (value: string | null | undefined) => value?.trim() || "–";
 
-type Entry = AdvanceAccount["entries"][number];
+type Entry = AdvanceHistoryRow;
 
 function entryColumns(supplier: string, account: AdvanceAccount, linkPo: boolean, canDelete: boolean): ColumnDef<Entry>[] {
   const money = (value: number, row: Entry) => amountText(value, row.currency);
@@ -62,9 +68,29 @@ function entryColumns(supplier: string, account: AdvanceAccount, linkPo: boolean
       id: "reference",
       accessorFn: (row) => row.po || row.reference,
       header: "Reference / order",
-      // A receipt: its reference and payment mode. An allocation or reversal: its order, and the advance it drew from or returned to.
+      // A receipt: its reference and payment mode. An order deposit: its order, paid with it. An allocation or reversal:
+      // its order, and the advance it drew from or returned to.
       cell: ({ row }) =>
-        row.original.kind === "receipt" ? (
+        row.original.kind === "excess" || row.original.kind === "excess_return" ? (
+          <span className="flex flex-col">
+            <span>
+              <PoLink po={row.original.po} linked={linkPo && row.original.orderId !== null} />
+              {row.original.orderId === null ? <span className="ml-1 text-xs text-muted-foreground">(order deleted)</span> : null}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.kind === "excess"
+                ? ["Paid beyond the order value", row.original.reference, row.original.mode].filter(Boolean).join(" · ")
+                : "Payment deleted or order value raised"}
+            </span>
+          </span>
+        ) : row.original.kind === "deposit" ? (
+          <span className="flex flex-col">
+            <PoLink po={row.original.po} linked={linkPo} />
+            <span className="text-xs text-muted-foreground">
+              {["Paid with the order", row.original.reference, row.original.mode].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+        ) : row.original.kind === "receipt" ? (
           <span className="flex flex-col">
             {orDash(row.original.reference)}
             <span className="text-xs text-muted-foreground">{orDash(row.original.mode)}</span>
@@ -88,6 +114,8 @@ function entryColumns(supplier: string, account: AdvanceAccount, linkPo: boolean
       header: "Amount",
       meta: { align: "right" },
       cell: ({ row }) => {
+        // An order deposit is recorded and applied at once: its amount, unsigned (the balance does not move).
+        if (row.original.kind === "deposit") return money(row.original.amount, row.original);
         const value = signedAdvance(row.original);
         return <span className={value < 0 ? "text-danger-strong" : undefined}>{`${value < 0 ? "−" : "+"}${money(Math.abs(value), row.original)}`}</span>;
       },
@@ -113,18 +141,22 @@ function entryColumns(supplier: string, account: AdvanceAccount, linkPo: boolean
             header: () => <span className="sr-only">Actions</span>,
             meta: { className: "w-px whitespace-nowrap" },
             cell: ({ row }: { row: { original: Entry } }) =>
-              row.original.kind === "receipt" ? <DeleteAdvanceButton entry={row.original} supplier={supplier} used={!isUnusedReceipt(row.original, account)} /> : null,
+              row.original.kind === "receipt" ? (
+                <DeleteAdvanceButton entry={row.original as AdvanceEntry} supplier={supplier} used={!isUnusedReceipt(row.original as AdvanceEntry, account)} />
+              ) : null,
           } satisfies ColumnDef<Entry>,
         ]
       : []),
   ];
 }
 
-/** Per currency: recorded, applied (gross), returned, applied net, available and how many orders used it. */
+/** Per currency: added, order deposits, applied from the added advance, returned, applied net, available and the orders. */
 const currencyColumns: ColumnDef<AdvanceSummary>[] = [
   { accessorKey: "currency", header: "Currency", cell: ({ row }) => currencyLabel(row.original.currency) },
-  { accessorKey: "receivedCny", header: "Advance recorded", meta: { align: "right" }, cell: ({ row }) => amountText(row.original.receivedCny, row.original.currency) },
-  { accessorKey: "allocatedCny", header: "Applied to orders", meta: { align: "right" }, cell: ({ row }) => amountText(row.original.allocatedCny, row.original.currency) },
+  { accessorKey: "receivedCny", header: "Added as advance", meta: { align: "right" }, cell: ({ row }) => amountText(row.original.receivedCny, row.original.currency) },
+  { id: "excess", header: "Excess payments", meta: { align: "right" }, cell: ({ row }) => amountText(excessOf(row.original), row.original.currency) },
+  { id: "deposits", header: "Order deposits", meta: { align: "right" }, cell: ({ row }) => amountText(depositsOf(row.original), row.original.currency) },
+  { accessorKey: "allocatedCny", header: "Applied from added advance", meta: { align: "right" }, cell: ({ row }) => amountText(row.original.allocatedCny, row.original.currency) },
   { accessorKey: "reversedCny", header: "Returned from orders", meta: { align: "right" }, cell: ({ row }) => amountText(row.original.reversedCny, row.original.currency) },
   { id: "net", header: "Applied to orders (net)", meta: { align: "right" }, cell: ({ row }) => amountText(netApplied(row.original), row.original.currency) },
   { accessorKey: "availableCny", header: "Available balance", meta: { align: "right", className: "font-bold" }, cell: ({ row }) => amountText(row.original.availableCny, row.original.currency) },
@@ -168,9 +200,17 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
   const { supplier } = account;
   const [filters, setFilters] = useState<AdvanceFilters>(EMPTY_ADVANCE_FILTERS);
   const set = <K extends keyof AdvanceFilters>(key: K) => (value: AdvanceFilters[K]) => setFilters((f) => ({ ...f, [key]: value }));
-  const entries = filterAdvanceEntries(account.entries, filters);
+  const history = advanceHistory(account);
+  const entries = filterAdvanceEntries(history, filters);
   const totals = (pick: (row: AdvanceSummary) => number) => amountList(summaryTotals(account.summary, pick), supplier.currency);
   const reversed = account.summary.some((row) => row.reversedCny > 0);
+  const hasDeposits = account.summary.some((row) => depositsOf(row) > 0);
+  const hasExcess = account.summary.some((row) => excessOf(row) > 0);
+  const recordedParts = [
+    `${totals((r) => r.receivedCny)} added`,
+    hasExcess ? `${totals(excessOf)} excess` : null,
+    hasDeposits ? `${totals(depositsOf)} order deposits` : null,
+  ];
   const describe = [
     filters.kind ? ADVANCE_KIND_LABEL[filters.kind] : null,
     filters.from || filters.to ? `${filters.from ? formatDate(filters.from) : "start"} to ${filters.to ? formatDate(filters.to) : "today"}` : null,
@@ -194,7 +234,7 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
         titleAddon={supplier.status === "Inactive" ? <StatusPill tone="neutral">Inactive</StatusPill> : undefined}
         actions={
           <>
-            <ReportDownload size="header" file={() => advanceFile(supplier, { ...account, entries }, describe || "All transactions", today)} />
+            <ReportDownload size="header" file={() => advanceFile(supplier, account, entries, describe || "All transactions", today)} />
             {addAdvance}
           </>
         }
@@ -224,12 +264,17 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
         </SectionCard>
 
         <KpiRow gap="sm">
-          <KpiCard size="xs" label="Advance recorded" value={totals((r) => r.receivedCny)} sub="paid before orders" />
+          <KpiCard
+            size="xs"
+            label="Advance recorded"
+            value={totals(recordedOf)}
+            sub={hasDeposits || hasExcess ? recordedParts.filter(Boolean).join(" · ") : "paid before orders"}
+          />
           <KpiCard
             size="xs"
             label="Applied to orders (net)"
             value={totals(netApplied)}
-            sub={reversed ? `after ${totals((r) => r.reversedCny)} returned from orders` : "on new orders, or applied"}
+            sub={reversed ? `after ${totals((r) => r.reversedCny)} returned from orders` : hasDeposits ? "order deposits included" : "on new orders, or applied"}
           />
           <KpiCard size="xs" label="Available balance" value={totals((r) => r.availableCny)} sub="ready for new orders" />
           <KpiCard size="xs" label="Orders" value={formatNumber(account.summary.reduce((sum, r) => sum + r.orders, 0))} sub="that used the advance" />
@@ -243,8 +288,8 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
         ) : null}
 
         <Callout size="sm">
-          Advances are separate from order payments and supplier deposits. An order&apos;s Payments tab shows the advance applied to it apart from its
-          direct payments.
+          A deposit paid with an order is part of this advance, applied to that order. Anything paid beyond an order&apos;s value is an excess
+          payment: available here for new orders. Each payment counts once. Supplier deposits (Deposits › Suppliers) are separate.
         </Callout>
 
         {account.openOrders?.length ? (
@@ -266,7 +311,7 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
 
         <SectionCard title="Transaction history" titleGap="none" className="min-w-0">
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <FilterSelect label="Transaction type" size="sm" value={filters.kind ?? ALL} options={KIND_OPTIONS} onValueChange={(v) => set("kind")(v === ALL ? null : (v as AdvanceKind))} />
+            <FilterSelect label="Transaction type" size="sm" value={filters.kind ?? ALL} options={KIND_OPTIONS} onValueChange={(v) => set("kind")(v === ALL ? null : (v as AdvanceHistoryKind))} />
             <label htmlFor={`${id}-from`} className="text-xs text-muted-foreground">
               From
             </label>
@@ -282,7 +327,7 @@ export function AdvanceSupplierScreen({ data }: { data: AdvanceSupplierData }) {
               </button>
             ) : null}
           </div>
-          {account.entries.length === 0 ? (
+          {history.length === 0 ? (
             <div className="mt-4 flex flex-col items-center gap-3 rounded-[10px] border border-dashed px-4 py-8 text-center">
               <p className="text-sm font-bold">No advance recorded for this supplier yet.</p>
               <p className="max-w-[460px] text-sm text-muted-foreground">

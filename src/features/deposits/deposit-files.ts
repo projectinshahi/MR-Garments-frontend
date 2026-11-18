@@ -4,7 +4,17 @@ import { formatDate } from "@/lib/formatters";
 import { orderedCurrencies } from "@/lib/currencies";
 import type { Currency } from "@/types/domain";
 
-import { ADVANCE_KIND_LABEL, netApplied, signedAdvance, type SupplierAdvanceRow } from "./advance-logic";
+import {
+  ADVANCE_KIND_LABEL,
+  advanceHistory,
+  type AdvanceHistoryRow,
+  depositsOf,
+  excessOf,
+  netApplied,
+  recordedOf,
+  signedAdvance,
+  type SupplierAdvanceRow,
+} from "./advance-logic";
 import { type DepositFilters, type DepositRow, type DepositView, KIND_LABEL, STATUS_LABEL, type SupplierSummary, totals } from "./deposits-logic";
 
 // The Deposits pages' Excel and PDF files (docs/phase2-contracts.md section 6): built from the rows the page shows after
@@ -49,27 +59,55 @@ const DEPOSIT_NOTES = [
   "Exchange rate: a paid order deposit's own rate, or the supplier's rate when a supplier deposit was opened (INR per 1 unit). Amounts in different currencies are never added together.",
 ];
 
-/** The supplier advance account is a third kind of money: paid before any order, applied to orders automatically. */
+/** The supplier advance account: money added before any order, plus the deposits paid with orders (owner decision 2026-11-18). */
 export const ADVANCE_NOTE =
-  "Supplier advances are money paid to a supplier before any order and applied to its new orders automatically. They are neither PO payments nor supplier deposits; an order deposit's paid figure includes the advance applied to that order.";
+  "Supplier advance = money added as advance before any order, supplier payments beyond an order's value (excess payments, available for other orders) and the deposits paid to the supplier with an order (applied to that order). Each payment counts once: up to its order's value toward that order, the rest as excess. Available advance is applied to new orders automatically. Supplier deposits (Deposits › Suppliers) are separate.";
 
-/** A supplier's advance account (SD-1, RPT-5D `advance`): its totals and its ledger (newest first), one table per currency. */
-export function advanceSections(account: AdvanceAccount | undefined): Section[] {
+/** The advance account's figures per currency, as every screen shows them: recorded less applied (net) is available. */
+const advanceSummaryColumns = (currency: Currency): Column[] => [
+  money("Advance recorded", currency),
+  money("Added as advance", currency),
+  money("Excess payments", currency),
+  money("Order deposits", currency),
+  money("Applied from added advance", currency),
+  money("Returned from orders", currency),
+  money("Applied to orders (net)", currency),
+  money("Available", currency),
+  text("Orders"),
+];
+const advanceSummaryRow = (line: AdvanceAccount["summary"][number]) => [
+  recordedOf(line),
+  line.receivedCny,
+  excessOf(line),
+  depositsOf(line),
+  line.allocatedCny,
+  line.reversedCny,
+  netApplied(line),
+  line.availableCny,
+  line.orders,
+];
+
+/**
+ * A supplier's advance account (SD-1, RPT-5D `advance`): its totals and its history (the ledger and the order deposits,
+ * newest first; `history` when filtered), one table per currency.
+ */
+export function advanceSections(account: AdvanceAccount | undefined, history: AdvanceHistoryRow[] = account ? advanceHistory(account) : []): Section[] {
   if (!account) return [];
   return [
     ...perCurrency(account.summary).map(([currency, lines]) => ({
       sheet: "Advance Summary",
       title: `Supplier advance (${currency})`,
-      columns: [money("Received", currency), money("Applied to orders", currency), money("Returned from orders", currency), money("Available", currency), text("Orders")],
-      rows: lines.map((line) => [line.receivedCny, line.allocatedCny, line.reversedCny, line.availableCny, line.orders]),
+      columns: advanceSummaryColumns(currency),
+      rows: lines.map(advanceSummaryRow),
     })),
-    ...perCurrency(account.entries).map(([currency, list]) => ({
+    ...perCurrency(history).map(([currency, list]) => ({
       sheet: "Advance Ledger",
       title: `Advance ledger (${currency})`,
       columns: [
         date("Date"),
         text("Type"),
         text("PO"),
+        // An order deposit: its amount, recorded and applied at once (the available advance does not move).
         money("Amount (+ in, - out)", currency),
         rate("Exchange rate", currency),
         money("INR equivalent", "INR"),
@@ -98,11 +136,23 @@ export function advanceOverviewFile(rows: SupplierAdvanceRow[], filters: string,
     sections: [
       {
         title: "Supplier advance by supplier",
-        columns: [{ header: "Supplier" }, { header: "Currency" }, { header: "Advance recorded" }, { header: "Applied to orders" }, { header: "Returned from orders" }, { header: "Applied to orders (net)" }, { header: "Available balance" }, { header: "Orders" }],
+        columns: [
+          { header: "Supplier" },
+          { header: "Currency" },
+          { header: "Advance recorded" },
+          { header: "Added as advance" },
+          { header: "Excess payments" },
+          { header: "Order deposits" },
+          { header: "Applied from added advance" },
+          { header: "Returned from orders" },
+          { header: "Applied to orders (net)" },
+          { header: "Available balance" },
+          { header: "Orders" },
+        ],
         rows: rows.flatMap((row) =>
           row.accounts.length
-            ? row.accounts.map((a) => [row.supplier, a.currency, a.receivedCny, a.allocatedCny, a.reversedCny, netApplied(a), a.availableCny, a.orders])
-            : [[row.supplier, null, null, null, null, null, null, 0]],
+            ? row.accounts.map((a) => [row.supplier, a.currency, ...advanceSummaryRow(a)])
+            : [[row.supplier, null, null, null, null, null, null, null, null, null, 0]],
         ),
       },
     ],
@@ -110,13 +160,13 @@ export function advanceOverviewFile(rows: SupplierAdvanceRow[], filters: string,
 }
 
 /** One supplier's advance account as its own report (Deposits › Supplier advance): pass the entries as shown (filtered). */
-export function advanceFile(supplier: { name: string; currency: string }, account: AdvanceAccount, filters: string, today: string): ReportFile {
+export function advanceFile(supplier: { name: string; currency: string }, account: AdvanceAccount, history: AdvanceHistoryRow[], filters: string, today: string): ReportFile {
   return {
     title: `Supplier advance: ${supplier.name}`,
     filename: `supplier-advance-${supplier.name.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${today}`,
     filters,
     notes: [ADVANCE_NOTE, `Supplier currency now: ${supplier.currency}. Each entry keeps the rate of the advance it belongs to (INR per 1 unit).`],
-    sections: advanceSections(account),
+    sections: advanceSections(account, history),
   };
 }
 
@@ -177,8 +227,8 @@ export function depositsFile(view: DepositView, rows: DepositRow[], filters: str
         ? perCurrency(advances).map(([currency, list]) => ({
             sheet: "Supplier Advances",
             title: `Supplier advances (${currency})`,
-            columns: [text("Supplier"), money("Received", currency), money("Applied to orders", currency), money("Returned from orders", currency), money("Available", currency), text("Orders")],
-            rows: list.map((a) => [a.supplier, a.receivedCny, a.allocatedCny, a.reversedCny, a.availableCny, a.orders]),
+            columns: [text("Supplier"), ...advanceSummaryColumns(currency)],
+            rows: list.map((a) => [a.supplier, ...advanceSummaryRow(a)]),
           }))
         : []),
     ],

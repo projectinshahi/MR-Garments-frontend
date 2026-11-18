@@ -10,7 +10,7 @@ import { ApiError } from "@/lib/api/errors";
 import { AddAdvanceDialog } from "./advance-dialog";
 import { advanceOverviewFile } from "./deposit-files";
 import { advanceSchema, MESSAGES, toAdvanceBody } from "./advance-form";
-import { EMPTY_ADVANCE_FILTERS, filterAdvanceEntries, filterSupplierRows, isUnusedReceipt, netApplied, supplierAdvanceRows } from "./advance-logic";
+import { advanceHistory, EMPTY_ADVANCE_FILTERS, excessOf, filterAdvanceEntries, filterSupplierRows, isUnusedReceipt, netApplied, recordedOf, signedAdvance, supplierAdvanceRows } from "./advance-logic";
 import { AdvanceOverviewScreen } from "./advance-screen";
 import { AdvanceSupplierScreen } from "./advance-supplier-screen";
 import type { AdvanceOverviewData, AdvanceSupplierData } from "./data/queries";
@@ -158,11 +158,12 @@ describe("22. supplier-wise overview", () => {
     expect(filterSupplierRows(rows, { query: "", withAdvance: true }).map((r) => r.supplier)).toEqual(["Foshan Fabrics", "Yiwu Trims Ltd."]);
     // The download: one row per supplier and currency (applied, returned, applied net), never a total row.
     const file = advanceOverviewFile(rows, "All suppliers", "2026-11-17");
+    // Recorded, added, excess, order deposits, applied from added, returned, applied net, available, orders.
     expect(file.sections[0]!.rows).toEqual([
-      ["Foshan Fabrics", "CNY", 1000, 200, 200, 0, 1000, 1],
-      ["Foshan Fabrics", "USD", 300, 120, 0, 120, 180, 1],
-      ["Yiwu Trims Ltd.", "CNY", 5000, 0, 0, 0, 5000, 0],
-      ["Hangzhou Knits", null, null, null, null, null, null, 0],
+      ["Foshan Fabrics", "CNY", 1000, 1000, 0, 0, 200, 200, 0, 1000, 1],
+      ["Foshan Fabrics", "USD", 300, 300, 0, 0, 120, 0, 120, 180, 1],
+      ["Yiwu Trims Ltd.", "CNY", 5000, 5000, 0, 0, 0, 0, 0, 5000, 0],
+      ["Hangzhou Knits", null, null, null, null, null, null, null, null, null, 0],
     ]);
   });
 
@@ -277,5 +278,105 @@ describe("orders still to pay: Apply advance (ADV-4) for an advance recorded aft
   it("is left out when nothing is owed", () => {
     render(<AdvanceSupplierScreen data={data({ account: { ...ACCOUNT, openOrders: [] } })} />);
     expect(screen.queryByRole("heading", { name: "Orders still to pay" })).toBeNull();
+  });
+});
+
+describe("order deposits: part of the supplier's advance, applied to their order, counted once", () => {
+  const DEPOSIT = {
+    id: "p1",
+    orderId: "o7",
+    po: "PO-2060",
+    paidOn: "2026-11-05",
+    currency: "CNY" as const,
+    amount: 400,
+    exchangeRate: 12.2,
+    amountInr: 4880,
+    mode: "Bank transfer",
+    reference: "DEP-9",
+    notes: "",
+    recordedAt: "2026-11-05T09:00:00Z",
+    recordedBy: "Priya Nair",
+    balance: 1000,
+  };
+  const WITH_DEPOSIT: SupplierAdvanceResponse = { ...ACCOUNT, summary: [{ ...ACCOUNT.summary[0]!, depositsCny: 400, orders: 2 }], deposits: [DEPOSIT] };
+
+  it("totals: recorded = added + deposits, applied (net) includes them, available stays the ledger's; an older backend adds 0", () => {
+    const row = WITH_DEPOSIT.summary[0]!;
+    expect([recordedOf(row), netApplied(row), row.availableCny]).toEqual([1400, 400, 1000]);
+    expect(recordedOf(row) - netApplied(row)).toBe(row.availableCny);
+    expect([recordedOf(ACCOUNT.summary[0]!), netApplied(ACCOUNT.summary[0]!)]).toEqual([1000, 0]);
+  });
+
+  it("history: deposits merged by day, newest first, a same-day deposit before that day's ledger rows", () => {
+    expect(advanceHistory(WITH_DEPOSIT).map((row) => [row.kind, row.entryDate])).toEqual([
+      ["reversal", "2026-11-12"],
+      ["allocation", "2026-11-10"],
+      ["deposit", "2026-11-05"],
+      ["receipt", "2026-11-05"],
+      ["receipt", "2026-11-01"],
+    ]);
+    expect(advanceHistory(ACCOUNT)).toHaveLength(4);
+  });
+
+  it("the supplier page lists the deposit with its order, unsigned, and filters by it", async () => {
+    const user = userEvent.setup();
+    render(<AdvanceSupplierScreen data={data({ account: WITH_DEPOSIT })} />);
+    const kpi = (label: string) => screen.getAllByText(label, { selector: "p" })[0]!.parentElement!;
+    expect(kpi("Advance recorded")).toHaveTextContent("¥1,400¥1,000 added · ¥400 order deposits");
+    expect(kpi("Applied to orders (net)")).toHaveTextContent("¥400");
+    expect(kpi("Available balance")).toHaveTextContent("¥1,000");
+    const history = () => within(screen.getAllByRole("table").at(-1)!).getAllByRole("row").slice(1);
+    expect(history()).toHaveLength(5);
+    const deposit = history()[2]!;
+    expect(deposit).toHaveTextContent("Order deposit");
+    expect(deposit).toHaveTextContent("PO-2060Paid with the order · DEP-9 · Bank transfer");
+    expect(deposit).toHaveTextContent("¥400CNY1 CNY = ₹12.20₹4,880.00¥1,000");
+    expect(deposit).not.toHaveTextContent("+¥400");
+    // No Delete on a deposit: it is a payment, deleted from its order.
+    expect(within(deposit).queryByRole("button", { name: /Delete/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^Transaction type:/ }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Order deposit" }));
+    expect(history()).toHaveLength(1);
+  });
+
+  it("the overview shows deposits in recorded and applied, available unchanged", () => {
+    const advances = [{ supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY" as const, receivedCny: 0, allocatedCny: 0, reversedCny: 0, availableCny: 0, depositsCny: 2500, orders: 1 }];
+    render(<AdvanceOverviewScreen data={overview({ advances })} />);
+    expect(screen.getByRole("row", { name: /Foshan Fabrics/ })).toHaveTextContent("CNY · 1 order used it¥2,500¥2,500¥0");
+  });
+});
+
+describe("excess payments (0016): paid beyond an order's value, available supplier advance", () => {
+  const EXCESS: SupplierAdvanceResponse = {
+    supplier: { ...SUPPLIER, currency: "USD", exchangeRate: 84 },
+    summary: [{ currency: "USD", receivedCny: 0, excessCny: 270.14, allocatedCny: 100, reversedCny: 0, availableCny: 170.14, depositsCny: 0, orders: 1 }],
+    entries: [
+      entry({ id: "u1", kind: "allocation", entryDate: "2026-11-12", currency: "USD", amount: 100, exchangeRate: 102.25, amountInr: 10225, advanceId: "x1", orderId: "o2", po: "PO-12000", mode: "", balance: 170.14 }),
+      entry({ id: "x1", kind: "excess", entryDate: "2026-10-28", currency: "USD", amount: 270.14, exchangeRate: 102.25, amountInr: 27621.82, orderId: "o1", po: "PO-11218", mode: "Wire", reference: "UTR-9", balance: 270.14 }),
+    ],
+  };
+
+  it("the overview keeps each supplier's excess (DEP-1 advances) in its currency line", () => {
+    const [row] = supplierAdvanceRows([{ id: "s9", name: "Hengyi" }], [{ supplierId: "s9", supplier: "Hengyi", ...EXCESS.summary[0]! }]);
+    expect(row!.accounts.map((a) => [a.currency, recordedOf(a), netApplied(a), a.availableCny])).toEqual([["USD", 270.14, 100, 170.14]]);
+  });
+
+  it("totals: recorded includes the excess, applied counts what orders drew, available = recorded - applied", () => {
+    const row = EXCESS.summary[0]!;
+    expect([excessOf(row), recordedOf(row), netApplied(row), row.availableCny]).toEqual([270.14, 270.14, 100, 170.14]);
+    expect(signedAdvance({ kind: "excess", amount: 5 })).toBe(5);
+    expect(signedAdvance({ kind: "excess_return", amount: 5 })).toBe(-5);
+  });
+
+  it("the supplier page shows the excess with its order, payment reference and rate, and in the by-currency table", () => {
+    render(<AdvanceSupplierScreen data={data({ account: EXCESS })} />);
+    const kpi = (label: string) => screen.getAllByText(label, { selector: "p" })[0]!.parentElement!;
+    expect(kpi("Advance recorded")).toHaveTextContent("$270.14$0 added · $270.14 excess");
+    expect(kpi("Available balance")).toHaveTextContent("$170.14");
+    const history = within(screen.getAllByRole("table").at(-1)!).getAllByRole("row").slice(1);
+    expect(history[1]).toHaveTextContent("Excess payment");
+    expect(history[1]).toHaveTextContent("PO-11218Paid beyond the order value · UTR-9 · Wire");
+    expect(history[1]).toHaveTextContent("+$270.14USD1 USD = ₹102.25₹27,621.82$270.14");
+    expect(screen.getByRole("row", { name: /^USD/ })).toHaveTextContent("$0$270.14$0$100$0$100$170.14");
   });
 });

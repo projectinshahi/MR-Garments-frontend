@@ -16,7 +16,7 @@ import type { AdvanceSummary } from "@/lib/api/deposits-types";
 import { formatNumber } from "@/lib/formatters";
 
 import type { AdvanceOverviewData } from "./data/queries";
-import { filterSupplierRows, netApplied, type OverviewFilters, supplierAdvanceRows, type SupplierAdvanceRow } from "./advance-logic";
+import { filterSupplierRows, netApplied, type OverviewFilters, recordedOf, supplierAdvanceRows, type SupplierAdvanceRow } from "./advance-logic";
 import { advanceOverviewFile } from "./deposit-files";
 import { DEPOSIT_TABS } from "./deposits-screen";
 import { amountText } from "./deposits-logic";
@@ -64,7 +64,7 @@ const columns: ColumnDef<SupplierAdvanceRow>[] = [
       </span>
     ),
   },
-  { id: "received", header: "Advance recorded", meta: { align: "right" }, cell: ({ row }) => <Amounts accounts={row.original.accounts} pick={(a) => a.receivedCny} /> },
+  { id: "received", header: "Advance recorded", meta: { align: "right" }, cell: ({ row }) => <Amounts accounts={row.original.accounts} pick={recordedOf} /> },
   { id: "applied", header: "Applied to orders (net)", meta: { align: "right" }, cell: ({ row }) => <Amounts accounts={row.original.accounts} pick={netApplied} /> },
   { id: "available", header: "Available balance", meta: { align: "right" }, cell: ({ row }) => <Amounts accounts={row.original.accounts} pick={(a) => a.availableCny} bold /> },
   {
@@ -119,7 +119,8 @@ export function AdvanceOverviewScreen({ data }: { data: AdvanceOverviewData }) {
         </div>
         <Callout size="sm">
           Each supplier&apos;s advance is shown on its own, per currency: amounts in different currencies or of different suppliers are never added
-          together. Open a supplier to see its transactions, add an advance or apply it to orders.
+          together. It includes the deposits paid with orders, applied to those orders. Open a supplier to see its transactions, add an advance or
+          apply it to orders.
         </Callout>
         <DataTable
           columns={columns}

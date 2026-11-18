@@ -245,6 +245,12 @@ export type OrderListItem = {
   advanceCny?: number;
   /** advanceCny in INR at the rate of each advance it came from. */
   advanceInr?: number;
+  /**
+   * Supplier payments beyond the order's value, moved to the supplier's available advance (0016), and their INR at each
+   * payment's rate. The paid figures already leave it out. Absent from an older backend.
+   */
+  excessCny?: number;
+  excessInr?: number;
   /** Paid supplier deposits (kind Deposit, payee the supplier) plus the supplier advance applied. */
   depositPaidCny: number;
   /** max(0, required - paid); null without a requirement. */

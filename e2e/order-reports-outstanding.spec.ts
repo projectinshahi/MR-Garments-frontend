@@ -28,11 +28,11 @@ test("Order reports show an overpaid order's balance as 0 and total only what is
   await api.pay(settled.id, { amountCny: 1000, rateInr: 12.5 });
   await api.pay(overpaid.id, { amountCny: 1500, rateInr: 12.5 });
 
-  await test.step("the API and the order keep the true signed balance", async () => {
+  await test.step("the API: the overpaid order owes 0 and the 500 beyond its value is the supplier's advance (0016)", async () => {
     const report = await api.get<OrderReportsResponse>(`/reports/orders?supplierId=${supplier.id}`);
-    expect(report.rows.find((row) => row.po === overpaid.po)!.balanceCny).toBe(-500);
-    expect(report.summary.byCurrency).toEqual([expect.objectContaining({ currency: "CNY", balanceCny: 500 })]);
-    expect((await api.order(overpaid.po)).balanceCny).toBe(-500);
+    expect(report.rows.find((row) => row.po === overpaid.po)!.balanceCny).toBe(0);
+    expect(report.summary.byCurrency).toEqual([expect.objectContaining({ currency: "CNY", balanceCny: 1000 })]);
+    expect(await api.order(overpaid.po)).toMatchObject({ balanceCny: 0, excessCny: 500 });
   });
 
   await test.step("page: rows floored at 0, the Balance total is what is owed", async () => {
@@ -41,7 +41,8 @@ test("Order reports show an overpaid order's balance as 0 and total only what is
     await expect(page.getByRole("heading", { name: "Order reports" })).toBeVisible();
     await expect(kpi(page, "Orders")).toContainText("3");
     await expect(kpi(page, "Order value")).toContainText("¥3,000");
-    await expect(kpi(page, "Paid to suppliers")).toContainText("¥2,500");
+    // Paid toward the orders: the 500 beyond the overpaid order's value is the supplier's advance (0016).
+    await expect(kpi(page, "Paid to suppliers")).toContainText("¥2,000");
     await expect(kpi(page, "Balance")).toContainText("¥1,000");
     const headers = await page.getByRole("columnheader").allTextContents();
     const at = headers.findIndex((header) => /^Balance\W*$/.test(header));

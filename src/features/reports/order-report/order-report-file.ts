@@ -1,6 +1,6 @@
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { stageLabel } from "@/features/orders/order-status";
-import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL } from "@/features/deposits/advance-logic";
+import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL, depositsOf, netApplied, recordedOf } from "@/features/deposits/advance-logic";
 import { DEPOSIT_STATUS } from "@/features/payments/money";
 import type { OrderReport, OrderTimelineStep } from "@/lib/api/reports-types";
 import { formatDate, formatDateTime } from "@/lib/formatters";
@@ -189,11 +189,12 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         [`Outstanding balance for this PO (${cur})`, payments.balanceCny],
         [`Deposits paid on this PO (${cur})`, payments.depositsPaidCny],
         ...(payments.advanceCny === undefined ? [] : ([[`Supplier advance applied to this PO (${cur})`, payments.advanceCny]] as Cell[][])),
+        ...(payments.excessCny ? ([[`Paid beyond the order value, moved to supplier advance (${cur})`, payments.excessCny]] as Cell[][]) : []),
         ...(supplierAccount.advanceApplied ? ([["Supplier advance applied (every order)", moneyList(supplierAccount.advanceApplied)]] as Cell[][]) : []),
         ...(supplierAccount.advance ?? []).map(
           (line): Cell[] => [
-            `Supplier advance (${line.currency}): received · applied · returned · available`,
-            `${line.receivedCny} · ${line.allocatedCny} · ${line.reversedCny} · ${line.availableCny}`,
+            `Supplier advance (${line.currency}): recorded · added · order deposits · applied (net) · available`,
+            `${recordedOf(line)} · ${line.receivedCny} · ${depositsOf(line)} · ${netApplied(line)} · ${line.availableCny}`,
           ],
         ),
         ...supplierAccount.deposits.summary.map(

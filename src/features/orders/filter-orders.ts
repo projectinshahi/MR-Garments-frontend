@@ -45,11 +45,12 @@ export const closedOrders = (orders: OrderRow[]) => orders.filter((order) => ord
 export const pendingQty = (order: Pick<OrderRow, "quantity" | "received">) => Math.max(0, order.quantity - order.received);
 
 /**
- * Balance owed to the supplier in the order's currency, to the cent: order value less what the supplier was paid (agent
- * payments are sea freight) and less the supplier advance applied (backend docs/supplier-advance.md; 0 from an older API).
+ * Balance owed to the supplier in the order's currency, to the cent: order value less what the supplier was paid toward
+ * it (agent payments are sea freight) and less the supplier advance applied (backend docs/supplier-advance.md; 0 from an
+ * older API). Never below 0: anything paid beyond the value is the supplier's advance (0016).
  */
 export const balanceCny = (order: Pick<OrderRow, "orderValueCny" | "supplierPaidCny" | "advanceCny">) =>
-  Math.round((order.orderValueCny - order.supplierPaidCny - (order.advanceCny ?? 0)) * 100) / 100;
+  Math.max(0, Math.round((order.orderValueCny - order.supplierPaidCny - (order.advanceCny ?? 0)) * 100) / 100);
 
 export type PaymentStatus = { label: "Unpaid" | "Partly paid" | "Paid"; tone: Tone };
 /** Deposit/payment status from the payments to the supplier against the order value (13.5). Proposed tones: neutral, warning, success. */
