@@ -100,6 +100,8 @@ export const ordersFile = (rows: OrderRow[], filters: string, today: string, lin
         text("Supplier"),
         text("Currency"),
         rate("Exchange rate", currency),
+        // The order's container terms (0015); empty for an older order not set yet.
+        text("Container terms"),
         text("Main item"),
         text("Ordered qty"),
         text("Unit"),
@@ -117,6 +119,7 @@ export const ordersFile = (rows: OrderRow[], filters: string, today: string, lin
         o.supplier,
         o.currency,
         o.exchangeRate,
+        o.terms ?? null,
         o.item,
         o.quantity,
         o.unit,
@@ -129,7 +132,7 @@ export const ordersFile = (rows: OrderRow[], filters: string, today: string, lin
         o.paidInr,
       ]),
       total: list.length
-        ? ["Total", null, null, null, null, null, null, null, null, null, null, totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.supplierPaidCny), totalOf(list, balanceCny), totalOf(list, (o) => o.paidInr)]
+        ? ["Total", null, null, null, null, null, null, null, null, null, null, null, totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.supplierPaidCny), totalOf(list, balanceCny), totalOf(list, (o) => o.paidInr)]
         : undefined,
     })),
     lines,

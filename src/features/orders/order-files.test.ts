@@ -56,7 +56,7 @@ const line = (orderId: string, po: string, patch: Partial<OrderLineItem> = {}): 
 describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () => {
   it("All orders: a summary, then per currency the saved rate, PO total, supplier payments, balance and INR paid, with totals", () => {
     const rows = [
-      row("PO-2053", { stage: 2, exchangeRate: 12.0412, paidCny: 400, supplierPaidCny: 300, paidInr: 4812.36 }),
+      row("PO-2053", { stage: 2, exchangeRate: 12.0412, paidCny: 400, supplierPaidCny: 300, paidInr: 4812.36, terms: "CNF" }),
       row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", orderValueCny: 2250, exchangeRate: 83.1, supplierPaidCny: 2250, paidInr: 186975 }),
     ];
     const file = ordersFile(rows, "No filters", TODAY);
@@ -71,15 +71,16 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
       ["Paid, all payees (INR)", 191787.36],
     ]);
     expect(headers(file, 1)).toEqual([
-      "PO", "Order date", "Supplier", "Currency", "Exchange rate (INR per 1 CNY)", "Main item", "Ordered qty", "Unit", "Delivery date", "Stage", "Status",
+      "PO", "Order date", "Supplier", "Currency", "Exchange rate (INR per 1 CNY)", "Container terms", "Main item", "Ordered qty", "Unit", "Delivery date", "Stage", "Status",
       "PO total (CNY)", "Paid to supplier (CNY)", "Balance (CNY)", "Paid, all payees (INR)",
     ]);
     expect(cny!.columns[4]).toEqual({ header: "Exchange rate (INR per 1 CNY)", rate: true });
     // The rate saved on the order (never the supplier's rate now); the balance counts supplier payments only.
-    expect(cny!.rows).toEqual([["PO-2053", "2026-10-01", "Foshan Fabrics", "CNY", 12.0412, "Denim jeans", 100, "pcs", "2026-10-30", "2. Receiving in China", "On track", 1000, 300, 700, 4812.36]]);
-    expect(cny!.total).toEqual(["Total", null, null, null, null, null, null, null, null, null, null, 1000, 300, 700, 4812.36]);
-    expect(headers(file, 2)[11]).toBe("PO total (USD)");
-    expect(usd!.rows[0]!.slice(0, 5)).toEqual(["PO-2052", "2026-10-01", "Shenzhen Apparel", "USD", 83.1]);
+    expect(cny!.rows).toEqual([["PO-2053", "2026-10-01", "Foshan Fabrics", "CNY", 12.0412, "CNF", "Denim jeans", 100, "pcs", "2026-10-30", "2. Receiving in China", "On track", 1000, 300, 700, 4812.36]]);
+    expect(cny!.total).toEqual(["Total", null, null, null, null, null, null, null, null, null, null, null, 1000, 300, 700, 4812.36]);
+    expect(headers(file, 2)[12]).toBe("PO total (USD)");
+    // An order whose container terms aren't set yet leaves the cell empty.
+    expect(usd!.rows[0]!.slice(0, 6)).toEqual(["PO-2052", "2026-10-01", "Shenzhen Apparel", "USD", 83.1, null]);
     // Without ORD-7 the file says the items sheet is missing instead of leaving it out silently.
     expect(file.notes!.at(-1)).toMatch(/order items could not be loaded/);
   });

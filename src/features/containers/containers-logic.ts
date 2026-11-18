@@ -115,6 +115,8 @@ export type LoadableLine = ContainerOptions["lines"][number];
 const lineSchema = z.object({
   orderLineId: z.string(),
   po: z.string(),
+  /** The line's order's container terms (CON-2): the container takes them; null (or absent) when not set. */
+  terms: z.enum(["FOB", "CNF"]).nullish(),
   item: z.string(),
   unit: z.string(),
   received: z.number(),
@@ -129,7 +131,6 @@ export const loadContainerSchema = z
   .object({
     number: z.string().trim().min(1, "Enter the container number."),
     shippingAgentId: z.string().min(1, "Choose a shipping agent."),
-    terms: z.enum(["FOB", "CNF"]),
     portOfLoading: z.string(),
     portOfArrival: z.string(),
     loadedOn: z.string().min(1, "Enter the loading date."),
@@ -147,17 +148,42 @@ export const loadContainerSchema = z
     });
     if (!values.lines.some((line) => parseCount(line.quantity) > 0))
       ctx.addIssue({ code: "custom", path: ["lines"], message: "Enter a quantity for at least one line." });
+    // The container takes its orders' terms (CON-3 checks the same): never a mix, never an order without terms.
+    const terms = loadTerms(values.lines);
+    if (terms.mixed) ctx.addIssue({ code: "custom", path: ["lines"], message: TERMS_TEXT.mixed(terms.fob, terms.cnf) });
+    else if (terms.missing.length > 0) ctx.addIssue({ code: "custom", path: ["lines"], message: TERMS_TEXT.missing(terms.missing) });
   });
 export type LoadContainerValues = z.infer<typeof loadContainerSchema>;
 
-/** API field names, in screen order, so 409/422 `fields` land on them. */
-export const LOAD_FIELDS = ["number", "shippingAgentId", "terms", "loadedOn", "eta", "lines"] as const;
+/** API field names, in screen order, so 409/422 `fields` land on them (`terms` has no field: it shows under the lines). */
+export const LOAD_FIELDS = ["number", "shippingAgentId", "loadedOn", "eta", "lines"] as const;
 
-/** An empty form: today as the loading date, FOB, every loadable line at 0 (not loaded). */
+const and = (list: string[]) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : (list[0] ?? ""));
+/** The API's wording (backend docs/order-container-terms.md), so the form and CON-3 say the same. */
+export const TERMS_TEXT = {
+  mixed: (fob: string[], cnf: string[]) =>
+    `${and(fob)} ${fob.length === 1 ? "is" : "are"} FOB and ${and(cnf)} ${cnf.length === 1 ? "is" : "are"} CNF: one container holds orders with the same container terms.`,
+  missing: (pos: string[]) => `Set the container terms on ${and(pos)} (Edit order) before loading ${pos.length === 1 ? "it" : "them"}.`,
+};
+
+/**
+ * The container's terms from the orders of the lines being loaded (a quantity above 0): their one terms value, or
+ * `mixed` with the POs of each, and the POs without terms. Each PO once, in PO order.
+ */
+export function loadTerms(lines: { po: string; terms?: "FOB" | "CNF" | null; quantity: string | number }[]) {
+  const loading = lines.filter((line) => (typeof line.quantity === "number" ? line.quantity : parseCount(line.quantity)) > 0);
+  const pos = (keep: (line: (typeof loading)[number]) => boolean) => [...new Set(loading.filter(keep).map((line) => line.po))].sort();
+  const fob = pos((line) => line.terms === "FOB");
+  const cnf = pos((line) => line.terms === "CNF");
+  const missing = pos((line) => !line.terms);
+  const mixed = fob.length > 0 && cnf.length > 0;
+  return { terms: mixed ? null : fob.length ? ("FOB" as const) : cnf.length ? ("CNF" as const) : null, mixed, fob, cnf, missing, orders: pos(() => true) };
+}
+
+/** An empty form: today as the loading date, every loadable line at 0 (not loaded). The terms come from the orders. */
 export const toLoadValues = (lines: LoadableLine[], today: string): LoadContainerValues => ({
   number: "",
   shippingAgentId: "",
-  terms: "FOB",
   portOfLoading: "",
   portOfArrival: "",
   loadedOn: today,
@@ -170,7 +196,8 @@ export const toLoadValues = (lines: LoadableLine[], today: string): LoadContaine
 export const toContainerBody = ({ lines, sailedOn, ...values }: LoadContainerValues): CreateContainerBody => ({
   number: values.number.trim(),
   shippingAgentId: values.shippingAgentId,
-  terms: values.terms,
+  // The orders' terms: the API takes them from the orders anyway; sent so an older backend gets them too.
+  ...(loadTerms(lines).terms ? { terms: loadTerms(lines).terms! } : {}),
   portOfLoading: values.portOfLoading.trim(),
   portOfArrival: values.portOfArrival.trim(),
   loadedOn: values.loadedOn,

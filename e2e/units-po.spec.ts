@@ -87,6 +87,8 @@ test("a PO number in any format places the order, opens its page, tabs, Edit ord
     await page.getByRole("combobox", { name: "Item, line 1", exact: true }).selectOption({ label: "Denim jeans" });
     await page.getByRole("textbox", { name: "Rate (¥), line 1", exact: true }).fill("12.5");
     await page.getByRole("textbox", { name: "Quantity, line 1", exact: true }).fill("200");
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
   }
 
@@ -122,6 +124,8 @@ test("a PO number in any format places the order, opens its page, tabs, Edit ord
   await expect(page.getByText("This PO number is already used by another order.")).toBeVisible();
   await expect(poBox).toHaveAttribute("aria-invalid", "true");
   await poBox.fill("   ");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(page.getByText("Enter the PO number.")).toBeVisible();
   await expect(page).toHaveURL("/orders/new");

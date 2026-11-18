@@ -18,6 +18,7 @@ import {
   lineLoads,
   listFootnote,
   loadContainerSchema,
+  loadTerms,
   parseCount,
   toContainerBody,
   toContainerRow,
@@ -122,8 +123,8 @@ describe("containerKpis and listFootnote", () => {
 
 describe("load container form", () => {
   const loadable = [
-    { orderLineId: "l1", orderId: "o1", po: "PO-2035", item: "Men's jackets", unit: "pcs" as const, received: 1160, loaded: 0 },
-    { orderLineId: "l2", orderId: "o2", po: "PO-2031", item: "Kids t-shirts", unit: "pcs" as const, received: 6000, loaded: 2000 },
+    { orderLineId: "l1", orderId: "o1", po: "PO-2035", terms: "FOB" as const, item: "Men's jackets", unit: "pcs" as const, received: 1160, loaded: 0 },
+    { orderLineId: "l2", orderId: "o2", po: "PO-2031", terms: "CNF" as const, item: "Kids t-shirts", unit: "pcs" as const, received: 6000, loaded: 2000 },
   ];
   const filled = () => {
     const values = toLoadValues(loadable, "2026-09-27");
@@ -136,7 +137,11 @@ describe("load container form", () => {
   };
 
   it("starts empty with today as the loading date", () => {
-    expect(toLoadValues(loadable, "2026-09-27")).toMatchObject({ loadedOn: "2026-09-27", sailedOn: "", eta: "", terms: "FOB", number: "" });
+    const values = toLoadValues(loadable, "2026-09-27");
+    expect(values).toMatchObject({ loadedOn: "2026-09-27", sailedOn: "", eta: "", number: "" });
+    // No terms to choose: each line carries its order's (CON-2).
+    expect(values).not.toHaveProperty("terms");
+    expect(values.lines.map((line) => line.terms)).toEqual(["FOB", "CNF"]);
   });
 
   it("checks quantity against received minus loaded, ETA after loading, and one line at least", () => {
@@ -160,7 +165,8 @@ describe("load container form", () => {
     expect(toContainerBody(filled())).toEqual({
       number: "FCIU 5527310",
       shippingAgentId: "a1",
-      terms: "FOB",
+      // PO-2031's terms: the only order loaded.
+      terms: "CNF",
       portOfLoading: "",
       portOfArrival: "",
       loadedOn: "2026-09-27",
@@ -168,6 +174,27 @@ describe("load container form", () => {
       eta: "2026-10-24",
       lines: [{ orderLineId: "l2", bundles: 40, quantity: 4000 }],
     });
+  });
+
+  it("takes the container's terms from the orders loaded: one value, a mix, or orders without terms (backend docs/order-container-terms.md)", () => {
+    const line = (po: string, terms: "FOB" | "CNF" | null | undefined, quantity: string) => ({ po, terms, quantity });
+    expect(loadTerms([line("PO-2", "CNF", "10"), line("PO-1", "CNF", "5"), line("PO-3", "FOB", "")])).toMatchObject({ terms: "CNF", mixed: false, missing: [], orders: ["PO-1", "PO-2"] });
+    expect(loadTerms([line("PO-1", "FOB", "")])).toMatchObject({ terms: null, mixed: false, orders: [] });
+    const mixed = loadTerms([line("PO-2", "CNF", "1"), line("PO-1", "FOB", "1"), line("PO-1", "FOB", "2")]);
+    expect(mixed).toMatchObject({ terms: null, mixed: true, fob: ["PO-1"], cnf: ["PO-2"] });
+    expect(loadTerms([line("PO-1", null, "1"), line("PO-2", undefined, "1"), line("PO-3", "FOB", "1")])).toMatchObject({ terms: "FOB", missing: ["PO-1", "PO-2"] });
+
+    const both = filled();
+    both.lines[0].quantity = "10";
+    expect(loadContainerSchema.safeParse(both).error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
+      ["lines", "PO-2035 is FOB and PO-2031 is CNF: one container holds orders with the same container terms."],
+    ]);
+    const unset = filled();
+    unset.lines[1].terms = null;
+    expect(loadContainerSchema.safeParse(unset).error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
+      ["lines", "Set the container terms on PO-2031 (Edit order) before loading it."],
+    ]);
+    expect(toContainerBody(unset)).not.toHaveProperty("terms");
   });
 
   it("sums the glance and the per-line loads from the entered quantities", () => {

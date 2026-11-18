@@ -146,6 +146,8 @@ test("New order and payments take the supplier's currency and rate; the API refu
     await field(page, "Mode").fill("Wire");
     await expect(kv(page, "Deposits in INR")).toHaveText("₹4,400");
     await shot(page, testInfo, "new-order-supplier-currency.png");
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(page).toHaveURL(/\/orders\/PO-\d+$/);
     po = new URL(page.url()).pathname.split("/").pop()!;

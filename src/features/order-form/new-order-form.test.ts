@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { orderHref } from "@/components/shared/po-link";
 
-import { DEPOSIT_REQUIRED_MESSAGE, emptyLine, newOrderSchema, toCreateOrderBody } from "./new-order-form";
+import { DEPOSIT_REQUIRED_MESSAGE, emptyLine, newOrderSchema, TERMS_MESSAGE, toCreateOrderBody } from "./new-order-form";
 
 const valid = {
   po: "PO-2050",
@@ -13,6 +13,7 @@ const valid = {
   lines: [{ itemId: "i-1", rateCny: "12.5", quantity: "200" }, emptyLine()],
   deposits: [],
   depositRequiredCny: "",
+  terms: "FOB",
 };
 const poError = (po: string) => newOrderSchema.safeParse({ ...valid, po }).error?.issues.find((issue) => issue.path[0] === "po")?.message;
 
@@ -56,5 +57,19 @@ describe("PO number", () => {
     expect(orderHref("PO-2050")).toBe("/orders/PO-2050");
     expect(orderHref("MR/2026/001")).toBe("/orders/MR%2F2026%2F001");
     expect(orderHref("A B&C")).toBe("/orders/A%20B%26C");
+  });
+});
+
+describe("Container terms (0015)", () => {
+  const error = (terms: string) => newOrderSchema.safeParse({ ...valid, terms }).error?.issues.find((issue) => issue.path[0] === "terms")?.message;
+
+  it("must be chosen: FOB or CNF, nothing else", () => {
+    expect(error("FOB")).toBeUndefined();
+    expect(error("CNF")).toBeUndefined();
+    for (const terms of ["", "fob", "EXW"]) expect(error(terms), terms).toBe(TERMS_MESSAGE);
+  });
+
+  it("is sent with the order", () => {
+    expect(toCreateOrderBody({ ...valid, terms: "CNF" }, { suppliers: [], agents: [] }).terms).toBe("CNF");
   });
 });

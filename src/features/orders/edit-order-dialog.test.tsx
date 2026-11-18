@@ -218,7 +218,8 @@ describe("Edit order at stages 2-5", () => {
     );
     expect(date(/^Order date/)).toHaveAttribute("readonly");
     expect(screen.getByText("Silk scarves")).toBeVisible();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    // Not loaded yet at stage 2: the container terms are the one choice left (no item selects).
+    expect(screen.getAllByRole("combobox")).toEqual([screen.getByRole("combobox", { name: "Container terms" })]);
     expect(screen.getAllByRole("textbox")).toEqual([box("PO number"), box("Deposit required (¥)")]);
     expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Remove line/ })).toBeNull();
@@ -292,5 +293,49 @@ describe("PO number (ORD-5 po)", () => {
     expect(toast.error).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("Container terms (backend docs/order-container-terms.md)", () => {
+  const terms = () => screen.getByRole("combobox", { name: "Container terms" });
+
+  it("shows the saved terms, sends new ones, and leaves unchanged ones out", async () => {
+    patch.mockResolvedValue({ order: { id: "o-1", po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", terms: "CNF" } });
+    const { user, save } = open({ ...ORDER, terms: "FOB" });
+    expect(terms()).toHaveValue("FOB");
+    expect(screen.queryByRole("option", { name: "Not set" })).toBeNull();
+    await user.selectOptions(terms(), "CNF");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { terms: "CNF" }));
+  });
+
+  it("lets an older order without terms set them, and sends nothing while left as Not set", async () => {
+    const { user, setDate, save } = open({ ...ORDER, stage: 2, terms: null });
+    expect(terms()).toHaveValue("");
+    setDate(/^Delivery date/, "2026-11-20");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-11-20" }));
+  });
+
+  it("is fixed (read-only, never sent) once a container holds the order", async () => {
+    patch.mockResolvedValue({});
+    const { user, box, setDate, save } = open({ ...ORDER, stage: 3, terms: "FOB" });
+    expect(screen.queryByRole("combobox", { name: "Container terms" })).toBeNull();
+    expect(box("Container terms")).toHaveValue("FOB");
+    expect(box("Container terms")).toHaveAttribute("readonly");
+    expect(screen.getByText("A container already holds this order, so its container terms are fixed.")).toBeVisible();
+    setDate(/^Delivery date/, "2026-12-01");
+    await user.click(save);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { deliveryDate: "2026-12-01" }));
+  });
+
+  it("shows the API's terms refusal under the field (a container took the order meanwhile)", async () => {
+    const locked = "This order is already loaded in a container, so its container terms can't change.";
+    patch.mockRejectedValue(new ApiError(422, "validation_failed", "Some fields need attention.", { terms: locked }));
+    const { user, save } = open({ ...ORDER, stage: 2, terms: "FOB" });
+    await user.selectOptions(terms(), "CNF");
+    await user.click(save);
+    expect(await screen.findByText(locked)).toBeVisible();
+    expect(terms()).toHaveAttribute("aria-invalid", "true");
   });
 });

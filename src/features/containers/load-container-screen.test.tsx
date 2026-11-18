@@ -21,9 +21,9 @@ const data = {
     { id: "a2", name: "Dragon Cargo" },
   ],
   lines: [
-    { orderLineId: "l1", orderId: "o1", po: "PO-2035", item: "Men's jackets", unit: "pcs" as const, received: 1160, loaded: 0 },
-    { orderLineId: "l2", orderId: "o2", po: "PO-2031", item: "Kids t-shirts", unit: "pcs" as const, received: 6000, loaded: 2000 },
-  ],
+    { orderLineId: "l1", orderId: "o1", po: "PO-2035", terms: "FOB" as const, item: "Men's jackets", unit: "pcs" as const, received: 1160, loaded: 0 },
+    { orderLineId: "l2", orderId: "o2", po: "PO-2031", terms: "CNF" as const, item: "Kids t-shirts", unit: "pcs" as const, received: 6000, loaded: 2000 },
+  ] as { orderLineId: string; orderId: string; po: string; terms: "FOB" | "CNF" | null; item: string; unit: "pcs"; received: number; loaded: number }[],
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -59,7 +59,8 @@ describe("LoadContainerScreen", () => {
     expect(post).toHaveBeenCalledWith("/containers", {
       number: "FCIU 5527310",
       shippingAgentId: "a1",
-      terms: "FOB",
+      // PO-2031's container terms (the order loaded), not chosen on this form.
+      terms: "CNF",
       portOfLoading: "Nansha, Guangzhou",
       portOfArrival: "",
       loadedOn: "2026-09-27",
@@ -80,5 +81,51 @@ describe("LoadContainerScreen", () => {
     expect(await screen.findByText(taken)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Container number" })).toHaveFocus();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  describe("container terms from the orders (backend docs/order-container-terms.md)", () => {
+    const terms = () => screen.getByRole("textbox", { name: "Container terms" });
+
+    it("offers no terms to choose: shows each line's order terms and fills the container's from the orders loaded", async () => {
+      const user = await fill();
+      expect(screen.queryByRole("combobox", { name: "Container terms" })).toBeNull();
+      expect(terms()).toHaveAttribute("readonly");
+      expect(terms()).toHaveValue("");
+      expect(screen.getByText("Taken from the orders you load.")).toBeVisible();
+      expect(screen.getByRole("row", { name: /PO-2035FOB/ })).toBeVisible();
+      await user.type(screen.getByRole("textbox", { name: "Quantity, PO-2031 Kids t-shirts" }), "100");
+      expect(terms()).toHaveValue("CNF");
+      expect(screen.getByText("From PO-2031.")).toBeVisible();
+    });
+
+    it("refuses orders with different terms in one container before the API", async () => {
+      const user = await fill();
+      await user.type(screen.getByRole("textbox", { name: "Quantity, PO-2035 Men's jackets" }), "100");
+      await user.type(screen.getByRole("textbox", { name: "Quantity, PO-2031 Kids t-shirts" }), "100");
+      expect(terms()).toHaveValue("Different terms");
+      await user.click(screen.getByRole("button", { name: "Save container" }));
+      expect(await screen.findByText("PO-2035 is FOB and PO-2031 is CNF: one container holds orders with the same container terms.")).toBeVisible();
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("asks for an order's terms on Edit order when it has none, linking to it", async () => {
+      const user = userEvent.setup();
+      render(<LoadContainerScreen {...data} lines={[{ ...data.lines[0]!, terms: null, po: "PO-2040" }]} />);
+      expect(screen.getByRole("row", { name: /PO-2040Terms not set/ })).toBeVisible();
+      await user.type(screen.getByRole("textbox", { name: "Quantity, PO-2040 Men's jackets" }), "10");
+      expect(screen.getByRole("link", { name: "Edit PO-2040" })).toHaveAttribute("href", "/orders/PO-2040?edit=1");
+      await user.click(screen.getByRole("button", { name: "Save container" }));
+      expect(await screen.findByText("Set the container terms on PO-2040 (Edit order) before loading it.")).toBeVisible();
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("shows the API's terms refusal under the lines", async () => {
+      const differ = "These orders are FOB, so the container is FOB.";
+      post.mockRejectedValue(new ApiError(422, "validation_failed", "Some fields need attention.", { terms: differ }));
+      const user = await fill();
+      await user.type(screen.getByRole("textbox", { name: "Quantity, PO-2035 Men's jackets" }), "100");
+      await user.click(screen.getByRole("button", { name: "Save container" }));
+      expect(await screen.findByText(differ)).toBeVisible();
+    });
   });
 });

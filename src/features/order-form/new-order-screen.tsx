@@ -21,7 +21,7 @@ import { currencySymbol, currencyLabel, formatINR, formatMoney, formatNumber, ra
 import { cn } from "@/lib/utils";
 
 import type { NewOrderData } from "./data/queries";
-import { defaultRate, emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
+import { CONTAINER_TERMS, defaultRate, emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, TERMS_HELP, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
 import { advancePreview, depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
 
 // Measured from 15_4_New_order.jpeg: 12.5 px bold labels 5 px above 42 px fields with 14 px text, 12 px table
@@ -50,6 +50,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     lines: [emptyLine()],
     deposits: [],
     depositRequiredCny: "",
+    terms: "",
   };
   const { register, control, handleSubmit, setError, setValue, reset, formState } = useForm<NewOrderValues>({
     resolver: zodResolver(newOrderSchema),
@@ -217,6 +218,22 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                     City
                   </FieldLabel>
                   <Input id="city" readOnly value={supplier?.city ?? ""} size="sm" />
+                </Field>
+                <Field className={fieldClass} data-invalid={!!errors.terms}>
+                  <FieldLabel htmlFor="container-terms" className={labelClass}>
+                    Container terms <RequiredMark />
+                  </FieldLabel>
+                  {/* Chosen here, not on the Containers tab: a container loading this order takes these terms. */}
+                  <NativeSelect size="sm" id="container-terms" required aria-invalid={!!errors.terms} aria-describedby="container-terms-note" {...register("terms")}>
+                    <option value="">Select terms</option>
+                    {CONTAINER_TERMS.map((terms) => (
+                      <option key={terms}>{terms}</option>
+                    ))}
+                  </NativeSelect>
+                  <FieldDescription id="container-terms-note" className="text-xs">
+                    {TERMS_HELP}
+                  </FieldDescription>
+                  <FieldError errors={[errors.terms]} />
                 </Field>
               </FieldGroup>
             </SectionCard>

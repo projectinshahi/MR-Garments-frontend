@@ -21,7 +21,7 @@ const poSearch = (page: Page) => page.getByRole("searchbox", { name: "Search PO 
 const containerSearch = (page: Page) => page.getByRole("searchbox", { name: "Search container or PO" });
 const password = () => process.env.E2E_PASSWORD ?? "";
 
-/** A PO with 2 lines (100 jackets @30, 200 t-shirts @5 = ¥4,000), a ¥1,000 deposit at 12, due in 5 days. */
+/** A FOB PO with 2 lines (100 jackets @30, 200 t-shirts @5 = ¥4,000), a ¥1,000 deposit at 12, due in 5 days. */
 async function makeOrder(api: Api, extra: { deliveryDate?: string } = {}) {
   return api.createOrder({
     supplier: "Shenzhen Apparel",
@@ -31,6 +31,8 @@ async function makeOrder(api: Api, extra: { deliveryDate?: string } = {}) {
     ],
     deliveryDate: extra.deliveryDate ?? today(5),
     deposits: [{ amountCny: 1000, rateInr: 12 }],
+    // Its container terms (backend docs/order-container-terms.md): the container form takes them.
+    terms: "FOB",
   });
 }
 
@@ -210,6 +212,8 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.getByRole("textbox", { name: "Amount (¥), deposit 1" }).fill("1000");
     await field(page, "Rate to INR").fill("12");
     await field(page, "Mode").fill("Bank transfer");
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(toast(page, `Order ${po} placed`)).toBeVisible();
     await expect(page).toHaveURL(`/orders/${po}`);
@@ -718,6 +722,8 @@ test("new order: 500, aborted and 403 requests show a message, keep the values a
   await page.getByRole("textbox", { name: "Quantity, line 1" }).fill("77");
   for (const mode of [500, "abort", 403] as const) {
     await failWith(page, "**/api/v1/orders", "POST", mode);
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(toast(page, mode === 403 ? "You don't have access to do that." : "Something went wrong.").first()).toBeVisible();
     await page.unroute("**/api/v1/orders");
@@ -726,6 +732,8 @@ test("new order: 500, aborted and 403 requests show a message, keep the values a
     await expect(page.getByRole("textbox", { name: "Rate (¥), line 1" })).toHaveValue("12");
     expect((await api.options()).nextPo, `${mode} created an order`).toBe(before);
   }
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(page).toHaveURL(new RegExp(`/orders/${before}$`));
 });
@@ -814,6 +822,8 @@ test("payment, receipt and container forms: 500, aborted and 401 keep the values
   await other.getByRole("textbox", { name: "Quantity, line 1" }).fill("5");
   await other.route("**/api/v1/orders", (route) => (route.request().method() === "POST" ? route.fulfill({ status: 401, json: { error: { code: "unauthorized", message: "x" } } }) : route.fallback()));
   const redirect = other.waitForRequest((r) => r.url().includes("/login?reason=session-ended"));
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await other.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await other.getByRole("button", { name: "Place order" }).click();
   await redirect;
   await other.close();

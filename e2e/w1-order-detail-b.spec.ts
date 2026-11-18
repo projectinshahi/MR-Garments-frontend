@@ -127,7 +127,8 @@ test("Containers: empty, then each container with its route, goods and a link to
 
   // Sailed: the route shows it.
   await api.updateContainer(first.id, { status: "sea", sailedOn: today() });
-  const second = await api.load([{ po: order.po, item: "Denim jeans", quantity: 40, bundles: 2 }], { agent: "Dragon Cargo", terms: "CNF" });
+  // The rest of the order, in a second container: an order keeps one container terms value (backend docs/order-container-terms.md).
+  const second = await api.load([{ po: order.po, item: "Denim jeans", quantity: 40, bundles: 2 }], { agent: "Dragon Cargo" });
   await page.reload();
   await expect(page.getByText("Denim jeans · Foshan Fabrics · 2 containers")).toBeVisible();
   await expect(page.getByText(`Sailed ${shortDate(today())}`)).toBeVisible();

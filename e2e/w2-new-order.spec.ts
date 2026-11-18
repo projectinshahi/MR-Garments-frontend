@@ -74,29 +74,39 @@ test("each validation message shows, and nothing is placed", async ({ page, api 
   const po = await nextPo(api);
   await page.goto("/orders/new");
 
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   for (const message of ["Choose a supplier.", "Choose the delivery date.", "Add at least one item."]) {
     await expect(page.getByText(message)).toBeVisible();
   }
 
   await field(page, "Order date").fill("");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(page.getByText("Choose the order date.")).toBeVisible();
 
   await field(page, "Order date").fill(today());
   await field(page, "Delivery date").fill(today(-1));
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(page.getByText("The delivery date can't be before the order date.")).toBeVisible();
 
   // A line that is only partly filled.
   await combo(page, "Item, line 1").selectOption({ label: "Polo shirts" });
   await box(page, "Quantity, line 1").fill("1.5");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(page.getByText("Line 1: Enter the rate.")).toBeVisible();
   await expect(page.getByText("Line 1: Enter a whole quantity.")).toBeVisible();
   await box(page, "Rate (¥), line 1").fill("5");
   await box(page, "Quantity, line 1").fill("10");
   await combo(page, "Item, line 1").selectOption({ label: "Select item" });
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(page.getByText("Line 1: Choose an item.")).toBeVisible();
 
@@ -104,6 +114,8 @@ test("each validation message shows, and nothing is placed", async ({ page, api 
   await page.getByRole("button", { name: "+ Add deposit" }).click();
   await box(page, "Amount (¥), deposit 1").fill("100");
   await field(page, "Paid on").fill("");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   for (const message of ["Deposit 1: Choose the date paid.", "Deposit 1: Enter the rate.", "Deposit 1: Enter the mode."]) {
     await expect(page.getByText(message)).toBeVisible();
@@ -117,6 +129,8 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
   await page.goto("/orders/new");
   // ORD-3 caps quantities at the integer column's size; the form only checks for a whole number above 0.
   await fillValid(page, "3000000000");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(page.getByText("Enter a whole quantity of at least 1.")).toBeVisible();
   await expect(box(page, "Quantity, line 1")).toHaveValue("3000000000");
@@ -128,6 +142,8 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
       ? route.fulfill({ status: 500, json: { error: { code: "internal", message: "Something went wrong." } } })
       : route.fallback(),
   );
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await expect(toast(page, "Something went wrong.")).toContainText("Please try again.");
   await expect(combo(page, "Supplier")).toHaveValue(/.+/);
@@ -138,6 +154,8 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
   // The request never reaches the API (network failure).
   await page.route("**/api/v1/orders", (route) => (route.request().method() === "POST" ? route.abort() : route.fallback()));
   const failed = page.waitForEvent("requestfailed", (request) => request.url().endsWith("/api/v1/orders"));
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
   await failed;
   await expect(toast(page, "Something went wrong.").first()).toBeVisible();
@@ -156,6 +174,8 @@ test("placing an order goes to its detail page, saves it, and the next visit sta
   await box(page, "Amount (¥), deposit 1").fill("1000");
   await field(page, "Rate to INR").fill("12.2");
   await field(page, "Mode").fill("Wire");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
 
   await expect(toast(page, `Order ${po} placed`)).toBeVisible();
@@ -184,6 +204,8 @@ test("double-clicking Place order places one order", async ({ page, api }) => {
   const po = await nextPo(api);
   await page.goto("/orders/new");
   await fillValid(page);
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).dblclick();
   await expect(page).toHaveURL(`/orders/${po}`);
   await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
@@ -197,6 +219,8 @@ test.describe("Procurement (orders Enter)", () => {
     const po = await nextPo(api);
     await page.goto("/orders/new");
     await fillValid(page);
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await place(page).click();
     await expect(page).toHaveURL(`/orders/${po}`);
     expect((await api.order(po)).supplier.name).toBe("Foshan Fabrics");

@@ -106,7 +106,8 @@ describe("Orders list actions", () => {
     renderList(ROLES.Accounts);
     expect(screen.queryByRole("link", { name: /^Edit/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Delete/ })).toBeNull();
-    expect(screen.getAllByRole("columnheader")).toHaveLength(8);
+    // PO, Item, Supplier, Quantity, Terms, Delivery date, Stage, Status, Paid so far: no Actions.
+    expect(screen.getAllByRole("columnheader")).toHaveLength(9);
   });
 
   it("Delete asks without opening the row, and Cancel sends nothing", async () => {

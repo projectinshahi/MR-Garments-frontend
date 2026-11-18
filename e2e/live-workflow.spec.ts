@@ -72,6 +72,8 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await field(priya, "Rate to INR").fill("12");
     await field(priya, "Mode").fill("Bank transfer");
     await expect(kv(priya, "Balance to pay")).toHaveText("¥ 3,000");
+    // Container terms are chosen on the order (backend docs/order-container-terms.md).
+    await priya.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await priya.getByRole("button", { name: "Place order" }).dblclick();
     await expect(toast(priya, `Order ${nextPo} placed`)).toBeVisible();
     await expect(priya).toHaveURL(`/orders/${nextPo}`);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { CreateOrderBody, OrderOptions } from "@/lib/api/types";
+import type { ContainerTerms, CreateOrderBody, OrderOptions } from "@/lib/api/types";
 import type { Currency } from "@/types/domain";
 
 import { parseNumber } from "./order-totals";
@@ -41,6 +41,12 @@ const depositSchema = z
     if (!deposit.mode.trim()) issue(ctx, "mode", "Enter the mode.");
   });
 
+/** Container terms (backend docs/order-container-terms.md): chosen on the order; containers loading it take them. */
+export const CONTAINER_TERMS: ContainerTerms[] = ["FOB", "CNF"];
+export const TERMS_MESSAGE = "Choose the container terms: FOB or CNF.";
+export const TERMS_HELP = "FOB: we pay the freight from the China port. CNF: the supplier pays it up to India. Containers loading this order take these terms.";
+const isTerms = (value: string): value is ContainerTerms => (CONTAINER_TERMS as string[]).includes(value);
+
 export const newOrderSchema = z
   .object({
     // Offered by ORD-2 (nextPo); the user may replace it with any format (VM-11340, MR/2026/001), kept as typed apart
@@ -57,6 +63,9 @@ export const newOrderSchema = z
     deposits: z.array(depositSchema).refine((deposits) => deposits.filter((d) => !isBlankDeposit(d)).length <= 10, "Add at most 10 deposits."),
     /** The deposit the supplier asked for, in the order's currency; blank when none was agreed. */
     depositRequiredCny: z.string().refine((text) => !text.trim() || isDepositRequired(text), DEPOSIT_REQUIRED_MESSAGE),
+    /** FOB or CNF; starts unchosen, so nobody saves the wrong terms by default. */
+    // A boolean check, not a type guard: the field starts as "" (unchosen).
+    terms: z.string().refine((value): boolean => isTerms(value), TERMS_MESSAGE),
   })
   .refine((order) => !order.orderDate || !order.deliveryDate || order.deliveryDate >= order.orderDate, {
     path: ["deliveryDate"],
@@ -96,6 +105,7 @@ export function toCreateOrderBody(values: NewOrderValues, options: Pick<OrderOpt
     orderDate: values.orderDate,
     deliveryDate: values.deliveryDate,
     ...(values.depositRequiredCny.trim() ? { depositRequiredCny: parseNumber(values.depositRequiredCny) } : {}),
+    ...(isTerms(values.terms) ? { terms: values.terms } : {}),
     lines: values.lines
       .filter((line) => !isBlankLine(line))
       .map((line) => ({ itemId: line.itemId, quantity: parseNumber(line.quantity), rateCny: parseNumber(line.rateCny) })),

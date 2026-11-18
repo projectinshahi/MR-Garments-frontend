@@ -9,7 +9,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/components/shared/filters";
 import { orderHref, PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
-import { StatusPill } from "@/components/shared/status-pill";
+import { StatusPill, TermsBadge } from "@/components/shared/status-pill";
 import { formatINR, formatShortDate } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { STAGES } from "@/types/domain";
@@ -57,9 +57,24 @@ const columns: ColumnDef<OrderRow>[] = [
     cell: ({ row }) => <OrderQuantityCell order={row.original} />,
   },
   {
+    // The order's container terms (backend docs/order-container-terms.md); a dash for an older order not set yet.
+    id: "terms",
+    header: "Terms",
+    meta: { className: "w-[60px]" },
+    cell: ({ row }) =>
+      row.original.terms ? (
+        // Compact, so the column adds little width and the row keeps Paid so far and the actions in view at 1440 px.
+        <TermsBadge terms={row.original.terms} className="h-[22px] px-2 text-[12.5px]" />
+      ) : (
+        <span className="text-muted-foreground" title="Container terms not set yet">
+          –<span className="sr-only">Container terms not set yet</span>
+        </span>
+      ),
+  },
+  {
     accessorKey: "deliveryDate",
     header: "Delivery date",
-    meta: { className: "w-[112px]" },
+    meta: { className: "w-[100px]" },
     cell: ({ row }) => formatShortDate(row.original.deliveryDate),
   },
   { accessorKey: "stage", header: "Stage", cell: ({ row }) => <StageProgress stage={row.original.stage} /> },

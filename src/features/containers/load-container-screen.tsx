@@ -9,24 +9,25 @@ import { useForm, useWatch } from "react-hook-form";
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
 import { FormFooter, NativeSelect, RequiredMark } from "@/components/shared/form";
+import { orderHref } from "@/components/shared/po-link";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { ProgressBar } from "@/components/shared/progress";
 import { Journey } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiClient } from "@/lib/api/client";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
 import { formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import type { Terms } from "@/types/domain";
 
 import {
   contents,
   LOAD_FIELDS,
   lineLoads,
   loadContainerSchema,
+  loadTerms,
   parseCount,
   toContainerBody,
   toLoadValues,
@@ -37,6 +38,7 @@ import type { LoadContainerData } from "./data/queries";
 // Proposed wording: SUCCESS has no container message yet.
 const CONTAINER_SAVED = "Container saved";
 
+// Container terms are no longer chosen here (backend docs/order-container-terms.md): the field shows the loaded orders'.
 // Measured from 23_8_Container_loading_-_Stage_3_form.jpeg: 12.5 px bold labels 5 px above 42 px fields, 12 px
 // table headers in a 30 px row, 60 px item rows. Cards use titleGap="none" and place their content where the
 // reference has it.
@@ -45,8 +47,6 @@ const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "px-1.5 py-0";
 const lineInputClass = "h-[38px] pr-2.5 text-right text-sm font-bold text-label";
-
-const TERMS: Terms[] = ["FOB", "CNF"];
 
 const shortDate = (value: string) => (value ? formatShortDate(value) : "–");
 
@@ -71,6 +71,8 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
   const departs = sailedOn || loadedOn;
   const seaDays = departs && eta ? differenceInCalendarDays(parseISO(eta), parseISO(departs)) : null;
   const agent = agents.find((a) => a.id === agentId)?.name;
+  // The container's terms are its orders' (chosen on each order; backend docs/order-container-terms.md).
+  const terms = loadTerms(lines);
   const linesError = errors.lines?.root?.message ?? errors.lines?.message;
 
   const onSubmit = handleSubmit(async (form) => {
@@ -78,6 +80,8 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
       await apiClient.post<{ container: { id: string } }>("/containers", toContainerBody(form));
     } catch (error) {
       const fields = handleApiError(error) ?? {};
+      // The terms have no field here: a terms refusal shows under the lines.
+      if (fields.terms && !fields.lines) fields.lines = fields.terms;
       LOAD_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
         setError(key, { type: "server", message: fields[key] }, { shouldFocus: index === 0 }),
       );
@@ -129,16 +133,27 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
                   </NativeSelect>
                   <FieldError errors={[errors.shippingAgentId]} />
                 </Field>
-                <Field className={fieldClass} data-invalid={!!errors.terms}>
+                <Field className={fieldClass}>
                   <FieldLabel htmlFor="container-terms" className={labelClass}>
-                    Container terms <RequiredMark />
+                    Container terms
                   </FieldLabel>
-                  <NativeSelect size="sm" id="container-terms" required aria-invalid={!!errors.terms} {...register("terms")}>
-                    {TERMS.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </NativeSelect>
-                  <FieldError errors={[errors.terms]} />
+                  {/* Not chosen here: the orders' terms (set on New order or Edit order). */}
+                  <Input
+                    size="sm"
+                    id="container-terms"
+                    readOnly
+                    value={terms.mixed ? "Different terms" : (terms.terms ?? "")}
+                    placeholder="From the orders loaded"
+                    aria-invalid={terms.mixed || undefined}
+                    aria-describedby="container-terms-note"
+                  />
+                  <FieldDescription id="container-terms-note" className="text-xs">
+                    {terms.mixed
+                      ? "The orders loaded have different terms."
+                      : terms.terms
+                        ? `From ${terms.orders.join(", ")}.`
+                        : "Taken from the orders you load."}
+                  </FieldDescription>
                 </Field>
                 <Field className={fieldClass} data-invalid={!!errors.loadedOn}>
                   <FieldLabel htmlFor="loaded-on" className={labelClass}>
@@ -198,7 +213,11 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
                     const quantityError = errors.lines?.[i]?.quantity;
                     return (
                       <TableRow key={line.orderLineId} className="h-[60px] border-border-subtle hover:bg-transparent">
-                        <TableCell className={cn(cellClass, "font-bold")}>{line.po}</TableCell>
+                        <TableCell className={cn(cellClass, "font-bold")}>
+                          {line.po}
+                          {/* The order's container terms: the container takes them. */}
+                          <span className="block text-[12px] leading-4 font-normal text-muted-foreground">{line.terms ?? "Terms not set"}</span>
+                        </TableCell>
                         <TableCell className={cellClass}>
                           {line.item}
                           <span className="block text-[12px] leading-4 text-muted-foreground">
@@ -233,8 +252,23 @@ export function LoadContainerScreen({ agents, lines: loadable, today }: LoadCont
                 </TableBody>
               </Table>
               <FieldError className="mt-2" errors={linesError ? [{ message: linesError }] : []} />
+              {terms.missing.length > 0 ? (
+                // Each order without terms opens on its Edit order dialog (?edit=1), where they are set.
+                <p className="mt-1 text-[13px] leading-5 text-label">
+                  Set the terms:{" "}
+                  {terms.missing.map((po, index) => (
+                    <span key={po}>
+                      {index ? ", " : ""}
+                      <Link className="font-bold text-primary hover:underline" href={`${orderHref(po)}?edit=1`}>
+                        Edit {po}
+                      </Link>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
 
               <p className="mt-[11px] rounded-[10px] border bg-table-head px-3.5 py-[10.5px] text-[13px] leading-5 text-label">
+                The container terms come from the orders loaded, so one container holds orders with the same terms.{" "}
                 <strong>FOB</strong>: we pay the freight from the China port. <strong>CNF</strong>: the supplier pays the freight
                 up to India.
               </p>

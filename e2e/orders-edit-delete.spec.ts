@@ -27,6 +27,8 @@ test("Management places an order, edits its delivery date, then deletes it after
   await combo(page, "Item, line 1").selectOption({ label: "Denim jeans" });
   await box(page, "Rate (¥), line 1").fill("12.5");
   await box(page, "Quantity, line 1").fill("200");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(page).toHaveURL(`/orders/${po}`);
 

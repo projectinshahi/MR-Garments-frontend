@@ -26,7 +26,8 @@ export function OrderProductsCell({ order }: { order: ProductsSource }) {
   const products = productsOf(order);
   const more = products.length - SHOWN_PRODUCTS;
   return (
-    <div className="flex flex-col gap-0.5 leading-[18px]">
+    // Long names wrap within the column instead of widening the table.
+    <div className="flex max-w-[190px] flex-col gap-0.5 leading-[18px]">
       {products.slice(0, SHOWN_PRODUCTS).map((product) => (
         <span key={`${product.item} ${product.unit}`}>
           {product.item} <span className="whitespace-nowrap text-muted-foreground">· {formatQty(product.quantity, product.unit)}</span>

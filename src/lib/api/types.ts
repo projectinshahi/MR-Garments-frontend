@@ -216,6 +216,11 @@ export type OrderListItem = {
   currency: Currency;
   /** INR per 1 of `currency` when the order was placed (migration 0012); null for older orders or a supplier without a rate then. */
   exchangeRate: number | null;
+  /**
+   * The order's container terms (backend docs/order-container-terms.md, 0015): containers loading it take them. Null
+   * for an older order not set yet; absent from an older backend.
+   */
+  terms?: ContainerTerms | null;
   item: string;
   quantity: number;
   unit: Unit;
@@ -301,6 +306,8 @@ export type CreateOrderBody = {
   lines: { itemId: string; quantity: number; rateCny: number }[];
   /** The deposit the supplier asked for, 0.01 to 999,999,999,999 with at most 2 decimals; left out, none. */
   depositRequiredCny?: number;
+  /** The container terms (0015): FOB or CNF. */
+  terms?: ContainerTerms;
   /** `rateInr` is left out for an INR order (the server stores 1). `reference` (transaction number, up to 100) and `notes` (up to 1,000) are optional. */
   deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
 };
@@ -318,13 +325,15 @@ export type CreateOrderResponse = { order: { id: string; po: string }; advance?:
 export type UpdateOrderBody = {
   /** A new PO number (ORD-5): the same order, renumbered; 422 `po` when another order uses it. */
   po?: string;
+  /** New container terms (0015): refused (422 `terms`) once a container holds the order, unless it had none. */
+  terms?: ContainerTerms;
   orderDate?: string;
   deliveryDate?: string;
   lines?: { id?: string; itemId: string; quantity: number; rateCny: number }[];
   /** The deposit the supplier asked for; null clears it. Allowed until the warehouse (stage 6), like the delivery date. */
   depositRequiredCny?: number | null;
 };
-export type UpdateOrderResponse = { order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string } };
+export type UpdateOrderResponse = { order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string; terms?: ContainerTerms | null } };
 // ORD-6 DELETE /api/v1/orders/:po (admin Full) and USR-5 DELETE /api/v1/users/:id (admin Full) answer 204 with no body;
 // a record that is used answers 409 `in_use` with a message written for the user.
 
@@ -471,14 +480,16 @@ export type ContainerListItem = {
 /** CON-2 GET /api/v1/containers/options */
 export type ContainerOptions = {
   agents: Named[];
-  lines: { orderLineId: string; orderId: string; po: string; item: string; unit: Unit; received: number; loaded: number }[];
+  /** `terms`: the line's order's container terms (0015), which the container loading it takes; null until set, absent from an older backend. */
+  lines: { orderLineId: string; orderId: string; po: string; terms?: ContainerTerms | null; item: string; unit: Unit; received: number; loaded: number }[];
 };
 
 /** CON-3 POST /api/v1/containers body; answers 201 `{ container: { id } }`. */
 export type CreateContainerBody = {
   number: string;
   shippingAgentId: string;
-  terms: ContainerTerms;
+  /** The loaded orders' terms (0015): the API takes them from the orders anyway; sent so an older backend gets them too. */
+  terms?: ContainerTerms;
   portOfLoading: string;
   portOfArrival: string;
   loadedOn: string;

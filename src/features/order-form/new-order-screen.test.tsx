@@ -44,6 +44,7 @@ function open() {
 
 async function fillOrder({ user, field }: ReturnType<typeof open>) {
   await user.selectOptions(field("Supplier"), "s-foshan");
+  await user.selectOptions(field("Container terms"), "FOB");
   await user.type(field("Delivery date"), "2026-11-25");
   await user.selectOptions(field("Item, line 1"), "i-denim");
   await user.type(field("Rate (¥), line 1"), "18.50");
@@ -103,6 +104,7 @@ describe("NewOrderScreen", () => {
       orderDate: TODAY,
       deliveryDate: "2026-11-25",
       depositRequiredCny: 25000,
+      terms: "FOB",
       lines: [
         { itemId: "i-denim", quantity: 2400, rateCny: 18.5 },
         { itemId: "i-buttons", quantity: 10000, rateCny: 0.35 },
@@ -224,6 +226,7 @@ describe("NewOrderScreen", () => {
     expect(post.mock.calls[0]![1]).not.toHaveProperty("depositRequiredCny");
 
     await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
+    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(screen.getByLabelText("Deposit required ($)")).toBeVisible();
   });
 
@@ -246,6 +249,7 @@ describe("NewOrderScreen", () => {
     expect(ui.field("Currency")).toHaveValue("CNY (¥)");
     expect(ui.field("Currency")).toHaveAttribute("readonly");
     await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
+    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(ui.field("Currency")).toHaveValue("USD ($)");
     expect(screen.getByText("Supplier rate now: 1 USD = ₹88.00")).toBeVisible();
     await ui.user.type(ui.field("Delivery date"), "2026-11-25");
@@ -276,6 +280,7 @@ describe("NewOrderScreen", () => {
     post.mockResolvedValue({ order: { id: "o-3", po: "PO-2050" } });
     const ui = open();
     await ui.user.selectOptions(ui.field("Supplier"), "s-kochi");
+    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(ui.field("Currency")).toHaveValue("INR (₹)");
     expect(screen.getByText("INR is the base currency: no exchange rate.")).toBeVisible();
     await ui.user.type(ui.field("Delivery date"), "2026-11-25");
@@ -296,6 +301,7 @@ describe("NewOrderScreen", () => {
   it("fills each deposit's rate from the supplier's rate now, and replaces it when the supplier changes", async () => {
     const ui = open();
     await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
+    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(screen.getByText("No exchange rate set for this supplier yet: set it under Suppliers.")).toBeVisible();
     await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
     expect(ui.field("Rate to INR")).toHaveValue("");
@@ -310,5 +316,23 @@ describe("NewOrderScreen", () => {
   it("has no Save draft stub", () => {
     open();
     expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
+  });
+
+  it("asks for the container terms (no default) and sends the ones chosen (backend docs/order-container-terms.md)", async () => {
+    post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" } });
+    const ui = open();
+    expect(ui.field("Container terms")).toHaveValue("");
+    expect(ui.field("Container terms")).toBeRequired();
+    await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
+    await ui.user.type(ui.field("Delivery date"), "2026-11-25");
+    await ui.user.selectOptions(ui.field("Item, line 1"), "i-denim");
+    await ui.user.type(ui.field("Rate (¥), line 1"), "18.50");
+    await ui.user.type(ui.field("Quantity, line 1"), "10");
+    await ui.user.click(ui.place);
+    expect(await screen.findByText("Choose the container terms: FOB or CNF.")).toBeVisible();
+    expect(post).not.toHaveBeenCalled();
+    await ui.user.selectOptions(ui.field("Container terms"), "CNF");
+    await ui.user.click(ui.place);
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/orders", expect.objectContaining({ terms: "CNF" })));
   });
 });

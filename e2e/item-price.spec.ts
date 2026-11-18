@@ -56,6 +56,8 @@ test("an item's price is set in Settings and fills the rate on New order, editab
   await expect(box(page, "Rate (¥), line 1")).toHaveValue("15");
   await box(page, "Rate (¥), line 1").fill("16");
   await expect(box(page, "Amount (¥), line 1")).toHaveValue("160.00");
+  // Container terms are chosen on the order (backend docs/order-container-terms.md).
+  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(toast(page, /Order .* placed/)).toBeVisible();
   await expect(page).toHaveURL(/\/orders\/(?!new$)[^/?]+$/);

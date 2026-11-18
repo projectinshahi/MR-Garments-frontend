@@ -11,10 +11,10 @@ import { dialogFooterButtonClass } from "@/components/shared/confirm-dialog";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DEPOSIT_REQUIRED_MESSAGE, isDepositRequired } from "@/features/order-form/new-order-form";
+import { CONTAINER_TERMS, DEPOSIT_REQUIRED_MESSAGE, isDepositRequired, TERMS_HELP } from "@/features/order-form/new-order-form";
 import { lineAmount, orderTotals, parseNumber } from "@/features/order-form/order-totals";
 import { moneyOrDash } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
@@ -32,7 +32,12 @@ import { cn } from "@/lib/utils";
 /** What the dialog needs from ORD-4. */
 /** What the dialog needs from ORD-4. `supplierPaidCny`: the ORD-5 guard counts supplier payments only (agent payments are sea freight). */
 export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "supplierPaidCny" | "depositRequiredCny" | "lines"> &
-  Partial<Pick<OrderDetail, "advanceCny">>;
+  Partial<Pick<OrderDetail, "advanceCny" | "terms">>;
+/**
+ * Container terms (backend docs/order-container-terms.md) change until a container holds the order: stages 1-2 (CON-3
+ * moves it to 3). An older order without terms may set them once at any stage. The API checks the containers.
+ */
+export const termsEditable = (order: Pick<EditableOrder, "stage" | "terms">) => order.stage <= 2 || !order.terms;
 /** ORD-2's active items. */
 export type ItemOption = OrderOptions["items"][number];
 
@@ -72,6 +77,8 @@ const editSchema = (paid: number, linesEditable: boolean, currency: Currency) =>
     .object({
       /** As New order's PO number (and ORD-3/ORD-5): any format, trimmed, 1-50 characters. */
       po: z.string().trim().min(1, "Enter the PO number.").max(50, "Use 50 characters or fewer."),
+      /** FOB, CNF, or "" while an older order has none (left as it is). */
+      terms: z.string(),
       orderDate: z.string().min(1, "Choose the order date."),
       deliveryDate: z.string().min(1, "Choose the delivery date."),
       /** The deposit the supplier asked for; blank clears it. */
@@ -90,6 +97,7 @@ function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditab
   const body: UpdateOrderBody = {};
   // The schema trims the number; the same one as saved is no change. Allowed at every stage the dialog opens at.
   if (values.po !== order.po) body.po = values.po;
+  if ((values.terms === "FOB" || values.terms === "CNF") && values.terms !== (order.terms ?? "") && termsEditable(order)) body.terms = values.terms;
   if (values.deliveryDate !== order.deliveryDate) body.deliveryDate = values.deliveryDate;
   const depositRequired = values.depositRequiredCny.trim() ? parseNumber(values.depositRequiredCny) : null;
   // An older API leaves the requirement out (undefined): that is "none", so an untouched field sends nothing.
@@ -151,6 +159,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
     resolver: zodResolver(editSchema(order.supplierPaidCny ?? 0, linesEditable, order.currency)),
     defaultValues: {
       po: order.po,
+      terms: order.terms ?? "",
       orderDate: order.orderDate,
       deliveryDate: order.deliveryDate,
       // Kept exactly as saved, in the order's currency; empty when none was agreed (or an older API left it out).
@@ -179,7 +188,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       // 422: under its field, the first focused; a field this form doesn't show is toasted, never dropped. Anything
       // else (409 without fields, 5xx, network) toasts in handleApiError, and the dialog keeps the values.
       Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) => {
-        if (field === "po" || field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
+        if (field === "po" || field === "terms" || field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
           setError(field, { message }, { shouldFocus: index === 0 });
         else notifyError(message);
       });
@@ -241,6 +250,26 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
             {...register("depositRequiredCny")}
           />
           <FieldError errors={[errors.depositRequiredCny]} />
+        </Field>
+        <Field className={fieldClass} data-invalid={!!errors.terms}>
+          <FieldLabel htmlFor={`${id}-terms`} className={labelClass}>
+            Container terms
+          </FieldLabel>
+          {/* Fixed terms show read-only (a disabled select would drop the field from the form's values). */}
+          {termsEditable(order) ? (
+            <NativeSelect size="sm" id={`${id}-terms`} aria-invalid={!!errors.terms} aria-describedby={`${id}-terms-note`} {...register("terms")}>
+              {order.terms ? null : <option value="">Not set</option>}
+              {CONTAINER_TERMS.map((terms) => (
+                <option key={terms}>{terms}</option>
+              ))}
+            </NativeSelect>
+          ) : (
+            <Input id={`${id}-terms`} size="sm" readOnly value={order.terms ?? ""} aria-describedby={`${id}-terms-note`} />
+          )}
+          <FieldDescription id={`${id}-terms-note`} className="text-xs">
+            {termsEditable(order) ? TERMS_HELP : "A container already holds this order, so its container terms are fixed."}
+          </FieldDescription>
+          <FieldError errors={[errors.terms]} />
         </Field>
       </div>
 

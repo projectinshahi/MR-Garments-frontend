@@ -18,9 +18,9 @@ const containersNamed = async (api: Api, number: string) =>
   (await api.get<ContainerListItem[]>("/containers")).filter((c) => c.number.toLowerCase() === number.toLowerCase());
 const EMPTY = "No containers match these filters.";
 
-/** An order with `received` Denim jeans received (of 100), ready to load. */
-async function receivedOrder(api: Api, received = 100) {
-  const order = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }] });
+/** An order (with its container terms, FOB unless given) with `received` Denim jeans received (of 100), ready to load. */
+async function receivedOrder(api: Api, received = 100, terms: "FOB" | "CNF" = "FOB") {
+  const order = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 100, rateCny: 10 }], terms });
   await api.receive(order.po, { "Denim jeans": received }, received < 100 ? {} : { shortRemark: "" });
   return order;
 }
@@ -34,8 +34,11 @@ async function fillContainer(page: Page, number: string) {
 test("the list shows each container, filters by search, agent, terms and status, and opens it by row, number or PO", async ({ page, api }) => {
   const order = await receivedOrder(api);
   const sino = await api.load([{ po: order.po, item: "Denim jeans", quantity: 60, bundles: 3 }], { loadedOn: today(-1), eta: today(19) });
-  const dragon = await api.load([{ po: order.po, item: "Denim jeans", quantity: 40, bundles: 2 }], { agent: "Dragon Cargo", terms: "CNF" });
+  // An order keeps its terms in every container (backend docs/order-container-terms.md): a CNF container needs a CNF order.
+  const dragon = await api.load([{ po: order.po, item: "Denim jeans", quantity: 40, bundles: 2 }], { agent: "Dragon Cargo" });
   await api.updateContainer(dragon.id, { status: "sea", sailedOn: today() });
+  const cnfOrder = await receivedOrder(api, 100, "CNF");
+  const cnf = await api.load([{ po: cnfOrder.po, item: "Denim jeans", quantity: 100, bundles: 5 }], { agent: "Dragon Cargo", terms: "CNF" });
 
   await page.goto("/containers");
   await expect(page.getByRole("heading", { level: 1, name: "Containers" })).toBeVisible();
@@ -72,17 +75,21 @@ test("the list shows each container, filters by search, agent, terms and status,
   const total = Number((await active.textContent())!.match(/\((\d+)\)/)![1]);
   expect(total).toBe((await api.get<ContainerListItem[]>("/containers")).length);
 
-  // Agent and terms filters.
+  // Agent and terms filters, over every container (the CNF one holds another order).
+  await search(page).fill("");
   await page.getByRole("button", { name: "Shipping agent: All agents" }).click();
   await page.getByRole("menuitemradio", { name: "Dragon Cargo" }).click();
   await expect(rowOf(page, dragon.number)).toBeVisible();
   await expect(rowOf(page, sino.number)).toHaveCount(0);
+  await expect(rowOf(page, cnf.number)).toBeVisible();
   await page.getByRole("button", { name: "Terms: All terms" }).click();
   await page.getByRole("menuitemradio", { name: "FOB" }).click();
-  await expect(page.getByText(EMPTY)).toBeVisible();
+  await expect(rowOf(page, dragon.number)).toBeVisible();
+  await expect(rowOf(page, cnf.number)).toHaveCount(0);
   await page.getByRole("button", { name: "Terms: FOB" }).click();
   await page.getByRole("menuitemradio", { name: "CNF" }).click();
-  await expect(rowOf(page, dragon.number)).toBeVisible();
+  await expect(rowOf(page, cnf.number)).toBeVisible();
+  await expect(rowOf(page, dragon.number)).toHaveCount(0);
   await search(page).fill("no such container zzz");
   await expect(page.getByText(EMPTY)).toBeVisible();
 
@@ -108,7 +115,9 @@ test("Load container: received lines, contents and loads follow what you type", 
   await expect(page).toHaveURL("/containers/new");
   await expect(page.getByRole("heading", { level: 1, name: "Load container" })).toBeVisible();
   await expect(field(page, "Loaded on")).toHaveValue(today());
-  await expect(page.getByRole("combobox", { name: "Container terms" })).toHaveValue("FOB");
+  // The terms come from the orders loaded (backend docs/order-container-terms.md): nothing to choose here.
+  await expect(page.getByRole("combobox", { name: "Container terms" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Container terms" })).toHaveValue("");
 
   const line = page.getByRole("row").filter({ hasText: order.po });
   await expect(line).toContainText("80 pcs received · 0 loaded");
@@ -119,6 +128,8 @@ test("Load container: received lines, contents and loads follow what you type", 
 
   await page.getByRole("textbox", { name: `Bundles, ${order.po} Denim jeans` }).fill("4");
   await page.getByRole("textbox", { name: `Quantity, ${order.po} Denim jeans` }).fill("50");
+  await expect(page.getByRole("textbox", { name: "Container terms" })).toHaveValue("FOB");
+  await expect(page.getByText(`From ${order.po}.`)).toBeVisible();
   const glance = page.getByRole("region", { name: "Contents at a glance" });
   await expect(kv(glance, "Orders in this container")).toHaveText("1");
   await expect(kv(glance, "Item lines")).toHaveText("1");
