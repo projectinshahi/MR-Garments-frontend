@@ -169,8 +169,11 @@ describe("toPaymentsData", () => {
 describe("getPayments", () => {
   const AGENTS = [{ id: "a1", name: "Sino Freight" }];
   const me = (payments: string, ordersView: string) => ({ shell: "management", permissions: { payments, ordersView } });
-  const answer = (options: () => Promise<unknown>) =>
-    apiGet.mockImplementation((path: string) => (path === "/orders/options" ? options() : Promise.resolve({ orders: [], payments: [] })));
+  const SUPPLIERS = [{ id: "s1", name: "Boston Denim", currency: "USD", exchangeRate: 88 }];
+  const answer = (options: () => Promise<unknown>, advanceSuppliers: () => Promise<unknown> = () => Promise.resolve({ suppliers: SUPPLIERS })) =>
+    apiGet.mockImplementation((path: string) =>
+      path === "/orders/options" ? options() : path === "/supplier-advances/suppliers" ? advanceSuppliers() : Promise.resolve({ orders: [], payments: [] }),
+    );
 
   beforeEach(() => {
     apiGet.mockReset();
@@ -188,26 +191,43 @@ describe("getPayments", () => {
 
   it("offers recording, with ORD-2's agents, to payments Enter or better, and links POs for Orders viewers", async () => {
     getMe.mockResolvedValue(me("Enter", "View"));
-    answer(() => Promise.resolve({ agents: AGENTS }));
+    answer(() => Promise.resolve({ agents: AGENTS, suppliers: [{ id: "x", name: "ORD-2 supplier", currency: "CNY", exchangeRate: null }] }));
     const data = await getPayments();
     expect(apiGet).toHaveBeenCalledWith("/orders/options");
     expect(data.agents).toEqual(AGENTS);
+    // ADV-5's active suppliers (a supplier advance with no order), never ORD-2's.
+    expect(apiGet).toHaveBeenCalledWith("/supplier-advances/suppliers");
+    expect(data.suppliers).toEqual(SUPPLIERS);
     expect(data.linkPo).toBe(true);
   });
 
-  it("doesn't offer recording to viewers, nor read ORD-2 for them", async () => {
+  it("doesn't offer recording to viewers, nor read ORD-2 or ADV-5 for them", async () => {
     getMe.mockResolvedValue(me("View", "None"));
-    answer(() => Promise.reject(new Error("ORD-2 must not be read")));
+    answer(
+      () => Promise.reject(new Error("ORD-2 must not be read")),
+      () => Promise.reject(new Error("ADV-5 must not be read")),
+    );
     const data = await getPayments();
     expect(apiGet).not.toHaveBeenCalledWith("/orders/options");
+    expect(apiGet).not.toHaveBeenCalledWith("/supplier-advances/suppliers");
     expect(data.agents).toBeNull();
+    expect(data.suppliers).toEqual([]);
     expect(data.linkPo).toBe(false);
   });
 
-  it("still offers recording, with no agents, when ORD-2 fails", async () => {
-    getMe.mockResolvedValue(me("Full", "None"));
+  it("without order access (ORD-2 403), still loads ADV-5's suppliers for a supplier advance; no agents", async () => {
+    getMe.mockResolvedValue(me("Enter", "None"));
     answer(() => Promise.reject(new ApiError(403, "forbidden", "no")));
-    expect((await getPayments()).agents).toEqual([]);
+    expect(await getPayments()).toMatchObject({ agents: [], suppliers: SUPPLIERS });
+  });
+
+  it("an ADV-5 failure (an older API) just means no supplier advance: the order payment form as before", async () => {
+    getMe.mockResolvedValue(me("Full", "Full"));
+    answer(
+      () => Promise.resolve({ agents: AGENTS }),
+      () => Promise.reject(new ApiError(404, "not_found", "no")),
+    );
+    expect(await getPayments()).toMatchObject({ agents: AGENTS, suppliers: [] });
   });
 
   it("rejects when the API fails (no fixture fallback)", async () => {

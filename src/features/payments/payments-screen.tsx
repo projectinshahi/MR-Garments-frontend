@@ -9,7 +9,7 @@ const payments = (count: number) => plural(count, "payment");
 
 /** Deposits & Payments (16_5_Deposits_&_Payments.jpeg): KPI row, payments by order, and the selected order's payments. */
 export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
-  const { kpis, orders, payments: records, defaultPo, agents, linkPo, canDelete } = data;
+  const { kpis, orders, payments: records, defaultPo, agents, suppliers, linkPo, canDelete } = data;
 
   return (
     <PaymentsView
@@ -17,6 +17,7 @@ export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
       payments={records}
       defaultPo={defaultPo}
       agents={agents}
+      suppliers={suppliers}
       linkPo={linkPo}
       canDelete={canDelete}
       kpis={

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PaymentsResponse } from "@/lib/api/types";
 
-import { toPaymentsData } from "./data/queries";
+import { type PaymentsScreenData, toPaymentsData } from "./data/queries";
 import { PaymentsScreen } from "./payments-screen";
 
 vi.mock("@/lib/api/server", () => ({ apiGet: vi.fn() }));
@@ -24,9 +24,9 @@ const api: PaymentsResponse = {
     { id: "p1", orderId: "o2", po: "PO-3002", currency: "CNY", kind: "Deposit", payee: "Hangzhou Silk", payeeRole: "supplier", amountCny: 5_000, status: "paid", paidOn: "2026-10-01", dueDate: null, rateInr: 12, mode: "Bank transfer", reference: "", notes: "", amountInr: 60_000 },
   ],
 };
-type Access = { agents: { id: string; name: string }[] | null; linkPo: boolean; canDelete: boolean };
-const renderScreen = (response = api, access: Access = { agents: null, linkPo: false, canDelete: false }) =>
-  render(<PaymentsScreen data={{ ...toPaymentsData(response, "2026-11-10"), ...access }} />);
+type Access = { agents: { id: string; name: string }[] | null; suppliers?: PaymentsScreenData["suppliers"]; linkPo: boolean; canDelete: boolean };
+const renderScreen = (response = api, { suppliers = [], ...access }: Access = { agents: null, linkPo: false, canDelete: false }) =>
+  render(<PaymentsScreen data={{ ...toPaymentsData(response, "2026-11-10"), ...access, suppliers }} />);
 
 describe("PaymentsScreen", () => {
   it("renders the API rows, KPIs and the first order with payments, and no reference fixtures", () => {
@@ -79,6 +79,20 @@ describe("PaymentsScreen", () => {
     expect(screen.getByRole("heading", { name: "Record payment for PO-3002" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("link", { name: "PO-3002" })).toHaveAttribute("href", "/orders/PO-3002");
+  });
+
+  it("with ADV-5's suppliers, the header's Record payment asks the payment type first; an order's card doesn't", async () => {
+    renderScreen(api, { agents: [], suppliers: [{ id: "s1", name: "Hangzhou Silk", currency: "CNY", exchangeRate: null }], linkPo: false, canDelete: false });
+    await userEvent.click(screen.getByRole("button", { name: "+ Record payment" }));
+    let dialog = screen.getByRole("dialog");
+    const type = within(dialog).getByRole("combobox", { name: "Payment type" });
+    expect(type).toHaveValue("");
+    await userEvent.selectOptions(type, "advance");
+    expect(within(dialog).getByRole("option", { name: "Hangzhou Silk (CNY)" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "+ Record payment for PO-3002" }));
+    dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByRole("combobox", { name: "Payment type" })).not.toBeInTheDocument();
   });
 
   it("keeps the reference's ¥ headers for one currency, and gives each amount its symbol when currencies differ", () => {

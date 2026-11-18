@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { emptyPayment, MESSAGES, paymentINR, recordPaymentSchema, SUPPLIER_PAYEE, toCreatePaymentBody, type RecordPaymentInput } from "./record-payment-form";
+import {
+  emptyPayment,
+  MESSAGES,
+  paymentINR,
+  recordPaymentSchema,
+  SUPPLIER_PAYEE,
+  toCreatePaymentBody,
+  toSupplierAdvanceBody,
+  type RecordPaymentInput,
+} from "./record-payment-form";
 
 const today = "2026-11-10";
 const schema = recordPaymentSchema(today);
 const filled: RecordPaymentInput = {
   orderId: "o1",
+  supplierId: "",
   kind: "Balance",
   payee: SUPPLIER_PAYEE,
   amountCny: "2,345.67",
@@ -20,11 +30,12 @@ const errorsFor = (overrides: Partial<RecordPaymentInput>) => {
 
 describe("recordPaymentSchema", () => {
   it("accepts a filled form dated today, parsing numbers and trimming the mode", () => {
-    expect(schema.parse(filled)).toEqual({ ...filled, amountCny: 2345.67, rateInr: 11.8765, mode: "Bank transfer" });
+    expect(schema.parse(filled)).toEqual({ ...filled, target: "order", amountCny: 2345.67, rateInr: 11.8765, mode: "Bank transfer" });
   });
 
   it("starts empty except the supplier as payee and today's date, and says what each field needs", () => {
-    expect(emptyPayment("", today)).toMatchObject({ payee: SUPPLIER_PAYEE, paidOn: today });
+    // No payment type chosen (Deposits & Payments asks for it first); an order payment form ignores it.
+    expect(emptyPayment("", today)).toMatchObject({ target: "", payee: SUPPLIER_PAYEE, paidOn: today });
     expect(errorsFor(emptyPayment("", today))).toEqual({
       orderId: MESSAGES.order,
       kind: MESSAGES.kind,
@@ -69,6 +80,47 @@ describe("toCreatePaymentBody", () => {
     const inr = recordPaymentSchema(today, "INR").parse({ ...filled, rateInr: "" });
     expect(toCreatePaymentBody(inr)).not.toHaveProperty("rateInr");
     expect(recordPaymentSchema(today, "USD").safeParse({ ...filled, rateInr: "" }).error?.issues.map((issue) => issue.message)).toEqual([MESSAGES.rateInr]);
+  });
+});
+
+describe("without an order (a deposit on the supplier's advance)", () => {
+  const advance = (currency: "CNY" | "USD" | "INR" = "USD") => recordPaymentSchema(today, currency, "advance");
+  const noOrder = { ...filled, orderId: "", supplierId: "s1", kind: "" };
+  const issues = (result: { error?: { issues: { path: PropertyKey[]; message: string }[] } }) => result.error?.issues.map((issue) => [issue.path[0], issue.message]);
+
+  it("needs the supplier instead of the order and the kind, and is a Deposit", () => {
+    expect(advance().parse(noOrder)).toMatchObject({ target: "advance", orderId: "", supplierId: "s1", kind: "Deposit", amountCny: 2345.67, rateInr: 11.8765 });
+    expect(issues(advance().safeParse({ ...noOrder, supplierId: "" }))).toEqual([["supplierId", MESSAGES.supplier]]);
+    // With an order nothing changes: the order and kind are needed, the supplier is not.
+    expect(errorsFor({ orderId: "", kind: "" })).toEqual({ orderId: MESSAGES.order, kind: MESSAGES.kind });
+  });
+
+  it("keeps the currency's rate rule: a USD or CNY supplier needs a rate, an INR one takes none", () => {
+    expect(issues(advance("USD").safeParse({ ...noOrder, rateInr: "" }))).toEqual([["rateInr", MESSAGES.rateInr]]);
+    expect(issues(advance("CNY").safeParse({ ...noOrder, rateInr: "0" }))).toEqual([["rateInr", MESSAGES.rateInr]]);
+    expect(advance("INR").parse({ ...noOrder, rateInr: "" }).rateInr).toBeUndefined();
+  });
+
+  it("posts the ADV-2 body: amount, date, rate, mode and the reference and notes when typed; no order, kind, payee or supplier", () => {
+    expect(toSupplierAdvanceBody(advance().parse({ ...noOrder, payee: "agent-1", reference: " UTR-9 ", notes: "" }))).toEqual({
+      amount: 2345.67,
+      paidOn: today,
+      rateInr: 11.8765,
+      mode: "Bank transfer",
+      reference: "UTR-9",
+    });
+    expect(toSupplierAdvanceBody(advance("INR").parse({ ...noOrder, rateInr: "", notes: "Advance for winter" }))).toEqual({
+      amount: 2345.67,
+      paidOn: today,
+      mode: "Bank transfer",
+      notes: "Advance for winter",
+    });
+  });
+
+  it("an order payment never sends the supplier or the payment type", () => {
+    const body = toCreatePaymentBody(schema.parse({ ...filled, supplierId: "s1", target: "order" }));
+    expect(body).not.toHaveProperty("supplierId");
+    expect(body).not.toHaveProperty("target");
   });
 });
 

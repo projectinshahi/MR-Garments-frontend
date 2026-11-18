@@ -278,6 +278,59 @@ test.describe("desktop", () => {
     await expect(kpi(page, "Balance to supplier")).toContainText("$0");
     await shot(page, testInfo, "excess-order-payments-1440.png");
   });
+
+  test("Record payment without an order: one advance receipt at the deposit's own rate, and the next order draws on it", async ({ page, api }, testInfo) => {
+    test.setTimeout(120_000);
+    // A USD supplier with no saved rate: the deposit needs its own.
+    const created = await api.post("/suppliers", { name: `No Order Deposit ${tag()}`, currency: "USD" });
+    expect(created.status(), await created.text()).toBe(201);
+    const supplier = ((await created.json()) as { supplier: SupplierRow }).supplier;
+    const paymentsBefore = (await api.get<{ payments: unknown[] }>("/payments")).payments.length;
+
+    await page.goto("/payments");
+    await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Record payment" });
+    // Nothing chosen on open: no order field, no supplier, and nothing saves until the type is chosen.
+    await expect(field(dialog, /^Payment type/)).toHaveValue("");
+    await expect(dialog.getByLabel(/^(Order|Supplier|Amount)/)).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Record payment" }).click();
+    await expect(dialog.getByText("Choose Order payment or Supplier advance.")).toBeVisible();
+    await field(dialog, /^Payment type/).selectOption({ label: "Supplier advance (no order)" });
+    await expect(dialog.getByLabel(/^(Order|Kind)/)).toHaveCount(0);
+    await field(dialog, /^Supplier/).selectOption({ label: `${supplier.name} (USD)` });
+    await expect(field(dialog, /^Rate/)).toHaveValue("");
+    await field(dialog, /^Amount/).fill("1,000");
+    await field(dialog, /^Mode/).fill("Wire");
+    await dialog.getByRole("button", { name: "Record payment" }).click();
+    await expect(dialog.getByText("Enter an INR rate above 0.")).toBeVisible();
+    await field(dialog, /^Rate/).fill("84.5");
+    await field(dialog, /^Reference/).fill("UTR-DEP-1");
+    await expect(dialog.getByRole("status")).toHaveText("₹84,500");
+    await settled(dialog);
+    await shot(page, testInfo, "record-deposit-without-order-1440.png", false);
+    await dialog.getByRole("button", { name: "Record payment" }).click();
+    await expect(toast(page, `Deposit recorded as supplier advance for ${supplier.name}. New orders for this supplier use it automatically`)).toBeVisible();
+
+    // One advance receipt, no payment record.
+    expect((await api.get<{ payments: unknown[] }>("/payments")).payments.length).toBe(paymentsBefore);
+    const account = await api.get<{ entries: { kind: string; amount: number; exchangeRate: number; reference: string }[] }>(`/suppliers/${supplier.id}/advances`);
+    expect(account.entries).toMatchObject([{ kind: "receipt", amount: 1000, exchangeRate: 84.5, reference: "UTR-DEP-1" }]);
+
+    await page.goto(`/deposits/advance/${supplier.id}`);
+    await expect(kpi(page, "Available balance")).toContainText("$1,000");
+    const receipt = ledgerRows(page).filter({ hasText: "Advance received" });
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt).toContainText("UTR-DEP-1");
+    await expect(receipt).toContainText("1 USD = ₹84.50");
+    await expect(receipt).toContainText("₹84,500.00");
+    await shot(page, testInfo, "deposit-without-order-advance-1440.png");
+
+    // A $600 order draws $600 of it automatically; $400 stays available.
+    const { po } = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 60, rateCny: 10 }] });
+    expect(await api.order(po)).toMatchObject({ orderValueCny: 600, advanceCny: 600, balanceCny: 0 });
+    await page.reload();
+    await expect(kpi(page, "Available balance")).toContainText("$400");
+  });
 });
 
 for (const viewport of [

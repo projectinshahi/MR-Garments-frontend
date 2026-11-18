@@ -215,3 +215,7 @@ export type SupplierAdvanceBalance = AdvanceSummary & { supplierId: string; supp
 
 /** ADV-2 body: no order is chosen; `rateInr` left out for an INR supplier. */
 export type CreateAdvanceBody = { amount: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string };
+
+/** ADV-5 GET /api/v1/supplier-advances/suppliers (payments Enter): the active suppliers an advance can be recorded for, by name; `exchangeRate` null while not set. */
+export type AdvanceSupplierOption = { id: string; name: string; currency: Currency; exchangeRate: number | null };
+export type AdvanceSuppliersResponse = { suppliers: AdvanceSupplierOption[] };

@@ -116,6 +116,8 @@ for (const [width, height] of VIEWPORTS) {
       await page.goto("/payments");
       await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Record payment" });
+      // The full order payment form: the payment type is chosen first.
+      await dialog.getByRole("combobox", { name: "Payment type", exact: true }).selectOption("order");
       await checkDialog(page, dialog, "record-payment", ["Cancel", "Record payment"]);
       await dialog.getByRole("button", { name: "Close", exact: true }).click();
       await expect(dialog).toBeHidden();

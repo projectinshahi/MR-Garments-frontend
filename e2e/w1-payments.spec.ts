@@ -78,16 +78,21 @@ test("Record payment: opens, cancels, checks every field, and saves a payment th
 
   // Open and cancel; open and close with Escape.
   await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
-  await expect(dialog(page)).toContainText("Record a payment already made against an order.");
+  await expect(dialog(page)).toContainText("Record a payment already made against an order, or a deposit without one as the supplier's advance.");
   await dialog(page).getByRole("button", { name: "Cancel" }).click();
   await expect(dialog(page)).toHaveCount(0);
   await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(dialog(page)).toHaveCount(0);
 
-  // Every client check.
+  // Every client check: the payment type first (nothing else shows, nothing saves, until it is chosen), then its fields.
   await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
   const form = dialog(page);
+  await expect(select(form, "Payment type")).toHaveValue("");
+  await expect(field(form, "Paid on")).toHaveCount(0);
+  await form.getByRole("button", { name: "Record payment" }).click();
+  await expect(form.getByText("Choose Order payment or Supplier advance.")).toBeVisible();
+  await select(form, "Payment type").selectOption("order");
   await expect(field(form, "Paid on")).toHaveValue(today());
   await form.getByRole("button", { name: "Record payment" }).click();
   for (const message of ["Choose an order from the list.", "Choose Deposit or Balance.", "Enter an amount above 0.", "Enter an INR rate above 0.", "Enter the payment mode."]) {
@@ -224,6 +229,8 @@ test.describe("Accounts (payments Enter)", () => {
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = dialog(page);
+    // Accounts (payments Enter) is asked the payment type too: ADV-5 gives it the suppliers.
+    await select(form, "Payment type").selectOption("order");
     await select(form, "Order").selectOption({ label: `${order.po} · Foshan Fabrics` });
     await select(form, "Kind").selectOption("Balance");
     await input(form, "Amount (¥)").fill("3000");

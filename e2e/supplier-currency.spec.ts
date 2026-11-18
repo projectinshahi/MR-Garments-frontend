@@ -168,6 +168,7 @@ test("New order and payments take the supplier's currency and rate; the API refu
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = dialog(page, "Record payment");
+    await form.getByRole("combobox", { name: "Payment type", exact: true }).selectOption("order");
     await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · ${name}` });
     await expect(form.getByRole("textbox", { name: "Rate (₹ per $)", exact: true })).toHaveValue("88");
     await expect(form.getByText("Supplier rate now: 1 USD = ₹88.00. Change it if this payment used another.")).toBeVisible();

@@ -22,7 +22,7 @@ import { DeletePaymentMenu } from "./delete-payment";
 import { filterOrders } from "./filter-orders";
 import { PaymentDetailCard } from "./payment-detail";
 import { paymentsFile } from "./payment-files";
-import { RecordPaymentDialog } from "./record-payment-dialog";
+import { RecordPaymentDialog, type SupplierChoice } from "./record-payment-dialog";
 
 // 10 px cell padding and column widths as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
 const PAD = "px-2.5 first:pl-2.5 last:pr-2.5";
@@ -121,6 +121,8 @@ type PaymentsViewProps = {
   kpis: React.ReactNode;
   /** Shipping agents to offer as payees, or null when the user can't record payments (no buttons). */
   agents: OrderOptions["agents"] | null;
+  /** Active suppliers (ADV-5): Record payment then asks Order payment or Supplier advance (no order) first. */
+  suppliers?: SupplierChoice[];
   /** POs link to their order page (canOpen(me, "/orders")). */
   linkPo: boolean;
   /** Each payment of the selected order has Delete (PAY-3, payments Full). */
@@ -131,7 +133,7 @@ type PaymentsViewProps = {
  * Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server
  * slot. The selected order's card shows only while its row does, and comes back when the search clears.
  */
-export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo, canDelete = false }: PaymentsViewProps) {
+export function PaymentsView({ orders, payments, defaultPo, kpis, agents, suppliers = [], linkPo, canDelete = false }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedPo, setSelectedPo] = useState(defaultPo);
   const visible = filterOrders(orders, query);
@@ -158,7 +160,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, linkPo
             </form>
             <ReportDownload file={() => paymentsFile(visible, payments, query, todayInIndia())} />
             {agents ? (
-              <RecordPaymentDialog orders={orders} agents={agents}>
+              <RecordPaymentDialog orders={orders} agents={agents} suppliers={suppliers}>
                 <Button type="button" size="header">
                   + Record payment
                 </Button>

@@ -31,7 +31,7 @@ const api: PaymentsResponse = {
     { ...deposit, orderId: "o2", po: "PO-3002", currency: "CNY" },
   ],
 };
-const renderPage = (canDelete: boolean) => render(<PaymentsScreen data={{ ...toPaymentsData(api, "2026-11-10"), agents: null, linkPo: false, canDelete }} />);
+const renderPage = (canDelete: boolean) => render(<PaymentsScreen data={{ ...toPaymentsData(api, "2026-11-10"), agents: null, suppliers: [], linkPo: false, canDelete }} />);
 // The balance counts supplier payments only (phase 2 fixes, 1): the agent's ¥500 leaves it at ¥15,000.
 const facts = { po: "PO-3002", supplier: "Hangzhou Silk", currency: "CNY" as const, supplierPaidCny: 5_000, balanceCny: 15_000 };
 const rows: OrderPayment[] = [deposit, freight];
@@ -153,7 +153,7 @@ describe("Payments by order: Actions (PAY-3)", () => {
     payments: [{ ...paid3, orderId: "o3", po: "PO-3003", currency: "CNY" }, ...api.payments],
   };
   const renderList = (canDelete: boolean) =>
-    render(<PaymentsScreen data={{ ...toPaymentsData(byOrder, "2026-11-10"), agents: null, linkPo: false, canDelete }} />);
+    render(<PaymentsScreen data={{ ...toPaymentsData(byOrder, "2026-11-10"), agents: null, suppliers: [], linkPo: false, canDelete }} />);
   const table = () => screen.getAllByRole("table")[0]!;
   const trigger = (po: string) => screen.getByRole("button", { name: `Delete a payment of ${po}` });
   const pick = async (user: ReturnType<typeof userEvent.setup>, po: string, choice: string) => {

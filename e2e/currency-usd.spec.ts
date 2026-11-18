@@ -58,6 +58,7 @@ test("a USD supplier's order is placed in dollars at its rate, paid at typed INR
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = page.getByRole("dialog", { name: "Record payment" });
+    await form.getByRole("combobox", { name: "Payment type", exact: true }).selectOption("order");
     await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · ${name}` });
     await form.getByRole("combobox", { name: "Kind", exact: true }).selectOption("Balance");
     await form.getByRole("textbox", { name: "Amount ($)", exact: true }).fill("700");

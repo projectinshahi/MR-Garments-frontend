@@ -1,6 +1,7 @@
 import { addDays, format, parseISO } from "date-fns";
 
 import { canOpen, hasAccess } from "@/config/navigation";
+import type { AdvanceSupplierOption, AdvanceSuppliersResponse } from "@/lib/api/deposits-types";
 import { apiGet } from "@/lib/api/server";
 import type { DepositStatus, OrderOptions, PaymentsResponse } from "@/lib/api/types";
 import { getMe } from "@/lib/session";
@@ -121,20 +122,28 @@ export type PaymentsScreenData = Awaited<ReturnType<typeof getPayments>>;
 
 /**
  * What the signed-in user may do here. `agents`: null when they can't record payments (payments below Enter), else
- * ORD-2's shipping agents to offer as payees; a 403 or any failure there just means none. `linkPo`: POs open the
- * order page.
+ * ORD-2's shipping agents to offer as payees. `suppliers`: ADV-5's active suppliers, for a supplier advance with no
+ * order (payments Enter only, so it doesn't depend on order access). A 403 or any failure on either just means none.
+ * `linkPo`: POs open the order page.
  */
 async function getAccess() {
   const me = await getMe();
-  const agents =
-    me && hasAccess(me, "payments", "Enter")
-      ? await apiGet<OrderOptions>("/orders/options").then(
+  const canEnter = !!me && hasAccess(me, "payments", "Enter");
+  const [agents, suppliers] = canEnter
+    ? await Promise.all([
+        apiGet<OrderOptions>("/orders/options").then(
           (options) => options.agents,
           (): OrderOptions["agents"] => [],
-        )
-      : null;
+        ),
+        apiGet<AdvanceSuppliersResponse>("/supplier-advances/suppliers").then(
+          (response) => response.suppliers,
+          (): AdvanceSupplierOption[] => [],
+        ),
+      ])
+    : [null, []];
   return {
     agents,
+    suppliers,
     linkPo: !!me && canOpen(me, "/orders"),
     // PAY-3 needs payments Full (Management); the API refuses anyone else too.
     canDelete: !!me && hasAccess(me, "payments", "Full"),
