@@ -10,7 +10,7 @@ import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/com
 import { orderHref, PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatINR, formatQty, formatShortDate } from "@/lib/formatters";
+import { formatINR, formatShortDate } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { STAGES } from "@/types/domain";
 
@@ -19,6 +19,7 @@ import { DeleteOrderButton, rowActionClass } from "./delete-order";
 import { filterOrders, type OrderChip } from "./filter-orders";
 import { describeFilters, fetchOrderLines, ordersFile } from "./order-files";
 import { isEditableStage } from "./order-permissions";
+import { OrderProductsCell, OrderQuantityCell } from "./order-products-cell";
 import { stageLabel } from "./order-status";
 import { OrdersFrame } from "./orders-frame";
 
@@ -45,13 +46,15 @@ export function PoCell({ order }: { order: OrderRow }) {
 // end up at their content width. Stage (no width) takes the rest, which keeps Status and Paid so far where the reference has them.
 const columns: ColumnDef<OrderRow>[] = [
   { accessorKey: "po", header: "PO", meta: { className: "w-[84px]" }, cell: ({ row }) => <PoCell order={row.original} /> },
-  { accessorKey: "item", header: "Item", meta: { className: "w-[160px]" } },
+  // Every product of the order with its own quantity (the first two, then "+N more"); sorts by the first one's name.
+  { accessorKey: "item", header: "Item", meta: { className: "w-[190px]" }, cell: ({ row }) => <OrderProductsCell order={row.original} /> },
   { accessorKey: "supplier", header: "Supplier", meta: { className: "w-[180px]" } },
   {
     id: "quantity",
     header: "Quantity",
     meta: { className: "w-[103px]" },
-    cell: ({ row }) => formatQty(row.original.quantity, row.original.unit),
+    // The whole order: the total per unit, and how many products when more than one.
+    cell: ({ row }) => <OrderQuantityCell order={row.original} />,
   },
   {
     accessorKey: "deliveryDate",

@@ -66,6 +66,19 @@ describe("filterOrders", () => {
     expect(pos({ query: " yiwu " })).toEqual(["PO-2050", "PO-2049"]);
   });
 
+  it("finds an order by any of its products, not only the first one", () => {
+    const products = [
+      { item: "Denim jeans", quantity: 100, unit: "pcs" },
+      { item: "Silk scarves", quantity: 20, unit: "pcs" },
+    ];
+    const list = [row("PO-1", "Denim jeans", "Foshan Fabrics", 1, null, { products }), row("PO-2", "Polo shirts", "Foshan Fabrics", 1, null)];
+    expect(filterOrders(list, { ...none, query: "scarves" }).map((o) => o.po)).toEqual(["PO-1"]);
+    expect(filterOrders(list, { ...none, query: "polo" }).map((o) => o.po)).toEqual(["PO-2"]);
+    // The Pending and Closed tabs keep their search (PO, the order's item, supplier).
+    expect(filterTabOrders(list, { query: "scarves", supplier: null, from: "", to: "" }, (o) => o.orderDate).map((o) => o.po)).toEqual([]);
+    expect(filterTabOrders(list, { query: "denim", supplier: null, from: "", to: "" }, (o) => o.orderDate).map((o) => o.po)).toEqual(["PO-1"]);
+  });
+
   it("filters by stage and supplier", () => {
     expect(pos({ stage: 2 })).toEqual(["PO-2052"]);
     expect(pos({ supplier: "Shenzhen Apparel" })).toEqual(["PO-2052", "PO-2051"]);

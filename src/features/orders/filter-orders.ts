@@ -1,6 +1,7 @@
 import type { Tone } from "@/types/domain";
 
 import type { OrderRow } from "./data/queries";
+import { productsOf } from "./order-products";
 
 export type OrderChip = "all" | "late" | "dueSoon" | "shortReceived" | "closed";
 
@@ -15,15 +16,18 @@ export type OrderFilters = {
 // Phase 2 fixes §4: "Closed" is the closure flag (every carrier stocked), not stage 6 alone.
 const chipMatch = (order: OrderRow, chip: OrderChip) => chip === "all" || (chip === "closed" ? order.closed : order.chip === chip);
 
-/** Search over PO, item and supplier; `q` is already trimmed and lower-cased. */
+/** Search over PO, item and supplier (the Pending and Closed tabs); `q` is already trimmed and lower-cased. */
 const matchesSearch = (order: OrderRow, q: string) => !q || [order.po, order.item, order.supplier].some((field) => field.toLowerCase().includes(q));
+/** The All orders tab, whose Item column shows every product: PO, supplier and any product of the order. */
+const matchesListSearch = (order: OrderRow, q: string) =>
+  !q || [order.po, order.supplier, ...productsOf(order).map((product) => product.item)].some((field) => field.toLowerCase().includes(q));
 
 /** Client-side filtering of the loaded rows: search (PO, item, supplier), stage, supplier and chip. */
 export function filterOrders(orders: OrderRow[], { query, stage, supplier, chip }: OrderFilters) {
   const q = query.trim().toLowerCase();
   return orders.filter(
     (order) =>
-      matchesSearch(order, q) && (stage === null || order.stage === stage) && (supplier === null || order.supplier === supplier) && chipMatch(order, chip),
+      matchesListSearch(order, q) && (stage === null || order.stage === stage) && (supplier === null || order.supplier === supplier) && chipMatch(order, chip),
   );
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
-import type { OrderListItem, OrderOptions } from "@/lib/api/types";
+import type { OrderLineItem, OrderListItem, OrderOptions } from "@/lib/api/types";
 
 import { getOrdersList } from "./queries";
 
@@ -49,7 +49,28 @@ const options: OrderOptions = {
   items: [],
   agents: [],
 };
-const answer = (orders: OrderListItem[]) => ((path: string) => Promise.resolve(path === "/orders" ? orders : options)) as typeof apiGet;
+const line = (orderId: string, position: number, item: string, quantity: number, unit = "m"): OrderLineItem => ({
+  orderId,
+  po: orderId,
+  currency: "CNY",
+  position,
+  item,
+  unit,
+  quantity,
+  rateCny: 1,
+  valueCny: quantity,
+  received: 0,
+  stocked: 0,
+});
+const LINES = [
+  line("PO-2053", 0, "Cotton denim fabric", 2400),
+  line("PO-2053", 1, "Polo shirts", 60, "pcs"),
+  line("PO-2053", 2, "Silk scarves", 20, "pcs"),
+  line("PO-2052", 0, "Cotton denim fabric", 2400),
+];
+const answer = (orders: OrderListItem[], lines: OrderLineItem[] | Error = LINES) =>
+  ((path: string) =>
+    path === "/order-lines" ? (lines instanceof Error ? Promise.reject(lines) : Promise.resolve(lines)) : Promise.resolve(path === "/orders" ? orders : options)) as typeof apiGet;
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -69,6 +90,28 @@ describe("getOrdersList", () => {
     expect(orders[0]!.paidInr).toBe(232000);
     expect(counts).toEqual({ all: 4, late: 1, dueSoon: 1, shortReceived: 1 });
     expect(supplierNames).toEqual(["Foshan Fabrics", "Old Supplier"]);
+  });
+
+  it("reads every order's products from ORD-7 (ORD-1 names the first line only)", async () => {
+    get.mockImplementation(answer(list));
+    const { orders } = await getOrdersList();
+    expect(get).toHaveBeenCalledWith("/order-lines");
+    expect(orders.find((o) => o.po === "PO-2053")!.products).toEqual([
+      { item: "Cotton denim fabric", quantity: 2400, unit: "m" },
+      { item: "Polo shirts", quantity: 60, unit: "pcs" },
+      { item: "Silk scarves", quantity: 20, unit: "pcs" },
+    ]);
+    expect(orders.find((o) => o.po === "PO-2052")!.products).toEqual([{ item: "Cotton denim fabric", quantity: 2400, unit: "m" }]);
+    // An order ORD-7 doesn't list keeps ORD-1's first line (productsOf).
+    expect(orders.find((o) => o.po === "PO-2051")!.products).toBeUndefined();
+  });
+
+  it("still lists every order when ORD-7 fails, each described by its first line", async () => {
+    get.mockImplementation(answer(list, new ApiError(500, "internal", "Something went wrong.")));
+    const { orders, counts } = await getOrdersList();
+    expect(orders).toHaveLength(4);
+    expect(orders.every((o) => o.products === undefined)).toBe(true);
+    expect(counts.all).toBe(4);
   });
 
   it("returns no rows when the API has no orders", async () => {
