@@ -24,6 +24,9 @@ export const ENTRY_TONE: Record<LedgerEntryType, Tone> = {
   adjustment: "purple",
 };
 
+/** The legacy archive's status for a receipt the owner excluded (ADV-1 `exclusionReason`): never on the account. */
+export const EXCLUDED_FROM_LEDGER = "Excluded from ledger";
+
 /** "+¥1,200.00" / "−¥300.00": a posting's signed amount (the sign is the direction on the account). */
 export const signed = (amount: number, show: (value: number) => string) => `${amount < 0 ? "−" : "+"}${show(Math.abs(amount))}`;
 

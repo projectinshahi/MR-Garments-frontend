@@ -28,7 +28,7 @@ import { AdjustmentDialog } from "./adjustment-dialog";
 import type { SupplierLedgerData } from "./data/queries";
 import { DepositsArchive } from "./deposits-archive";
 import { statementFile } from "./ledger-files";
-import { ENTRY_LABEL, ENTRY_TONE, filterEntries, paymentChoice, reasonOf, signed, type StatementFilters } from "./ledger-logic";
+import { ENTRY_LABEL, ENTRY_TONE, EXCLUDED_FROM_LEDGER, filterEntries, paymentChoice, reasonOf, signed, type StatementFilters } from "./ledger-logic";
 
 // One supplier's ledger (LED-1, D14): an account card per currency (signed), the statement newest first with the
 // running balance, the orders' FIFO projection, held accounts' raw records, and the two read-only archives. Record
@@ -174,9 +174,30 @@ const orderColumns = (linkPo: boolean): ColumnDef<LedgerOrder>[] => {
 
 const archiveColumns: ColumnDef<AdvanceArchiveEntry>[] = [
   { accessorKey: "entryDate", header: "Date", cell: ({ row }) => formatDate(row.original.entryDate) },
-  { accessorKey: "kind", header: "Kind", cell: ({ row }) => ADVANCE_KIND_LABEL[row.original.kind] ?? row.original.kind },
+  {
+    accessorKey: "kind",
+    header: "Kind",
+    cell: ({ row }) => {
+      const label = ADVANCE_KIND_LABEL[row.original.kind] ?? row.original.kind;
+      if (!row.original.exclusionReason) return label;
+      // A receipt the owner excluded (a duplicate, a test entry): kept here as recorded, never on the account. Status and
+      // reason sit in this early column so they show without scrolling the table on a phone.
+      return (
+        <span className="flex min-w-[190px] flex-col items-start gap-1">
+          {label}
+          <StatusPill tone="warning">{EXCLUDED_FROM_LEDGER}</StatusPill>
+          <span className="text-[12.5px] leading-[16px] whitespace-normal text-muted-foreground">{row.original.exclusionReason}</span>
+        </span>
+      );
+    },
+  },
   { accessorKey: "po", header: "PO", cell: ({ row }) => row.original.po || DASH },
-  { accessorKey: "amount", header: "Amount", meta: right, cell: ({ row }) => amountOf(row.original.amount, row.original.currency) },
+  {
+    accessorKey: "amount",
+    header: "Amount",
+    meta: right,
+    cell: ({ row }) => <span className={row.original.exclusionReason ? "text-muted-foreground" : undefined}>{amountOf(row.original.amount, row.original.currency)}</span>,
+  },
   { accessorKey: "exchangeRate", header: "Rate (INR)", meta: right, cell: ({ row }) => (row.original.exchangeRate === null ? DASH : formatRateInr(row.original.exchangeRate)) },
   { accessorKey: "amountInr", header: "INR", meta: right, cell: ({ row }) => moneyOrDash(row.original.amountInr, (v) => formatINR(v, 2)) },
   { accessorKey: "mode", header: "Mode", cell: ({ row }) => row.original.mode || DASH },
@@ -372,7 +393,8 @@ export function SupplierLedgerScreen({ data }: { data: SupplierLedgerData }) {
               ) : (
                 <>
                   <CardNote size="sm" className="mb-3 block">
-                    Archive, read-only: advance receipts are on the account as payments; the other rows are kept for reference only.
+                    Archive, read-only: advance receipts are on the account as payments, except any marked {EXCLUDED_FROM_LEDGER}; the other rows are
+                    kept for reference only.
                   </CardNote>
                   <DataTable columns={archiveColumns} data={advances.entries} getRowId={(entry) => entry.id} size="sm" header="tall" pagination={{ pageSize: 15, itemLabel: "entries" }} />
                 </>

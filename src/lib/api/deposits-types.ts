@@ -87,6 +87,8 @@ export type AdvanceArchiveEntry = {
   notes: string;
   recordedAt: string;
   recordedBy: string;
+  /** Set on a receipt the owner excluded from the ledger (the backend's DEFAULT_RECEIPT_EXCLUSIONS): never on the account. */
+  exclusionReason: string | null;
 };
 export type AdvanceArchiveResponse = { supplier: { id: string; name: string; currency: Currency }; entries: AdvanceArchiveEntry[] };
 

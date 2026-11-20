@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/lib/api/client";
+import type { AdvanceArchiveEntry, AdvanceArchiveResponse } from "@/lib/api/deposits-types";
 import { ApiError } from "@/lib/api/errors";
 import type { LedgerAccount, LedgerEntry, LedgerOverviewResponse, SupplierLedgerResponse } from "@/lib/api/ledger-types";
 
@@ -198,6 +199,76 @@ describe("SupplierLedgerScreen (LED-1)", () => {
       ["Order debit", -5_000, -5_000, null],
     ]);
     expect(file.sections.find((s) => s.title === "Accounts")!.rows.map((r) => r[4])).toEqual(["Payable to supplier ¥1,200.00", "Settled", "Available with supplier ₹300.00"]);
+  });
+
+  describe("legacy advance history: the owner's excluded receipts", () => {
+    const DUPLICATE = "Duplicate: SUP-004 USD 25,000 CASH receipt entered 2026-11-19 14:34Z, a second entry of receipt 547ef798 (14:03Z).";
+    const TEST = "Test entry: SUP-009 CNY 1,212 Cash receipt entered 2026-11-20 04:54Z.";
+    const receipt = (id: string, over: Partial<AdvanceArchiveEntry> = {}): AdvanceArchiveEntry => ({
+      id,
+      kind: "receipt",
+      amount: 25_000,
+      currency: "USD",
+      exchangeRate: 101.6,
+      amountInr: 2_540_000,
+      entryDate: "2026-11-19",
+      po: null,
+      paymentId: null,
+      advanceId: null,
+      mode: "CASH",
+      reference: "",
+      notes: "",
+      recordedAt: "2026-11-19T14:03:06Z",
+      recordedBy: "Owner",
+      exclusionReason: null,
+      ...over,
+    });
+    const advances: AdvanceArchiveResponse = {
+      supplier: { id: "s1", name: "Hangzhou Silk", currency: "CNY" },
+      entries: [
+        receipt("547ef798-3290-4fa4-a5cf-15ca9c8ac9e5"),
+        receipt("f2b7966a-0937-485b-94a6-e6a536bfeedc", { recordedAt: "2026-11-19T14:34:51Z", exclusionReason: DUPLICATE }),
+        receipt("6ab149cc-bd00-4ef9-90f3-dc6bac5ccb47", { amount: 1212, currency: "CNY", exchangeRate: 12.2, amountInr: 14_786.4, entryDate: "2026-11-20", mode: "Cash", exclusionReason: TEST }),
+      ],
+    };
+
+    it("marks both with Excluded from ledger and the reason, keeps every recorded detail, and leaves an ordinary receipt as it was", async () => {
+      const user = userEvent.setup();
+      render(<SupplierLedgerScreen data={data({ advances })} />);
+      await user.click(screen.getByRole("tab", { name: "Legacy advance history" }));
+      expect(screen.getByText(/except any marked Excluded from ledger/)).toBeInTheDocument();
+      const [ordinary, duplicate, test] = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+      expect(within(ordinary!).queryByText("Excluded from ledger")).not.toBeInTheDocument();
+      expect(ordinary).toHaveTextContent(/Advance received–.*25,000\.00.*CASH/);
+      expect(within(duplicate!).getByText("Excluded from ledger")).toBeInTheDocument();
+      expect(within(duplicate!).getByText(DUPLICATE)).toBeInTheDocument();
+      expect(duplicate).toHaveTextContent(/Advance received.*25,000\.00.*101\.60.*CASH.*Owner/);
+      expect(within(test!).getByText("Excluded from ledger")).toBeInTheDocument();
+      expect(within(test!).getByText(TEST)).toBeInTheDocument();
+      expect(test).toHaveTextContent(/1,212\.00.*Cash/);
+    });
+
+    it("are not ledger credits: the statement holds only ledger entries, and the download marks them in the archive sheet", async () => {
+      const user = userEvent.setup();
+      render(<SupplierLedgerScreen data={data({ advances })} />);
+      expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(LEDGER.entries.length + 1);
+      expect(screen.queryByText(/25,000|1,212/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: "Legacy advance history" }));
+      expect(screen.getAllByText("Excluded from ledger")).toHaveLength(2);
+
+      const file = statementFile(LEDGER, LEDGER.entries, "Supplier: Hangzhou Silk", "2026-11-10", advances);
+      const statementRows = file.sections.filter((s) => s.title?.startsWith("Statement")).flatMap((s) => s.rows);
+      expect(statementRows).toHaveLength(LEDGER.entries.length);
+      expect(statementRows.some((row) => row.includes(25_000) || row.includes(1212))).toBe(false);
+      const archive = file.sections.filter((s) => s.sheet === "Legacy Advance");
+      expect(archive.map((s) => s.title)).toEqual(["Legacy advance history, archive (CNY)", "Legacy advance history, archive (USD)"]);
+      expect(archive[0]!.columns[2]!.header).toBe("Ledger");
+      expect(archive.flatMap((s) => s.rows).map((row) => [row[1], row[2], row[4], row[7]])).toEqual([
+        ["Advance received", `Excluded from ledger: ${TEST}`, 1212, "Cash"],
+        ["Advance received", null, 25_000, "CASH"],
+        ["Advance received", `Excluded from ledger: ${DUPLICATE}`, 25_000, "CASH"],
+      ]);
+    });
   });
 });
 

@@ -5,7 +5,7 @@ import type { AdvanceArchiveResponse, DepositMilestone } from "@/lib/api/deposit
 import type { LedgerAccount, LedgerEntry, LedgerTotal, SupplierLedgerResponse } from "@/lib/api/ledger-types";
 import { formatDateTime } from "@/lib/formatters";
 
-import { ENTRY_LABEL, type OverviewRow, reasonOf } from "./ledger-logic";
+import { ENTRY_LABEL, EXCLUDED_FROM_LEDGER, type OverviewRow, reasonOf } from "./ledger-logic";
 
 // Supplier ledger downloads (PDF, Excel, CSV) through the report download helpers: one table per currency, so no total
 // adds two currencies. Balances are signed (+ available with the supplier, − payable to the supplier); held accounts
@@ -143,8 +143,21 @@ export function statementFile(data: SupplierLedgerResponse, entries: LedgerEntry
         ? perCurrency(advances.entries).map(([currency, list]) => ({
             sheet: "Legacy Advance",
             title: `Legacy advance history, archive (${currency})`,
-            columns: [date("Date"), text("Kind"), text("PO"), money("Amount", currency), rate("Exchange rate", currency), money("INR equivalent", "INR"), text("Mode"), text("Reference"), text("Notes"), text("Recorded by")],
-            rows: list.map((a) => [a.entryDate, ADVANCE_KIND_LABEL[a.kind], a.po || null, a.amount, a.exchangeRate, a.amountInr, a.mode || null, a.reference || null, a.notes || null, a.recordedBy || null]),
+            columns: [date("Date"), text("Kind"), text("Ledger"), text("PO"), money("Amount", currency), rate("Exchange rate", currency), money("INR equivalent", "INR"), text("Mode"), text("Reference"), text("Notes"), text("Recorded by")],
+            rows: list.map((a) => [
+              a.entryDate,
+              ADVANCE_KIND_LABEL[a.kind],
+              // A receipt the owner excluded is listed as recorded, never as a credit on the account.
+              a.exclusionReason ? `${EXCLUDED_FROM_LEDGER}: ${a.exclusionReason}` : null,
+              a.po || null,
+              a.amount,
+              a.exchangeRate,
+              a.amountInr,
+              a.mode || null,
+              a.reference || null,
+              a.notes || null,
+              a.recordedBy || null,
+            ]),
           }))
         : []),
     ],
