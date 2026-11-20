@@ -30,10 +30,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
+          // The app's own tokens (globals.css defines no --popover / --radius): an undefined one left every toast
+          // transparent, so a toast over a dialog's footer was unreadable.
+          "--normal-bg": "var(--card)",
+          "--normal-text": "var(--foreground)",
           "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--border-radius": "var(--radius-lg)",
         } as React.CSSProperties
       }
       toastOptions={{
