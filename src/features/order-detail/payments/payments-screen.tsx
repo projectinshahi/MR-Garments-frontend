@@ -1,117 +1,109 @@
 import { PageContainer } from "@/components/layout/page-header";
-import { Callout, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
-import { KeyValueList } from "@/components/shared/key-value-list";
+import { Callout, CardNote, KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
+import { Button } from "@/components/ui/button";
 import type { OrderPayment, OrderView } from "@/features/order-detail/data/queries";
-import { AdvanceBreakdown, AdvanceEntriesCard, PartialAdvanceWarning } from "@/features/order-detail/shared/advance-breakdown";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
-import { agentPaid, DepositStatusPill, moneyOrDash } from "@/features/payments/money";
-import { formatINR, formatMoney, formatRate } from "@/lib/formatters";
+import { SupplierAccountCard } from "@/features/order-detail/shared/order-money";
+import { HELD_MESSAGE, MILESTONE_STATUS, moneyOrDash, PAYMENT_STATUS } from "@/features/payments/money";
+import { RecordPaymentDialog, RecordSeaFreightDialog, type SupplierChoice } from "@/features/payments/record-payment-dialog";
+import type { OrderOptions } from "@/lib/api/types";
+import { formatINR, formatMoney } from "@/lib/formatters";
 
-import { PaymentsTable } from "./payments-table";
+import { PaymentsTable, SlicesTable } from "./payments-table";
 
 /**
- * Order detail, tab c (08_3.1.c_Deposits_&_payments.jpeg) from ORD-4: KPIs, the order's payments (oldest first) and
- * the INR working. The figures follow the API's payee rules (phase 2 fixes, 1 and 2): paid to the supplier and the
- * balance the supplier is still owed; agent payments are sea freight, shown apart; the deposit KPI only when the
- * supplier asked for one. The "Balance rule" card is left out: no approved rule reduces a balance yet.
+ * Order detail, tab c (08_3.1.c, unified supplier ledger) from ORD-4: the order's value, what the supplier's account
+ * settled of it (FIFO, oldest order first) and how ("Settled by", each credit at its own rate), what is outstanding, the
+ * Deposit Required milestone, the supplier's signed balance, and the payments recorded against this PO (legacy supplier
+ * ones as a memo, sea freight to agents). Record payment (the supplier's, prefilled) and Record sea freight payment for
+ * payments Enter; Void for payments Full.
  */
 export function PaymentsScreen({
   order,
   payments,
-  canDelete = false,
-  canApply = false,
+  canVoid = false,
+  supplier = null,
+  agents = null,
 }: {
   order: OrderView;
   payments: OrderPayment[];
-  canDelete?: boolean;
-  /** payments Enter: Apply advance (ADV-4) on the supplier advance card. */
-  canApply?: boolean;
+  canVoid?: boolean;
+  /** This order's supplier from ADV-5 (payments Enter and the supplier active): Record payment. */
+  supplier?: SupplierChoice | null;
+  /** ORD-2's shipping agents (payments Enter): Record sea freight payment. */
+  agents?: OrderOptions["agents"] | null;
 }) {
-  const paid = payments.filter((p) => p.status === "paid");
-  const toSupplier = paid.filter((p) => p.payeeRole === "supplier");
-  const toAgents = paid.filter((p) => p.payeeRole === "agent");
-  // An older API (before the migrated backend) sends none of the supplier figures: they show as a dash, never as the
-  // all-payee numbers under the new labels.
-  const supplierPaid = order.supplierPaidCny ?? null;
-  const balance = supplierPaid == null ? null : order.balanceCny;
-  const agentsCny = agentPaid(order.paidCny, supplierPaid);
-  const money = (value: number | null) => moneyOrDash(value, (v) => formatMoney(v, order.currency));
-  const count = (n: number) => `${n} ${n === 1 ? "payment" : "payments"}`;
-  // INR per payment is the API's `amountInr` (rounded in SQL like every total), never recomputed here.
-  // Paid payments always carry their typed rate; a missing one shows as such, never as 0.
-  const working = (p: OrderPayment) => ({ label: `${money(p.amountCny)} × ${p.rateInr === null ? "rate not set" : formatRate(p.rateInr)}`, value: moneyOrDash(p.amountInr, formatINR) });
+  const money = (value: number | null) => moneyOrDash(value, (v) => formatMoney(v, order.currency, { decimals: 2 }));
+  const status = order.held ? "Pending review" : order.paymentStatus ? PAYMENT_STATUS[order.paymentStatus].label : undefined;
 
   return (
     <PageContainer>
       <OrderContextStrip order={order} fact={`Order value ${money(order.orderValueCny)}`} />
+      {order.held ? (
+        <Callout tone="warning" size="sm" role="status">
+          {HELD_MESSAGE} This order&apos;s figures are not shown until the review is done.
+        </Callout>
+      ) : null}
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Order value" value={money(order.orderValueCny)} />
-        <KpiCard size="xs" label="Paid to supplier" value={money(supplierPaid)} sub={`${count(toSupplier.length)}${agentsCny !== null && agentsCny > 0 ? ` · agents ${money(agentsCny)}` : ""}`} />
-        {/* The supplier advance applied (backend docs/supplier-advance.md): not a payment, so its own tile. */}
-        {order.advanceCny ? <KpiCard size="xs" label="Advance applied" value={money(order.advanceCny)} sub="from the supplier account" /> : null}
-        {/* Paid beyond the order's value (0016): the supplier's available advance, left out of Paid to supplier. */}
-        {order.excessCny ? <KpiCard size="xs" label="Excess to supplier advance" value={money(order.excessCny)} sub="paid beyond the order value" /> : null}
-        <KpiCard size="xs" label="Balance to supplier" value={money(balance)} sub={balance !== null && balance <= 0 ? "Fully paid" : undefined} />
+        <KpiCard size="xs" label="Settled" value={money(order.settledCny)} sub="from the supplier account" />
+        <KpiCard size="xs" label="Outstanding" value={money(order.outstandingCny)} sub={status} />
         {order.depositRequiredCny == null ? null : (
           <KpiCard
             size="xs"
-            label="Deposit"
-            value={money(order.depositPendingCny ?? 0)}
-            sub={
-              <>
-                {money(order.depositPaidCny)} of {money(order.depositRequiredCny)} <DepositStatusPill status={order.depositStatus} className="ml-1 align-middle" />
-              </>
-            }
+            label="Deposit required"
+            value={money(order.depositRequiredCny)}
+            sub={order.depositStatus ? `${MILESTONE_STATUS[order.depositStatus].label} · ${money(order.depositPendingCny)} pending` : undefined}
           />
         )}
+        {order.agentPaidCny ? <KpiCard size="xs" label="Sea freight" value={money(order.agentPaidCny)} sub={`${moneyOrDash(order.agentPaidInr, formatINR)} to agents`} /> : null}
       </KpiRow>
 
-      <PartialAdvanceWarning order={order} />
-
       <div className="grid gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
-        <SectionCard title="Deposits and payments" bottomGap="tight" className="min-w-0">
-          <PaymentsTable
-            rows={payments}
-            // The rows as paid: the order's paid figures plus its excess (money paid beyond the value, now supplier advance).
-            totals={{ paidCny: order.paidCny + (order.excessCny ?? 0), paidInr: order.paidInr + (order.excessInr ?? 0), currency: order.currency }}
-            // PAY-3: each payment's Delete, with the figures it changes.
-            remove={
-              canDelete
-                ? { po: order.po, supplier: order.supplier.name, currency: order.currency, supplierPaidCny: supplierPaid, balanceCny: balance }
-                : null
-            }
-          />
-        </SectionCard>
-
         <div className="flex min-w-0 flex-col gap-(--page-gap)">
-          <AdvanceBreakdown order={order} canApply={canApply} />
-          <SectionCard title="How the INR figure is found" titleGap="none">
-            <Callout size="sm" className="mt-3.5">
-              Each payment is changed to INR at the rate on the day it was paid. A later change in rate does not change an
-              old payment.
-            </Callout>
-            <KeyValueList
-              size="sm"
-              className="mt-3"
-              boldValues
-              items={[
-                ...toSupplier.map(working),
-                // Paid beyond the order's value (0016): the supplier's advance, at each payment's rate, so not this order's cost.
-                ...(order.excessCny ? [{ label: `Less ${money(order.excessCny)} beyond the order value (supplier advance)`, value: `−⁠${moneyOrDash(order.excessInr ?? 0, formatINR)}` }] : []),
-              ]}
-              total={{ label: "Paid to supplier in INR", value: moneyOrDash(order.supplierPaidInr, formatINR) }}
-            />
-            {toAgents.length ? (
-              <KeyValueList
-                size="sm"
-                className="mt-3"
-                boldValues
-                items={toAgents.map((p) => ({ ...working(p), label: `${working(p).label} · ${p.payee}` }))}
-                total={{ label: "Paid to agents (sea freight) in INR", value: moneyOrDash(agentPaid(order.paidInr, order.supplierPaidInr), formatINR) }}
-              />
+          <SectionCard title="Settled by" aside={<CardNote size="sm">Oldest first · each at its own rate</CardNote>} bottomGap="tight" className="min-w-0">
+            <SlicesTable slices={order.slices ?? []} currency={order.currency} settledCny={order.settledCny} settledInr={order.settledInr} />
+          </SectionCard>
+          <SectionCard title={`Recorded against ${order.po}`} bottomGap="tight" className="min-w-0">
+            <PaymentsTable rows={payments} canVoid={canVoid} />
+            {payments.some((p) => p.payeeRole === "supplier") ? (
+              <CardNote size="sm" className="mt-3 mb-3 block">
+                Supplier payments here were recorded against this PO before the supplier ledger. They are on the supplier&apos;s account and settle its orders
+                oldest first.
+              </CardNote>
             ) : null}
           </SectionCard>
-          <AdvanceEntriesCard order={order} />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-(--page-gap)">
+          <SupplierAccountCard order={order} />
+          <SectionCard title="How the INR figure is found" titleGap="none">
+            <Callout size="sm" className="mt-3.5">
+              Each credit that settled the order keeps the rate of the day it was paid; the goods INR adds them up. Sea freight is paid to agents at its own rates.
+            </Callout>
+            <p className="mt-3 flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Paid (INR), goods + sea freight</span>
+              <strong>{moneyOrDash(order.paidInr, formatINR)}</strong>
+            </p>
+          </SectionCard>
+          {supplier || agents ? (
+            <div className="flex flex-col gap-2">
+              {supplier ? (
+                <RecordPaymentDialog suppliers={[supplier]} supplierId={supplier.id}>
+                  <Button type="button" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
+                    + Record payment for {supplier.name}
+                  </Button>
+                </RecordPaymentDialog>
+              ) : null}
+              {agents ? (
+                <RecordSeaFreightDialog order={{ orderId: order.id, po: order.po, currency: order.currency, exchangeRate: order.exchangeRate }} agents={agents}>
+                  <Button type="button" variant="outline" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
+                    + Record sea freight payment
+                  </Button>
+                </RecordSeaFreightDialog>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </PageContainer>

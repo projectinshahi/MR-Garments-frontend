@@ -7,9 +7,9 @@ import { PaymentsView } from "./payments-view";
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 const payments = (count: number) => plural(count, "payment");
 
-/** Deposits & Payments (16_5_Deposits_&_Payments.jpeg): KPI row, payments by order, and the selected order's payments. */
+/** Payments (16_5, unified supplier ledger): KPI row, every payment, payments by order and the selected order's card. */
 export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
-  const { kpis, orders, payments: records, defaultPo, agents, suppliers, linkPo, canDelete } = data;
+  const { kpis, orders, payments: records, totals, defaultPo, agents, suppliers, linkPo, canVoid } = data;
 
   return (
     <PaymentsView
@@ -19,29 +19,25 @@ export function PaymentsScreen({ data }: { data: PaymentsScreenData }) {
       agents={agents}
       suppliers={suppliers}
       linkPo={linkPo}
-      canDelete={canDelete}
+      canVoid={canVoid}
+      totals={totals}
       kpis={
         <KpiRow gap="sm">
           <KpiCard
             size="xs"
             label="Paid so far (INR)"
             value={formatINR(kpis.paidSoFarInr)}
-            // Every payee (phase 2 fixes, 1): agent payments are sea freight, but they left the company for the order.
-            sub={`across ${plural(kpis.paidOrders, "order")} · all payees`}
+            // Every payee, voided payments left out; one without a rate has no INR figure.
+            sub={`${payments(kpis.paidCount)} · all payees${kpis.unrated ? ` · ${kpis.unrated} without rate` : ""}`}
           />
-          {/* Due payments have no INR rate until paid (PAY-1): each currency's amount, never added together. */}
-          <KpiCard size="xs" label="Due in next 7 days" value={formatMoneyList(kpis.dueNext7.amounts)} sub={dueSub(kpis.dueNext7)} />
-          <KpiCard
-            size="xs"
-            label="Due in next 30 days"
-            value={formatMoneyList(kpis.dueNext30.amounts)}
-            sub={payments(kpis.dueNext30.count)}
-          />
+          {/* Per currency from the supplier accounts (held left out), never added together. */}
+          <KpiCard size="xs" label="Payable to suppliers" value={formatMoneyList(kpis.payable)} sub="accounts below zero" />
+          <KpiCard size="xs" label="Available with suppliers" value={formatMoneyList(kpis.available)} sub="accounts above zero" />
+          <KpiCard size="xs" label="Due in next 30 days" value={formatMoneyList(kpis.dueNext30.amounts)} sub={dueSub(kpis.dueNext30)} />
         </KpiRow>
       }
     />
   );
 }
 
-const dueSub = ({ count, first }: DueWindow) =>
-  first ? `${payments(count)} · ${first.po} on ${formatShortDate(first.due)}` : payments(count);
+const dueSub = ({ count, first }: DueWindow) => (first ? `${payments(count)} · ${first.po ?? "supplier"} on ${formatShortDate(first.due)}` : payments(count));

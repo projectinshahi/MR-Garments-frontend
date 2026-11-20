@@ -31,8 +31,12 @@ export function SupplierAnalytics({ data }: { data: SupplierInsightsData }) {
       </SectionCard>
       <div className="grid gap-(--page-gap) lg:grid-cols-2">
         <SectionCard title="Outstanding balance by supplier" titleGap="none" className="min-w-0">
-          <CardSubtitle>Order value less payments to the supplier, per order currency</CardSubtitle>
-          <MoneyCharts label="Outstanding balance by supplier" rows={bySupplier.map((row) => ({ label: row.name, totals: row.balance }))} empty="Nothing outstanding." />
+          <CardSubtitle>Payable to the supplier: its ledger balance below zero, per currency (held accounts left out)</CardSubtitle>
+          <MoneyCharts
+            label="Outstanding balance by supplier"
+            rows={bySupplier.map((row) => ({ label: row.name, totals: row.balance.filter((t) => t.amount < 0).map((t) => ({ ...t, amount: -t.amount })) }))}
+            empty="Nothing outstanding."
+          />
         </SectionCard>
         <SectionCard title="Top suppliers by purchase value" titleGap="none" className="min-w-0">
           <CardSubtitle>The five biggest in the period, ranked per currency (CNY first)</CardSubtitle>

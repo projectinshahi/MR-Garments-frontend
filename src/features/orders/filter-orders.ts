@@ -1,5 +1,3 @@
-import type { Tone } from "@/types/domain";
-
 import type { OrderRow } from "./data/queries";
 import { productsOf } from "./order-products";
 
@@ -43,24 +41,6 @@ export const closedOrders = (orders: OrderRow[]) => orders.filter((order) => ord
 
 /** Main line still to receive; excess (received > ordered) never goes below 0. */
 export const pendingQty = (order: Pick<OrderRow, "quantity" | "received">) => Math.max(0, order.quantity - order.received);
-
-/**
- * Balance owed to the supplier in the order's currency, to the cent: order value less what the supplier was paid toward
- * it (agent payments are sea freight) and less the supplier advance applied (backend docs/supplier-advance.md; 0 from an
- * older API). Never below 0: anything paid beyond the value is the supplier's advance (0016).
- */
-export const balanceCny = (order: Pick<OrderRow, "orderValueCny" | "supplierPaidCny" | "advanceCny">) =>
-  Math.max(0, Math.round((order.orderValueCny - order.supplierPaidCny - (order.advanceCny ?? 0)) * 100) / 100);
-
-export type PaymentStatus = { label: "Unpaid" | "Partly paid" | "Paid"; tone: Tone };
-/** Deposit/payment status from the payments to the supplier against the order value (13.5). Proposed tones: neutral, warning, success. */
-export function paymentStatus({ supplierPaidCny, orderValueCny, advanceCny }: Pick<OrderRow, "supplierPaidCny" | "orderValueCny" | "advanceCny">): PaymentStatus {
-  // The supplier advance applied counts with the supplier payments, once.
-  const covered = Math.round((supplierPaidCny + (advanceCny ?? 0)) * 100) / 100;
-  if (covered <= 0) return { label: "Unpaid", tone: "neutral" };
-  if (covered >= orderValueCny) return { label: "Paid", tone: "success" };
-  return { label: "Partly paid", tone: "warning" };
-}
 
 export type TabFilters = {
   query: string;

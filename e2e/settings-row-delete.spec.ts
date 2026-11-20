@@ -41,11 +41,22 @@ const capitalised = (noun: string) => `${noun[0]!.toUpperCase()}${noun.slice(1)}
 // Leave nothing behind: other Settings specs count the rows under each status chip.
 const deleteRecord = async (api: Api, tab: Tab, id: string) => expect((await api.request.delete(`/api/v1${tab.api}/${id}`, { data: {} })).status()).toBe(204);
 const deleteRecord204 = async (api: Api, path: string) => expect((await api.request.delete(`/api/v1${path}`, { data: {} })).status(), path).toBe(204);
-/** Removes an order the test made, its payments first (PAY-3, then ORD-6), so its supplier or agent can go too. */
+/**
+ * Cleans up an order the test made. Since the unified ledger a payment is only ever voided (PAY-3, with a reason) and
+ * ORD-6 refuses an order with any payment, voided ones included: such an order stays, its payments voided. An order
+ * without payments is deleted (its ledger debit is cancelled, and the postings stay on the supplier's account).
+ */
 async function removeOrder(api: Api, po: string) {
-  for (const payment of (await api.order(po)).payments ?? []) await deleteRecord204(api, `/payments/${payment.id}`);
-  await deleteRecord204(api, `/orders/${encodeURIComponent(po)}`);
+  const payments = (await api.order(po)).payments ?? [];
+  for (const payment of payments) await api.voidPayment(payment.id, "E2E cleanup");
+  if (payments.length === 0) await deleteRecord204(api, `/orders/${encodeURIComponent(po)}`);
 }
+/** A record whose ledger postings or payments stay can't be deleted any more: the API says what uses it. */
+const refusedDelete = async (api: Api, tab: Tab, id: string, uses: RegExp) => {
+  const response = await api.request.delete(`/api/v1${tab.api}/${id}`, { data: {} });
+  expect(response.status()).toBe(409);
+  expect(await response.text()).toMatch(uses);
+};
 
 test.describe("Management", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
@@ -87,20 +98,22 @@ test.describe("Management", () => {
     await row.getByRole("button", { name: `Delete ${name}` }).click();
     await page.getByRole("alertdialog", { name: "Delete supplier?" }).getByRole("button", { name: "Delete supplier" }).click();
     const instead = page.getByRole("alertdialog", { name: "Deactivate supplier instead?" });
-    await expect(instead).toContainText("This supplier is used by 1 order, so it can't be deleted.");
+    // The order's debit is on the supplier's account too (unified ledger).
+    await expect(instead).toContainText("This supplier is used by 1 order and 1 ledger posting, so it can't be deleted.");
     await instead.getByRole("button", { name: "Cancel" }).click();
     await expect(instead).toBeHidden();
     await expect(row).toContainText("Active");
     expect(await ids(api, supplier)).toContain(id);
     await removeOrder(api, po);
-    await deleteRecord(api, supplier, id);
+    // The ledger keeps the debit and its cancellation, so the supplier stays (Deactivate is the way out).
+    await refusedDelete(api, supplier, id, /used by 2 ledger postings/);
   });
 
   test("a paid shipping agent keeps its name, so its payments still block its delete", async ({ page, api }) => {
     const agents = TABS[1];
     const name = unique("paid agent");
     const id = await add(api, agents, name);
-    const { po } = await api.createOrder({ deposits: [{ amountCny: 100, rateInr: 12, payee: name, payeeRole: "agent" }] });
+    const { po } = await api.createOrder({ deposits: [{ amountCny: 100, rateInr: 12, payee: name }] });
     const row = await open(page, agents.tab, name);
     await row.getByRole("link", { name: `Edit ${name}` }).click();
     const edit = page.getByRole("dialog", { name: "Edit shipping agent" });
@@ -117,7 +130,8 @@ test.describe("Management", () => {
     );
     await page.keyboard.press("Escape");
     await removeOrder(api, po);
-    await deleteRecord(api, agents, id);
+    // Voided, the payment still names the agent.
+    await refusedDelete(api, agents, id, /used by 1 agent payment/);
   });
 
   test("on a phone, Delete stays in view and the confirmation fits", async ({ page, api }) => {

@@ -1,7 +1,7 @@
 // API contracts shared with the backend (MR-Garments-Backend docs/contracts.md). Coordinator-owned.
 
 import type { Currency, MoneyTotal, RecordStatus, Role } from "@/types/domain";
-import type { AdvanceEntry } from "./deposits-types";
+import type { LedgerAccount, LedgerChange, LedgerOverviewResponse, PaymentRow, SettlementSlice } from "./ledger-types";
 
 export type Access = "None" | "View" | "Enter" | "Full";
 
@@ -71,8 +71,9 @@ export type SupplierProfile = {
   exchangeRate: number | null;
 };
 /**
- * MD-1 GET /api/v1/suppliers. `ytdValue`: this year's order value; `balance`: what is still owed over every order;
- * both one entry per order currency present (never added together), `[]` without orders.
+ * MD-1 GET /api/v1/suppliers. `ytdValue`: this year's order value, one entry per order currency present; `balance`:
+ * the signed ledger balance per currency (+ available with the supplier, − payable), held accounts left out and named
+ * in `heldCurrencies`. Never added together; `[]` without orders or postings.
  */
 export type SupplierRow = Contact &
   SupplierProfile & {
@@ -82,6 +83,7 @@ export type SupplierRow = Contact &
     openPos: number;
     ytdValue: MoneyTotal[];
     balance: MoneyTotal[];
+    heldCurrencies: string[];
     /** When the currency or rate was last set (ISO); null while never set. */
     rateUpdatedAt: string | null;
     /** Any order or supplier deposit: a change of currency or rate then applies to new transactions only. */
@@ -230,32 +232,36 @@ export type OrderListItem = {
   closed: boolean;
   closedOn: string | null;
   orderValueCny: number;
-  /** Every paid payment, agent (sea freight) ones included. */
-  paidCny: number;
-  /** Paid payments to the supplier only: balances, payment status and deposit figures read these (phase 2 fixes, 1). */
-  supplierPaidCny: number;
-  supplierPaidInr: number;
-  paidInr: number;
-  /** The deposit the supplier asked for (0009), in the order's currency; null when none was agreed. */
+  /** Paid to shipping agents (sea freight, never posted to the ledger), non-void; null without payments View. */
+  agentPaidCny: number | null;
+  agentPaidInr: number | null;
+  /** settledInr + agentPaidInr; null when settledInr is null (held, unposted, a slice without rate) or without payments View. */
+  paidInr: number | null;
+} & SettlementFields &
+  MilestoneFields;
+
+/**
+ * SettlementFields (backend docs/unified-ledger.md): the order's FIFO settlement from its supplier account, read-only.
+ * Null figures while the account is held or the order's debit is not posted. `outstandingCny` is never negative.
+ */
+export type PaymentStatus = "unpaid" | "partly" | "paid";
+export type SettlementFields = {
+  held: boolean;
+  settledCny: number | null;
+  outstandingCny: number | null;
+  paymentStatus: PaymentStatus | null;
+  /** Goods INR: the settling credits at their own rates; null when any has no rate. */
+  settledInr: number | null;
+};
+
+/** The Deposit Required milestone (D11): met once the FIFO-settled amount reaches what the supplier asked for. Never a balance. */
+export type MilestoneStatus = "none" | "unmet" | "partly" | "met";
+export type MilestoneFields = {
   depositRequiredCny: number | null;
-  /**
-   * The supplier advance applied to the order (backend docs/supplier-advance.md): money already with the supplier, not
-   * a payment. Balance to supplier = value - supplierPaidCny - advanceCny. Absent from an older backend (read as 0).
-   */
-  advanceCny?: number;
-  /** advanceCny in INR at the rate of each advance it came from. */
-  advanceInr?: number;
-  /**
-   * Supplier payments beyond the order's value, moved to the supplier's available advance (0016), and their INR at each
-   * payment's rate. The paid figures already leave it out. Absent from an older backend.
-   */
-  excessCny?: number;
-  excessInr?: number;
-  /** Paid supplier deposits (kind Deposit, payee the supplier) plus the supplier advance applied. */
-  depositPaidCny: number;
-  /** max(0, required - paid); null without a requirement. */
+  depositSettledCny: number | null;
   depositPendingCny: number | null;
-  depositStatus: DepositStatus;
+  /** Null while held or not posted. */
+  depositStatus: MilestoneStatus | null;
 };
 
 /**
@@ -277,8 +283,6 @@ export type OrderLineItem = {
   stocked: number;
 };
 
-/** The order's deposit against what the supplier asked for: none agreed, nothing paid yet, partly paid, or paid in full (more is kept as paid). */
-export type DepositStatus = "none" | "due" | "partly" | "paid";
 
 /** ORD-2 GET /api/v1/orders/options */
 export type OrderOptions = {
@@ -290,8 +294,11 @@ export type OrderOptions = {
     city: string;
     currency: Currency;
     exchangeRate: number | null;
-    /** The supplier's advance available in its currency, applied automatically when the order is created; absent from an older backend. */
-    advanceAvailable?: number;
+    /** The supplier's current-currency account is held (pending review): no order can be placed for it. */
+    held: boolean;
+    /** The supplier's signed ledger balances (non-held accounts): + available with the supplier, − payable. */
+    /** Null without payments View (money). */
+    ledgerBalance: { currency: Currency; balanceCny: number }[] | null;
   })[];
   /** `price`: the item's default rate per unit, offered for the line when the item is chosen; null when none is set. */
   items: (Named & { unit: Unit; price: number | null })[];
@@ -301,7 +308,7 @@ export type OrderOptions = {
 
 export type PayeeRole = "supplier" | "agent";
 
-/** ORD-3 POST /api/v1/orders body; answers 201 `{ order: { id, po } }`. */
+/** ORD-3 POST /api/v1/orders body; answers 201 with CreateOrderResponse. */
 export type CreateOrderBody = {
   /** The PO number: the offered `nextPo`, or what the user changed it to (any format, up to 50 characters, trimmed; one another order uses in any letter case is a 422 on `po`). */
   po: string;
@@ -310,23 +317,25 @@ export type CreateOrderBody = {
   orderDate: string;
   deliveryDate: string;
   lines: { itemId: string; quantity: number; rateCny: number }[];
-  /** The deposit the supplier asked for, 0.01 to 999,999,999,999 with at most 2 decimals; left out, none. */
+  /** The deposit the supplier asked for (a milestone, never a payment), 0.01 to 999,999,999,999 with at most 2 decimals; left out, none. */
   depositRequiredCny?: number;
   /** The container terms (0015): FOB or CNF. */
   terms?: ContainerTerms;
-  /** `rateInr` is left out for an INR order (the server stores 1). `reference` (transaction number, up to 100) and `notes` (up to 1,000) are optional. */
-  deposits: { payee: string; payeeRole: PayeeRole; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
+  /** Shipping-agent payees only (a supplier payee is 422 `deposits`); left out, none. */
+  deposits?: { payee: string; payeeRole: "agent"; amountCny: number; paidOn: string; rateInr?: number; mode: string; reference?: string; notes?: string }[];
 };
-/** ORD-3's advance result (backend docs/supplier-advance.md); absent from an older backend. */
-export type AdvanceResult = { appliedCny: number; changeCny: number; availableCny: number; balanceCny: number; status: AdvanceStatus };
-/** none: nothing applied; full: nothing left to pay after the advance and direct payments; partial otherwise. */
-export type AdvanceStatus = "none" | "partial" | "full";
-export type CreateOrderResponse = { order: { id: string; po: string }; advance?: AdvanceResult };
+/** ORD-3: the order and its debit on the supplier's account (balance signed, before and after). */
+export type CreateOrderResponse = {
+  order: { id: string; po: string };
+  /** Null without payments View (money). */
+  ledger: { supplierId: string; currency: Currency; debitCny: number; balanceBefore: number; balanceAfter: number } | null;
+};
 
 /**
  * ORD-5 PATCH /api/v1/orders/:po (ordersEdit >= Enter; docs/orders-users-contract.md). Any subset, at least one key.
  * Stage 1: dates and lines; stages 2-5: `deliveryDate` only (else 409 `order_locked`); stage 6: nothing. `lines`
  * replaces the whole list in order: a line with `id` updates that line, one without is added, one left out is removed.
+ * A line change posts the value change to the supplier's account (the "total below paid" refusal is gone).
  */
 export type UpdateOrderBody = {
   /** A new PO number (ORD-5): the same order, renumbered; 422 `po` when another order uses it. */
@@ -339,8 +348,13 @@ export type UpdateOrderBody = {
   /** The deposit the supplier asked for; null clears it. Allowed until the warehouse (stage 6), like the delivery date. */
   depositRequiredCny?: number | null;
 };
-export type UpdateOrderResponse = { order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string; terms?: ContainerTerms | null } };
-// ORD-6 DELETE /api/v1/orders/:po (admin Full) and USR-5 DELETE /api/v1/users/:id (admin Full) answer 204 with no body;
+/** `ledger` only when `lines` were sent: the order's value change posted to the supplier's account. */
+export type UpdateOrderResponse = {
+  order: { id: string; po: string; stage: number; orderDate: string; deliveryDate: string; terms?: ContainerTerms | null };
+  /** Sent when lines were; null without payments View (money). */
+  ledger?: { supplierId: string; currency: Currency; changeCny: number; balanceBefore: number; balanceAfter: number } | null;
+};
+// ORD-6 DELETE /api/v1/orders/:po (admin Full; posts the order's cancellation entry first) and USR-5 DELETE /api/v1/users/:id (admin Full) answer 204 with no body;
 // a record that is used answers 409 `in_use` with a message written for the user.
 
 /** CAL-1 GET /api/v1/deliveries: orders at stage 1-2, due date oldest first. Item, quantity and received: main line. */
@@ -357,54 +371,29 @@ export type DeliveryItem = {
   fullyReceived?: boolean;
 };
 
-/** PAY-1 GET /api/v1/payments */
+/** PAY-1 GET /api/v1/payments (payments View). Orders newest first; payments latest date first, orderless and voided included. */
 export type PaymentsResponse = {
-  orders: {
+  orders: ({
     orderId: string;
     po: string;
+    supplierId: string;
     supplier: string;
     currency: Currency;
     /** The supplier's rate now (INR per 1 of `currency`), a new payment's default; null while not set. */
     supplierRate: number | null;
     orderValueCny: number;
-    /** Every paid payment, agents (sea freight) included. */
-    paidCny: number;
-    paidInr: number;
-    /** Paid to the supplier only. */
-    supplierPaidCny: number;
-    supplierPaidInr: number;
-    /** The supplier advance applied (absent from an older backend). */
-    advanceCny?: number;
-    /** What the supplier is still owed: order value less supplier payments and the advance applied. */
-    balanceCny: number;
-    depositRequiredCny: number | null;
-    depositPaidCny: number;
-    depositPendingCny: number | null;
-    depositStatus: DepositStatus;
+    agentPaidCny: number | null;
+    agentPaidInr: number | null;
+    /** settledInr + agentPaidInr; null when settledInr is null. */
+    paidInr: number | null;
     /** Earliest due payment, or null ("Not yet due"). */
     nextDue: string | null;
-  }[];
-  payments: {
-    id: string;
-    orderId: string;
-    po: string;
-    /** The order's. */
-    currency: Currency;
-    kind: "Deposit" | "Balance";
-    payee: string;
-    payeeRole: PayeeRole;
-    amountCny: number;
-    status: "paid" | "due";
-    paidOn: string | null;
-    dueDate: string | null;
-    rateInr: number | null;
-    mode: string | null;
-    /** Transaction or receipt number and notes; "" when none (migration 0008). */
-    reference: string;
-    notes: string;
-    /** INR at the payment's own rate, rounded in SQL like every total (the same paisa as ORD-4); null while due. */
-    amountInr: number | null;
-  }[];
+  } & SettlementFields &
+    MilestoneFields)[];
+  payments: PaymentRow[];
+  /** As LED-2: every supplier account and the per-currency totals (held left out); absent from a backend before 0017. */
+  accounts?: LedgerOverviewResponse["accounts"];
+  totals?: LedgerOverviewResponse["totals"];
 };
 
 /** REC-1 GET /api/v1/receipts, received date newest first. Main-line figures. */
@@ -445,7 +434,8 @@ export type ReceiptOptions = {
     /** Always given: it is not an amount. */
     currency: Currency;
     orderValueCny: number | null;
-    depositsPaidCny: number | null;
+    /** What the supplier is still owed for the order (the ledger's FIFO projection); null without payments View, while held or not posted. */
+    outstandingCny: number | null;
     lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number | null }[];
   }[];
 };
@@ -507,6 +497,7 @@ export type CreateContainerBody = {
 // Five-tab completion (contracts: "Five-tab completion"): order detail, recording a payment, container detail and
 // status. No new tables; order stages still change only through REC-3 and CON-3.
 
+/** Deposit and Balance remain on legacy and shipping-agent payments; an orderless supplier payment is "Payment". */
 export type PaymentKind = "Deposit" | "Balance";
 
 /**
@@ -514,14 +505,11 @@ export type PaymentKind = "Deposit" | "Balance";
  * the signed-in user can't view it (payments, receiving, containers access). Records are oldest first.
  */
 export type OrderDetail = Omit<OrderListItem, "supplier"> & {
-  supplier: Omit<OrderOptions["suppliers"][number], "currency" | "exchangeRate" | "advanceAvailable">;
-  balanceCny: number;
-  /** Absent from an older backend. */
-  advanceStatus?: AdvanceStatus;
-  /** The order's advance allocations and reversals, oldest first; null without payments access, absent from an older backend. */
-  advanceEntries?: AdvanceEntry[] | null;
-  /** The supplier's advance available in the order's currency (ADV-4 can apply it); null without payments access, absent from an older backend. */
-  advanceAvailableCny?: number | null;
+  supplier: Omit<OrderOptions["suppliers"][number], "currency" | "exchangeRate" | "held" | "ledgerBalance">;
+  /** The credits that settled the order, oldest first; null without payments View. */
+  slices: SettlementSlice[] | null;
+  /** The supplier's account in the order's currency; null without payments View. */
+  supplierAccount: LedgerAccount | null;
   lines: {
     id: string;
     position: number;
@@ -533,8 +521,8 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
     received: number;
     loaded: number;
   }[];
-  /** In the order's `currency`, with each payment's SQL `amountInr` as PAY-1 gives it. */
-  payments: Omit<PaymentsResponse["payments"][number], "orderId" | "po" | "currency">[] | null;
+  /** Order-linked payments: legacy supplier rows (a memo: they settle through the account) and agent rows (sea freight); null without payments View. */
+  payments: PaymentRow[] | null;
   receipts:
     | {
         id: string;
@@ -569,27 +557,40 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
 };
 
 /**
- * PAY-2 POST /api/v1/payments body: a payment already made (saved as status "paid"). The server sets the payee name
- * from the order's supplier or the chosen agent. Answers 201 `{ payment: { id } }`. Records only: nothing moves money.
+ * PAY-2 POST /api/v1/payments, the supplier body (the unified Record payment): no order, no kind. `currency` left out is
+ * the supplier's and must be one of its `currencyOptions`; `rateInr` is required for non-INR and left out for INR.
+ * `clientRequestId` is generated once per dialog open and reused on retry (the same details answer 200 with the same body).
  */
-export type CreatePaymentBody = {
-  orderId: string;
-  kind: PaymentKind;
-  payeeRole: PayeeRole;
-  /** An active shipping agent when payeeRole is "agent"; null for the supplier. */
-  agentId: string | null;
-  /** In the order's currency. */
-  amountCny: number;
+export type CreateSupplierPaymentBody = {
+  supplierId: string;
+  amount: number;
+  currency?: Currency;
   paidOn: string;
-  /** Left out for an INR order (the server stores 1). */
   rateInr?: number;
   mode: string;
-  /** Transaction or receipt number (up to 100) and notes (up to 1,000); optional, stored as "" when left out. */
   reference?: string;
   notes?: string;
+  clientRequestId: string;
 };
-/** PAY-2. `advance` (supplier payments, backend docs/supplier-advance.md): the advance the payment now covers went back (changeCny < 0); absent for agent payments and from an older backend. */
-export type CreatePaymentResponse = { payment: { id: string }; advance?: AdvanceResult };
+/** PAY-2, the shipping-agent body (sea freight on an order, never posted to the ledger). */
+export type CreateAgentPaymentBody = {
+  orderId: string;
+  payeeRole: "agent";
+  agentId: string;
+  kind: PaymentKind;
+  amountCny: number;
+  paidOn: string;
+  rateInr?: number;
+  mode: string;
+  reference?: string;
+  notes?: string;
+  clientRequestId: string;
+};
+export type CreatePaymentBody = CreateSupplierPaymentBody | CreateAgentPaymentBody;
+/** PAY-2: `ledger` on a supplier payment (its account's balance before and after); absent on an agent payment. */
+export type CreatePaymentResponse = { payment: PaymentRow; ledger?: LedgerChange };
+/** PAY-3 DELETE /api/v1/payments/:id with `{ reason }` (payments Full): voids the payment; `ledger` null for an unposted one. */
+export type VoidPaymentResponse = { payment: PaymentRow; ledger: LedgerChange | null };
 
 /** CON-4 GET /api/v1/containers/:id */
 export type ContainerDetail = ContainerListItem & {

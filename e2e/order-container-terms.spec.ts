@@ -70,7 +70,10 @@ test("terms chosen on New order and Edit order show on Orders and fill the conta
     await expect(await termsCell(page, po)).toHaveText("FOB");
     await expect(await termsCell(page, cnf.po)).toHaveText("CNF");
     await expect(await termsCell(page, older.po)).toContainText("–");
-    // The extra column keeps the table inside the page at 1440 px: Paid so far is in view, no sideways scroll.
+    // The extra column keeps the table inside the page at 1440 px: Paid so far is in view, no sideways scroll. Measured
+    // on this test's supplier's rows: other specs' newest orders (longer names, several products) vary the widths.
+    await page.getByRole("searchbox", { name: "Search PO, item or supplier" }).fill("Foshan Fabrics");
+    await expect(await termsCell(page, older.po)).toContainText("–");
     const paid = await page.getByRole("columnheader", { name: "Paid so far (INR)" }).boundingBox();
     expect(paid!.x + paid!.width).toBeLessThanOrEqual(1440 - 32);
     await shot(page, testInfo, "orders-terms-1440.png");

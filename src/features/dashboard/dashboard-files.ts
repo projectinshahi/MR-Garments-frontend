@@ -2,7 +2,6 @@ import { amountsText, type Cell, type Column, money, perCurrency, type ReportFil
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { ContainerListItem, DeliveryItem, OrderListItem, PaymentsResponse } from "@/lib/api/types";
-import { balanceCny } from "@/features/orders/filter-orders";
 import { formatDate, sumByCurrency } from "@/lib/formatters";
 import { STAGES } from "@/types/domain";
 
@@ -10,7 +9,7 @@ import { type DashboardSources, isAvailable, type Source, toDashboard } from "./
 
 // Dashboard report download (backend docs/report-downloads.md): the dashboard's KPIs and every row behind its four
 // cards (the page shows five a card), from the same four calls and the same derivations (dashboard-logic.ts), plus a
-// supplier summary and the outstanding balances from ORD-1. A source the role can't read is said, never guessed.
+// supplier summary from ORD-1 (each order's FIFO settlement) and the payable supplier balances from PAY-1's ledger totals. A source the role can't read is said, never guessed.
 // The dashboard has no date filter: the file is as of today in India.
 
 const text = (header: string): Column => ({ header });
@@ -46,7 +45,7 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
     filename: `dashboard-${today}`,
     filters: `As of ${formatDate(today)} (India)`,
     notes: [
-      "Payments due carry no exchange rate until paid, so they are one total per currency. Balances count payments to the supplier only.",
+      "Payments due carry no exchange rate until paid, so they are one total per currency. Payable to suppliers is the sum of the supplier ledger accounts below zero; an order's settled and outstanding amounts are the ledger's oldest-first settlement. Held accounts (pending review) count in no total.",
       "Warehouse stock and landed cost are in the Warehouse and Landed Cost reports.",
     ],
     sections: [
@@ -57,9 +56,11 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
         ["Containers on the way", kpi(d.containers, (c) => c.onTheWay)],
         ["Containers arriving this week", kpi(d.containers, (c) => c.arrivingThisWeek)],
         ["Payments due in next 30 days", kpi(d.paymentsDue, (p) => amountsText(p.amounts))],
-        ["Paid so far, all payees (INR)", kpi(orders, (list) => round2(list.reduce((sum, o) => sum + o.paidInr, 0)))],
+        // Every paid, not voided payment (supplier and shipping agent, orderless ones included) at its own rate.
+        ["Paid so far, all payees (INR)", kpi(sources.payments, (p) => round2(p.payments.reduce((sum, row) => sum + (!row.voided && row.status === "paid" ? (row.amountInr ?? 0) : 0), 0)))],
         ["PO value", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, (o) => o.orderValueCny)))],
-        ["Outstanding balance to suppliers", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, balanceCny)))],
+        // The supplier ledger accounts below zero (PAY-1's LED-2 totals), held accounts left out.
+        ["Payable to suppliers", kpi(sources.payments, (p) => amountsText((p.totals ?? []).filter((t) => t.payableCny > 0).map((t) => ({ currency: t.currency, amount: t.payableCny }))))],
       ]),
       ...needs(d.orders, "Orders by stage", "Orders by Stage", (o) => [
         { sheet: "Orders by Stage", title: "Orders by stage", columns: [text("Stage"), text("Orders")], rows: o.byStage.map((s) => [`${s.stage}. ${STAGES[s.stage - 1]}`, s.count]) },
@@ -87,14 +88,16 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
             orders: mine.length,
             active: mine.filter((o) => o.stage < 6).length,
             value: round2(mine.reduce((sum, o) => sum + o.orderValueCny, 0)),
-            paid: round2(mine.reduce((sum, o) => sum + o.supplierPaidCny, 0)),
+            // The FIFO settlement; null while the account is held or an order is not posted (no figure, never a made-up 0).
+            settled: mine.some((o) => o.settledCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.settledCny!, 0)),
+            outstanding: mine.some((o) => o.outstandingCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.outstandingCny!, 0)),
           };
         });
         return perCurrency(lines).map(([currency, rows]) => ({
           sheet: "Suppliers",
           title: `Supplier summary (${currency} orders)`,
-          columns: [text("Supplier"), text("Orders"), text("Active orders"), money("PO value", currency), money("Paid to supplier", currency), money("Outstanding balance", currency)],
-          rows: rows.map((r) => [r.supplier, r.orders, r.active, r.value, r.paid, round2(r.value - r.paid)]),
+          columns: [text("Supplier"), text("Orders"), text("Active orders"), money("PO value", currency), money("Settled", currency), money("Outstanding", currency)],
+          rows: rows.map((r) => [r.supplier, r.orders, r.active, r.value, r.settled, r.outstanding]),
         }));
       }),
     ],

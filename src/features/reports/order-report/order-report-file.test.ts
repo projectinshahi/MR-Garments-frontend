@@ -6,6 +6,29 @@ import { csvRows } from "../report-files";
 import { landedCostBreakdown, orderReportFile, REPORT_SECTIONS } from "./order-report-file";
 
 const TODAY = "2026-11-09";
+const pay = {
+  orderId: "o1",
+  po: "MR/2026/001",
+  supplierId: "s1",
+  supplier: "Guangzhou Textile Co.",
+  currency: "CNY" as const,
+  payee: "Guangzhou Textile Co.",
+  payeeRole: "supplier" as const,
+  amountInr: null,
+  paidOn: null,
+  dueDate: null,
+  rateInr: null,
+  mode: null,
+  reference: "",
+  notes: "",
+  recordedAt: "2026-10-11T05:00:00.000Z",
+  recordedBy: null,
+  voided: false,
+  voidedAt: null,
+  voidedBy: null,
+  voidReason: "",
+  held: false,
+};
 const authored = { recordedAt: null, recordedBy: null, updatedAt: null, updatedBy: null };
 
 const report: OrderReport = {
@@ -55,29 +78,63 @@ const report: OrderReport = {
     { id: "l2", position: 1, itemId: "i2", item: "Cotton fabric", unit: "m", ordered: 50, received: 30, excess: 0, short: 20, pending: 20, loaded: 50, stocked: 50, rateCny: 8, valueCny: 400 },
   ],
   payments: {
-    paidCny: 800,
-    paidInr: 9850,
-    balanceCny: 600,
-    depositsPaidCny: 300,
+    held: false,
+    settledCny: 800,
+    outstandingCny: 600,
+    paymentStatus: "partly",
+    settledInr: 9850,
+    slices: [
+      { entryId: "e1", entryType: "payment", paymentId: "p1", advanceEntryId: null, entryDate: "2026-10-11", amount: 300, exchangeRate: 12, amountInr: 3600, mode: "Bank", reference: "TXN-1", memoPo: "MR/2026/001" },
+      { entryId: "e9", entryType: "payment", paymentId: "p9", advanceEntryId: null, entryDate: "2026-10-20", amount: 500, exchangeRate: 12.5, amountInr: 6250, mode: "Wire", reference: "UTR-9", memoPo: null },
+    ],
     dueCny: 200,
     agentPaidCny: 0,
     agentPaidInr: 0,
     depositRequiredCny: 500,
-    depositPendingCny: 200,
-    depositStatus: "partly",
+    depositSettledCny: 800,
+    depositPendingCny: 0,
+    depositStatus: "met",
     list: [
-      { id: "p1", kind: "Deposit", payee: "Guangzhou Textile Co.", payeeRole: "supplier", amountCny: 300, amountInr: 3600, status: "paid", paidOn: "2026-10-11", dueDate: null, rateInr: 12, mode: "Bank", reference: "TXN-1", notes: "", recordedAt: null, recordedBy: null },
-      { id: "p2", kind: "Balance", payee: "Guangzhou Textile Co.", payeeRole: "supplier", amountCny: 200, amountInr: null, status: "due", paidOn: null, dueDate: "2026-11-19", rateInr: null, mode: null, reference: "", notes: "", recordedAt: null, recordedBy: null },
-      // A second deposit still due: in the ledger, never in "Deposits paid on this PO" (its total is paid money).
-      { id: "p3", kind: "Deposit", payee: "Guangzhou Textile Co.", payeeRole: "supplier", amountCny: 100, amountInr: null, status: "due", paidOn: null, dueDate: "2026-11-25", rateInr: null, mode: null, reference: "", notes: "", recordedAt: null, recordedBy: null },
+      { ...pay, id: "p1", kind: "Deposit", amountCny: 300, amountInr: 3600, status: "paid", paidOn: "2026-10-11", rateInr: 12, mode: "Bank", reference: "TXN-1" },
+      { ...pay, id: "p2", kind: "Balance", amountCny: 200, status: "due", dueDate: "2026-11-19" },
+      // A second deposit still due: listed, never in the legacy deposits table (its total is paid money).
+      { ...pay, id: "p3", kind: "Deposit", amountCny: 100, status: "due", dueDate: "2026-11-25" },
     ],
   },
   supplierAccount: {
     orders: 3,
     openOrders: 2,
     purchaseValue: [{ currency: "CNY", amount: 1801 }],
-    paid: [{ currency: "CNY", amount: 1200 }],
-    balance: [{ currency: "CNY", amount: 601 }],
+    settled: [{ currency: "CNY", amount: 1200 }],
+    outstanding: [{ currency: "CNY", amount: 601 }],
+    accounts: [
+      { supplierId: "s1", currency: "CNY", held: false, creditsCny: 1200, debitsCny: 1801, balanceCny: -601, paidInr: 14850, paidInrComplete: true, outstandingCny: 601, openOrders: 2, lastPaymentOn: "2026-10-20" },
+    ],
+    entries: [
+      {
+        id: "e9",
+        entryType: "payment",
+        currency: "CNY",
+        amount: 500,
+        exchangeRate: 12.5,
+        amountInr: 6250,
+        entryDate: "2026-10-20",
+        origin: "app",
+        orderId: null,
+        po: null,
+        paymentId: "p9",
+        advanceEntryId: null,
+        reversesId: null,
+        notes: null,
+        balanceBefore: null,
+        balanceAfter: null,
+        runningBalance: -601,
+        recordedAt: "2026-10-20T05:00:00.000Z",
+        recordedBy: "Priya",
+        payment: { kind: "Payment", payeeRole: "supplier", mode: "Wire", reference: "UTR-9", notes: "", memoPo: null, voided: false, voidedAt: null, voidedBy: null, voidReason: "" },
+        advance: null,
+      },
+    ],
     deposits: {
       summary: [{ currency: "CNY", direction: "give", amount: 1000, settled: 400, pending: 600 }],
       list: [
@@ -168,6 +225,8 @@ describe("order report file", () => {
       "Quantities",
       "Supplier",
       "Supplier financial summary",
+      "Supplier ledger accounts",
+      "Statement (CNY)",
       "Items",
       "China receipts",
       "Containers",
@@ -176,8 +235,9 @@ describe("order report file", () => {
       "Transport (container totals)",
       "Warehouse receipts",
       "Payment summary",
-      "Payment ledger",
-      "Deposits paid on this PO",
+      "Settled by (supplier credits, oldest first)",
+      "Payments recorded on this PO",
+      "Legacy deposits recorded against this PO",
       "Supplier account deposits (not linked to this PO)",
       "Landed cost breakdown",
       "Landed cost",
@@ -191,7 +251,8 @@ describe("order report file", () => {
     const rows = csvRows(file);
     expect(rows).toContainEqual(["Status", "Closed on 5 Nov 2026"]);
     expect(rows).toContainEqual(["Original PO value (CNY)", 1400]);
-    expect(rows).toContainEqual(["Outstanding balance (CNY)", 600]);
+    expect(rows).toContainEqual(["Outstanding (CNY)", 600]);
+    expect(rows).toContainEqual(["Payment status", "Partly paid"]);
     expect(rows).toContainEqual(["Supplier code", "SUP-001"]);
     expect(rows).toContainEqual(["Payment terms", "30% deposit"]);
     expect(rows).toContainEqual(["Email", "–"]);
@@ -208,13 +269,17 @@ describe("order report file", () => {
   it("keeps the supplier's account apart from the PO: every-order totals, the account deposit, and no utilisation claimed", () => {
     const summary = titled("Supplier financial summary").rows;
     expect(summary).toContainEqual(["Total purchase value with this supplier", "1,801.00 CNY"]);
-    expect(summary).toContainEqual(["Supplier's overall balance (every order)", "601.00 CNY"]);
-    expect(summary).toContainEqual(["Outstanding balance for this PO (CNY)", 600]);
+    expect(summary).toContainEqual(["Supplier balance (ledger)", "CNY: Payable to supplier ¥601.00"]);
+    expect(summary).toContainEqual(["Outstanding (every order)", "601.00 CNY"]);
+    expect(summary).toContainEqual(["Outstanding for this PO (CNY)", 600]);
     expect(summary).toContainEqual(["Deposit utilised for this PO", "Not tracked: account deposits are not linked to orders"]);
-    expect(titled("Deposits paid on this PO").rows).toEqual([["2026-10-11", null, "TXN-1", 300, 12, 3600, "Bank", "paid", ""]]);
-    expect(titled("Deposits paid on this PO").total?.[3]).toBe(300);
-    // The due deposit is a ledger row, not a paid one.
-    expect(titled("Payment ledger").rows).toHaveLength(3);
+    expect(titled("Legacy deposits recorded against this PO").rows).toEqual([["2026-10-11", null, "TXN-1", 300, 12, 3600, "Bank", "paid", ""]]);
+    expect(titled("Legacy deposits recorded against this PO").total?.[3]).toBe(300);
+    // The due deposit is listed, not a paid one.
+    expect(titled("Payments recorded on this PO").rows).toHaveLength(3);
+    // The supplier's statement (the ledger's own sections) sits on the Supplier Details sheet.
+    expect(titled("Statement (CNY)")).toMatchObject({ sheet: "Supplier Details" });
+    expect(titled("Statement (CNY)").rows[0]!.slice(0, 7)).toEqual(["2026-10-20", "Payment", null, 500, 12.5, 6250, -601]);
     expect(titled("Supplier account deposits (not linked to this PO)").rows).toEqual([["DEP-1", "To give", "2026-10-01", "CNY", null, 1000, 400, 600, "partly settled", "Not tracked", "", "2026-10-02", "DEP-1/1", "Bank", 400, ""]]);
   });
 
@@ -246,21 +311,38 @@ describe("order report file", () => {
     ]);
   });
 
-  it("writes the payment ledger with the order's currency, the agent's sea freight apart, and no refunds or deposit links", () => {
+  it("writes the settlement (the credits that settled the order) and the payments on this PO, the agent's sea freight apart", () => {
     const summary = titled("Payment summary").rows;
     expect(summary).toContainEqual(["Sea freight paid to agents (CNY)", 0]);
-    expect(summary).toContainEqual(["Payment refunds and credits", "Not recorded in this system (advance returns are under Supplier advance applied)"]);
-    expect(titled("Payment ledger").rows[1]).toEqual([null, "", "Balance", null, 200, "CNY", null, null, "Guangzhou Textile Co.", "supplier", null, "", "due", "2026-11-19", "–", "–"]);
+    expect(summary).toContainEqual(["Settled from the supplier's account (CNY)", 800]);
+    expect(summary).toContainEqual(["Refunds and corrections", "Voids and Management adjustments on the supplier ledger (the statement on Supplier Details)"]);
+    const settled = titled("Settled by (supplier credits, oldest first)");
+    expect(settled.rows).toEqual([
+      ["2026-10-11", "Payment", "TXN-1", "Bank", "MR/2026/001", 300, 12, 3600],
+      ["2026-10-20", "Payment", "UTR-9", "Wire", null, 500, 12.5, 6250],
+    ]);
+    expect(settled.total).toEqual([null, "Settled", null, null, null, 800, null, 9850]);
+    expect(titled("Payments recorded on this PO").rows[1]!.slice(0, -1)).toEqual([null, "", "Balance (legacy)", null, 200, "CNY", null, null, "Guangzhou Textile Co.", "supplier", "", "due", "2026-11-19", "–"]);
+    // A voided payment is listed with its reason and counts nowhere.
+    const voided = orderReportFile({ ...report, payments: { ...report.payments!, list: [{ ...report.payments!.list[0]!, voided: true, voidReason: "Duplicate" }] } }, TODAY);
+    expect(voided.sections.find((s) => s.title === "Payments recorded on this PO")!.rows[0]![11]).toBe("voided: Duplicate");
+    expect(voided.sections.find((s) => s.title === "Legacy deposits recorded against this PO")!.rows).toEqual([]);
   });
 
-  it("adds the deposit the supplier asked for, with its standing, only when one was agreed (0009)", () => {
+  it("adds the Deposit Required milestone (D11), with its standing, only when one was agreed", () => {
     const rows = csvRows(file);
     expect(rows).toContainEqual(["Deposit required (CNY)", 500]);
-    expect(rows).toContainEqual(["Deposit pending (CNY)", 200]);
-    expect(rows).toContainEqual(["Deposit status", "Deposit partly paid"]);
+    expect(rows).toContainEqual(["Deposit pending (CNY)", 0]);
+    expect(rows).toContainEqual(["Deposit milestone", "Deposit met"]);
     const none = csvRows(orderReportFile({ ...report, payments: { ...report.payments!, depositRequiredCny: null, depositPendingCny: null, depositStatus: "none" } }, TODAY));
     expect(none.filter((row) => String(row[0]).startsWith("Deposit required") || String(row[0]).startsWith("Deposit pending"))).toEqual([]);
-    expect(none).toContainEqual(["Deposits paid on this PO (CNY)", 300]);
+  });
+
+  it("writes a held account's order (pending review) with no settlement figures", () => {
+    const held = { ...report.payments!, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, slices: [] };
+    const rows = csvRows(orderReportFile({ ...report, payments: held }, TODAY));
+    expect(rows).toContainEqual(["Payment status", "Opening balance pending review"]);
+    expect(rows).toContainEqual(["Outstanding (CNY)", null]);
   });
 
   it("explains a CNF order's sea freight and marks the parts the records never hold", () => {
@@ -280,7 +362,7 @@ describe("order report file", () => {
     const { toXlsx } = await import("../xlsx");
     const pdf = Buffer.from(toPdf(file, "Generated now")).toString("latin1");
     expect(pdf.startsWith("%PDF-")).toBe(true);
-    for (const title of ["Supplier financial summary", "China receipts", "Payment ledger", "Landed cost breakdown", "Timeline"]) expect(pdf).toContain(`(${title}) Tj`);
+    for (const title of ["Supplier financial summary", "China receipts", "Payments recorded on this PO", "Landed cost breakdown", "Timeline"]) expect(pdf).toContain(`(${title}) Tj`);
     expect(pdf).toContain("Page 1 of");
     const xlsx = toXlsx(file, "Generated now");
     expect(xlsx.byteLength).toBeGreaterThan(1000);
@@ -289,38 +371,5 @@ describe("order report file", () => {
   it("leaves out the sections the API nulled", () => {
     const limited = orderReportFile({ ...report, payments: null, supplierAccount: null, receipts: null, logistics: null, warehouse: null, landedCost: null }, TODAY);
     expect([...new Set(limited.sections.map((section) => section.sheet))]).toEqual(["Order Overview", "Supplier Details", "Order Items", "Order Timeline"]);
-  });
-
-  it("writes the supplier advance applied apart from paid, signed per entry, and the supplier's advance account", () => {
-    const entry = { currency: "CNY", exchangeRate: 12, advanceId: "a1", advancePaidOn: "2026-10-01", advanceReference: "UTR 1", orderId: "o1", po: report.order.po, mode: "", reference: "", notes: "", recordedAt: "2026-10-10T05:00:00Z", recordedBy: "Priya" };
-    const withAdvance = orderReportFile(
-      {
-        ...report,
-        payments: {
-          ...report.payments!,
-          advanceCny: 400,
-          advanceInr: 4800,
-          advanceStatus: "partial",
-          balanceCny: 200,
-          advanceEntries: [
-            { ...entry, id: "e1", kind: "allocation", entryDate: "2026-10-10", amount: 500, amountInr: 6000, reversalOf: null },
-            { ...entry, id: "e2", kind: "reversal", entryDate: "2026-10-12", amount: 100, amountInr: 1200, reversalOf: "e1" },
-          ],
-        },
-        supplierAccount: { ...report.supplierAccount!, advanceApplied: [{ currency: "CNY", amount: 400 }], advance: [{ currency: "CNY", receivedCny: 1000, allocatedCny: 500, reversedCny: 100, availableCny: 600, orders: 1 }] },
-      },
-      TODAY,
-    );
-    const rows = csvRows(withAdvance);
-    expect(rows).toContainEqual(["Supplier advance applied (CNY)", 400]);
-    expect(rows).toContainEqual(["Advance status", "Partial"]);
-    // Recorded (added + order deposits) · added · order deposits · applied net (500 - 100 + 0) · available.
-    expect(rows).toContainEqual(["Supplier advance (CNY): recorded · added · order deposits · applied (net) · available", "1000 · 1000 · 0 · 400 · 600"]);
-    const applied = withAdvance.sections.find((section) => section.title === "Supplier advance applied")!;
-    expect(applied.rows.map((row) => [row[1], row[2], row[4]])).toEqual([
-      ["Applied to order", 500, 6000],
-      ["Returned from order", -100, -1200],
-    ]);
-    expect(applied.total).toEqual([null, "Advance applied", 400, null, 4800, null, "", "", ""]);
   });
 });

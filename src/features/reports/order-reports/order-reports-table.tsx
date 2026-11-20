@@ -9,13 +9,14 @@ import { DataTable } from "@/components/shared/data-table";
 import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { stageLabel } from "@/features/orders/order-status";
+import { moneyOrDash } from "@/features/payments/money";
 import type { OrderReportRow } from "@/lib/api/reports-types";
 import { formatDate, formatINR, formatMoney, formatNumber, formatQty, formatRateInr } from "@/lib/formatters";
 
-import { outstanding, PAYMENT_STATE_LABEL, rowStatus } from "./order-reports-file";
+import { paymentStatusLabel, rowStatus } from "./order-reports-file";
 
 // The Order reports table (RPT-O2, docs/order-report.md): one row per order with its supplier (name and code), items,
-// ordered quantity per unit, currency, PO value, paid, balance, stage and status, and the link to the order's detailed
+// ordered quantity per unit, currency, PO value, settled, outstanding, stage and status, and the link to the order's detailed
 // report. Amounts in the row's currency. Sortable, paged by 10. Client-side because column definitions hold functions.
 
 const PAYMENT_TONE = { unpaid: "danger", partly: "warning", paid: "success" } as const;
@@ -26,7 +27,10 @@ const wrap = "whitespace-normal";
 export const detailedReportHref = (po: string) => `/reports/orders/${encodeURIComponent(po)}`;
 
 export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportRow[]; today: string; linkPos: boolean }) {
-  const money = (pick: (row: OrderReportRow) => number) => ({ row }: { row: { original: OrderReportRow } }) => formatMoney(pick(row.original), row.original.currency);
+  const money =
+    (pick: (row: OrderReportRow) => number | null) =>
+    ({ row }: { row: { original: OrderReportRow } }) =>
+      moneyOrDash(pick(row.original), (v) => formatMoney(v, row.original.currency));
   const columns: ColumnDef<OrderReportRow>[] = [
     { accessorKey: "po", header: "PO Number", meta: { className: "w-[88px] font-bold" }, cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
     { accessorKey: "orderDate", header: "Order Date", meta: { className: "w-[92px]" }, cell: ({ row }) => formatDate(row.original.orderDate) },
@@ -76,20 +80,23 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       ),
     },
     {
-      accessorKey: "paidCny",
-      header: "Paid Amount",
+      // What the supplier's account settled of the order (the ledger's FIFO projection) and its payment status.
+      accessorKey: "settledCny",
+      header: "Settled",
       meta: { ...right, className: `w-[96px] ${wrap}` },
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end">
-          {formatMoney(row.original.paidCny, row.original.currency)}
-          {/* The supplier advance applied, apart from paid: balance = value - paid - advance. */}
-          {row.original.advanceCny ? <span className="text-[12.5px] text-muted-foreground">+ {formatMoney(row.original.advanceCny, row.original.currency)} advance</span> : null}
-          <StatusPill tone={PAYMENT_TONE[row.original.paymentStatus]}>{PAYMENT_STATE_LABEL[row.original.paymentStatus]}</StatusPill>
+          {moneyOrDash(row.original.settledCny, (v) => formatMoney(v, row.original.currency))}
+          {row.original.held ? (
+            <StatusPill tone="neutral">Pending review</StatusPill>
+          ) : row.original.paymentStatus ? (
+            <StatusPill tone={PAYMENT_TONE[row.original.paymentStatus]}>{paymentStatusLabel(row.original)}</StatusPill>
+          ) : null}
         </span>
       ),
     },
-    // Never below 0 (an overpaid order reads 0); sorts by the figure shown.
-    { id: "balanceCny", accessorFn: outstanding, header: "Balance", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money(outstanding) },
+    // Never below 0 by construction (the projection); "–" while held or not posted.
+    { accessorKey: "outstandingCny", header: "Outstanding", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money((row) => row.outstandingCny) },
     { accessorKey: "stage", header: "Order Stage", meta: { className: `w-[108px] ${wrap}` }, cell: ({ row }) => stageLabel(row.original.stage) },
     {
       id: "status",

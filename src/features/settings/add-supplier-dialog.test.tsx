@@ -39,7 +39,7 @@ const CURRENCY = "Preferred transaction currency";
 // The profile fields (backend docs/suppliers.md) of the saved row; the Add form posts them empty unless typed.
 const PROFILE = { code: "SUP-006", country: "China", email: "xu.feng@ningbo-denim.cn", state: "Zhejiang", postalCode: "315000", paymentTerms: "30% deposit", taxNumber: "91330200MA" };
 const EMPTY_PROFILE = { country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "" };
-const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, ...PROFILE, id: "s-6", openOrders: 0, openPos: 0, ytdValue: [], balance: [], exchangeRate: 11.5, rateUpdatedAt: "2026-11-01T06:30:00.000Z", hasTransactions: false, status: "Active" } };
+const saved: { supplier: SupplierRow } = { supplier: { ...NINGBO, ...PROFILE, id: "s-6", openOrders: 0, openPos: 0, ytdValue: [], balance: [], heldCurrencies: [], exchangeRate: 11.5, rateUpdatedAt: "2026-11-01T06:30:00.000Z", hasTransactions: false, status: "Active" } };
 const ROWS: SupplierRow[] = [
   saved.supplier,
   { ...saved.supplier, id: "s-7", code: "SUP-007", name: "Wenzhou Buttons", status: "Inactive" },

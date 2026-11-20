@@ -5,71 +5,86 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import type { OrderPayment } from "@/features/order-detail/data/queries";
 import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
-import { DeletePaymentButton, type PaymentOrderFacts } from "@/features/payments/delete-payment";
+import { DASH, moneyOrDash, PaymentStatus, paymentType } from "@/features/payments/money";
+import { VoidPaymentButton } from "@/features/payments/void-payment";
+import type { SettlementSlice } from "@/lib/api/ledger-types";
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
-/** `currency`: the order's, which its payments are in. Paid totals count every payee (ORD-4 `paidCny`/`paidInr`). */
-type Totals = { paidCny: number; paidInr: number; currency: Currency };
+const right = { align: "right" } as const;
+const rateOf = (rate: number | null, currency: Currency) => (currency === "INR" || rate === null ? DASH : formatRate(rate));
 
-/** `remove`: the order's figures for PAY-3's Actions column (payments Full), or null without it. */
-function columns(totals: Totals, remove: PaymentOrderFacts | null): ColumnDef<OrderPayment>[] {
+/**
+ * The payments recorded against this PO (ORD-4 `payments`): legacy supplier payments (a memo: they are on the supplier's
+ * account and settle its orders oldest first) and shipping-agent payments (sea freight). Voided ones stay listed,
+ * flagged. `canVoid`: PAY-3's Void (payments Full).
+ */
+function paymentColumns(canVoid: boolean): ColumnDef<OrderPayment>[] {
   return [
     {
       id: "date",
       header: "Date",
       cell: ({ row }) => {
         const date = row.original.paidOn ?? row.original.dueDate;
-        return date ? formatDate(date) : "–";
+        return date ? formatDate(date) : DASH;
       },
-      footer: "Total paid (all payees)",
     },
-    { accessorKey: "kind", header: "Type" },
+    { id: "type", header: "Type", cell: ({ row }) => paymentType(row.original) },
     { accessorKey: "payee", header: "Paid to" },
     {
       accessorKey: "amountCny",
       header: "Amount",
-      cell: ({ row }) => formatMoney(row.original.amountCny, totals.currency),
-      footer: () => formatMoney(totals.paidCny, totals.currency),
-      meta: { align: "right" },
+      meta: right,
+      cell: ({ row }) => <span className={row.original.voided ? "line-through" : undefined}>{formatMoney(row.original.amountCny, row.original.currency, { decimals: 2 })}</span>,
     },
-    {
-      accessorKey: "rateInr",
-      header: "Rate",
-      cell: ({ row }) => (row.original.rateInr === null ? "–" : formatRate(row.original.rateInr)),
-      meta: { align: "right" },
-    },
-    {
-      // The API's figure at the payment's own rate (ORD-4 `amountInr`); null while due.
-      accessorKey: "amountInr",
-      header: "In INR",
-      cell: ({ row }) => (row.original.amountInr == null ? "–" : formatINR(row.original.amountInr)),
-      footer: () => formatINR(totals.paidInr),
-      meta: { align: "right", className: "font-bold" },
-    },
-    // The table has no Status column, so Actions comes last.
-    ...(remove
+    { accessorKey: "rateInr", header: "Rate", meta: right, cell: ({ row }) => rateOf(row.original.rateInr, row.original.currency) },
+    // The API's figure at the payment's own rate; null while due.
+    { accessorKey: "amountInr", header: "In INR", meta: { align: "right", className: "font-bold" }, cell: ({ row }) => moneyOrDash(row.original.amountInr, formatINR) },
+    { id: "status", header: "Status", cell: ({ row }) => <PaymentStatus payment={row.original} /> },
+    ...(canVoid
       ? [
           {
             id: "actions",
             header: "Actions",
             meta: { className: `w-[72px] ${ACTIONS_COLUMN_CLASS}` },
-            cell: ({ row }) => <DeletePaymentButton payment={row.original} order={remove} />,
+            cell: ({ row }) => <VoidPaymentButton payment={row.original} voided={row.original.voided} />,
           } satisfies ColumnDef<OrderPayment>,
         ]
       : []),
   ];
 }
 
-export function PaymentsTable({ rows, totals, remove = null }: { rows: OrderPayment[]; totals: Totals; remove?: PaymentOrderFacts | null }) {
-  return (
-    <DataTable
-      columns={columns(totals, remove)}
-      data={rows}
-      getRowId={(payment) => payment.id}
-      density="snug"
-      size="sm"
-      emptyState="No payments recorded yet."
-    />
-  );
+export function PaymentsTable({ rows, canVoid = false }: { rows: OrderPayment[]; canVoid?: boolean }) {
+  return <DataTable columns={paymentColumns(canVoid)} data={rows} getRowId={(payment) => payment.id} density="snug" size="sm" emptyState="No payment names this PO." />;
+}
+
+/** "Settled by": the credits that settled the order, oldest first (ORD-4 `slices`), each at its own rate. */
+export function SlicesTable({ slices, currency, settledCny, settledInr }: { slices: SettlementSlice[]; currency: Currency; settledCny: number | null; settledInr: number | null }) {
+  const columns: ColumnDef<SettlementSlice>[] = [
+    { accessorKey: "entryDate", header: "Date", cell: ({ row }) => formatDate(row.original.entryDate), footer: "Settled" },
+    {
+      id: "source",
+      header: "From",
+      cell: ({ row }) =>
+        row.original.entryType === "adjustment" ? "Adjustment" : `Payment${row.original.memoPo ? ` (recorded against ${row.original.memoPo})` : row.original.advanceEntryId ? " (legacy advance)" : ""}`,
+    },
+    { accessorKey: "mode", header: "Mode", cell: ({ row }) => row.original.mode || DASH },
+    { accessorKey: "reference", header: "Reference", cell: ({ row }) => row.original.reference || DASH },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      meta: right,
+      cell: ({ row }) => formatMoney(row.original.amount, currency, { decimals: 2 }),
+      footer: () => moneyOrDash(settledCny, (v) => formatMoney(v, currency, { decimals: 2 })),
+    },
+    { accessorKey: "exchangeRate", header: "Rate", meta: right, cell: ({ row }) => rateOf(row.original.exchangeRate, currency) },
+    {
+      accessorKey: "amountInr",
+      header: "In INR",
+      meta: { align: "right", className: "font-bold" },
+      cell: ({ row }) => moneyOrDash(row.original.amountInr, formatINR),
+      footer: () => moneyOrDash(settledInr, formatINR),
+    },
+  ];
+  return <DataTable columns={columns} data={slices} getRowId={(slice) => slice.entryId} density="snug" size="sm" emptyState="Nothing has settled this order yet." />;
 }

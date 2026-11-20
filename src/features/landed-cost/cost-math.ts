@@ -8,11 +8,15 @@ export function shareOfTotal(values: number[]) {
   return { total, percents: values.map((value) => (total ? Math.round((value / total) * 1000) / 10 : 0)) };
 }
 
-/** Goods payments' totals: each payment is already in INR at its own date's rate; the average is total INR / total in the order's currency. */
+/**
+ * Goods credits' totals (the ledger's FIFO slices): each is already in INR at its own credit's rate. A slice without a
+ * rate (legacy) adds no INR, as goodsInr; the average is the rated slices' INR / their amount in the order's currency.
+ */
 export function convertPayments(payments: LandedCostRow["goodsPayments"]) {
-  const totalCny = sum(payments, (p) => p.amountCny);
-  const totalInr = sum(payments, (p) => p.amountInr);
-  return { totalCny, totalInr, averageRate: totalCny ? totalInr / totalCny : 0 };
+  const rated = payments.filter((p) => p.amountInr !== null);
+  const ratedCny = sum(rated, (p) => p.amount);
+  const totalInr = sum(rated, (p) => p.amountInr!);
+  return { totalCny: sum(payments, (p) => p.amount), totalInr, averageRate: ratedCny ? totalInr / ratedCny : 0 };
 }
 
 export type CostPartKey = "goods" | "seaFreight" | "duty" | "transport";

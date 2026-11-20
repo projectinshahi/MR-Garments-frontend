@@ -1,8 +1,10 @@
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
 import { stageLabel } from "@/features/orders/order-status";
-import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL, depositsOf, netApplied, recordedOf } from "@/features/deposits/advance-logic";
-import { DEPOSIT_STATUS } from "@/features/payments/money";
+import { balanceText, HELD_BALANCE, MILESTONE_STATUS, PAYMENT_STATUS, paymentType, round2 } from "@/features/payments/money";
+import { ledgerSections } from "@/features/supplier-ledger/ledger-files";
+import type { LedgerAccount } from "@/lib/api/ledger-types";
 import type { OrderReport, OrderTimelineStep } from "@/lib/api/reports-types";
+import type { SettlementFields } from "@/lib/api/types";
 import { formatDate, formatDateTime } from "@/lib/formatters";
 import type { MoneyTotal } from "@/types/domain";
 
@@ -18,6 +20,12 @@ const columns = (...list: (string | Column)[]) => list.map((column) => (typeof c
 const orDash = (value: string | null | undefined) => (value?.trim() ? value : "–");
 const when = (value: string | null) => (value ? formatDateTime(value) : "–");
 const moneyList = (totals: MoneyTotal[]) => (totals.length ? totals.map((total) => `${total.amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${total.currency}`).join(" · ") : "–");
+
+/** The order's FIFO payment status as the page and files write it: "Pending review" while its account is held, "–" when not posted. */
+export const settlementLabel = (s: Pick<SettlementFields, "held" | "paymentStatus">) => (s.held ? HELD_BALANCE : s.paymentStatus ? PAYMENT_STATUS[s.paymentStatus].label : "–");
+/** The supplier's signed ledger balance per currency ("Payable to supplier ¥1,200.00 · Settled"); a held one says so. */
+export const accountsText = (accounts: LedgerAccount[]) =>
+  accounts.map((a) => `${a.currency}: ${a.held || a.balanceCny === null ? HELD_BALANCE : balanceText(a.balanceCny, a.currency)}`).join(" · ") || "–";
 
 /** The report's sections, in page and file order, with the ids the section navigation scrolls to. */
 export const REPORT_SECTIONS = [
@@ -74,7 +82,7 @@ export function landedCostBreakdown(cost: NonNullable<OrderReport["landedCost"]>
   const notTracked = (label: string): CostComponent => ({ label, inr: null, status: "not tracked" });
   const components: CostComponent[] = [
     {
-      label: "Original purchase value (supplier payments and supplier advance applied, INR at each one's own rate)",
+      label: "Original purchase value (the supplier payments that settled the order, INR at each one's own rate)",
       inr: cost.goodsInr,
       status: cost.waitingFor === "supplier payment" ? "partial" : "recorded",
     },
@@ -130,11 +138,10 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["PO value (INR, at the PO rate)", order.orderValueInr],
         ...(payments
           ? ([
-              [`Total paid to supplier (${cur})`, payments.paidCny],
-              ["Paid (INR)", payments.paidInr],
-              // The supplier advance applied (not a payment), only from a backend that reports it.
-              ...(payments.advanceCny === undefined ? [] : [[`Supplier advance applied (${cur})`, payments.advanceCny]]),
-              [`Outstanding balance (${cur})`, payments.balanceCny],
+              [`Settled from the supplier's account (${cur})`, payments.settledCny],
+              ["Settled (INR, at each payment's rate)", payments.settledInr],
+              [`Outstanding (${cur})`, payments.outstandingCny],
+              ["Payment status", settlementLabel(payments)],
             ] as Cell[][])
           : []),
         ["Ordered", perUnit((t) => t.ordered)],
@@ -183,20 +190,11 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Orders with this supplier", supplierAccount.orders],
         ["Open orders with this supplier", supplierAccount.openOrders],
         ["Total purchase value with this supplier", moneyList(supplierAccount.purchaseValue)],
-        ["Paid to this supplier (every order)", moneyList(supplierAccount.paid)],
-        ["Supplier's overall balance (every order)", moneyList(supplierAccount.balance)],
-        [`Amount paid for this PO (${cur})`, payments.paidCny],
-        [`Outstanding balance for this PO (${cur})`, payments.balanceCny],
-        [`Deposits paid on this PO (${cur})`, payments.depositsPaidCny],
-        ...(payments.advanceCny === undefined ? [] : ([[`Supplier advance applied to this PO (${cur})`, payments.advanceCny]] as Cell[][])),
-        ...(payments.excessCny ? ([[`Paid beyond the order value, moved to supplier advance (${cur})`, payments.excessCny]] as Cell[][]) : []),
-        ...(supplierAccount.advanceApplied ? ([["Supplier advance applied (every order)", moneyList(supplierAccount.advanceApplied)]] as Cell[][]) : []),
-        ...(supplierAccount.advance ?? []).map(
-          (line): Cell[] => [
-            `Supplier advance (${line.currency}): recorded · added · order deposits · applied (net) · available`,
-            `${recordedOf(line)} · ${line.receivedCny} · ${depositsOf(line)} · ${netApplied(line)} · ${line.availableCny}`,
-          ],
-        ),
+        ["Settled (every order)", moneyList(supplierAccount.settled)],
+        ["Outstanding (every order)", moneyList(supplierAccount.outstanding)],
+        ["Supplier balance (ledger)", accountsText(supplierAccount.accounts)],
+        [`Settled for this PO (${cur})`, payments.settledCny],
+        [`Outstanding for this PO (${cur})`, payments.outstandingCny],
         ...supplierAccount.deposits.summary.map(
           (line): Cell[] => [
             `Supplier deposit ${line.direction === "give" ? "to give" : "to receive"} (${line.currency}): agreed · settled · remaining`,
@@ -206,6 +204,8 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Deposit utilised for this PO", "Not tracked: account deposits are not linked to orders"],
       ],
     });
+    // The supplier's ledger accounts and statement (newest first), beside the summary.
+    sections.push(...ledgerSections(supplierAccount.accounts, supplierAccount.entries).map((s) => ({ ...s, sheet: "Supplier Details", title: s.title === "Accounts" ? "Supplier ledger accounts" : s.title })));
   }
   sections.push({
     sheet: "Order Items",
@@ -249,7 +249,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
     });
     if (payments) {
       // Paid rows only: the total is what was paid; a due agent payment stays in the payment ledger.
-      const agentPayments = payments.list.filter((p) => p.payeeRole === "agent" && p.status === "paid");
+      const agentPayments = payments.list.filter((p) => p.payeeRole === "agent" && p.status === "paid" && !p.voided);
       sections.push({
         sheet: "Shipping",
         title: "Sea freight paid to shipping agents",
@@ -382,79 +382,65 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         columns: columns("Field", "Value"),
         rows: [
           [`Original PO amount (${cur})`, order.orderValueCny],
-          [`Total paid to supplier (${cur})`, payments.paidCny],
-          ["Paid (INR)", payments.paidInr],
-          [`Deposits paid on this PO (${cur})`, payments.depositsPaidCny],
+          [`Settled from the supplier's account (${cur})`, payments.settledCny],
+          ["Settled (INR, at each payment's rate)", payments.settledInr],
+          [`Outstanding (${cur})`, payments.outstandingCny],
+          ["Payment status", settlementLabel(payments)],
           [`Due (${cur})`, payments.dueCny],
-          ...(payments.advanceCny === undefined
-            ? []
-            : ([
-                [`Supplier advance applied (${cur})`, payments.advanceCny],
-                ["Supplier advance applied (INR)", payments.advanceInr ?? null],
-                ["Advance status", payments.advanceStatus ? ADVANCE_STATUS_LABEL[payments.advanceStatus] : ""],
-              ] as Cell[][])),
-          [`Outstanding balance (${cur})`, payments.balanceCny],
           [`Sea freight paid to agents (${cur})`, payments.agentPaidCny],
           ["Sea freight paid (INR)", payments.agentPaidInr],
-          // The deposit the supplier asked for (0009), only when one was agreed.
+          // The Deposit Required milestone (D11), only when one was agreed: met once the settled amount reaches it.
           ...(payments.depositRequiredCny == null
             ? []
             : ([
                 [`Deposit required (${cur})`, payments.depositRequiredCny],
-                [`Deposit pending (${cur})`, payments.depositPendingCny ?? null],
-                ["Deposit status", DEPOSIT_STATUS[payments.depositStatus]?.label ?? ""],
+                [`Deposit pending (${cur})`, payments.depositPendingCny],
+                ["Deposit milestone", payments.depositStatus ? MILESTONE_STATUS[payments.depositStatus].label : null],
               ] as Cell[][])),
-          ["Payment refunds and credits", "Not recorded in this system (advance returns are under Supplier advance applied)"],
+          ["Refunds and corrections", "Voids and Management adjustments on the supplier ledger (the statement on Supplier Details)"],
         ],
       },
       {
         sheet: "Payment History",
-        title: "Payment ledger",
-        columns: columns(date("Payment date"), "Reference", "Type", "Method", money("Amount", cur), "Currency", "Rate (INR)", money("Amount", "INR"), "Payee", "Paid to", "Deposit reference", "Notes", "Status", date("Due date"), "Recorded by", "Recorded"),
+        title: "Settled by (supplier credits, oldest first)",
+        columns: columns(date("Date"), "Credit", "Reference", "Method", "Recorded against PO", money("Amount", cur), "Rate (INR)", money("Amount", "INR")),
+        rows: payments.slices.map((s) => [s.entryDate, s.entryType === "adjustment" ? "Adjustment" : "Payment", s.reference, s.mode, s.memoPo, s.amount, s.exchangeRate, s.amountInr]),
+        total: payments.slices.length ? [null, "Settled", null, null, null, payments.settledCny, null, payments.settledInr] : undefined,
+      },
+      {
+        sheet: "Payment History",
+        title: "Payments recorded on this PO",
+        columns: columns(date("Payment date"), "Reference", "Type", "Method", money("Amount", cur), "Currency", "Rate (INR)", money("Amount", "INR"), "Payee", "Paid to", "Notes", "Status", date("Due date"), "Recorded by", "Recorded"),
         rows: payments.list.map((p) => [
           p.paidOn,
           p.reference,
-          p.kind,
+          paymentType(p),
           p.mode,
           p.amountCny,
-          cur,
+          p.currency,
           p.rateInr,
           p.amountInr,
           p.payee,
           p.payeeRole,
-          null,
           p.notes,
-          p.status,
+          p.voided ? `voided: ${p.voidReason}` : p.status,
           p.dueDate,
           orDash(p.recordedBy),
           when(p.recordedAt),
         ]),
       },
     );
-    // The order's supplier advance allocations (+) and reversals (-), each at the rate of the advance it came from.
-    if (payments.advanceEntries?.length) {
-      sections.push({
-        sheet: "Payment History",
-        title: "Supplier advance applied",
-        columns: columns(date("Date"), "Type", money("Amount (+ applied, - returned)", cur), "Rate (INR)", money("Amount", "INR"), date("From advance paid on"), "Advance reference", "Recorded by", "Recorded"),
-        rows: payments.advanceEntries.map((e) => {
-          const sign = e.kind === "reversal" ? -1 : 1;
-          return [e.entryDate, ADVANCE_KIND_LABEL[e.kind], sign * e.amount, e.exchangeRate, sign * e.amountInr, e.advancePaidOn, e.advanceReference ?? "", orDash(e.recordedBy), when(e.recordedAt)];
-        }),
-        total: [null, "Advance applied", payments.advanceCny ?? null, null, payments.advanceInr ?? null, null, "", "", ""],
-      });
-    }
   }
   if (payments && supplierAccount) {
-    // Paid deposits only (the total is `depositsPaidCny`); a due deposit stays in the payment ledger.
-    const poDeposits = payments.list.filter((p) => p.payeeRole === "supplier" && p.kind === "Deposit" && p.status === "paid");
+    // Legacy supplier deposits recorded against this PO (a memo: they settle through the account); paid, not voided.
+    const poDeposits = payments.list.filter((p) => p.payeeRole === "supplier" && p.kind === "Deposit" && p.status === "paid" && !p.voided);
     sections.push(
       {
         sheet: "Deposit History",
-        title: "Deposits paid on this PO",
+        title: "Legacy deposits recorded against this PO",
         columns: columns(date("Paid on"), date("Due date"), "Reference", money("Amount", cur), "Rate (INR)", money("Amount", "INR"), "Mode", "Status", "Notes"),
         rows: poDeposits.map((p) => [p.paidOn, p.dueDate, p.reference, p.amountCny, p.rateInr, p.amountInr, p.mode, p.status, p.notes]),
-        total: poDeposits.length ? [null, null, "Deposits paid", payments.depositsPaidCny, null, null, "", "", ""] : undefined,
+        total: poDeposits.length ? [null, null, "Deposits", round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), null, null, "", "", ""] : undefined,
       },
       {
         sheet: "Deposit History",

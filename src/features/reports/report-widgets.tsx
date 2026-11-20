@@ -7,6 +7,7 @@ import { LinkPending, useNavigate } from "@/components/layout/navigation-progres
 import { BarChart } from "@/components/shared/bar-chart";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
+import { BalanceFigure, moneyOrDash } from "@/features/payments/money";
 import { formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
 import type { LandedCostByMonthReport, OrderedVsReceivedReport, OrderStatusReport, PaymentsPerSupplierReport } from "./data/queries";
@@ -78,9 +79,10 @@ type SupplierRow = PaymentsPerSupplierReport["suppliers"][number];
 type Totals = PaymentsPerSupplierReport["totalsByCurrency"];
 
 /**
- * Payments per supplier (37), with the totals row. A row per supplier and currency; each amount in its row's currency,
- * and the totals one per currency ("¥5,800 · $200"), never added together. INR is one total. The supplier name and
- * the row open the supplier's detail (RPT-5D) with the report's filters (`query`).
+ * Payments per supplier (37), with the totals row. A row per supplier and currency: its open orders' value, settled
+ * and outstanding (the ledger's FIFO projection) and its signed ledger balance; each amount in its row's currency,
+ * and the totals one per currency ("¥5,800 · $200"), never added together, held accounts left out. INR is one total.
+ * The supplier name and the row open the supplier's detail (RPT-5D) with the report's filters (`query`).
  */
 export function SupplierPaymentsTable({ rows, totals, query }: { rows: SupplierRow[]; totals: Totals; query: string }) {
   const navigate = useNavigate();
@@ -114,34 +116,34 @@ export function SupplierPaymentsTable({ rows, totals, query }: { rows: SupplierR
       footer: each((total) => total.orderValueCny),
     },
     {
-      accessorKey: "paidCny",
-      header: "Paid",
+      // The open orders' FIFO-settled part; a held account (pending review) has no figures.
+      accessorKey: "settledCny",
+      header: "Settled",
       meta: { align: "right", className: "w-[146px]" },
-      // The supplier advance applied shows under paid only when there is one, so the reference layout is unchanged otherwise.
-      cell: ({ row }) =>
-        row.original.advanceCny ? (
-          <span className="inline-flex flex-col items-end">
-            {formatMoney(row.original.paidCny, row.original.currency)}
-            <span className="text-[12.5px] text-muted-foreground">+ {formatMoney(row.original.advanceCny, row.original.currency)} advance</span>
-          </span>
-        ) : (
-          formatMoney(row.original.paidCny, row.original.currency)
-        ),
-      footer: each((total) => total.paidCny),
+      cell: ({ row }) => moneyOrDash(row.original.settledCny, (v) => formatMoney(v, row.original.currency)),
+      footer: each((total) => total.settledCny),
+    },
+    {
+      accessorKey: "outstandingCny",
+      header: "Outstanding",
+      meta: { align: "right", className: "w-[146px]" },
+      cell: ({ row }) => moneyOrDash(row.original.outstandingCny, (v) => formatMoney(v, row.original.currency)),
+      footer: each((total) => total.outstandingCny),
     },
     {
       accessorKey: "paidInr",
       header: "Paid in INR",
-      meta: { align: "right", className: "w-[160px]" },
-      cell: ({ row }) => formatINR(row.original.paidInr),
+      meta: { align: "right", className: "w-[150px]" },
+      cell: ({ row }) => moneyOrDash(row.original.paidInr, (v) => formatINR(v)),
       footer: formatINR(totals.reduce((sum, total) => sum + total.paidInr, 0)),
     },
     {
+      // The ledger account, signed: available with the supplier (+), settled (0) or payable to the supplier (−).
       accessorKey: "balanceCny",
-      header: "Balance",
-      meta: { align: "right", className: "w-[145px]" },
-      cell: ({ row }) => formatMoney(row.original.balanceCny, row.original.currency),
-      footer: each((total) => total.balanceCny),
+      header: "Supplier balance",
+      meta: { align: "right", className: "w-[170px]" },
+      cell: ({ row }) => <BalanceFigure balance={row.original.balanceCny} currency={row.original.currency} held={row.original.held} />,
+      footer: `${each((total) => total.payableCny)} payable`,
     },
   ];
   return (

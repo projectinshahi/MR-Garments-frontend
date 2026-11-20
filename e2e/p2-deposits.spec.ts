@@ -1,155 +1,83 @@
 import type { Page } from "@playwright/test";
 
-import { type Api, cny, expect, kpi, longDate, test, today } from "./live-api";
+import { expect, test } from "./live-api";
 import { downloadReport } from "./report-download";
 
-// Deposits (docs/phase2-contracts.md section 3, docs/phase2-fixes.md section 2), against the live API as Management.
-// Scenario 6: an order's deposit requirement on the Deposits page, pending until it is paid. Scenario 7: a supplier's
-// deposits to give and to receive, partly settled, kept apart; the statement's export downloads. Role/label locators
-// only (hidden <Activity> routes stay in the DOM); each test makes its own records and finds them by PO or by a
-// supplier of its own.
+// Deposits after the unified supplier ledger (D8, D11, D14). Scenario 6: an order's Deposit Required is a milestone
+// on Supplier ledger > Deposit milestones, met as the supplier's account settles the order (oldest first), never a
+// balance. Scenario 7: supplier deposits are a read-only archive: the API refuses new ones (410) and the supplier's
+// ledger shows the archive tab without any way to add to it. Each test uses a supplier of its own.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-/** Filters the table to this PO until `shown` holds, typing again if hydration reset the box (the list is long on a shared database). */
+/** Filters the milestones to this PO until `shown` holds, typing again if hydration reset the box. */
 const searchPo = (page: Page, po: string, shown: () => Promise<void>) =>
   expect(async () => {
-    await page.getByRole("searchbox", { name: "Search PO" }).fill(po);
+    await page.getByRole("searchbox", { name: "Search PO or supplier" }).fill(po);
     await shown();
   }).toPass({ timeout: 20_000 });
 
-/** A supplier of this test's own (MD-2), so its statement holds only what the test records. */
-async function newSupplier(api: Api) {
-  const name = `Deposit Test ${String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0")}`;
-  const response = await api.post("/suppliers", { name, currency: "CNY" });
-  expect(response.status(), await response.text()).toBe(201);
-  const { supplier } = (await response.json()) as { supplier: { id: string; name: string } };
-  return supplier;
-}
-
-test("Scenario 6: an order's deposit requirement is Partly paid under Pending until the rest is paid, then under Paid", async ({ page, api }) => {
-  // ¥1,000 order whose supplier asked for a ¥1,000 deposit, ¥300 of it paid with the order.
-  const { id: orderId, po } = await api.createOrder({ depositRequiredCny: 1000, deposits: [{ amountCny: 300, rateInr: 12 }] });
+test("Scenario 6: a Deposit Required milestone goes not met, partly met, met as payments settle the order", async ({ page, api }) => {
+  // ¥1,000 order whose supplier asked for a ¥1,000 deposit; nothing paid yet.
+  const supplier = await api.newSupplier("Milestone Supply");
+  const { po } = await api.createOrder({ supplier: supplier.name, depositRequiredCny: 1000 });
   const row = page.getByRole("table").getByRole("row").filter({ hasText: po });
   const oneRow = () => expect(row).toHaveCount(1, { timeout: 2_000 });
+  const cells = row.getByRole("cell");
 
-  await page.goto("/deposits/pending");
-  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
+  await page.goto("/supplier-ledger/milestones");
+  await expect(page.getByRole("heading", { level: 1, name: "Supplier ledger" })).toBeVisible();
   await searchPo(page, po, oneRow);
-  // One obligation row, not the ¥300 payment itself: ¥1,000 asked, ¥300 paid in one payment, ¥700 pending.
-  await expect(row).toContainText("Order deposit");
-  await expect(row).toContainText("1 payment");
-  await expect(row).toContainText(cny(1000));
-  await expect(row).toContainText(cny(700));
-  await expect(row.getByText("Partly paid", { exact: true })).toBeVisible();
-  await expect(row.getByRole("link", { name: "Details" })).toHaveAttribute("href", `/orders/${encodeURIComponent(po)}/payments`);
-  // Payables only, the obligation counted once: ¥1,000 to pay, ¥300 paid, ¥700 pending, nothing to receive.
-  await expect(kpi(page, "Deposits to pay")).toContainText(`${cny(1000)}1 deposit`);
-  await expect(kpi(page, "Paid")).toContainText(cny(300));
-  await expect(kpi(page, "Pending to pay")).toContainText(cny(700));
-  await expect(kpi(page, "To receive")).toContainText("0 deposits");
+  await expect(cells.nth(2)).toHaveText(supplier.name);
+  await expect(cells.nth(3)).toHaveText("¥1,000.00");
+  await expect(cells.nth(4)).toHaveText("¥0.00");
+  await expect(cells.nth(5)).toHaveText("¥1,000.00");
+  await expect(row.getByText("Deposit not met", { exact: true })).toBeVisible();
+  await expect(row.getByRole("link", { name: supplier.name })).toHaveAttribute("href", `/supplier-ledger/${supplier.id}`);
 
-  // The remaining ¥700 is paid (PAY-2, kind Deposit): the order leaves Pending ...
-  await api.pay(orderId, { kind: "Deposit", amountCny: 700, rateInr: 12 });
+  // ¥300 to the supplier's account: partly met, ¥700 pending.
+  await api.paySupplier(supplier.id, { amount: 300, rateInr: 12 });
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
-  // Nothing pending at all on a fresh database, or nothing matching once other specs have left pending rows.
-  await searchPo(page, po, () => expect(page.getByText(/^No (pending deposits|deposits match these filters)\.$/)).toBeVisible({ timeout: 2_000 }));
-
-  // ... and shows under Paid, in full, with both payments.
-  await page.getByRole("link", { name: "Paid" }).click();
   await searchPo(page, po, oneRow);
-  await expect(row).toContainText("2 payments");
-  await expect(row).toContainText(cny(1000));
-  await expect(row.getByText("Paid", { exact: true })).toBeVisible();
-  await expect(kpi(page, "Pending to pay")).toContainText(cny(0));
+  await expect(cells.nth(4)).toHaveText("¥300.00");
+  await expect(cells.nth(5)).toHaveText("¥700.00");
+  await expect(row.getByText("Deposit partly met", { exact: true })).toBeVisible();
+  // The Milestone filter keeps it under Partly met only.
+  const milestone = async (label: string) => {
+    await page.getByRole("button", { name: /^Milestone: / }).click();
+    await page.getByRole("menuitemradio", { name: label }).click();
+  };
+  await milestone("Deposit met");
+  await expect(row).toHaveCount(0);
+  await milestone("Deposit partly met");
+  await expect(row).toHaveCount(1);
+  await milestone("All milestones");
+
+  // The remaining ¥700: met, nothing pending.
+  await api.paySupplier(supplier.id, { amount: 700, rateInr: 12 });
+  await page.reload();
+  await searchPo(page, po, oneRow);
+  await expect(cells.nth(4)).toHaveText("¥1,000.00");
+  await expect(cells.nth(5)).toHaveText("¥0.00");
+  await expect(row.getByText("Deposit met", { exact: true })).toBeVisible();
+  expect(await api.order(po)).toMatchObject({ depositRequiredCny: 1000, depositSettledCny: 1000, depositPendingCny: 0, depositStatus: "met" });
+
+  // The page's download is a file.
+  expect((await downloadReport(page, "Excel")).name).toMatch(/\.xlsx$/);
 });
 
-test("Scenario 7: a deposit to give with a partial payment and one to receive with a partial receipt stay apart; the statement exports", async ({ page, api }) => {
-  const supplier = await newSupplier(api);
-  await page.goto(`/deposits/suppliers/${supplier.id}`);
+test("Scenario 7: supplier deposits are a read-only archive: the API refuses new ones and the ledger offers no way to add them", async ({ page, api }) => {
+  const supplier = await api.newSupplier("Archive Supply");
+  const refused = await api.post(`/suppliers/${supplier.id}/deposits`, { direction: "give", amount: 1000, openedOn: "2026-11-01", exchangeRate: 12.5 });
+  expect(refused.status()).toBe(410);
+  expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("gone");
+  expect((await api.post(`/suppliers/${supplier.id}/advances`, { amount: 100, paidOn: "2026-11-01", rateInr: 12.5, mode: "Cash" })).status()).toBe(410);
+
+  await page.goto(`/supplier-ledger/${supplier.id}`);
   await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
-  await expect(page.getByText(`No deposits with ${supplier.name} yet.`)).toBeVisible();
-
-  // Open a ¥1,000 deposit to give through the dialog.
-  await page.getByRole("button", { name: "+ New deposit" }).click();
-  let dialog = page.getByRole("dialog", { name: `New deposit for ${supplier.name}` });
-  await dialog.getByLabel(/^Direction/).selectOption("give");
-  await dialog.getByLabel(/^Amount/).fill("1000");
-  await dialog.getByLabel(/^Reference/).fill("Tooling advance");
-  // The supplier has no saved rate (it is optional): the deposit asks for its own before it opens.
-  await dialog.getByRole("button", { name: "Open deposit" }).click();
-  await expect(dialog.getByText("Enter the exchange rate: a number above 0 with at most 4 decimals.")).toBeVisible();
-  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
-  await dialog.getByRole("button", { name: "Open deposit" }).click();
-  await expect(dialog).toBeHidden();
-  const give = page.getByRole("article", { name: /^To give/ });
-  await expect(give).toContainText("Open");
-  // The rate typed for the deposit, and its INR at that rate: 1,000 x 12.5.
-  await expect(give).toContainText("Rate when opened1 CNY = ₹12.50");
-  await expect(give).toContainText("INR equivalent₹12,500.00");
-
-  // Pay ¥300 of it: the amount comes prefilled with the pending ¥1,000.
-  await give.getByRole("button", { name: "Record payment" }).click();
-  dialog = page.getByRole("dialog", { name: "Record payment" });
-  await expect(dialog.getByLabel(/^Amount/)).toHaveValue("1000");
-  await dialog.getByLabel(/^Amount/).fill("300");
-  await dialog.getByLabel(/^Mode/).fill("Bank transfer");
-  await dialog.getByRole("button", { name: "Record payment" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(give).toContainText("Partly settled");
-  await expect(give.getByRole("list", { name: "Payments" })).toContainText(`1. ${longDate(today())} · ${cny(300)} · Bank transfer`);
-
-  // Open a ¥500 deposit to receive and receive ¥100 of it.
-  await page.getByRole("button", { name: "+ New deposit" }).click();
-  dialog = page.getByRole("dialog", { name: `New deposit for ${supplier.name}` });
-  await dialog.getByLabel(/^Direction/).selectOption("receive");
-  await dialog.getByLabel(/^Amount/).fill("500");
-  await dialog.getByLabel(/^Exchange rate/).fill("12.5");
-  await dialog.getByRole("button", { name: "Open deposit" }).click();
-  await expect(dialog).toBeHidden();
-  const receive = page.getByRole("article", { name: /^To receive/ });
-  await receive.getByRole("button", { name: "Record receipt" }).click();
-  dialog = page.getByRole("dialog", { name: "Record receipt" });
-  await dialog.getByLabel(/^Amount/).fill("100");
-  await dialog.getByLabel(/^Mode/).fill("Cash");
-  await dialog.getByRole("button", { name: "Record receipt" }).click();
-  await expect(dialog).toBeHidden();
-
-  // Six figures, never netted: give 1,000 / 300 / 700; receive 500 / 100 / 400.
-  await expect(kpi(page, "To give")).toContainText(cny(1000));
-  await expect(kpi(page, "Given")).toContainText(cny(300));
-  await expect(kpi(page, "Pending to give")).toContainText(cny(700));
-  await expect(kpi(page, "To receive")).toContainText(cny(500));
-  await expect(kpi(page, "Received")).toContainText(cny(100));
-  await expect(kpi(page, "Pending to receive")).toContainText(cny(400));
-
-  // The API refuses more than what is pending, under the field.
-  await give.getByRole("button", { name: "Record payment" }).click();
-  dialog = page.getByRole("dialog", { name: "Record payment" });
-  await dialog.getByLabel(/^Amount/).fill("700.01");
-  await dialog.getByLabel(/^Mode/).fill("Cash");
-  await dialog.getByRole("button", { name: "Record payment" }).click();
-  await expect(dialog.getByText("Only ¥700 left to settle.")).toBeVisible();
-  await dialog.getByRole("button", { name: "Cancel" }).click();
-
-  // The Suppliers tab shows the same six figures on the supplier's line; the Pending tab lists both deposits.
-  await page.goto("/deposits/suppliers");
-  const line = page.getByRole("table").getByRole("row").filter({ hasText: supplier.name });
-  await expect(line.getByRole("cell")).toHaveText([supplier.name, cny(1000), cny(300), cny(700), cny(500), cny(100), cny(400), "Statement"]);
-  await page.getByRole("link", { name: "Pending" }).click();
-  await expect(page.getByRole("table").getByRole("row").filter({ hasText: supplier.name })).toHaveCount(2);
-
-  // An export button downloads a file.
-  await page.goto(`/deposits/suppliers/${supplier.id}`);
-  expect((await downloadReport(page, "Excel")).name).toMatch(/^supplier-deposits-deposit-test-\d{6}-\d{4}-\d{2}-\d{2}\.xlsx$/);
-
-  // Leave nothing behind (the Suppliers tab pages by 10): each transaction (SD-4), each deposit (SD-5), then the supplier.
-  const statement = await api.get<{ deposits: { id: string; transactions: { id: string }[] }[] }>(`/suppliers/${supplier.id}/deposits`);
-  const remove = async (path: string) => expect((await api.request.delete(`/api/v1${path}`, { data: {} })).status(), path).toBe(204);
-  for (const deposit of statement.deposits) {
-    for (const transaction of deposit.transactions) await remove(`/supplier-deposit-transactions/${transaction.id}`);
-    await remove(`/supplier-deposits/${deposit.id}`);
-  }
-  await remove(`/suppliers/${supplier.id}`);
+  await page.getByRole("tab", { name: "Supplier deposits (archive)" }).click();
+  await expect(page.getByText(`No supplier deposits with ${supplier.name}.`)).toBeVisible();
+  await page.getByRole("tab", { name: "Legacy advance history" }).click();
+  await expect(page.getByText("No legacy advance history.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /New deposit|Add advance/ })).toHaveCount(0);
 });

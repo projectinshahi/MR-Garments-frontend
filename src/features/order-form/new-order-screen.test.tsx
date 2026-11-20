@@ -19,10 +19,11 @@ const TODAY = "2026-10-27";
 const options: OrderOptions = {
   nextPo: "PO-2050",
   suppliers: [
-    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China", currency: "CNY", exchangeRate: null },
-    // Yiwu has its rate set (1 USD = ₹88): the deposits' default rate. Foshan has none yet; INR needs none.
-    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu", currency: "USD", exchangeRate: 88 },
-    { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR", exchangeRate: 1 },
+    // ORD-2 `ledgerBalance`: signed (+ available with the supplier, − payable); `held`: pending review (D4).
+    { id: "s-foshan", name: "Foshan Fabrics", contactPerson: "Mr. Li Wei", phone: "+86 757 8812 0345", city: "Foshan, China", currency: "CNY", exchangeRate: null, held: false, ledgerBalance: [{ currency: "CNY", balanceCny: 10_000 }] },
+    { id: "s-yiwu", name: "Yiwu Trims Ltd.", contactPerson: "Ms. Zhao", phone: "+86 579 0000", city: "Yiwu", currency: "USD", exchangeRate: 88, held: false, ledgerBalance: [] },
+    { id: "s-kochi", name: "Kochi Mills", contactPerson: "", phone: "", city: "Kochi", currency: "INR", exchangeRate: 1, held: false, ledgerBalance: [] },
+    { id: "s-shantou", name: "Shantou Toys", contactPerson: "", phone: "", city: "Shantou", currency: "CNY", exchangeRate: 12, held: true, ledgerBalance: [] },
   ],
   items: [
     { id: "i-denim", name: "Cotton denim fabric", unit: "m", price: null },
@@ -68,8 +69,8 @@ describe("NewOrderScreen", () => {
     expect(ui.field("City")).toHaveAttribute("readonly");
   });
 
-  it("posts ORD-3 with lines and deposits, then toasts, empties the form and opens the new order", async () => {
-    post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" } });
+  it("posts ORD-3 with lines and no payments, shows the supplier balance now and after, toasts the debit, empties the form and opens the order", async () => {
+    post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" }, ledger: { supplierId: "s-foshan", currency: "CNY", debitCny: 47_900, balanceBefore: 10_000, balanceAfter: -37_900 } });
     const ui = open();
     await fillOrder(ui);
     expect(screen.getByText("m")).toBeVisible();
@@ -82,15 +83,10 @@ describe("NewOrderScreen", () => {
     await ui.user.type(ui.field("Rate (¥), line 2"), "0.35");
     await ui.user.type(ui.field("Quantity, line 2"), "10000");
 
-    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
-    await ui.user.type(ui.field("Amount (¥), deposit 1"), "20000");
-    await ui.user.type(screen.getAllByLabelText("Rate to INR")[0]!, "11.6");
-    await ui.user.type(screen.getAllByLabelText("Mode")[0]!, "Bank transfer");
-    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
-    await ui.user.selectOptions(ui.field("Paid to, deposit 2"), "a-sino");
-    await ui.user.type(ui.field("Amount (¥), deposit 2"), "1500");
-    await ui.user.type(screen.getAllByLabelText("Rate to INR")[1]!, "11.6");
-    await ui.user.type(screen.getAllByLabelText("Mode")[1]!, "Bank transfer");
+    // No deposits section (D6): supplier payments are recorded with Record payment.
+    expect(screen.queryByRole("button", { name: "+ Add deposit" })).not.toBeInTheDocument();
+    expect(screen.getByText("Supplier balance now").nextSibling).toHaveTextContent("Available with supplier ¥10,000.00");
+    expect(screen.getByText("Supplier balance after this order").parentElement!.nextSibling).toHaveTextContent("Payable to supplier ¥37,900.00");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 47,900.00");
     await ui.user.type(ui.field("Deposit required (¥)"), "25,000");
 
@@ -109,12 +105,8 @@ describe("NewOrderScreen", () => {
         { itemId: "i-denim", quantity: 2400, rateCny: 18.5 },
         { itemId: "i-buttons", quantity: 10000, rateCny: 0.35 },
       ],
-      deposits: [
-        { payee: "Foshan Fabrics", payeeRole: "supplier", amountCny: 20000, paidOn: TODAY, rateInr: 11.6, mode: "Bank transfer" },
-        { payee: "Sino Freight", payeeRole: "agent", amountCny: 1500, paidOn: TODAY, rateInr: 11.6, mode: "Bank transfer" },
-      ],
     });
-    expect(toast.success).toHaveBeenCalledWith("Order PO-2050 placed");
+    expect(toast.success).toHaveBeenCalledWith("Order PO-2050 placed. Debited ¥47,900.00; supplier balance Payable to supplier ¥37,900.00.");
     expect(router.push).toHaveBeenCalledWith("/orders/PO-2050");
     expect(router.push.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
     // The route stays mounted, so the next visit must not show this order again.
@@ -122,8 +114,15 @@ describe("NewOrderScreen", () => {
     expect(ui.field("Delivery date")).toHaveValue("");
     expect(ui.field("Deposit required (¥)")).toHaveValue("");
     expect(screen.queryByLabelText(/^Item, line 2/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Amount \(¥\), deposit 1/)).not.toBeInTheDocument();
   }, 30_000);
+
+  it("a held supplier shows the review message and can't place the order", async () => {
+    const ui = open();
+    await ui.user.selectOptions(ui.field("Supplier"), "s-shantou");
+    expect(screen.getByRole("alert")).toHaveTextContent("This supplier's account is pending review.");
+    expect(ui.place).toBeDisabled();
+    expect(screen.queryByText("Supplier balance now")).not.toBeInTheDocument();
+  });
 
   it("sends one request however often Place order is clicked while it runs", async () => {
     let answer: (value: unknown) => void = () => {};
@@ -257,60 +256,21 @@ describe("NewOrderScreen", () => {
     await ui.user.type(screen.getByLabelText("Rate ($), line 1"), "0.35");
     await ui.user.type(ui.field("Quantity, line 1"), "1000");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("$ 350.00");
-    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
-    await ui.user.type(screen.getByLabelText("Amount ($), deposit 1"), "100");
-    await ui.user.type(ui.field("Mode"), "Wire");
-    // The supplier's rate now fills the deposit's rate; this deposit was paid at another, so it is changed.
-    expect(ui.field("Rate to INR")).toHaveValue("88");
-    await ui.user.clear(ui.field("Rate to INR"));
-    await ui.user.click(ui.place);
-    expect(await screen.findByText("Deposit 1: Enter the rate.")).toBeVisible();
-    await ui.user.type(ui.field("Rate to INR"), "88.5");
-    expect(screen.getAllByText("₹8,850")).toHaveLength(2); // the deposit and "Deposits in INR"
+    // No account yet in USD: settled now, payable after.
+    expect(screen.getByText("Supplier balance now").nextSibling).toHaveTextContent("Settled");
     await ui.user.click(ui.place);
     await waitFor(() => expect(post).toHaveBeenCalledOnce());
-    expect(post.mock.calls[0]![1]).toMatchObject({
-      supplierId: "s-yiwu",
-      currency: "USD",
-      deposits: [{ payee: "Yiwu Trims Ltd.", amountCny: 100, rateInr: 88.5, mode: "Wire" }],
-    });
+    expect(post.mock.calls[0]![1]).toMatchObject({ supplierId: "s-yiwu", currency: "USD" });
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("deposits");
   }, 30_000);
 
-  it("an INR supplier's order asks no deposit rate and sends none", async () => {
-    post.mockResolvedValue({ order: { id: "o-3", po: "PO-2050" } });
+  it("an INR supplier's order is in INR, with no exchange rate", async () => {
     const ui = open();
     await ui.user.selectOptions(ui.field("Supplier"), "s-kochi");
-    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(ui.field("Currency")).toHaveValue("INR (₹)");
     expect(screen.getByText("INR is the base currency: no exchange rate.")).toBeVisible();
-    await ui.user.type(ui.field("Delivery date"), "2026-11-25");
-    await ui.user.selectOptions(ui.field("Item, line 1"), "i-denim");
-    await ui.user.type(ui.field("Rate (₹), line 1"), "250");
-    await ui.user.type(ui.field("Quantity, line 1"), "10");
-    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
-    expect(screen.queryByLabelText("Rate to INR")).not.toBeInTheDocument();
-    await ui.user.type(ui.field("Amount (₹), deposit 1"), "1000");
-    await ui.user.type(ui.field("Mode"), "NEFT");
-    await ui.user.click(ui.place);
-    await waitFor(() => expect(post).toHaveBeenCalledOnce());
-    const body = post.mock.calls[0]![1] as { currency: string; deposits: object[] };
-    expect(body.currency).toBe("INR");
-    expect(body.deposits).toEqual([{ payee: "Kochi Mills", payeeRole: "supplier", amountCny: 1000, paidOn: TODAY, mode: "NEFT" }]);
-  }, 30_000);
-
-  it("fills each deposit's rate from the supplier's rate now, and replaces it when the supplier changes", async () => {
-    const ui = open();
     await ui.user.selectOptions(ui.field("Supplier"), "s-foshan");
-    await ui.user.selectOptions(ui.field("Container terms"), "FOB");
     expect(screen.getByText("No exchange rate set for this supplier yet: set it under Suppliers.")).toBeVisible();
-    await ui.user.click(screen.getByRole("button", { name: "+ Add deposit" }));
-    expect(ui.field("Rate to INR")).toHaveValue("");
-    await ui.user.selectOptions(ui.field("Supplier"), "s-yiwu");
-    expect(ui.field("Currency")).toHaveValue("USD ($)");
-    expect(ui.field("Rate to INR")).toHaveValue("88");
-    await ui.user.selectOptions(ui.field("Supplier"), "s-kochi");
-    expect(ui.field("Currency")).toHaveValue("INR (₹)");
-    expect(screen.queryByLabelText("Rate to INR")).not.toBeInTheDocument();
   });
 
   it("has no Save draft stub", () => {

@@ -141,11 +141,17 @@ describe("ReceiveGoodsScreen", () => {
             { currency: "CNY", amount: 1210.5 },
             { currency: "USD", amount: 200 },
           ],
+          ledgerBalance: [
+            { currency: "CNY", balanceCny: -1210.5 },
+            { currency: "USD", balanceCny: 50 },
+          ],
         },
       ],
     });
     expect(screen.getByText("Previous supplier outstanding")).toBeInTheDocument();
     expect(screen.getByText("Guangzhou Textile Co. · 3 unpaid orders")).toBeInTheDocument();
+    // The supplier's signed ledger balance beside it, per currency.
+    expect(screen.getByText("Supplier balance: Payable to supplier ¥1,210.50 · Available with supplier $50.00")).toBeInTheDocument();
     // Never added across currencies, never converted.
     expect(screen.getByText("¥1,210.50 · $200.00")).toBeInTheDocument();
     expect(screen.getByText("Unpaid orders placed before this trip. Not included in the cost above.")).toBeInTheDocument();
@@ -157,8 +163,8 @@ describe("ReceiveGoodsScreen", () => {
     view({
       cost,
       previousOutstanding: [
-        { supplierId: "s1", supplier: "Foshan Fabrics", currency: "USD", orders: 0, byCurrency: [] },
-        { supplierId: "s2", supplier: "Yiwu Trims", currency: "CNY", orders: 1, byCurrency: [{ currency: "INR", amount: 5000 }] },
+        { supplierId: "s1", supplier: "Foshan Fabrics", currency: "USD", orders: 0, byCurrency: [], ledgerBalance: [] },
+        { supplierId: "s2", supplier: "Yiwu Trims", currency: "CNY", orders: 1, byCurrency: [{ currency: "INR", amount: 5000 }], ledgerBalance: [] },
       ],
     });
     expect(screen.getAllByText("Previous supplier outstanding")).toHaveLength(2);

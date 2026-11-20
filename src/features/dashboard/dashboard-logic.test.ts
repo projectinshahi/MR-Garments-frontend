@@ -63,6 +63,7 @@ describe("toDashboard", () => {
       payment("p2", "due", "2026-11-28", 300),
       payment("p1", "due", "2026-10-29", 50),
       payment("far", "due", "2026-11-29", 4),
+      { ...payment("void", "due", "2026-10-30", 7000), voided: true },
     ];
     const { paymentsDue } = toDashboard({ orders: [], deliveries: [], payments: { orders: [], payments }, containers: [] }, TODAY);
     expect(paymentsDue).toMatchObject({ amounts: [{ currency: "CNY", amount: 350 }], windowDays: 30 });

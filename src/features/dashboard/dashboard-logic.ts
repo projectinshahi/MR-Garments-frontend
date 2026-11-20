@@ -62,7 +62,12 @@ function deliveries(items: DeliveryItem[], today: string, limit = ROWS) {
 function paymentsDue({ payments }: PaymentsResponse, today: string, limit = ROWS) {
   const until = format(addDays(parseISO(today), PAYMENTS_WINDOW_DAYS), "yyyy-MM-dd");
   const due = payments
-    .filter((p): p is typeof p & { dueDate: string } => p.status === "due" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until)
+    // Due rows are legacy or shipping-agent ones (on an order, Deposit or Balance): an orderless supplier payment is
+    // always paid. Voided rows count nowhere.
+    .filter(
+      (p): p is typeof p & { dueDate: string; po: string; kind: "Deposit" | "Balance" } =>
+        p.status === "due" && !p.voided && p.po !== null && p.kind !== "Payment" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until,
+    )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return {
     amounts: sumByCurrency(due, (p) => p.currency, (p) => p.amountCny),

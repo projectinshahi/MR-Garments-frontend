@@ -2,59 +2,47 @@ import { addDays, format, parseISO } from "date-fns";
 
 import { canOpen, hasAccess } from "@/config/navigation";
 import type { AdvanceSupplierOption, AdvanceSuppliersResponse } from "@/lib/api/deposits-types";
+import type { LedgerTotal, PaymentRow } from "@/lib/api/ledger-types";
 import { apiGet } from "@/lib/api/server";
-import type { DepositStatus, OrderOptions, PaymentsResponse } from "@/lib/api/types";
+import type { OrderOptions, PaymentsResponse } from "@/lib/api/types";
 import { getMe } from "@/lib/session";
 import { sumByCurrency } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
-import type { Currency, MoneyTotal, Tone } from "@/types/domain";
+import type { MoneyTotal, Tone } from "@/types/domain";
 
-// Deposits & Payments (16) reads PAY-1. The call reads the session cookie, so the page renders inside the (app)
-// loading.tsx Suspense boundary; a failed call throws to the (app) error.tsx.
+import { live } from "../money";
 
-export type Payment = PaymentsResponse["payments"][number];
+// Payments (16, the unified supplier ledger) reads PAY-1: every payment (orderless supplier payments, legacy
+// order-linked ones and shipping-agent ones, voided ones flagged), the orders with the API's FIFO figures, and the
+// supplier accounts' per-currency totals. Voided payments are listed but count in no total here. The call reads the
+// session cookie, so the page renders inside the (app) loading.tsx Suspense boundary; a failure throws to error.tsx.
 
-export type OrderPaymentRow = {
-  orderId: string;
-  po: string;
-  supplier: string;
-  /** The order's: orderValue, paid and balance are in it. */
-  currency: Currency;
-  /** The supplier's rate now (INR per 1 of `currency`), the default for a new payment; null while not set or with an older API. */
-  supplierRate: number | null;
-  orderValue: number;
-  /** Every paid payment, agents (sea freight) included. */
-  paid: number;
-  /** INR, each payment at the rate of its own date; every payee. */
-  paidInr: number;
-  /** Paid to the supplier only (phase 2 fixes, 1): the balance is the order value less this. Null when the API did not send it (older backend): shown as "–". */
-  supplierPaid: number | null;
-  /** The supplier advance applied to the order (not a payment; 0 from an older API). The balance counts it. */
-  advance?: number;
-  supplierPaidInr: number | null;
-  /** What the supplier is still owed; null with an older API, whose balance counted every payee. */
-  balance: number | null;
-  /** The deposit the supplier asked for (0009): null when none was agreed; pending = max(0, required - paid). */
-  depositRequired: number | null;
-  depositPaid: number;
-  depositPending: number | null;
-  depositStatus: DepositStatus;
-  /** YYYY-MM-DD, the earliest due payment; null shows "Not yet due". */
-  nextDue: string | null;
-  /** danger when overdue, warning when due within 7 days. */
-  nextDueTone?: Tone;
-};
+export type Payment = PaymentRow;
+
+/** A PAY-1 order with its next-due tone (danger overdue, warning within 7 days). */
+export type OrderPaymentRow = PaymentsResponse["orders"][number] & { nextDueTone?: Tone };
 
 /** Due payments whose due date falls from today to today + N days, one total per currency (no INR rate until paid). */
-export type DueWindow = { amounts: MoneyTotal[]; count: number; first: { po: string; due: string } | null };
+export type DueWindow = { amounts: MoneyTotal[]; count: number; first: { po: string | null; due: string } | null };
 
-/** `paidOrders`: how many orders `paidSoFarInr` comes from (something paid). */
-export type PaymentsKpis = { paidSoFarInr: number; paidOrders: number; dueNext7: DueWindow; dueNext30: DueWindow };
+/**
+ * `paidSoFarInr`: Σ INR of the non-void paid payments (every payee); `paidCount` how many; `unrated` paid ones without
+ * an INR figure. `payable` / `available`: LED-2 totals per currency (held accounts left out), never added together.
+ */
+export type PaymentsKpis = {
+  paidSoFarInr: number;
+  paidCount: number;
+  unrated: number;
+  payable: MoneyTotal[];
+  available: MoneyTotal[];
+  dueNext30: DueWindow;
+};
 
 export type PaymentsData = {
   kpis: PaymentsKpis;
   orders: OrderPaymentRow[];
   payments: Payment[];
+  totals: LedgerTotal[];
   /** The first order that has payments (else the first order), or null when there are no orders. */
   defaultPo: string | null;
 };
@@ -63,7 +51,7 @@ const plusDays = (isoDate: string, days: number) => format(addDays(parseISO(isoD
 
 function dueWithin(payments: Payment[], today: string, days: number): DueWindow {
   const until = plusDays(today, days);
-  const due = payments
+  const due = live(payments)
     .filter((p): p is Payment & { dueDate: string } => p.status === "due" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return {
@@ -81,39 +69,22 @@ function dueTone(nextDue: string | null, today: string): Tone | undefined {
 }
 
 /** Everything the screen shows, derived from PAY-1 with `today` (YYYY-MM-DD, India). */
-export function toPaymentsData({ orders, payments }: PaymentsResponse, today: string): PaymentsData {
-  const rows = orders.map(
-    (o): OrderPaymentRow => ({
-      orderId: o.orderId,
-      po: o.po,
-      supplier: o.supplier,
-      currency: o.currency,
-      supplierRate: o.supplierRate ?? null,
-      orderValue: o.orderValueCny,
-      paid: o.paidCny,
-      paidInr: o.paidInr,
-      // Fields an older backend leaves out are null here, never a different figure under the new label.
-      supplierPaid: o.supplierPaidCny ?? null,
-      advance: o.advanceCny ?? 0,
-      supplierPaidInr: o.supplierPaidInr ?? null,
-      balance: o.supplierPaidCny == null ? null : o.balanceCny,
-      depositRequired: o.depositRequiredCny ?? null,
-      depositPaid: o.depositPaidCny ?? 0,
-      depositPending: o.depositPendingCny ?? null,
-      depositStatus: o.depositStatus ?? "none",
-      nextDue: o.nextDue,
-      nextDueTone: dueTone(o.nextDue, today),
-    }),
-  );
+export function toPaymentsData({ orders, payments, totals = [] }: PaymentsResponse, today: string): PaymentsData {
+  const rows = orders.map((o): OrderPaymentRow => ({ ...o, nextDueTone: dueTone(o.nextDue, today) }));
+  const paid = live(payments).filter((p) => p.status === "paid");
+  const pick = (key: "payableCny" | "availableCny") => totals.filter((t) => t[key] > 0).map((t) => ({ currency: t.currency, amount: t[key] }));
   return {
     kpis: {
-      paidSoFarInr: orders.reduce((sum, o) => sum + o.paidInr, 0),
-      paidOrders: orders.filter((o) => o.paidCny > 0).length,
-      dueNext7: dueWithin(payments, today, 7),
+      paidSoFarInr: Math.round(paid.reduce((sum, p) => sum + (p.amountInr ?? 0), 0) * 100) / 100,
+      paidCount: paid.length,
+      unrated: paid.filter((p) => p.amountInr === null).length,
+      payable: pick("payableCny"),
+      available: pick("availableCny"),
       dueNext30: dueWithin(payments, today, 30),
     },
     orders: rows,
     payments,
+    totals,
     defaultPo: (rows.find((r) => payments.some((p) => p.po === r.po)) ?? rows[0])?.po ?? null,
   };
 }
@@ -121,12 +92,11 @@ export function toPaymentsData({ orders, payments }: PaymentsResponse, today: st
 export type PaymentsScreenData = Awaited<ReturnType<typeof getPayments>>;
 
 /**
- * What the signed-in user may do here. `agents`: null when they can't record payments (payments below Enter), else
- * ORD-2's shipping agents to offer as payees. `suppliers`: ADV-5's active suppliers, for a supplier advance with no
- * order (payments Enter only, so it doesn't depend on order access). A 403 or any failure on either just means none.
- * `linkPo`: POs open the order page.
+ * What the signed-in user may do here. payments Enter: Record payment (ADV-5's suppliers with their currencies and
+ * balances) and Record sea freight payment (ORD-2's shipping agents); `suppliers`/`agents` null without it. A 403 or
+ * any failure on either list just means none. payments Full: Void. `linkPo`: POs open the order page.
  */
-async function getAccess() {
+export async function getPaymentAccess() {
   const me = await getMe();
   const canEnter = !!me && hasAccess(me, "payments", "Enter");
   const [agents, suppliers] = canEnter
@@ -140,18 +110,18 @@ async function getAccess() {
           (): AdvanceSupplierOption[] => [],
         ),
       ])
-    : [null, []];
+    : [null, null];
   return {
     agents,
     suppliers,
     linkPo: !!me && canOpen(me, "/orders"),
-    // PAY-3 needs payments Full (Management); the API refuses anyone else too.
-    canDelete: !!me && hasAccess(me, "payments", "Full"),
+    // PAY-3 (void) and LED-3 (adjustment) need payments Full (Management); the API refuses anyone else too.
+    canVoid: !!me && hasAccess(me, "payments", "Full"),
   };
 }
 
 /** PAY-1 GET /api/v1/payments. Today is read after the API call (Cache Components). */
 export async function getPayments() {
-  const [response, access] = await Promise.all([apiGet<PaymentsResponse>("/payments"), getAccess()]);
+  const [response, access] = await Promise.all([apiGet<PaymentsResponse>("/payments"), getPaymentAccess()]);
   return { ...toPaymentsData(response, todayInIndia()), ...access };
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
-import { statementHref } from "@/features/deposits/deposits-logic";
+import { ledgerHref } from "@/features/supplier-ledger/ledger-logic";
 import { rowActionClass } from "@/features/orders/delete-order";
 import type { CurrencyInfo, SupplierRow } from "@/lib/api/types";
 import { currencySymbol } from "@/lib/formatters";
@@ -24,10 +24,10 @@ const supplierColumns: ColumnDef<SupplierRow>[] = [
   { accessorKey: "openOrders", header: "Open orders", meta: right },
 ];
 
-/** The supplier's deposit statement (docs/phase2-contracts.md 3.3): a text action before Edit, as Edit is drawn. */
+/** The supplier's ledger (unified supplier ledger, D14): a text action before Edit, as Edit is drawn. */
 const depositsLink = (row: SupplierRow) => (
-  <Link href={statementHref(row.id)} aria-label={`Deposits of ${row.name}`} className={rowActionClass}>
-    Deposits
+  <Link href={ledgerHref(row.id)} aria-label={`Ledger of ${row.name}`} className={rowActionClass}>
+    Ledger
   </Link>
 );
 

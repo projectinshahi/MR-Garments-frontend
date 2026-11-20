@@ -109,7 +109,7 @@ export function SettingsList<T extends SettingsRecord>({
   path: string;
   /** The row as its Delete sees it (the same the edit dialog's Delete uses). */
   deletable: (row: T) => Deletable;
-  /** A tab's own text actions, rendered before Edit in the actions cell (Suppliers: "Deposits"). */
+  /** A tab's own text actions, rendered before Edit in the actions cell (Suppliers: "Ledger"). */
   extraActions?: (row: T) => React.ReactNode;
   rows: T[];
   /** The tab's own columns; Status and Edit are appended. */

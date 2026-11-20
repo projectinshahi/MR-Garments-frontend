@@ -1,17 +1,19 @@
+import { MILESTONE_STATUS, PAYMENT_STATUS } from "@/features/payments/money";
 import { amountsText, type Column, money, perCurrency, rate, type ReportFile, type Section, summarySection } from "@/features/reports/report-files";
 import { apiClient } from "@/lib/api/client";
 import type { OrderLineItem } from "@/lib/api/types";
 import { formatDate, sumByCurrency } from "@/lib/formatters";
 
 import type { OrderRow } from "./data/queries";
-import { balanceCny, paymentStatus, pendingQty } from "./filter-orders";
+import { pendingQty } from "./filter-orders";
 import { stageLabel } from "./order-status";
 
 // Phase 2 §5 and §6, and the page report downloads (backend docs/report-downloads.md): the files of the rows an orders
 // tab shows after its filters (every matching order, not only the table's page), named <tab>-<today>. Amounts in order
 // currencies go one table per currency, the header naming it (`money`); the rate is the one saved on each order (null
-// for orders placed before rates were kept), never the supplier's rate now. Balances and payment status count supplier
-// payments only; agent payments (sea freight) are in the INR column alone. The "Order items" sheet lists every line of
+// for orders placed before rates were kept), never the supplier's rate now. Settled, outstanding and payment status are
+// the API's FIFO projection from the supplier's account (null on a held account: left out of the totals); agent payments
+// (sea freight) are in the INR column alone. The "Order items" sheet lists every line of
 // those orders with its saved rate (ORD-7), never the item's master price.
 
 const text = (header: string): Column => ({ header });
@@ -58,15 +60,19 @@ function itemSheet(rows: OrderRow[], lines: OrderLineItem[]): Section[] {
   }));
 }
 
-/** The KPIs of the exported rows: how many orders and, per currency, their value, supplier payments and balance. */
+/** The KPIs of the exported rows: how many orders and, per currency, their value, settled and outstanding (held left out). */
 const orderSummary = (rows: OrderRow[]) =>
   summarySection([
     ["Orders", rows.length],
     ["PO value", amountsText(sumByCurrency(rows, (o) => o.currency, (o) => o.orderValueCny))],
-    ["Paid to supplier", amountsText(sumByCurrency(rows, (o) => o.currency, (o) => o.supplierPaidCny))],
-    ["Balance to supplier", amountsText(sumByCurrency(rows, (o) => o.currency, balanceCny))],
-    ["Paid, all payees (INR)", rows.reduce((sum, o) => Math.round((sum + o.paidInr) * 100) / 100, 0)],
+    ["Settled", amountsText(sumByCurrency(rows.filter((o) => o.settledCny !== null), (o) => o.currency, (o) => o.settledCny ?? 0))],
+    ["Outstanding", amountsText(sumByCurrency(rows.filter((o) => o.outstandingCny !== null), (o) => o.currency, (o) => o.outstandingCny ?? 0))],
+    ["Paid, all payees (INR)", totalOf(rows, (o) => o.paidInr)],
   ]);
+
+/** The order's FIFO payment status as text ("Pending review" while its account is held). */
+const statusText = (o: OrderRow) => (o.held ? "Pending review" : o.paymentStatus ? PAYMENT_STATUS[o.paymentStatus].label : null);
+const milestoneText = (o: OrderRow) => (o.depositStatus && o.depositStatus !== "none" ? MILESTONE_STATUS[o.depositStatus].label : null);
 
 function file(title: string, slug: string, today: string, filters: string, sections: Section[], lines: OrderLineItem[] | null, rows: OrderRow[]): ReportFile {
   return {
@@ -76,13 +82,15 @@ function file(title: string, slug: string, today: string, filters: string, secti
     sections: [orderSummary(rows), ...sections, ...(lines ? itemSheet(rows, lines) : [])],
     notes: [
       "Amounts are in each order's currency; the exchange rate is the one saved on the order when it was placed (INR per 1 unit).",
-      "Paid and balance count payments to the supplier; shipping-agent payments (sea freight) count only in the INR column.",
+      "Settled and outstanding are what the supplier's account covers of each order, oldest first; shipping-agent payments (sea freight) count only in the INR column.",
+      "A held account (pending review) has no figures and is left out of the totals.",
       ...(lines ? [] : ["The order items could not be loaded, so the Order Items sheet is left out. Please try again."]),
     ],
   };
 }
 
-const totalOf = (list: OrderRow[], pick: (o: OrderRow) => number) => Math.round(list.reduce((sum, o) => sum + pick(o), 0) * 100) / 100;
+/** Σ of a figure, its nulls (held, unknown) left out. */
+const totalOf = (list: OrderRow[], pick: (o: OrderRow) => number | null) => Math.round(list.reduce((sum, o) => sum + (pick(o) ?? 0), 0) * 100) / 100;
 
 /** All orders (05): every order matching the filters, per currency, with its saved rate, value, payments and balance. */
 export const ordersFile = (rows: OrderRow[], filters: string, today: string, lines: OrderLineItem[] | null = null) =>
@@ -109,8 +117,10 @@ export const ordersFile = (rows: OrderRow[], filters: string, today: string, lin
         text("Stage"),
         text("Status"),
         money("PO total", currency),
-        money("Paid to supplier", currency),
-        money("Balance", currency),
+        money("Settled", currency),
+        money("Outstanding", currency),
+        text("Payment status"),
+        text("Deposit milestone"),
         money("Paid, all payees", "INR"),
       ],
       rows: list.map((o) => [
@@ -127,12 +137,23 @@ export const ordersFile = (rows: OrderRow[], filters: string, today: string, lin
         stageLabel(o.stage),
         o.status,
         o.orderValueCny,
-        o.supplierPaidCny,
-        balanceCny(o),
+        o.settledCny,
+        o.outstandingCny,
+        statusText(o),
+        milestoneText(o),
         o.paidInr,
       ]),
       total: list.length
-        ? ["Total", null, null, null, null, null, null, null, null, null, null, null, totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.supplierPaidCny), totalOf(list, balanceCny), totalOf(list, (o) => o.paidInr)]
+        ? [
+            "Total",
+            ...Array<null>(11).fill(null),
+            totalOf(list, (o) => o.orderValueCny),
+            totalOf(list, (o) => o.settledCny),
+            totalOf(list, (o) => o.outstandingCny),
+            null,
+            null,
+            totalOf(list, (o) => o.paidInr),
+          ]
         : undefined,
     })),
     lines,
@@ -160,9 +181,10 @@ export const pendingOrdersFile = (rows: OrderRow[], filters: string, today: stri
         text("Pending qty"),
         text("Unit"),
         money("Order value", currency),
-        money("Paid to supplier", currency),
-        money("Balance", currency),
+        money("Settled", currency),
+        money("Outstanding", currency),
         text("Payment status"),
+        text("Deposit milestone"),
         text("Current stage"),
       ],
       rows: list.map((o) => [
@@ -176,13 +198,14 @@ export const pendingOrdersFile = (rows: OrderRow[], filters: string, today: stri
         pendingQty(o),
         o.unit,
         o.orderValueCny,
-        o.supplierPaidCny,
-        balanceCny(o),
-        paymentStatus(o).label,
+        o.settledCny,
+        o.outstandingCny,
+        statusText(o),
+        milestoneText(o),
         stageLabel(o.stage),
       ]),
       total: list.length
-        ? ["Total", null, null, null, null, null, null, null, null, totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.supplierPaidCny), totalOf(list, balanceCny), null, null]
+        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), null, null, null]
         : undefined,
     })),
     lines,
@@ -210,8 +233,8 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         text("Warehouse received qty"),
         text("Unit"),
         money("Order value", currency),
-        money("Paid to supplier", currency),
-        money("Balance to supplier", currency),
+        money("Settled", currency),
+        money("Outstanding", currency),
         money("Paid, all payees", "INR"),
         text("Final status"),
       ],
@@ -226,13 +249,13 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         o.stocked,
         o.unit,
         o.orderValueCny,
-        o.supplierPaidCny,
-        balanceCny(o),
+        o.settledCny,
+        o.outstandingCny,
         o.paidInr,
         o.status,
       ]),
       total: list.length
-        ? ["Total", null, null, null, null, null, null, null, null, totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.supplierPaidCny), totalOf(list, balanceCny), totalOf(list, (o) => o.paidInr), null]
+        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), totalOf(list, (o) => o.paidInr), null]
         : undefined,
     })),
     lines,

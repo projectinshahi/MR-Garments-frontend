@@ -14,15 +14,16 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { balanceText, HELD_MESSAGE, round2 } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { currencySymbol, currencyLabel, formatINR, formatMoney, formatNumber, rateText } from "@/lib/formatters";
+import { currencySymbol, currencyLabel, formatMoney, formatNumber, rateText } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { NewOrderData } from "./data/queries";
-import { CONTAINER_TERMS, defaultRate, emptyDeposit, emptyLine, newOrderSchema, SUPPLIER_PAYEE, TERMS_HELP, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
-import { advancePreview, depositINR, lineAmount, orderTotals, parseNumber } from "./order-totals";
+import { CONTAINER_TERMS, emptyLine, newOrderSchema, TERMS_HELP, toCreateOrderBody, type NewOrderValues } from "./new-order-form";
+import { lineAmount, orderTotal, parseNumber } from "./order-totals";
 
 // Measured from 15_4_New_order.jpeg: 12.5 px bold labels 5 px above 42 px fields with 14 px text, 12 px table
 // headers, 38 px item inputs with 10 px padding. Cards use titleGap="none" and place content where the reference has it.
@@ -31,11 +32,9 @@ const labelClass = "gap-0.5 text-[12.5px] leading-[15px] font-bold text-label";
 const headClass = "h-[30px] px-1.5 text-[12px] font-bold text-table-head-foreground";
 const cellClass = "px-1.5 py-2";
 const lineInput = "h-[38px] px-2.5 text-sm";
-// "+ Add item" / "+ Add deposit": 13.5 px bold text links on a 10 px line, flush with the card edge.
+// "+ Add item": a 13.5 px bold text link on a 10 px line, flush with the card edge.
 // Block-level (flex w-fit) so the card's line-height strut does not add height under them.
 const addLinkClass = "mt-[13px] flex h-auto w-fit border-0 p-0 text-[13.5px] leading-[10px]";
-const factLabel = "text-[12.5px] leading-[17px] text-muted-foreground";
-const factInput = "h-[34px] px-2 text-sm";
 const messages = (...errors: ({ message?: string } | undefined)[]) => errors.filter((error) => error?.message);
 
 /** New order, Stage 1: order and deposit (15_4_New_order.jpeg). Places the order with ORD-3. */
@@ -48,7 +47,6 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     orderDate: today,
     deliveryDate: "",
     lines: [emptyLine()],
-    deposits: [],
     depositRequiredCny: "",
     terms: "",
   };
@@ -57,15 +55,14 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     defaultValues,
   });
   const lineRows = useFieldArray({ control, name: "lines" });
-  const depositRows = useFieldArray({ control, name: "deposits" });
   const { errors } = formState;
 
-  const [supplierId, currency, lines, deposits] = useWatch({ control, name: ["supplierId", "currency", "lines", "deposits"] });
+  const [supplierId, currency, lines] = useWatch({ control, name: ["supplierId", "currency", "lines"] });
   const supplier = options.suppliers.find((s) => s.id === supplierId);
-  // Amounts are in the order's currency; an INR order's deposits need no rate (it is 1).
+  // Amounts are in the order's currency (the supplier's).
   const symbol = currencySymbol(currency);
   const inr = currency === "INR";
-  const spaced = (value: number) => formatMoney(value, currency, { spaced: true });
+  const spaced = (value: number) => formatMoney(value, currency, { spaced: true, decimals: 2 });
   const unitOf = (itemId: string) => options.items.find((item) => item.id === itemId)?.unit ?? "";
   /** The chosen item's saved price fills the line's rate (still editable); an item without one clears it, so no stale rate stays. */
   const rateFor = (itemId: string) => {
@@ -73,17 +70,16 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     return price !== null && price > 0 ? String(price) : "";
   };
   const numericLines = lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) }));
-  const numericDeposits = deposits.map((d) => ({ amount: parseNumber(d.amountCny), rate: inr ? 1 : parseNumber(d.rateInr) }));
-  const totals = orderTotals(numericLines, numericDeposits);
-  // The supplier's advance in its currency, applied automatically by ORD-3 (0 from an older API, which applies none).
-  const available = supplier?.advanceAvailable ?? 0;
-  const supplierDeposits = deposits.reduce((sum, d) => sum + (d.payee === SUPPLIER_PAYEE ? parseNumber(d.amountCny) : 0), 0);
-  const advance = advancePreview(totals.orderTotal, supplierDeposits, available);
+  const total = orderTotal(numericLines);
+  // ORD-2's signed balance in the order's currency (no account yet: 0); the order debits its value (a preview: the
+  // API's figure is the one posted). A held supplier can't take an order (409 `account_held`).
+  const balanceNow = supplier?.ledgerBalance?.find((b) => b.currency === currency)?.balanceCny ?? 0;
+  const held = !!supplier?.held;
 
   async function place(order: NewOrderValues) {
     let created: CreateOrderResponse;
     try {
-      created = await apiClient.post<CreateOrderResponse>("/orders", toCreateOrderBody(order, options));
+      created = await apiClient.post<CreateOrderResponse>("/orders", toCreateOrderBody(order));
     } catch (error) {
       // 422: each message under its field, the first focused; a field this form doesn't show is toasted, never
       // dropped. Other failures toast (handleApiError).
@@ -95,10 +91,10 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     }
     // The route stays mounted (Activity): empty the form so a later visit starts fresh.
     reset();
-    const applied = created.advance?.appliedCny ?? 0;
+    const ledger = created.ledger;
     notifySuccess(
-      applied > 0
-        ? `Order ${created.order.po} placed. Supplier advance applied: ${formatMoney(applied, currency, { decimals: 2 })}${created.advance!.status === "partial" ? `; ${formatMoney(created.advance!.balanceCny, currency, { decimals: 2 })} still to pay` : ""}.`
+      ledger
+        ? `Order ${created.order.po} placed. Debited ${formatMoney(ledger.debitCny, ledger.currency, { decimals: 2 })}; supplier balance ${balanceText(ledger.balanceAfter, ledger.currency)}.`
         : `Order ${created.order.po} placed`,
     );
     router.push(orderHref(created.order.po));
@@ -109,13 +105,6 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     const e = errors.lines?.[i];
     return messages(e?.itemId, e?.rateCny, e?.quantity).map((error) => ({ message: `Line ${i + 1}: ${error?.message}` }));
   });
-  const depositErrors = depositRows.fields.flatMap((_, i) => {
-    const e = errors.deposits?.[i];
-    return messages(e?.payee, e?.amountCny, e?.paidOn, inr ? undefined : e?.rateInr, e?.mode).map((error) => ({
-      message: `Deposit ${i + 1}: ${error?.message}`,
-    }));
-  });
-
   return (
     <>
       <PageHeader
@@ -164,13 +153,10 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                     required
                     aria-invalid={!!errors.supplierId}
                     {...register("supplierId", {
-                      // The order is in the supplier's currency (the API refuses another), and its rate now replaces
-                      // the previous supplier's on every deposit row (docs/supplier-currency.md).
+                      // The order is in the supplier's currency (the API refuses another).
                       onChange: (event: { target: { value: string } }) => {
                         const chosen = options.suppliers.find((s) => s.id === event.target.value);
-                        if (!chosen) return;
-                        setValue("currency", chosen.currency);
-                        deposits.forEach((_deposit, index) => setValue(`deposits.${index}.rateInr`, defaultRate(chosen)));
+                        if (chosen) setValue("currency", chosen.currency);
                       },
                     })}
                   >
@@ -325,15 +311,15 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
               <div className="mt-3 flex items-start justify-end gap-7 border-t pt-[12.5px]">
                 <span className="text-[15px] leading-4">Order total</span>
                 <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
-                  {formatMoney(totals.orderTotal, currency, { decimals: 2, spaced: true })}
+                  {formatMoney(total, currency, { decimals: 2, spaced: true })}
                 </output>
               </div>
             </SectionCard>
           </div>
 
           <div className="flex min-w-0 flex-col gap-(--page-gap)">
-            <SectionCard title="Deposits paid against this order" titleGap="none">
-              {/* Optional (0009): what the supplier asked for, in the order's currency; the Payments tab tracks paid and pending against it. */}
+            <SectionCard title="Deposit required" titleGap="none">
+              {/* Optional (0009, D11): what the supplier asked for, in the order's currency. A milestone of the order, met once the supplier account has settled that much of it; never a payment. */}
               <Field className={cn(fieldClass, "mt-3")} data-invalid={!!errors.depositRequiredCny}>
                 <FieldLabel htmlFor="deposit-required" className={labelClass}>
                   Deposit required ({symbol})
@@ -343,107 +329,44 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                   inputMode="decimal"
                   placeholder="None agreed"
                   aria-invalid={!!errors.depositRequiredCny}
+                  aria-describedby="deposit-required-note"
                   size="sm"
                   className="text-right"
                   {...register("depositRequiredCny")}
                 />
+                <FieldDescription id="deposit-required-note" className="text-xs">
+                  A milestone, not a payment. Record what the supplier was paid with Record payment.
+                </FieldDescription>
                 <FieldError errors={[errors.depositRequiredCny]} />
               </Field>
-              {depositRows.fields.length > 0 ? (
-                <div className="mt-3 flex flex-col gap-2.5">
-                  {depositRows.fields.map((field, i) => {
-                    const n = i + 1;
-                    const e = errors.deposits?.[i];
-                    const amountINR = depositINR(numericDeposits[i] ?? { amount: 0, rate: 0 });
-                    return (
-                      <article key={field.id} className="rounded-[10px] border bg-input-background px-3.5 pt-2.5 pb-[11px]">
-                        <div className="flex items-center justify-between gap-3 text-sm leading-5 font-bold">
-                          <NativeSelect
-                            size="sm"
-                            aria-label={`Paid to, deposit ${n}`}
-                            aria-invalid={!!e?.payee}
-                            className="[&>select]:h-[34px] [&>select]:font-bold"
-                            {...register(`deposits.${i}.payee`)}
-                          >
-                            <option value={SUPPLIER_PAYEE}>{supplier ? `${supplier.name} (supplier)` : "Supplier"}</option>
-                            {options.agents.map((agent) => (
-                              <option key={agent.id} value={agent.id}>
-                                {agent.name} (agent)
-                              </option>
-                            ))}
-                          </NativeSelect>
-                          <Input
-                            aria-label={`Amount (${symbol}), deposit ${n}`}
-                            aria-invalid={!!e?.amountCny}
-                            inputMode="decimal"
-                            placeholder={symbol}
-                            className={cn(factInput, "w-[110px] shrink-0 text-right font-bold")}
-                            {...register(`deposits.${i}.amountCny`)}
-                          />
-                        </div>
-                        <div className={cn("mt-[5px] grid gap-x-2", inr ? "grid-cols-[1.3fr_2fr]" : "grid-cols-[1.3fr_1fr_1fr]")}>
-                          <label className="flex min-w-0 flex-col">
-                            <span className={factLabel}>Paid on</span>
-                            <Input type="date" aria-invalid={!!e?.paidOn} className={factInput} {...register(`deposits.${i}.paidOn`)} />
-                          </label>
-                          {inr ? null : (
-                            <label className="flex min-w-0 flex-col">
-                              <span className={factLabel}>Rate to INR</span>
-                              <Input inputMode="decimal" aria-invalid={!!e?.rateInr} className={factInput} {...register(`deposits.${i}.rateInr`)} />
-                            </label>
-                          )}
-                          <label className="flex min-w-0 flex-col">
-                            <span className={factLabel}>Mode</span>
-                            <Input aria-invalid={!!e?.mode} className={factInput} {...register(`deposits.${i}.mode`)} />
-                          </label>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
-                          <span className="text-[13px] leading-5 text-muted-foreground">Amount in INR</span>
-                          <span className="text-[15px] leading-5 font-bold">{formatINR(amountINR)}</span>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : null}
-              <FieldError className="mt-2" errors={messages(errors.deposits, errors.deposits?.root, ...depositErrors)} />
-              <Button type="button" variant="link" className={addLinkClass} onClick={() => depositRows.append(emptyDeposit(today, defaultRate(supplier)))}>
-                + Add deposit
-              </Button>
             </SectionCard>
 
             <SectionCard title="Summary" titleGap="none" bottomGap="form">
+              {held ? (
+                <Callout tone="warning" size="sm" role="alert" className="mt-2.5">
+                  {HELD_MESSAGE} No order can be placed for it until the review is done.
+                </Callout>
+              ) : null}
               <KeyValueList
                 density="compact"
                 className="mt-2.5 border-b border-border-subtle"
                 items={[
-                  { label: "Order total", value: spaced(totals.orderTotal) },
-                  { label: "Deposits paid", value: spaced(totals.depositsPaid) },
-                  { label: "Deposits in INR", value: formatINR(totals.depositsINR) },
-                  ...(available > 0 ? [{ label: "Supplier advance to apply", value: spaced(advance.applied) }] : []),
-                  {
-                    label: <span className="text-base leading-5 font-bold">Balance to pay</span>,
-                    value: <span className="text-base leading-5 font-bold">{spaced(available > 0 ? advance.remaining : totals.balance)}</span>,
-                  },
+                  { label: "Order total", value: spaced(total) },
+                  // No balances without payments View (ORD-2 sends ledgerBalance null): only the total.
+                  ...(supplier && !held && supplier.ledgerBalance
+                    ? [
+                        { label: "Supplier balance now", value: balanceText(balanceNow, currency) },
+                        {
+                          label: <span className="text-base leading-5 font-bold">Supplier balance after this order</span>,
+                          value: <span className="text-base leading-5 font-bold">{balanceText(round2(balanceNow - total), currency)}</span>,
+                        },
+                      ]
+                    : []),
                 ]}
               />
-              {available > 0 ? (
-                <Callout tone={advance.partial ? "warning" : "info"} size="sm" role="status" className="mt-3">
-                  {advance.partial ? (
-                    <>
-                      <strong>Supplier advance is not enough.</strong> {spaced(available)} available covers part of this order; {spaced(advance.remaining)} will still be
-                      to pay.
-                    </>
-                  ) : (
-                    <>
-                      {spaced(available)} supplier advance available. It is applied to this order automatically when it is placed.
-                    </>
-                  )}
-                </Callout>
-              ) : null}
               <FormFooter className="mt-3.5 gap-3">
                 {/* Disabled while the request runs (no spinner is designed), so one click places one order. */}
-                <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]" disabled={formState.isSubmitting}>
+                <Button type="submit" size="lg" className="min-w-0 flex-1 text-[15px]" disabled={formState.isSubmitting || held}>
                   Place order
                 </Button>
               </FormFooter>

@@ -25,12 +25,11 @@ async function expectExports(page: Page) {
 }
 
 test("a new order is pending until its first China receipt; All keeps it, Closed never lists it, every tab exports", async ({ page, api }) => {
-  const unpaid = await api.createOrder({ deliveryDate: today(30) });
-  const partly = await api.createOrder({
-    supplier: "Shenzhen Apparel",
-    lines: [{ item: "Track pants", quantity: 75, rateCny: 30 }],
-    deposits: [{ amountCny: 500, rateInr: 12 }],
-  });
+  // Suppliers of their own, so each payment status is the FIFO projection of that supplier's account alone.
+  const [first, second] = [await api.newSupplier("Pending Unpaid"), await api.newSupplier("Pending Partly")];
+  const unpaid = await api.createOrder({ supplier: first.name, deliveryDate: today(30) });
+  const partly = await api.createOrder({ supplier: second.name, lines: [{ item: "Track pants", quantity: 75, rateCny: 30 }] });
+  await api.paySupplier(second.id, { amount: 500, rateInr: 12 });
 
   await page.goto("/orders/pending");
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
@@ -41,7 +40,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
   await search(page).fill(unpaid.po);
   await expect(rowOf(page, unpaid.po).getByRole("cell")).toHaveText([
     unpaid.po,
-    "Foshan Fabrics",
+    first.name,
     shortDate(today()),
     shortDate(today(30)),
     "100 pcs",
@@ -53,7 +52,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
   await search(page).fill(partly.po);
   await expect(rowOf(page, partly.po).getByRole("cell")).toHaveText([
     partly.po,
-    "Shenzhen Apparel",
+    second.name,
     shortDate(today()),
     shortDate(today(30)),
     "75 pcs",
@@ -71,7 +70,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
   await expect(rowOf(page, partly.po)).toBeVisible();
   await choose(page, /^Supplier: All suppliers$/, "Yiwu Trims Ltd.");
   await expect(table(page).getByText(EMPTY)).toBeVisible();
-  await choose(page, /^Supplier: Yiwu Trims Ltd\.$/, "Shenzhen Apparel");
+  await choose(page, /^Supplier: Yiwu Trims Ltd\.$/, second.name);
   await expect(rowOf(page, partly.po)).toBeVisible();
 
   // The first China receipt moves the order to stage 2, so it leaves Pending; the other stays.

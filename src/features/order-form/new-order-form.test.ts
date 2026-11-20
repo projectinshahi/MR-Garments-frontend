@@ -11,7 +11,6 @@ const valid = {
   orderDate: "2026-11-01",
   deliveryDate: "2026-11-20",
   lines: [{ itemId: "i-1", rateCny: "12.5", quantity: "200" }, emptyLine()],
-  deposits: [],
   depositRequiredCny: "",
   terms: "FOB",
 };
@@ -20,7 +19,7 @@ const poError = (po: string) => newOrderSchema.safeParse({ ...valid, po }).error
 describe("Deposit required (0009)", () => {
   const error = (text: string) =>
     newOrderSchema.safeParse({ ...valid, depositRequiredCny: text }).error?.issues.find((issue) => issue.path[0] === "depositRequiredCny")?.message;
-  const body = (text: string) => toCreateOrderBody({ ...valid, depositRequiredCny: text }, { suppliers: [], agents: [] });
+  const body = (text: string) => toCreateOrderBody({ ...valid, depositRequiredCny: text });
 
   it("is optional: blank is valid and leaves the key out of the body", () => {
     expect(error("")).toBeUndefined();
@@ -42,7 +41,7 @@ describe("PO number", () => {
   it("takes any format, trimmed and kept as typed", () => {
     for (const po of ["PO-2050", "VM-11340", "MR/2026/001", "ABC-001", "2026-001", "SUPPLIER/PO/2026/01", "mr-001"]) {
       expect(poError(po), po).toBeUndefined();
-      expect(toCreateOrderBody(newOrderSchema.parse({ ...valid, po: `  ${po} ` }), { suppliers: [], agents: [] }).po).toBe(po);
+      expect(toCreateOrderBody(newOrderSchema.parse({ ...valid, po: `  ${po} ` })).po).toBe(po);
     }
   });
 
@@ -70,6 +69,14 @@ describe("Container terms (0015)", () => {
   });
 
   it("is sent with the order", () => {
-    expect(toCreateOrderBody({ ...valid, terms: "CNF" }, { suppliers: [], agents: [] }).terms).toBe("CNF");
+    expect(toCreateOrderBody({ ...valid, terms: "CNF" }).terms).toBe("CNF");
+  });
+});
+
+describe("no payments on New order (unified supplier ledger, D6)", () => {
+  it("sends no deposits: supplier payments are recorded with Record payment, sea freight on the order", () => {
+    const body = toCreateOrderBody(newOrderSchema.parse(valid));
+    expect(body).not.toHaveProperty("deposits");
+    expect(body.lines).toEqual([{ itemId: "i-1", quantity: 200, rateCny: 12.5 }]);
   });
 });

@@ -77,7 +77,7 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
   await expect(page.getByText(/^Showing 1 to 5 of \d+ suppliers$/)).toBeVisible();
   await page.getByRole("button", { name: "Next page" }).click();
   await expect(page.getByText(/^Showing 6 to \d+ of \d+ suppliers$/)).toBeVisible();
-  await page.getByRole("button", { name: "Page 1" }).click();
+  await page.getByRole("button", { name: "Page 1", exact: true }).click();
   await page.getByLabel("Rows per page").selectOption("50");
   const code = page.getByRole("columnheader", { name: /Supplier Code/ }).getByRole("button");
   const position = async (text: string) => (await rows(page).allInnerTexts()).findIndex((row) => row.includes(text));
@@ -86,7 +86,10 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
   expect(await position("SUP-001")).toBeLessThan(await position("SUP-002"));
   await code.click();
   await expect(page.getByRole("columnheader", { name: /Supplier Code/ })).toHaveAttribute("aria-sort", "descending");
-  expect(await position("SUP-001")).toBeGreaterThan(await position("SUP-002"));
+  // Highest codes first: on a long shared run SUP-001 and SUP-002 may be past the first 50 rows, so check the page's order.
+  const codes = (await rows(page).allInnerTexts()).map((row) => row.match(/SUP-\d+/)?.[0]).filter((c): c is string => !!c);
+  expect(codes).toEqual(codes.toSorted().toReversed());
+  expect(codes[0]! > "SUP-002").toBe(true);
   await page.getByLabel("Rows per page").selectOption("10");
   for (const supplier of paging) await remove(api, supplier.id);
 });
@@ -141,7 +144,8 @@ test("adds a supplier with the offered code, views, edits and deactivates it fro
   await expect(kv(page, "Payment terms")).toHaveText("50% deposit, balance on shipment");
   await expect(page.getByRole("heading", { level: 2, name: "Orders" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
-  await expect(kpi(page, "Balance to pay")).toBeVisible();
+  await expect(kpi(page, "Outstanding")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Supplier ledger" })).toBeVisible();
   await shot(page, testInfo, "view-supplier.png");
   await page.locator("header").getByRole("link", { name: "Suppliers" }).click();
   await expect(page).toHaveURL("/suppliers");

@@ -1,13 +1,8 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { getStatement } from "@/features/deposits/data/queries";
-import { StatementScreen } from "@/features/deposits/statement-screen";
+import { ledgerHref } from "@/features/supplier-ledger/ledger-logic";
 
-export const metadata: Metadata = { title: "Supplier deposits" };
-
-// Any supplier id, known only at request time: params are read inside the shell's Suspense boundary. An unknown
-// supplier renders the not-found page.
-export default async function SupplierDepositsPage({ params }: PageProps<"/deposits/suppliers/[supplierId]">) {
-  const { supplierId } = await params;
-  return <StatementScreen data={await getStatement(supplierId)} />;
+// A supplier's deposit statement is its supplier ledger now; the deposits are its read-only archive tab (D8, D14).
+export default async function SupplierStatementPage({ params }: PageProps<"/deposits/suppliers/[supplierId]">) {
+  redirect(ledgerHref((await params).supplierId));
 }

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OrderDetailActions } from "@/features/order-detail/shared/order-detail-actions";
+import { SETTLED } from "@/features/payments/test-fixtures";
 import { apiClient } from "@/lib/api/client";
 import type { Access, Me } from "@/lib/api/types";
 
@@ -63,14 +64,10 @@ const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   closed: false,
   closedOn: null,
   orderValueCny: 1000,
-  paidCny: 0,
-  supplierPaidCny: 0,
-  supplierPaidInr: 0,
+  ...SETTLED,
+  agentPaidCny: 0,
+  agentPaidInr: 0,
   paidInr: 0,
-  depositRequiredCny: null,
-  depositPaidCny: 0,
-  depositPendingCny: null,
-  depositStatus: "none",
   status: "On track",
   tone: "success",
   chip: null,
@@ -122,7 +119,7 @@ describe("Orders list actions", () => {
   });
 });
 
-const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", currency: "CNY", supplierPaidCny: 0, depositRequiredCny: null, lines: [] };
+const ORDER: EditableOrder = { po: "PO-2051", stage: 1, orderDate: "2026-10-01", deliveryDate: "2026-11-15", currency: "CNY", depositRequiredCny: null, lines: [] };
 
 function renderHeader(permissions: { canEdit: boolean; canDelete: boolean }) {
   render(<OrderDetailActions order={ORDER} supplier="Foshan Fabrics" items={[]} {...permissions} />);

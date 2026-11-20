@@ -2,13 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { OrderRow } from "./data/queries";
 import {
-  balanceCny,
   closedOrders,
   filterOrders,
   filterTabOrders,
   isFiltered,
   type OrderFilters,
-  paymentStatus,
   pendingOrders,
   pendingQty,
   type TabFilters,
@@ -31,12 +29,16 @@ const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"
   closed: false,
   closedOn: null,
   orderValueCny: 0,
-  paidCny: 0,
-  supplierPaidCny: 0,
-  supplierPaidInr: 0,
+  held: false,
+  settledCny: 0,
+  outstandingCny: 0,
+  paymentStatus: "paid",
+  settledInr: 0,
+  agentPaidCny: 0,
+  agentPaidInr: 0,
   paidInr: 0,
   depositRequiredCny: null,
-  depositPaidCny: 0,
+  depositSettledCny: 0,
   depositPendingCny: null,
   depositStatus: "none",
   status: "",
@@ -103,19 +105,10 @@ describe("Pending and Closed tabs (phase 2 §1, §5)", () => {
     expect(closedOrders([row("PO-1", "x", "y", 6, null)])).toEqual([]);
   });
 
-  it("pending quantity never goes below 0; the balance is rounded to the cent", () => {
+  it("pending quantity never goes below 0", () => {
     expect(pendingQty({ quantity: 100, received: 0 })).toBe(100);
     expect(pendingQty({ quantity: 100, received: 60 })).toBe(40);
     expect(pendingQty({ quantity: 100, received: 130 })).toBe(0);
-    expect(balanceCny({ orderValueCny: 44400, supplierPaidCny: 20000.1 })).toBe(24399.9);
-    expect(balanceCny({ orderValueCny: 0.3, supplierPaidCny: 0.1 })).toBe(0.2);
-  });
-
-  it("payment status: Unpaid at zero, Paid at or over the order value, else Partly paid", () => {
-    expect(paymentStatus({ supplierPaidCny: 0, orderValueCny: 1000 })).toEqual({ label: "Unpaid", tone: "neutral" });
-    expect(paymentStatus({ supplierPaidCny: 500, orderValueCny: 1000 })).toEqual({ label: "Partly paid", tone: "warning" });
-    expect(paymentStatus({ supplierPaidCny: 1000, orderValueCny: 1000 })).toEqual({ label: "Paid", tone: "success" });
-    expect(paymentStatus({ supplierPaidCny: 1200, orderValueCny: 1000 })).toMatchObject({ label: "Paid" });
   });
 
   const open: TabFilters = { query: "", supplier: null, from: "", to: "" };

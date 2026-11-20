@@ -1,41 +1,36 @@
 import { Callout, CardNote, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { PoLink } from "@/components/shared/po-link";
-import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import type { OrderOptions } from "@/lib/api/types";
-import { formatDate, formatINR, formatMoney, formatRate, formatShortDate } from "@/lib/formatters";
-import type { Currency } from "@/types/domain";
+import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
-import { DeletePaymentButton, type PaymentOrderFacts } from "./delete-payment";
-import { agentPaid, DepositStatusPill, moneyOrDash } from "./money";
-import { RecordPaymentDialog } from "./record-payment-dialog";
+import { HELD_MESSAGE, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
+import { RecordPaymentDialog, RecordSeaFreightDialog, type SupplierChoice } from "./record-payment-dialog";
+import { VoidPaymentButton } from "./void-payment";
 
-const spacedMoney = (value: number, currency: Currency) => formatMoney(value, currency, { spaced: true });
 const date = (value: string | null) => (value ? formatDate(value) : "–");
 
 type PaymentDetailCardProps = {
   order: OrderPaymentRow;
+  /** The payments recorded against this PO: legacy supplier ones (a memo) and shipping-agent ones (sea freight). */
   payments: Payment[];
-  /** Shipping agents to offer as payees, or null when the user can't record payments (no button). */
+  suppliers: SupplierChoice[] | null;
   agents: OrderOptions["agents"] | null;
-  /** The PO links to its order page (canOpen(me, "/orders")). */
   linkPo: boolean;
-  /** Each payment has Delete (PAY-3, payments Full). */
-  canDelete?: boolean;
+  canVoid?: boolean;
 };
 
 /**
- * Right card: the selected order's payments, each paid one at its own rate, then the order's figures (PAY-1, phase 2
- * fixes 1 and 2): paid to the supplier, to agents (sea freight, only when any), in INR for every payee, the balance
- * the supplier is still owed, and the deposit against what the supplier asked for when one was agreed. Records only.
+ * Right card: the selected order's figures as the API projects them (value, settled from the supplier's account,
+ * outstanding, status, the Deposit Required milestone, sea freight paid to agents, INR), the payments recorded against
+ * its PO, Record payment (the supplier's, prefilled) and Record sea freight payment. Records only.
  */
-export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete = false }: PaymentDetailCardProps) {
+export function PaymentDetailCard({ order, payments, suppliers, agents, linkPo, canVoid = false }: PaymentDetailCardProps) {
   const { po, supplier, currency } = order;
-  const facts: PaymentOrderFacts = { po, supplier, currency, supplierPaidCny: order.supplierPaid, balanceCny: order.balance };
-  const money = (value: number | null) => moneyOrDash(value, (v) => spacedMoney(v, currency));
-  const toAgents = agentPaid(order.paid, order.supplierPaid);
+  const money = (value: number | null) => moneyOrDash(value, (v) => formatMoney(v, currency, { decimals: 2, spaced: true }));
+  const payable = suppliers?.find((s) => s.id === order.supplierId);
 
   return (
     <SectionCard
@@ -48,97 +43,106 @@ export function PaymentDetailCard({ order, payments, agents, linkPo, canDelete =
       titleGap="none"
       className="pt-3.5 pb-[18px]"
     >
-      {payments.length === 0 ? (
-        <p className="mt-3.5 text-[13.5px] text-muted-foreground">No payments recorded for {po} yet.</p>
-      ) : (
-        <>
-          <ol className="mt-3.5 flex flex-col gap-3">
-            {payments.map((payment, index) => (
-              <li key={payment.id}>
-                <PaymentBlock number={index + 1} payment={payment} currency={currency} remove={canDelete ? <DeletePaymentButton payment={payment} order={facts} /> : null} />
-              </li>
-            ))}
-          </ol>
-
-          <Callout size="sm" className="mt-[13px]">
-            Each payment is changed to INR at the rate of its own date, then added up.
-          </Callout>
-        </>
-      )}
-
+      {order.held ? (
+        <Callout tone="warning" size="sm" role="status" className="mt-3">
+          {HELD_MESSAGE}
+        </Callout>
+      ) : null}
       <KeyValueList
         size="sm"
         className="mt-3"
         boldValues
         items={[
-          { label: "Paid to supplier", value: money(order.supplierPaid) },
-          ...(toAgents !== null && toAgents > 0 ? [{ label: "Paid to agents (sea freight)", value: money(toAgents), muted: true }] : []),
-          { label: "Paid (INR), all payees", value: formatINR(order.paidInr) },
+          { label: "Order value", value: money(order.orderValueCny) },
+          { label: "Settled from supplier account", value: money(order.settledCny) },
+          ...(order.agentPaidCny ? [{ label: "Paid to agents (sea freight)", value: money(order.agentPaidCny), muted: true }] : []),
+          { label: "Paid (INR), goods + sea freight", value: moneyOrDash(order.paidInr, formatINR) },
+          { label: "Status", value: <PaymentStatusPill status={order.paymentStatus} held={order.held} /> },
         ]}
-        total={{ label: "Balance to supplier", value: money(order.balance) }}
+        total={{ label: "Outstanding", value: money(order.outstandingCny) }}
       />
-      {order.depositRequired == null ? null : (
+      {order.depositRequiredCny == null ? null : (
         <KeyValueList
           size="sm"
           className="mt-3"
           boldValues
           items={[
-            { label: "Deposit required", value: money(order.depositRequired) },
-            { label: "Deposit paid", value: money(order.depositPaid) },
+            { label: "Deposit required", value: money(order.depositRequiredCny) },
+            { label: "Settled toward it", value: money(order.depositSettledCny) },
             {
               label: (
                 <>
-                  Deposit pending <DepositStatusPill status={order.depositStatus} className="ml-1 align-middle" />
+                  Deposit pending <MilestonePill status={order.depositStatus} className="ml-1 align-middle" />
                 </>
               ),
-              value: money(order.depositPending ?? 0),
+              value: money(order.depositPendingCny),
             },
           ]}
         />
       )}
 
-      {agents ? (
-        <RecordPaymentDialog orders={[order]} fixed agents={agents}>
-          <Button type="button" className="mt-3.5 h-11 w-full rounded-[10px] text-[15px]">
-            + Record payment for {po}
-          </Button>
-        </RecordPaymentDialog>
+      <h3 className="mt-4 text-[14.5px] font-bold">Recorded against {po}</h3>
+      {payments.length === 0 ? (
+        <p className="mt-1.5 text-[13.5px] text-muted-foreground">No payment names this PO. Supplier payments are on the supplier&apos;s account.</p>
+      ) : (
+        <ol className="mt-2 flex flex-col gap-3">
+          {payments.map((payment, index) => (
+            <li key={payment.id}>
+              <PaymentBlock number={index + 1} payment={payment} remove={canVoid ? <VoidPaymentButton payment={payment} voided={payment.voided} /> : null} />
+            </li>
+          ))}
+        </ol>
+      )}
+      {payments.some((p) => p.payeeRole === "supplier") ? (
+        <Callout size="sm" className="mt-3">
+          Supplier payments listed here were recorded against this PO before the supplier ledger. They are on the supplier&apos;s account and settle its orders
+          oldest first.
+        </Callout>
+      ) : null}
+
+      {payable || agents ? (
+        <div className="mt-3.5 flex flex-col gap-2">
+          {payable ? (
+            <RecordPaymentDialog suppliers={suppliers!} supplierId={payable.id}>
+              <Button type="button" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
+                + Record payment for {supplier}
+              </Button>
+            </RecordPaymentDialog>
+          ) : null}
+          {agents ? (
+            <RecordSeaFreightDialog order={{ orderId: order.orderId, po, currency, exchangeRate: order.supplierRate }} agents={agents}>
+              <Button type="button" variant="outline" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
+                + Record sea freight payment
+              </Button>
+            </RecordSeaFreightDialog>
+          ) : null}
+        </div>
       ) : null}
     </SectionCard>
   );
 }
 
-function PaymentBlock({ number, payment, currency, remove }: { number: number; payment: Payment; currency: Currency; remove: React.ReactNode }) {
+function PaymentBlock({ number, payment, remove }: { number: number; payment: Payment; remove: React.ReactNode }) {
+  const { currency } = payment;
+  const spaced = (value: number) => formatMoney(value, currency, { spaced: true, decimals: 2 });
   const paid = payment.status === "paid";
-  const facts = paid
-    ? [
-        { label: "Paid on", value: date(payment.paidOn) },
-        { label: "Amount", value: spacedMoney(payment.amountCny, currency) },
-        { label: "Rate on that day", value: payment.rateInr === null ? "–" : formatRate(payment.rateInr) },
-        { label: "Mode", value: payment.mode ?? "–" },
-      ]
-    : [
-        { label: "Due date", value: date(payment.dueDate) },
-        { label: "Amount", value: spacedMoney(payment.amountCny, currency) },
-      ];
-  // Reference and notes (migration 0008) show only when recorded; the notes take the whole row.
-  const extras = [
-    ...(payment.reference ? [{ label: "Reference", value: payment.reference, wide: false }] : []),
-    ...(payment.notes ? [{ label: "Notes", value: payment.notes, wide: true }] : []),
+  const facts = [
+    { label: paid ? "Paid on" : "Due date", value: date(paid ? payment.paidOn : payment.dueDate) },
+    { label: "Amount", value: spaced(payment.amountCny) },
+    { label: "Paid to", value: payment.payee },
+    ...(paid ? [{ label: "Rate on that day", value: payment.rateInr === null || currency === "INR" ? "–" : formatRate(payment.rateInr) }] : []),
+    ...(paid ? [{ label: "In INR", value: moneyOrDash(payment.amountInr, formatINR) }] : []),
+    ...(payment.mode ? [{ label: "Mode", value: payment.mode }] : []),
+    ...(payment.reference ? [{ label: "Reference", value: payment.reference }] : []),
   ];
-
   return (
-    <article className="rounded-[10px] border bg-input-background px-4 py-[13px]">
-      <div className="flex h-5 items-center justify-between gap-3">
-        <h3 className="text-[14.5px] leading-[17px] font-bold">
-          {number}. {payment.kind}
-        </h3>
+    <article className="rounded-[10px] border bg-input-background px-4 py-[13px]" aria-label={`${number}. ${paymentType(payment)}${payment.voided ? " (voided)" : ""}`}>
+      <div className="flex min-h-5 items-center justify-between gap-3">
+        <h4 className={payment.voided ? "text-[14.5px] leading-[17px] font-bold line-through" : "text-[14.5px] leading-[17px] font-bold"}>
+          {number}. {paymentType(payment)}
+        </h4>
         <div className="flex items-center gap-3">
-          {paid ? (
-            <StatusPill tone="success">Paid</StatusPill>
-          ) : (
-            <StatusPill tone="warning">{payment.dueDate ? `Due ${formatShortDate(payment.dueDate)}` : "Due"}</StatusPill>
-          )}
+          <PaymentStatus payment={payment} />
           {remove}
         </div>
       </div>
@@ -146,26 +150,22 @@ function PaymentBlock({ number, payment, currency, remove }: { number: number; p
         {facts.map((fact) => (
           <div key={fact.label}>
             <dt className="text-[12.5px] leading-[15px] text-muted-foreground">{fact.label}</dt>
-            <dd className="text-[14.5px] leading-[17px] font-bold">{fact.value}</dd>
-          </div>
-        ))}
-        {extras.map((fact) => (
-          <div key={fact.label} className={fact.wide ? "col-span-2" : undefined}>
-            <dt className="text-[12.5px] leading-[15px] text-muted-foreground">{fact.label}</dt>
             <dd className="text-[14.5px] leading-[17px] font-bold [overflow-wrap:anywhere]">{fact.value}</dd>
           </div>
         ))}
+        {payment.voided ? (
+          <div className="col-span-2">
+            <dt className="text-[12.5px] leading-[15px] text-muted-foreground">Voided{payment.voidedBy ? ` by ${payment.voidedBy}` : ""}</dt>
+            <dd className="text-[14.5px] leading-[17px] font-bold [overflow-wrap:anywhere]">{payment.voidReason || "–"}</dd>
+          </div>
+        ) : null}
+        {payment.notes ? (
+          <div className="col-span-2">
+            <dt className="text-[12.5px] leading-[15px] text-muted-foreground">Notes</dt>
+            <dd className="text-[14.5px] leading-[17px] font-bold [overflow-wrap:anywhere]">{payment.notes}</dd>
+          </div>
+        ) : null}
       </dl>
-      {/* An INR payment needs no change to INR (its rate is 1). */}
-      {payment.rateInr === null || currency === "INR" ? null : (
-        <div className="mt-3 flex h-[43px] items-center justify-between gap-3 rounded-lg border border-dashed border-placeholder/60 bg-card px-3">
-          <span className="text-[13.5px] text-label">
-            {spacedMoney(payment.amountCny, currency)} × {formatRate(payment.rateInr)}
-          </span>
-          {/* The API's INR, rounded in SQL like every total (phase 2 final fixes, 2); an older API shows a dash. */}
-          <span className="text-[16.5px] font-bold">{moneyOrDash(payment.amountInr, formatINR)}</span>
-        </div>
-      )}
     </article>
   );
 }

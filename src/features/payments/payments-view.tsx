@@ -7,109 +7,123 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { CardNote, SectionCard } from "@/components/shared/cards";
 import { DataTable } from "@/components/shared/data-table";
 import { SearchInput } from "@/components/shared/filters";
+import { PoLink } from "@/components/shared/po-link";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { PLAIN_ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
 import { ReportDownload } from "@/features/reports/report-actions";
+import type { LedgerTotal } from "@/lib/api/ledger-types";
 import type { OrderOptions } from "@/lib/api/types";
-import { currencySymbol, formatINR, formatMoney, formatNumber, formatShortDate } from "@/lib/formatters";
+import { currencySymbol, formatDate, formatINR, formatMoney, formatNumber, formatRate, formatShortDate } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
-import { DASH } from "./money";
-import { DeletePaymentMenu } from "./delete-payment";
-import { filterOrders } from "./filter-orders";
+import { filterOrders, filterPayments } from "./filter-orders";
+import { DASH, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
 import { PaymentDetailCard } from "./payment-detail";
 import { paymentsFile } from "./payment-files";
 import { RecordPaymentDialog, type SupplierChoice } from "./record-payment-dialog";
+import { VoidPaymentButton } from "./void-payment";
 
-// 10 px cell padding and column widths as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
+// 10 px cell padding as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
 const PAD = "px-2.5 first:pl-2.5 last:pr-2.5";
-// Reference header: 12 px text, 3 px below the centre of the 44 px tall-density header row.
 const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</span>;
 
 /**
- * `currency`: the one currency every order is in, shown in the headers as in the reference ("Order value (¥)"); null
- * when orders are in different currencies, and each amount then shows its own symbol. `actions`: the Actions column's
- * cell (PAY-3, payments Full; the table has no Status, so it comes last), or null without it.
+ * Every payment, latest first: orderless supplier payments, legacy ones recorded against a PO (a memo), shipping-agent
+ * ones (sea freight). A voided payment is struck through and flagged; it counts in no total.
  */
-const columns = (currency: Currency | null, actions: ((row: OrderPaymentRow) => React.ReactNode) | null): ColumnDef<OrderPaymentRow>[] => {
-  const label = (text: string) => head(currency ? `${text} (${currencySymbol(currency)})` : text);
-  const amount = (value: number | null, row: OrderPaymentRow) => (value == null ? DASH : currency ? formatNumber(value) : formatMoney(value, row.currency));
-  return [
+const paymentColumns = (linkPo: boolean, canVoid: boolean): ColumnDef<Payment>[] => [
+  { id: "date", header: "Date", cell: ({ row }) => formatDate(row.original.paidOn ?? row.original.dueDate ?? row.original.recordedAt) },
+  { accessorKey: "supplier", header: "Supplier" },
   {
-    accessorKey: "po",
-    header: () => head("PO / Supplier"),
-    meta: { className: PAD },
-    cell: ({ row }) => (
-      <>
-        {/* Focusable for keyboard users; Enter or Space bubbles a click to the row handler. */}
-        <button
-          type="button"
-          className="block rounded-sm text-left leading-4 font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          {row.original.po}
-        </button>
-        <span className="block text-[12.5px] leading-4 font-bold text-muted-foreground">{row.original.supplier}</span>
-      </>
-    ),
+    id: "order",
+    header: "Order",
+    cell: ({ row }) => (row.original.po ? <PoLink po={row.original.po} linked={linkPo} /> : <span className="text-muted-foreground">Supplier account</span>),
   },
+  { accessorKey: "payee", header: "Paid to", cell: ({ row }) => (row.original.payeeRole === "agent" ? `${row.original.payee} (agent)` : row.original.payee) },
+  { id: "type", header: "Type", cell: ({ row }) => paymentType(row.original) },
   {
-    accessorKey: "orderValue",
-    header: () => label("Order value"),
-    meta: { align: "right", className: `${PAD} w-[130px]` },
-    cell: ({ row }) => amount(row.original.orderValue, row.original),
+    accessorKey: "amountCny",
+    header: "Amount",
+    meta: { align: "right" },
+    cell: ({ row }) => <span className={row.original.voided ? "line-through" : undefined}>{formatMoney(row.original.amountCny, row.original.currency, { decimals: 2 })}</span>,
   },
-  {
-    accessorKey: "supplierPaid",
-    header: () => label("Paid to supplier"),
-    meta: { align: "right", className: `${PAD} w-[118px]` },
-    cell: ({ row }) => (
-      <>
-        {amount(row.original.supplierPaid, row.original)}
-        {row.original.advance ? <span className="block text-xs whitespace-nowrap text-muted-foreground">+ {amount(row.original.advance, row.original)} advance</span> : null}
-      </>
-    ),
-  },
-  {
-    accessorKey: "paidInr",
-    // Every payee: agent payments (sea freight) count here and nowhere else in the row.
-    header: () => (
-      <span className="block text-xs leading-4">
-        Paid (INR)
-        <span className="block text-[11px] font-normal">all payees</span>
-      </span>
-    ),
-    meta: { align: "right", className: `${PAD} w-[98.5px]` },
-    cell: ({ row }) => formatINR(row.original.paidInr),
-  },
-  {
-    accessorKey: "balance",
-    header: () => label("Balance to supplier"),
-    meta: { align: "right", className: `${PAD} w-[132px]` },
-    cell: ({ row }) => amount(row.original.balance, row.original),
-  },
-  {
-    accessorKey: "nextDue",
-    header: () => head("Next due"),
-    meta: { className: `${PAD} w-[99px]` },
-    cell: ({ row }) => {
-      const { nextDue, nextDueTone } = row.original;
-      if (!nextDue) return "Not yet due";
-      return nextDueTone ? <StatusPill tone={nextDueTone}>{formatShortDate(nextDue)}</StatusPill> : formatShortDate(nextDue);
-    },
-  },
-  ...(actions
+  { accessorKey: "rateInr", header: "Rate", meta: { align: "right" }, cell: ({ row }) => (row.original.currency === "INR" || row.original.rateInr === null ? DASH : formatRate(row.original.rateInr)) },
+  { accessorKey: "amountInr", header: "In INR", meta: { align: "right" }, cell: ({ row }) => moneyOrDash(row.original.amountInr, formatINR) },
+  { id: "reference", header: "Mode · reference", cell: ({ row }) => [row.original.mode, row.original.reference].filter(Boolean).join(" · ") || DASH },
+  { id: "status", header: "Status", cell: ({ row }) => <PaymentStatus payment={row.original} /> },
+  ...(canVoid
     ? [
         {
           id: "actions",
-          header: () => head("Actions"),
-          meta: { className: `${PAD} w-[84px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
-          cell: ({ row }) => actions(row.original),
-        } satisfies ColumnDef<OrderPaymentRow>,
+          header: "Actions",
+          meta: { className: `w-[72px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
+          cell: ({ row }) => <VoidPaymentButton payment={row.original} voided={row.original.voided} />,
+        } satisfies ColumnDef<Payment>,
       ]
     : []),
+];
+
+/**
+ * Payments by order, the API's FIFO figures: value, settled from the supplier's account, outstanding (never negative),
+ * the payment status and the Deposit Required milestone. `currency`: the one currency of every order, shown in the
+ * headers; null when they differ (each amount then shows its own symbol).
+ */
+const orderColumns = (currency: Currency | null): ColumnDef<OrderPaymentRow>[] => {
+  const label = (text: string) => head(currency ? `${text} (${currencySymbol(currency)})` : text);
+  const amount = (value: number | null, row: OrderPaymentRow) => moneyOrDash(value, (v) => (currency ? formatNumber(v, 2) : formatMoney(v, row.currency, { decimals: 2 })));
+  return [
+    {
+      accessorKey: "po",
+      header: () => head("PO / Supplier"),
+      meta: { className: PAD },
+      cell: ({ row }) => (
+        <>
+          {/* Focusable for keyboard users; Enter or Space bubbles a click to the row handler. */}
+          <button type="button" className="block rounded-sm text-left leading-4 font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+            {row.original.po}
+          </button>
+          <span className="block text-[12.5px] leading-4 font-bold text-muted-foreground">{row.original.supplier}</span>
+        </>
+      ),
+    },
+    { accessorKey: "orderValueCny", header: () => label("Order value"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.orderValueCny, row.original) },
+    { accessorKey: "settledCny", header: () => label("Settled"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.settledCny, row.original) },
+    { accessorKey: "outstandingCny", header: () => label("Outstanding"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.outstandingCny, row.original) },
+    {
+      id: "status",
+      header: () => head("Status"),
+      meta: { className: PAD },
+      cell: ({ row }) => (
+        <span className="flex flex-col items-start gap-1">
+          <PaymentStatusPill status={row.original.paymentStatus} held={row.original.held} />
+          <MilestonePill status={row.original.depositStatus} />
+        </span>
+      ),
+    },
+    {
+      accessorKey: "paidInr",
+      header: () => (
+        <span className="block text-xs leading-4">
+          Paid (INR)
+          <span className="block text-[11px] font-normal">goods + sea freight</span>
+        </span>
+      ),
+      meta: { align: "right", className: PAD },
+      cell: ({ row }) => moneyOrDash(row.original.paidInr, formatINR),
+    },
+    {
+      accessorKey: "nextDue",
+      header: () => head("Next due"),
+      meta: { className: PAD },
+      cell: ({ row }) => {
+        const { nextDue, nextDueTone } = row.original;
+        if (!nextDue) return "Not yet due";
+        return nextDueTone ? <StatusPill tone={nextDueTone}>{formatShortDate(nextDue)}</StatusPill> : formatShortDate(nextDue);
+      },
+    },
   ];
 };
 
@@ -119,48 +133,43 @@ type PaymentsViewProps = {
   /** The order selected on load; a row click selects another. */
   defaultPo: string | null;
   kpis: React.ReactNode;
-  /** Shipping agents to offer as payees, or null when the user can't record payments (no buttons). */
+  /** ADV-5's suppliers (payments Enter): Record payment; null without it. */
+  suppliers: SupplierChoice[] | null;
+  /** Shipping agents (payments Enter): Record sea freight payment; null without it. */
   agents: OrderOptions["agents"] | null;
-  /** Active suppliers (ADV-5): Record payment then asks Order payment or Supplier advance (no order) first. */
-  suppliers?: SupplierChoice[];
   /** POs link to their order page (canOpen(me, "/orders")). */
   linkPo: boolean;
-  /** Each payment of the selected order has Delete (PAY-3, payments Full). */
-  canDelete?: boolean;
+  /** Void on each payment (PAY-3, payments Full). */
+  canVoid?: boolean;
+  /** LED-2's per-currency totals, for the download's summary. */
+  totals?: LedgerTotal[];
 };
 
 /**
- * Header search filters the "Payments by order" table; a row click shows that order's payments. KPIs are a server
- * slot. The selected order's card shows only while its row does, and comes back when the search clears.
+ * Payments: the KPIs (a server slot), every payment, and payments by order with the selected order's card. The header
+ * search filters both tables by PO or supplier (and a payment's reference).
  */
-export function PaymentsView({ orders, payments, defaultPo, kpis, agents, suppliers = [], linkPo, canDelete = false }: PaymentsViewProps) {
+export function PaymentsView({ orders, payments, defaultPo, kpis, suppliers, agents, linkPo, canVoid = false, totals = [] }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedPo, setSelectedPo] = useState(defaultPo);
   const visible = filterOrders(orders, query);
+  const shownPayments = filterPayments(payments, query);
   const selected = visible.find((order) => order.po === selectedPo);
-  // Every order's currency, from all orders so the headers don't change while searching. None yet: yuan, as before.
   const currencies = new Set(orders.map((order) => order.currency));
   const single = currencies.size > 1 ? null : ([...currencies][0] ?? "CNY");
 
   return (
     <>
       <PageHeader
-        title="Deposits & Payments"
+        title="Payments"
         actions={
           <>
             <form role="search" className="hidden sm:block" onSubmit={(event) => event.preventDefault()}>
-              <SearchInput
-                size="sm"
-                label="Search PO or supplier"
-                placeholder="Search PO or supplier"
-                value={query}
-                onValueChange={setQuery}
-                className="w-[170px] lg:w-[250px]"
-              />
+              <SearchInput size="sm" label="Search PO or supplier" placeholder="Search PO or supplier" value={query} onValueChange={setQuery} className="w-[170px] lg:w-[250px]" />
             </form>
-            <ReportDownload file={() => paymentsFile(visible, payments, query, todayInIndia())} />
-            {agents ? (
-              <RecordPaymentDialog orders={orders} agents={agents} suppliers={suppliers}>
+            <ReportDownload file={() => paymentsFile(visible, shownPayments, query, todayInIndia(), totals)} />
+            {suppliers ? (
+              <RecordPaymentDialog suppliers={suppliers}>
                 <Button type="button" size="header">
                   + Record payment
                 </Button>
@@ -171,6 +180,18 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, suppli
       />
       <PageContainer>
         {kpis}
+        <SectionCard title="Payments" aside={<CardNote size="sm">Latest first · voided payments are listed but count in no total</CardNote>} titleGap="none" className="min-w-0">
+          <DataTable
+            columns={paymentColumns(linkPo, canVoid)}
+            data={shownPayments}
+            getRowId={(payment) => payment.id}
+            size="sm"
+            header="tall"
+            emptyState={payments.length ? "No payments match your search." : "No payments recorded yet."}
+            pagination={{ pageSize: 10, itemLabel: "payments" }}
+            className="mt-2.5"
+          />
+        </SectionCard>
         <div className="grid items-start gap-(--page-gap) lg:grid-cols-[1.6fr_1fr]">
           <SectionCard
             title="Payments by order"
@@ -179,18 +200,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, suppli
             className="min-w-0 pt-3.5 pb-[18px]"
           >
             <DataTable
-              columns={columns(
-                single,
-                canDelete
-                  ? (row) => (
-                      <DeletePaymentMenu
-                        // Oldest first, as the order's payment card numbers them.
-                        payments={payments.filter((p) => p.po === row.po).toReversed()}
-                        order={{ po: row.po, supplier: row.supplier, currency: row.currency, supplierPaidCny: row.supplierPaid, balanceCny: row.balance }}
-                      />
-                    )
-                  : null,
-              )}
+              columns={orderColumns(single)}
               data={visible}
               getRowId={(row) => row.po}
               density="tall"
@@ -200,19 +210,19 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, agents, suppli
               emptyState={orders.length ? "No orders match your search." : "No orders yet."}
               className="mt-2.5"
             />
-            {/* Phase 2 fixes, 1: the balance counts supplier payments only. Proposed wording. */}
             <CardNote size="sm" className="mt-3 block">
-              Balance is what the supplier is still owed; agent payments are sea freight and count only in the INR total.
+              Supplier payments go to the supplier&apos;s account; each order is settled from it, oldest first. Sea freight is paid to agents on the order.
             </CardNote>
           </SectionCard>
           {selected ? (
             <PaymentDetailCard
               order={selected}
-              // PAY-1 lists payments newest first; the card numbers them oldest first (1. Deposit, 2. Balance), as in 16.
+              // PAY-1 lists payments newest first; the card numbers them oldest first.
               payments={payments.filter((p) => p.po === selected.po).toReversed()}
+              suppliers={suppliers}
               agents={agents}
               linkPo={linkPo}
-              canDelete={canDelete}
+              canVoid={canVoid}
             />
           ) : null}
         </div>

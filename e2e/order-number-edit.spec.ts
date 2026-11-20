@@ -23,7 +23,8 @@ test("Edit order renumbers the order in place, refusing a blank or taken number,
   await page.setViewportSize({ width: 1440, height: 900 });
   const order = await api.createOrder({ lines: [{ item: "Denim jeans", quantity: 120, rateCny: 10 }] });
   const other = await api.createOrder();
-  const { payment } = await api.pay(order.id, { amountCny: 400, rateInr: 12.5, kind: "Deposit" });
+  // A sea freight payment is recorded against the order itself (supplier payments go to the supplier account).
+  const { payment } = await api.payAgent(order.id, { amountCny: 400, rateInr: 12.5, kind: "Deposit" });
   const renamed = `MR/2026/${tag()}`;
 
   await page.goto(`/orders/${order.po}`);
@@ -62,7 +63,7 @@ test("Edit order renumbers the order in place, refusing a blank or taken number,
 
   await test.step("the same order: id, value and payment unchanged; the old number is gone", async () => {
     const detail = await api.order(renamed);
-    expect(detail).toMatchObject({ id: order.id, po: renamed, orderValueCny: 1200, supplierPaidCny: 400 });
+    expect(detail).toMatchObject({ id: order.id, po: renamed, orderValueCny: 1200, agentPaidCny: 400 });
     expect(detail.payments?.map((p) => p.id)).toEqual([payment.id]);
     expect((await api.request.get(`/api/v1/orders/${order.po}`)).status()).toBe(404);
   });

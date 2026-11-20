@@ -44,13 +44,17 @@ describe("landed cost math (31_12_Landed_Cost.jpeg)", () => {
     ]);
   });
 
-  it("totals the goods payments and averages the rate over the total", () => {
+  it("totals the goods credits and averages the rate over the rated ones", () => {
+    const slice = { entryType: "payment" as const, paymentId: null, advanceEntryId: null, mode: null, reference: null, memoPo: null };
     const payments = [
-      { id: "p1", orderId: "o1", kind: "Deposit" as const, paidOn: "2026-08-05", amountCny: 70000, rateInr: 12, amountInr: 840000 },
-      { id: "p2", orderId: "o1", kind: "Balance" as const, paidOn: "2026-08-26", amountCny: 10000, rateInr: 14, amountInr: 140000 },
+      { ...slice, entryId: "e1", entryDate: "2026-08-05", amount: 70000, exchangeRate: 12, amountInr: 840000 },
+      { ...slice, entryId: "e2", entryDate: "2026-08-26", amount: 10000, exchangeRate: 14, amountInr: 140000 },
     ];
     expect(convertPayments(payments)).toEqual({ totalCny: 80000, totalInr: 980000, averageRate: 12.25 });
     expect(convertPayments([]).averageRate).toBe(0);
+    // A legacy credit with no rate adds its amount but no INR, and stays out of the average.
+    const unrated = { ...slice, entryId: "e3", entryDate: "2026-09-01", amount: 500, exchangeRate: null, amountInr: null };
+    expect(convertPayments([...payments, unrated])).toEqual({ totalCny: 80500, totalInr: 980000, averageRate: 12.25 });
   });
 
   it("adds each team's pieces and cost over the orders, in team order, leaving out teams with no stock", () => {

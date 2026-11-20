@@ -39,6 +39,7 @@ export function hubFile(summary: ReportsSummary, today: string): ReportFile {
           ["Containers", "On the way", summary.containers.onTheWay],
           ["Containers", "Arriving in 7 days", summary.containers.arrivingIn7Days],
           ["Payments", "Due in next 30 days", amountsText(summary.payments.dueNext30ByCurrency)],
+          ["Payments", "Payable to suppliers", amountsText(summary.payments.payableByCurrency)],
           ["Landed cost", "Finished orders", summary.landedCost.finishedOrders],
           ["Landed cost", "Total landed cost, finished orders (INR)", summary.landedCost.finishedTotalInr],
         ],
@@ -97,7 +98,7 @@ const CARDS: ReportCard[] = [
     description: "Paid and due amounts for each supplier.",
     name: "payments-per-supplier",
     // Due payments have no exchange rate yet: each order currency apart, never added together (DEF-25: not INR).
-    stat: (s) => `${formatMoneyList(s.payments.dueNext30ByCurrency)} due in next 30 days`,
+    stat: (s) => `${formatMoneyList(s.payments.payableByCurrency)} payable · ${formatMoneyList(s.payments.dueNext30ByCurrency)} due in next 30 days`,
   },
   {
     category: "Cost",

@@ -165,7 +165,13 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
       enableSorting: false,
       header: yuanOnly ? "Balance (¥)" : "Balance",
       meta: { ...right, className: "w-[104px]" },
-      cell: ({ row }) => money(row.original.balance),
+      // The signed ledger balance (+ available with the supplier, − payable); a held account has none, only its note.
+      cell: ({ row }) => (
+        <>
+          {money(row.original.balance)}
+          {row.original.heldCurrencies.length ? <span className="block text-xs text-muted-foreground">{row.original.heldCurrencies.join(", ")} pending review</span> : null}
+        </>
+      ),
     },
     {
       accessorKey: "status",

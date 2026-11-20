@@ -13,7 +13,9 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { optionParam } from "@/features/calendar/params";
 import { orderStatus } from "@/features/orders/order-status";
+import { moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "@/features/payments/money";
 import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 import { STAGES } from "@/types/domain";
 
 import type { SupplierPaymentDetail } from "./data/queries";
@@ -125,29 +127,34 @@ export function SupplierPaymentsList({ list, linkPos, empty }: { list: List<Paym
         return paidOn ? formatDate(paidOn) : dueDate ? `due ${formatDate(dueDate)}` : DASH;
       },
     },
-    { accessorKey: "po", header: "PO", cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
-    { accessorKey: "kind", header: "Type" },
+    // An orderless supplier payment has no PO; a legacy one keeps the order it was recorded against (a memo).
+    { accessorKey: "po", header: "PO", cell: ({ row }) => (row.original.po ? <PoLink po={row.original.po} linked={linkPos} /> : DASH) },
+    { accessorKey: "kind", header: "Type", cell: ({ row }) => paymentType(row.original) },
     { accessorKey: "mode", header: "Method", cell: ({ row }) => row.original.mode || DASH },
     { accessorKey: "currency", header: "Currency" },
-    { accessorKey: "amountCny", header: "Amount", meta: { align: "right" }, cell: ({ row }) => formatMoney(row.original.amountCny, row.original.currency) },
+    {
+      accessorKey: "amountCny",
+      header: "Amount",
+      meta: { align: "right" },
+      cell: ({ row }) => <span className={cn(row.original.voided && "text-muted-foreground line-through")}>{formatMoney(row.original.amountCny, row.original.currency)}</span>,
+    },
     {
       accessorKey: "amountInr",
       header: "INR",
       meta: { align: "right" },
       cell: ({ row }) => (row.original.amountInr === null ? DASH : formatINR(row.original.amountInr)),
     },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => (row.original.status === "paid" ? <StatusPill tone="success">Paid</StatusPill> : <StatusPill tone="warning">Due</StatusPill>),
-    },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <PaymentStatus payment={row.original} /> },
   ];
   return <PagedTable list={list} columns={columns} param={PAGE_PARAMS.payments} itemLabel="payments" empty={empty} getRowId={(row) => row.id} />;
 }
 
 type Order = SupplierPaymentDetail["orders"]["rows"][number];
 
-const money = (pick: (order: Order) => number) => ({ row }: { row: { original: Order } }) => formatMoney(pick(row.original), row.original.currency);
+const money =
+  (pick: (order: Order) => number | null) =>
+  ({ row }: { row: { original: Order } }) =>
+    moneyOrDash(pick(row.original), (v) => formatMoney(v, row.original.currency));
 
 export function SupplierOrdersList({ list, linkPos, today, empty }: { list: List<Order>; linkPos: boolean; today: string; empty: string }) {
   const navigate = useNavigate();
@@ -170,10 +177,10 @@ export function SupplierOrdersList({ list, linkPos, today, empty }: { list: List
       cell: ({ row }) => row.original.quantities.map((q) => formatQty(q.quantity, q.unit)).join(" · ") || DASH,
     },
     { accessorKey: "orderValueCny", header: "Order value", meta: { align: "right" }, cell: money((o) => o.orderValueCny) },
-    { accessorKey: "paidCny", header: "Paid", meta: { align: "right" }, cell: money((o) => o.paidCny) },
-    // The supplier advance applied (not a payment): outstanding = value - paid - advance.
-    { accessorKey: "advanceCny", header: "Advance applied", meta: { align: "right" }, cell: money((o) => o.advanceCny ?? 0) },
-    { accessorKey: "balanceCny", header: "Outstanding", meta: { align: "right" }, cell: money((o) => o.balanceCny) },
+    // The ledger's FIFO projection: settled from the supplier's account oldest first; outstanding = value - settled.
+    { accessorKey: "settledCny", header: "Settled", meta: { align: "right" }, cell: money((o) => o.settledCny) },
+    { accessorKey: "outstandingCny", header: "Outstanding", meta: { align: "right" }, cell: money((o) => o.outstandingCny) },
+    { id: "payment", header: "Payment", cell: ({ row }) => <PaymentStatusPill status={row.original.paymentStatus} held={row.original.held} /> },
     {
       id: "status",
       header: "Status",

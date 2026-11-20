@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { ANITA, type Api, expect, field, freshSignIn, kv, test, toast, today } from "./live-api";
+import { ANITA, type Api, expect, field, freshSignIn, kv, num, test, toast, today } from "./live-api";
 import { PROCUREMENT_STATE } from "./sessions";
 
 // New order (15) against the live API: ORD-2 for the choices, ORD-3 to place the order. Role/label locators only.
@@ -22,9 +22,14 @@ async function fillValid(page: Page, quantity = "200") {
 }
 
 const nextPo = async (api: Api) => (await api.options()).nextPo;
+/** ORD-2's signed ledger balance of a supplier in yuan (no account yet: 0). */
+const balanceOf = async (api: Api, supplier: string) => (await api.options()).suppliers.find((s) => s.name === supplier)!.ledgerBalance?.find((b) => b.currency === "CNY")?.balanceCny ?? 0;
+/** The app's wording of a signed balance (src/features/payments/money.tsx balanceText). */
+const balanceText = (balance: number) => (balance === 0 ? "Settled" : `${balance > 0 ? "Available with supplier" : "Payable to supplier"} ¥${num(Math.abs(balance), 2)}`);
 
-test("the form shows the next PO and fills supplier facts and totals as you type", async ({ page, api }) => {
+test("the form shows the next PO and fills supplier facts, totals and the supplier balance as you type", async ({ page, api }) => {
   const po = await nextPo(api);
+  const balance = await balanceOf(api, "Foshan Fabrics");
   await page.goto("/orders/new");
   await expect(page.getByRole("heading", { level: 1, name: "New order" })).toBeVisible();
   await expect(box(page, "Purchase order no.")).toHaveValue(po);
@@ -50,19 +55,12 @@ test("the form shows the next PO and fills supplier facts and totals as you type
   await expect(box(page, "Amount (¥), line 2")).toHaveValue("4,000.00");
   await expect(page.getByRole("status", { name: "Order total" })).toHaveText("¥ 6,500.00");
 
-  await page.getByRole("button", { name: "+ Add deposit" }).click();
-  const payee = combo(page, "Paid to, deposit 1");
-  await expect(payee.getByRole("option")).toHaveText(["Foshan Fabrics (supplier)", "Sino Freight (agent)", "Dragon Cargo (agent)"]);
-  await expect(field(page, "Paid on")).toHaveValue(today());
-  await box(page, "Amount (¥), deposit 1").fill("2000");
-  await field(page, "Rate to INR").fill("12");
-  await field(page, "Mode").fill("Bank transfer");
-  await expect(page.getByText("₹24,000").first()).toBeVisible();
-
-  await expect(kv(page, "Order total")).toHaveText("¥ 6,500");
-  await expect(kv(page, "Deposits paid")).toHaveText("¥ 2,000");
-  await expect(kv(page, "Deposits in INR")).toHaveText("₹24,000");
-  await expect(kv(page, "Balance to pay")).toHaveText("¥ 4,500");
+  // No deposits on the order (supplier money is recorded with Record payment): the supplier's balance before and after.
+  await expect(page.getByRole("button", { name: "+ Add deposit" })).toHaveCount(0);
+  await expect(kv(page, "Order total")).toHaveText("¥ 6,500.00");
+  await expect(kv(page, "Supplier balance now")).toHaveText(balanceText(balance));
+  await expect(kv(page, "Supplier balance after this order")).toHaveText(balanceText(Math.round((balance - 6500) * 100) / 100));
+  await expect(page.getByText("A milestone, not a payment. Record what the supplier was paid with Record payment.")).toBeVisible();
 
   // Cancel goes back to the list and places nothing.
   await page.getByRole("link", { name: "Cancel" }).click();
@@ -110,17 +108,6 @@ test("each validation message shows, and nothing is placed", async ({ page, api 
   await place(page).click();
   await expect(page.getByText("Line 1: Choose an item.")).toBeVisible();
 
-  // A deposit with only an amount.
-  await page.getByRole("button", { name: "+ Add deposit" }).click();
-  await box(page, "Amount (¥), deposit 1").fill("100");
-  await field(page, "Paid on").fill("");
-  // Container terms are chosen on the order (backend docs/order-container-terms.md).
-  await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
-  await place(page).click();
-  for (const message of ["Deposit 1: Choose the date paid.", "Deposit 1: Enter the rate.", "Deposit 1: Enter the mode."]) {
-    await expect(page.getByText(message)).toBeVisible();
-  }
-
   expect(await nextPo(api)).toBe(po);
 });
 
@@ -165,29 +152,29 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
   expect(await nextPo(api)).toBe(po);
 });
 
-test("placing an order goes to its detail page, saves it, and the next visit starts a fresh form", async ({ page, api }) => {
+test("placing an order debits the supplier's account, goes to its detail page, and the next visit starts a fresh form", async ({ page, api }) => {
   const po = await nextPo(api);
+  const before = await balanceOf(api, "Foshan Fabrics");
+  const after = Math.round((before - 2500) * 100) / 100;
   await page.goto("/orders/new");
   await fillValid(page);
   await box(page, "Deposit required (¥)").fill("1,500");
-  await page.getByRole("button", { name: "+ Add deposit" }).click();
-  await box(page, "Amount (¥), deposit 1").fill("1000");
-  await field(page, "Rate to INR").fill("12.2");
-  await field(page, "Mode").fill("Wire");
   // Container terms are chosen on the order (backend docs/order-container-terms.md).
   await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
 
-  await expect(toast(page, `Order ${po} placed`)).toBeVisible();
+  await expect(toast(page, `Order ${po} placed. Debited ¥2,500.00; supplier balance ${balanceText(after)}.`)).toBeVisible();
   await expect(page).toHaveURL(`/orders/${po}`);
   await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
 
   const saved = await api.order(po);
-  expect(saved).toMatchObject({ stage: 1, supplier: { name: "Foshan Fabrics" }, orderDate: today(), deliveryDate: today(20), orderValueCny: 2500, paidCny: 1000, paidInr: 12_200 });
-  // The deposit required (0009) against the deposit paid.
-  expect(saved).toMatchObject({ depositRequiredCny: 1500, depositPaidCny: 1000, depositPendingCny: 500, depositStatus: "partly" });
+  expect(saved).toMatchObject({ stage: 1, supplier: { name: "Foshan Fabrics" }, orderDate: today(), deliveryDate: today(20), orderValueCny: 2500, held: false });
+  // The deposit required (0009) is a milestone of the order, met as the supplier's account settles it.
+  expect(saved).toMatchObject({ depositRequiredCny: 1500 });
+  expect(saved.depositStatus).toMatch(/^(unmet|partly|met)$/);
   expect(saved.lines).toMatchObject([{ item: { name: "Denim jeans" }, quantity: 200, rateCny: 12.5 }]);
-  expect(saved.payments).toMatchObject([{ kind: "Deposit", payee: "Foshan Fabrics", payeeRole: "supplier", amountCny: 1000, rateInr: 12.2, mode: "Wire", status: "paid" }]);
+  expect(saved.payments).toEqual([]);
+  expect(saved.supplierAccount).toMatchObject({ currency: "CNY", balanceCny: after });
 
   // Back to the list and in again: the kept (Activity) route shows an empty form with the next PO.
   await page.getByRole("link", { name: "Orders", exact: true }).first().click();
@@ -197,7 +184,6 @@ test("placing an order goes to its detail page, saves it, and the next visit sta
   await expect(combo(page, "Supplier")).toHaveValue("");
   await expect(box(page, "Rate (¥), line 1")).toHaveValue("");
   await expect(box(page, "Deposit required (¥)")).toHaveValue("");
-  await expect(page.getByRole("combobox", { name: "Paid to, deposit 1" })).toHaveCount(0);
 });
 
 test("double-clicking Place order places one order", async ({ page, api }) => {

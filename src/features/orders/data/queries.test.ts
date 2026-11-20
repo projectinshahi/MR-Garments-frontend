@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SETTLED } from "@/features/payments/test-fixtures";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet } from "@/lib/api/server";
 import type { OrderLineItem, OrderListItem, OrderOptions } from "@/lib/api/types";
@@ -27,14 +28,14 @@ const order = (po: string, patch: Partial<OrderListItem>): OrderListItem => ({
   closed: false,
   closedOn: null,
   orderValueCny: 44400,
-  paidCny: 20000,
-  supplierPaidCny: 20000,
-  supplierPaidInr: 232000,
+  ...SETTLED,
+  settledCny: 20000,
+  outstandingCny: 24400,
+  paymentStatus: "partly",
+  settledInr: 232000,
+  agentPaidCny: 0,
+  agentPaidInr: 0,
   paidInr: 232000,
-  depositRequiredCny: null,
-  depositPaidCny: 0,
-  depositPendingCny: null,
-  depositStatus: "none",
   ...patch,
 });
 const list = [
@@ -45,7 +46,7 @@ const list = [
 ];
 const options: OrderOptions = {
   nextPo: "PO-2054",
-  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", exchangeRate: null }],
+  suppliers: [{ id: "s-1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", exchangeRate: null, held: false, ledgerBalance: [] }],
   items: [],
   agents: [],
 };

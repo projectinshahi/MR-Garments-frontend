@@ -25,7 +25,7 @@ const row = (over: Partial<SupplierRow>): SupplierRow => ({
   openOrders: 0,
   openPos: 0,
   ytdValue: [],
-  balance: [],
+  balance: [], heldCurrencies: [],
   exchangeRate: null,
   rateUpdatedAt: null,
   hasTransactions: false,

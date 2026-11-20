@@ -1,4 +1,6 @@
-import { advanceSections, statementFile } from "@/features/deposits/deposit-files";
+import { statementFile } from "@/features/deposits/deposit-files";
+import { HELD_BALANCE, PAYMENT_STATUS, paymentType } from "@/features/payments/money";
+import { LEDGER_NOTES, ledgerSections } from "@/features/supplier-ledger/ledger-files";
 import { stageLabel } from "@/features/orders/order-status";
 import type { SupplierStatement } from "@/lib/api/deposits-types";
 import { formatDateTime } from "@/lib/formatters";
@@ -7,9 +9,9 @@ import type { SupplierPaymentDetail } from "./data/queries";
 import { type Column, money, perCurrency, rate, type ReportFile, type Section } from "./report-files";
 
 // One supplier's report download (RPT-5D with `all=1`, backend docs/report-downloads.md): the profile, the money
-// summary per order currency, every order, order line (with its saved rate, never the item's price now) and supplier
-// payment the page's period, payment-date and stage filters keep, then the supplier's account deposits and their
-// transactions (SD-1) when the user may view payments. Account deposits are never payments of a PO.
+// summary per currency, every order (with its FIFO settlement), order line (with its saved rate, never the item's price
+// now) and supplier payment the page's period, payment-date and stage filters keep, the supplier's ledger (accounts and
+// statement, whole), then the supplier-deposit archive and its transactions (SD-1) when the user may view payments.
 
 const text = (header: string): Column => ({ header });
 const date = (header: string): Column => ({ header, date: true });
@@ -17,21 +19,19 @@ const or = (value: string) => value.trim() || null;
 
 export function supplierDetailFile(data: SupplierPaymentDetail, statement: SupplierStatement | null, filters: string, today: string): ReportFile {
   const { supplier, summary } = data;
-  // The advance account comes from RPT-5D itself, so the statement's own advance sheets are left out (no sheet twice).
-  const advance = advanceSections(data.advance);
   const deposits: Section[] = statement
-    ? statementFile(statement, today)
-        .sections.filter((section) => !advance.length || !section.sheet?.startsWith("Advance "))
-        .map((section) => ({ ...section, sheet: section.sheet === "Summary" ? "Deposit Summary" : section.sheet }))
+    ? statementFile(statement, today).sections.map((section) => ({ ...section, sheet: section.sheet === "Summary" ? "Deposit Summary" : section.sheet }))
     : [];
+  // The ledger's own Summary sheet is the accounts table: named apart from the deposit archive's.
+  const ledger = ledgerSections(data.ledger.accounts, data.ledger.entries).map((section) => ({ ...section, sheet: section.sheet === "Summary" ? "Ledger Accounts" : section.sheet }));
   return {
     title: `Supplier report: ${supplier.name}`,
     filename: `supplier-${(supplier.code || supplier.name).replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${today}`,
     filters,
     notes: [
-      "Paid and balance count payments to the supplier; each payment keeps the exchange rate typed for it (INR per 1 unit).",
-      "Supplier deposits belong to the supplier's account and are never counted as payments of a PO.",
-      ...(data.advance ? ["Advance applied is the supplier advance (money paid before any order) drawn by each order; balance = order value - paid - advance applied."] : []),
+      ...LEDGER_NOTES,
+      "Settled and outstanding count payments to the supplier only (shipping-agent payments are sea freight); each payment keeps the exchange rate typed for it (INR per 1 unit). Voided payments are listed and count in no total.",
+      "Supplier deposits are a read-only archive of the supplier's account and are never counted as payments of a PO.",
       ...(statement ? [] : ["Supplier deposits are left out: they need Payments access."]),
     ],
     sections: [
@@ -67,13 +67,15 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
         columns: [
           text("Orders"),
           money("Order value", currency),
-          money("Paid", currency),
-          money("Of which deposits", currency),
+          money("Settled", currency),
+          money("Outstanding", currency),
+          money("Payments", currency),
           money("Paid", "INR"),
-          money("Advance applied", currency),
-          money("Balance", currency),
+          money("Supplier balance (+ available, - payable)", currency),
         ],
-        rows: list.map((t) => [t.orders, t.orderValueCny, t.paidCny, t.depositsCny, t.paidInr, t.advanceCny ?? 0, t.balanceCny]),
+        rows: list.map((t) =>
+          t.held ? [t.orders, t.orderValueCny, HELD_BALANCE, null, null, null, null] : [t.orders, t.orderValueCny, t.settledCny, t.outstandingCny, t.creditsCny, t.paidInr, t.balanceCny],
+        ),
       })),
       ...perCurrency(data.orders.rows).map(([currency, list]) => ({
         sheet: "Purchase Orders",
@@ -85,9 +87,9 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           text("Stage"),
           text("Quantity"),
           money("Order value", currency),
-          money("Paid", currency),
-          money("Advance applied", currency),
-          money("Balance", currency),
+          money("Settled", currency),
+          money("Outstanding", currency),
+          text("Payment status"),
         ],
         rows: list.map((o) => [
           o.po,
@@ -96,9 +98,9 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           stageLabel(o.stage),
           o.quantities.map((q) => `${q.quantity} ${q.unit}`).join(" · "),
           o.orderValueCny,
-          o.paidCny,
-          o.advanceCny ?? 0,
-          o.balanceCny,
+          o.settledCny,
+          o.outstandingCny,
+          o.held ? "Pending review" : o.paymentStatus ? PAYMENT_STATUS[o.paymentStatus].label : null,
         ]),
       })),
       ...perCurrency(data.lines.rows).map(([currency, list]) => ({
@@ -121,10 +123,10 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           money("INR equivalent", "INR"),
           text("Status"),
         ],
-        rows: list.map((p) => [p.paidOn, p.dueDate, p.po, p.kind, p.mode, p.amountCny, p.rateInr, p.amountInr, p.status === "paid" ? "Paid" : "Due"]),
+        rows: list.map((p) => [p.paidOn, p.dueDate, p.po, paymentType(p), p.mode, p.amountCny, p.rateInr, p.amountInr, p.voided ? `Voided: ${p.voidReason}` : p.status === "paid" ? "Paid" : "Due"]),
       })),
+      ...ledger,
       ...deposits,
-      ...advance,
     ],
   };
 }

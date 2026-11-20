@@ -21,25 +21,27 @@ async function choose(page: Page, current: RegExp, option: string) {
 
 test("a new order is listed with its figures; the row and the PO link open it", async ({ page, api }) => {
   const due = today(40);
+  // A supplier of its own whose account holds ¥1,000 at 12: it settles ¥1,000 of this order (₹12,000).
+  const supplier = await api.newSupplier("Knits List");
   const order = await api.createOrder({
-    supplier: "Hangzhou Knits",
+    supplier: supplier.name,
     lines: [{ item: "Polo shirts", quantity: 240, rateCny: 25 }],
     deliveryDate: due,
-    deposits: [{ amountCny: 1000, rateInr: 12 }],
   });
+  await api.paySupplier(supplier.id, { amount: 1000, rateInr: 12 });
 
   await page.goto("/orders");
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await search(page).fill(order.po);
   const row = rowOf(page, order.po);
-  for (const text of ["Polo shirts", "Hangzhou Knits", "240 pcs", shortDate(due), "1. Order and deposit", "On track", inr(12_000)]) {
+  for (const text of ["Polo shirts", supplier.name, "240 pcs", shortDate(due), "1. Order and deposit", "On track", inr(12_000)]) {
     await expect(row).toContainText(text);
   }
   await expect(table(page).getByRole("row")).toHaveCount(2);
   await expect(page.getByText("Showing 1 to 1 of 1 orders")).toBeVisible();
 
   // The row opens the order.
-  await row.getByRole("cell", { name: "Hangzhou Knits" }).click();
+  await row.getByRole("cell", { name: supplier.name }).click();
   await expect(page).toHaveURL(`/orders/${order.po}`);
   await expect(page.getByRole("heading", { level: 1, name: order.po })).toBeVisible();
 
@@ -67,8 +69,8 @@ test("search, stage and supplier filters narrow the rows, with an empty state", 
   await expect(table(page).getByText(EMPTY)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Table pagination" })).toHaveCount(0);
 
-  // Nothing reaches stage 6 in this batch, so the stage filter can show the empty state truthfully.
-  await search(page).fill("");
+  // This order is at stage 1, so under stage 6 its search is empty (other specs' orders may reach stage 6 on a shared run).
+  await search(page).fill(order.po);
   await choose(page, /^Stage: All stages$/, "6. India warehouse");
   await expect(table(page).getByText(EMPTY)).toBeVisible();
   await choose(page, /^Stage: 6\. India warehouse$/, "1. Order and deposit");
@@ -130,9 +132,13 @@ test("status chips: Late, Due soon, Short received and Closed, with their counts
     await search(page).fill("");
   }
 
-  // Nothing is closed (every carrier stocked in India) in this batch.
+  // None of these orders is closed (every carrier stocked in India); other specs' closed orders may be listed.
   await chips(page).getByRole("button", { name: "Closed" }).click();
-  await expect(table(page).getByText(EMPTY)).toBeVisible();
+  for (const { po } of [late, dueSoon, short]) {
+    await search(page).fill(po);
+    await expect(table(page).getByText(EMPTY)).toBeVisible();
+  }
+  await search(page).fill("");
   const all = chips(page).getByRole("button", { name: /^All \d+$/ });
   await all.click();
   await expect(all).toHaveAttribute("aria-pressed", "true");

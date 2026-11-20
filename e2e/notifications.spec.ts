@@ -17,8 +17,10 @@ test.describe("Accounts (payments Enter)", () => {
   test.use({ storageState: freshSignIn(ANITA) });
 
   test("a payment Management recorded shows in the bell; opening it marks it read; Mark all as read clears the count", async ({ page, api }) => {
-    const order = await api.createOrder();
-    await api.pay(order.id, { amountCny: 500, rateInr: 12 });
+    // A supplier payment (no order): the notification names the supplier and opens its ledger.
+    const supplier = await api.newSupplier("Bell Supply");
+    await api.paySupplier(supplier.id, { amount: 500, rateInr: 12 });
+    const order = { po: supplier.name };
 
     await page.goto("/payments");
     await unreadBell(page).click();
@@ -27,6 +29,7 @@ test.describe("Accounts (payments Enter)", () => {
     const read = markedRead(page);
     await item.click();
     expect((await read).status()).toBe(200);
+    await expect(page).toHaveURL(`/supplier-ledger/${supplier.id}`);
 
     await page.goto("/notifications");
     await expect(page.getByRole("heading", { level: 1, name: "Notifications" })).toBeVisible();
@@ -59,9 +62,9 @@ test.describe("China staff (receiving)", () => {
 });
 
 test("Management, who recorded the payment, gets no notification for it", async ({ page, api }) => {
-  const order = await api.createOrder();
-  await api.pay(order.id, { amountCny: 500, rateInr: 12 });
+  const supplier = await api.newSupplier("Quiet Supply");
+  await api.paySupplier(supplier.id, { amount: 500, rateInr: 12 });
   await page.goto("/notifications");
   await expect(page.getByRole("heading", { level: 1, name: "Notifications" })).toBeVisible();
-  await expect(page.getByText(order.po)).toHaveCount(0);
+  await expect(page.getByText(supplier.name)).toHaveCount(0);
 });

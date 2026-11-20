@@ -1,28 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { OrderPaymentRow } from "./data/queries";
-import { filterOrders } from "./filter-orders";
+import { filterOrders, filterPayments } from "./filter-orders";
+import { paymentOrder, paymentRow } from "./test-fixtures";
 
-const row = (po: string, supplier: string): OrderPaymentRow => ({
-  orderId: `o-${po}`,
-  po,
-  supplier,
-  currency: "CNY",
-  supplierRate: null,
-  orderValue: 0,
-  paid: 0,
-  paidInr: 0,
-  supplierPaid: 0,
-  supplierPaidInr: 0,
-  balance: 0,
-  depositRequired: null,
-  depositPaid: 0,
-  depositPending: null,
-  depositStatus: "none",
-  nextDue: null,
-});
-
-const rows = [row("PO-2049", "Foshan Fabrics"), row("PO-2047", "Guangzhou Textile Co."), row("PO-2041", "Guangzhou Textile Co.")];
+const rows = [paymentOrder("PO-2049", { supplier: "Foshan Fabrics" }), paymentOrder("PO-2047", { supplier: "Guangzhou Textile Co." }), paymentOrder("PO-2041", { supplier: "Guangzhou Textile Co." })];
 
 describe("filterOrders", () => {
   it("returns every row for an empty or blank query", () => {
@@ -34,5 +15,16 @@ describe("filterOrders", () => {
     expect(filterOrders(rows, "po-2041").map((r) => r.po)).toEqual(["PO-2041"]);
     expect(filterOrders(rows, " guangzhou ").map((r) => r.po)).toEqual(["PO-2047", "PO-2041"]);
     expect(filterOrders(rows, "trims")).toEqual([]);
+  });
+});
+
+describe("filterPayments", () => {
+  const payments = [paymentRow("p1", { reference: "UTR 77" }), paymentRow("p2", { po: "PO-2049", payeeRole: "agent", payee: "Sino Freight" }), paymentRow("p3", { supplier: "Foshan Fabrics" })];
+  it("matches an orderless payment by supplier or reference, and an order's by PO or payee", () => {
+    expect(filterPayments(payments, "")).toBe(payments);
+    expect(filterPayments(payments, "utr 77").map((p) => p.id)).toEqual(["p1"]);
+    expect(filterPayments(payments, "po-2049").map((p) => p.id)).toEqual(["p2"]);
+    expect(filterPayments(payments, "sino").map((p) => p.id)).toEqual(["p2"]);
+    expect(filterPayments(payments, "foshan").map((p) => p.id)).toEqual(["p3"]);
   });
 });

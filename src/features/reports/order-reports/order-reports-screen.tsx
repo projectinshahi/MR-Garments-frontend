@@ -6,7 +6,7 @@ import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 import { ReportDownload } from "../report-actions";
 import { Footnote } from "../report-screens";
 import { OrderReportsFilters } from "./order-reports-filters";
-import { orderReportsFile, outstandingTotal } from "./order-reports-file";
+import { orderReportsFile } from "./order-reports-file";
 import { OrderReportsTable } from "./order-reports-table";
 import { orderReportsFilterLabel } from "./params";
 import type { OrderReportsPage } from "./queries";
@@ -35,21 +35,15 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
           <KpiCard size="xs" label="Orders" value={formatNumber(summary.orders)} sub={label ? "matching the filters" : "every order"} />
           <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />
-          <KpiCard size="xs" label="Paid to suppliers" value={each((t) => t.paidCny)} sub={`${formatINR(summary.paidInr)} at payment-day rates`} />
-          <KpiCard
-            size="xs"
-            label="Balance"
-            // The rows' balances floored at 0 and added up per currency, as the table and the files show them.
-            value={each((t) => outstandingTotal(data.rows, t.currency))}
-            sub={summary.byCurrency.some((t) => t.advanceCny) ? `order value less paid and ${each((t) => t.advanceCny ?? 0)} advance applied` : "order value less paid"}
-          />
+          <KpiCard size="xs" label="Settled" value={each((t) => t.settledCny)} sub={`${formatINR(summary.paidInr)} paid at payment-day rates`} />
+          <KpiCard size="xs" label="Outstanding" value={each((t) => t.outstandingCny)} sub="order value less what the supplier's account settled" />
           <KpiCard size="xs" label="Landed cost" value={formatINR(summary.landedCostInr)} sub="orders with a cost so far" />
         </KpiRow>
         <OrderReportsTable rows={data.rows} today={today} linkPos={linkPos} />
         <Footnote>
-          Paid and balance count payments to the supplier only; payments to shipping agents are sea freight in the landed cost. Landed cost is the
-          order&apos;s allocated share so far, final or estimate; the Report link opens the order&apos;s full report. An overpaid order&apos;s balance
-          shows 0 and adds nothing to the totals.
+          Settled and outstanding come from the supplier ledger: each supplier&apos;s payments settle its orders oldest first, so outstanding is never below
+          0. Payments to shipping agents are sea freight in the landed cost. Landed cost is the order&apos;s allocated share so far, final or estimate;
+          the Report link opens the order&apos;s full report. An order of a held account (pending review) has no figures.
         </Footnote>
       </PageContainer>
     </>

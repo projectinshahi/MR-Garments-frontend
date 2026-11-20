@@ -85,9 +85,9 @@ export function receivingKpis(items: ReceiptListItem[], options: ReceiptOptions 
 /** Quantity still missing after this receipt; never negative. */
 export const lineShort = (line: ReceiptLine) => Math.max(0, line.ordered - line.receivedEarlier - line.receivedNow);
 
-/** Effect on payment: balance before this receipt, less the value of short priced lines. */
-export function paymentEffect(payment: { orderValue: number; depositsPaid: number }, lines: ReceiptLine[]) {
-  const balanceBefore = payment.orderValue - payment.depositsPaid;
+/** Effect on payment: the order's outstanding (the ledger's FIFO projection) before this receipt, less the value of short priced lines. */
+export function paymentEffect(payment: { outstanding: number }, lines: ReceiptLine[]) {
+  const balanceBefore = payment.outstanding;
   const deductions = lines.flatMap((line) => {
     if (line.unitPrice === undefined) return [];
     const short = lineShort(line);

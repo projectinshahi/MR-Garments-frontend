@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { getDeposits } from "@/features/deposits/data/queries";
-import { DepositsScreen } from "@/features/deposits/deposits-screen";
-
-export const metadata: Metadata = { title: "Deposits" };
-
-export default async function DepositsPage() {
-  return <DepositsScreen data={await getDeposits()} view="all" />;
+// The unified supplier ledger (D14) replaced the Deposits pages; old links keep working.
+export default function DepositsPage() {
+  redirect("/supplier-ledger");
 }

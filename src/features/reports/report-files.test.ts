@@ -15,10 +15,22 @@ const NONE = { from: null, to: null, supplier: null };
 const payments: PaymentsPerSupplierReport = {
   filter: { from: "2026-09-01", to: "2026-09-30", supplier: "Foshan Fabrics" },
   suppliers: [
-    { supplierId: "s1", supplier: "Foshan Fabrics", currency: "CNY", orders: ["PO-2047", "PO-2041"], orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 },
+    {
+      supplierId: "s1",
+      supplier: "Foshan Fabrics",
+      currency: "CNY",
+      held: false,
+      orders: ["PO-2047", "PO-2041"],
+      orderValueCny: 160000.5,
+      settledCny: 40000,
+      outstandingCny: 120000.5,
+      creditsCny: 40000,
+      balanceCny: -120000.5,
+      paidInr: 480000,
+    },
   ],
-  totals: { orders: 2, orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 },
-  totalsByCurrency: [{ currency: "CNY", orders: 2, orderValueCny: 160000.5, paidCny: 40000, paidInr: 480000, balanceCny: 120000.5 }],
+  totals: { orders: 2, orderValueCny: 160000.5, settledCny: 40000, outstandingCny: 120000.5, balanceCny: -120000.5, payableCny: 120000.5, availableCny: 0, paidInr: 480000 },
+  totalsByCurrency: [{ currency: "CNY", orders: 2, orderValueCny: 160000.5, settledCny: 40000, outstandingCny: 120000.5, balanceCny: -120000.5, payableCny: 120000.5, availableCny: 0, paidInr: 480000 }],
   dueNext30Cny: 0,
   dueNext30ByCurrency: [],
   finishedPos: [],
@@ -88,9 +100,9 @@ describe("report files", () => {
 
   it("write CSV with currency codes in the headers, human labels and a No rows line for an empty table", () => {
     expect(toCsv(csvRows(reportFile("payments-per-supplier", payments, TODAY)))).toBe(
-      "Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)\r\n" +
-        'Foshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,120000.5\r\n' +
-        "Total,2 open orders,160000.5,40000,480000,120000.5",
+      "Supplier,Open orders,Order value (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance\r\n" +
+        'Foshan Fabrics,"PO-2047, PO-2041",160000.5,40000,120000.5,40000,480000,-120000.5,Payable to supplier\r\n' +
+        "Total,2 open orders,160000.5,40000,120000.5,,480000,-120000.5,",
     );
     expect(csvRows(reportFile("containers-timeline", containers, TODAY))[1]).toEqual(["MSKU 4471", "On the sea", "2026-10-01", "2026-10-28"]);
     expect(csvRows(reportFile("deliveries-per-day", noDeliveries, TODAY))).toEqual([["Date", "Deliveries due"], ["No rows"]]);
@@ -103,30 +115,26 @@ describe("report files", () => {
     expect(csvRows(reportFile("landed-cost-by-month", months, TODAY))[1]).toEqual(["Oct 2026 (so far)", 1800, 991440, 550.8]);
   });
 
-  it("write one table per order currency, each with its code in the headers and its own total, never one sum", () => {
-    const usd = { supplierId: "s2", supplier: "Boston Denim", currency: "USD" as const, orders: ["PO-2050"], orderValueCny: 1200, paidCny: 200, paidInr: 17600, balanceCny: 1000 };
+  it("write one table per currency, each with its code in the headers and its own total, never one sum", () => {
+    const usd = { ...payments.suppliers[0]!, supplierId: "s2", supplier: "Boston Denim", currency: "USD" as const, orders: ["PO-2050"], orderValueCny: 1200, settledCny: 1200, outstandingCny: 0, creditsCny: 1500, balanceCny: 300, paidInr: 132000 };
     const mixed: PaymentsPerSupplierReport = {
       ...payments,
       suppliers: [...payments.suppliers, usd],
-      totalsByCurrency: [...payments.totalsByCurrency, { currency: "USD", orders: 1, orderValueCny: 1200, paidCny: 200, paidInr: 17600, balanceCny: 1000 }],
+      totalsByCurrency: [...payments.totalsByCurrency, { currency: "USD", orders: 1, orderValueCny: 1200, settledCny: 1200, outstandingCny: 0, balanceCny: 300, payableCny: 0, availableCny: 300, paidInr: 132000 }],
     };
-    expect(toCsv(csvRows(reportFile("payments-per-supplier", mixed, TODAY)))).toBe(
-      `Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)\r\nFoshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,120000.5\r\nTotal,2 open orders,160000.5,40000,480000,120000.5\r\n\r\nSupplier,Orders,Order value (USD),Paid (USD),Paid (INR),Balance (USD)\r\nBoston Denim,PO-2050,1200,200,17600,1000\r\nTotal,1 open order,1200,200,17600,1000`,
+    const csv = toCsv(csvRows(reportFile("payments-per-supplier", mixed, TODAY))).split("\r\n\r\n");
+    expect(csv).toHaveLength(2);
+    expect(csv[1]).toBe(
+      "Supplier,Open orders,Order value (USD),Settled (USD),Outstanding (USD),Payments (USD),Paid (INR),Supplier balance (USD),Balance\r\nBoston Denim,PO-2050,1200,1200,0,1500,132000,300,Available with supplier\r\nTotal,1 open order,1200,1200,0,,132000,300,",
     );
   });
 
-  it("adds Advance applied before Balance when the API reports the supplier advance (value - paid - advance = balance)", () => {
-    const withAdvance: PaymentsPerSupplierReport = {
-      ...payments,
-      suppliers: [{ ...payments.suppliers[0]!, advanceCny: 20000, balanceCny: 100000.5 }],
-      totalsByCurrency: [{ ...payments.totalsByCurrency[0]!, advanceCny: 20000, balanceCny: 100000.5 }],
-    };
-    expect(toCsv(csvRows(reportFile("payments-per-supplier", withAdvance, TODAY)))).toBe(
-      `Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Advance applied (CNY),Balance (CNY)\r\nFoshan Fabrics,"PO-2047, PO-2041",160000.5,40000,480000,20000,100000.5\r\nTotal,2 open orders,160000.5,40000,480000,20000,100000.5`,
-    );
+  it("writes a held account (pending review) with no figures", () => {
+    const held = { ...payments.suppliers[0]!, held: true, settledCny: null, outstandingCny: null, creditsCny: null, balanceCny: null, paidInr: null };
+    const rows = csvRows(reportFile("payments-per-supplier", { ...payments, suppliers: [held] }, TODAY));
+    expect(rows[1]).toEqual(["Foshan Fabrics", "PO-2047, PO-2041", 160000.5, null, null, null, null, null, "Opening balance pending review"]);
   });
 });
-
 describe("Excel file", () => {
   const file: ReportFile = {
     title: "Order status",

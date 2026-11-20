@@ -9,7 +9,8 @@ test.use({ viewport: { width: 1440, height: 900 } });
 const TABS = [
   // At least the 5 seeded suppliers (batch1-a4-settings.spec.ts may have added one).
   { name: "Suppliers", path: "/settings/suppliers", action: "+ Add supplier", record: "Guangzhou Textile Co.", rows: null },
-  { name: "Shipping agents", path: "/settings/shipping-agents", action: "+ Add shipping agent", record: "Sino Freight", rows: 2 },
+  // At least the 2 seeded agents: settings-row-delete.spec.ts leaves a paid one (a payment is only ever voided, never deleted).
+  { name: "Shipping agents", path: "/settings/shipping-agents", action: "+ Add shipping agent", record: "Sino Freight", rows: null },
   { name: "Clearing agents", path: "/settings/clearing-agents", action: "+ Add clearing agent", record: "Kochi Clearing Services", rows: 2 },
   { name: "Transport companies", path: "/settings/transport-companies", action: "+ Add transport company", record: "Kerala Roadways", rows: 2 },
   { name: "Offices & warehouses", path: "/settings/offices", action: "+ Add office or warehouse", record: "Guangzhou office", rows: 3 },

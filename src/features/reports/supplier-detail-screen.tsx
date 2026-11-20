@@ -2,7 +2,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-header";
 import { KpiCard, KpiRow, SectionCard } from "@/components/shared/cards";
 import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
-import { AdvanceAccountView } from "@/features/deposits/advance-account-view";
+import { AccountCard, LedgerStatementTable } from "@/features/supplier-ledger/supplier-ledger-screen";
 import { currencyTitle, formatDate, formatDateTime, formatINR, formatMoneyList, formatNumber, rateText } from "@/lib/formatters";
 
 import { filterLabel } from "./data/filters";
@@ -48,10 +48,11 @@ export function SupplierDetailScreen({
   const { supplier, summary } = data;
   const params = new URLSearchParams(page.search);
   const period = filterLabel({ from: data.filter.from, supplier: null });
-  // One amount per order currency ("¥5,800 · $200"), never added together; INR amounts add up.
-  const each = (pick: (total: Totals) => number) =>
-    formatMoneyList(summary.byCurrency.map((total) => ({ currency: total.currency, amount: pick(total) })), {}, supplier.currency);
-  const paidInr = summary.byCurrency.reduce((sum, total) => sum + total.paidInr, 0);
+  // One amount per order currency ("¥5,800 · $200"), never added together; INR amounts add up. A held account (pending
+  // review) has no figures and counts in none of them.
+  const counted = summary.byCurrency.filter((total) => !total.held);
+  const each = (pick: (total: Totals) => number) => formatMoneyList(counted.map((total) => ({ currency: total.currency, amount: pick(total) })), {}, supplier.currency);
+  const paidInr = counted.reduce((sum, total) => sum + (total.paidInr ?? 0), 0);
   const inPeriod = period ? " in this period" : "";
 
   const details = [
@@ -117,26 +118,21 @@ export function SupplierDetailScreen({
             pushed the page sideways. */}
         <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
           <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />
-          <KpiCard
-            size="xs"
-            label="Paid so far"
-            value={each((t) => t.paidCny)}
-            sub={
-              <>
-                of which deposits {each((t) => t.depositsCny)}
-                <br />
-                {formatINR(paidInr)} at payment-day rates
-              </>
-            }
-          />
-          {/* The supplier advance applied to these orders (backend docs/supplier-advance.md): apart from paid, never added to it. */}
-          {data.advance ? <KpiCard size="xs" label="Advance applied" value={each((t) => t.advanceCny ?? 0)} sub="from the supplier advance account" /> : null}
-          <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub={data.advance ? "order value less paid and advance" : "order value less paid"} />
+          <KpiCard size="xs" label="Settled" value={each((t) => t.settledCny ?? 0)} sub={`${formatINR(paidInr)} paid at payment-day rates`} />
+          <KpiCard size="xs" label="Outstanding" value={each((t) => t.outstandingCny ?? 0)} sub="order value less what the account settled, oldest first" />
         </KpiRow>
+        {/* The supplier's ledger accounts, whole (not limited to the period): signed balance per currency. */}
+        {data.ledger.accounts.length ? (
+          <KpiRow gap="sm">
+            {data.ledger.accounts.map((account) => (
+              <AccountCard key={account.currency} account={account} />
+            ))}
+          </KpiRow>
+        ) : null}
 
         <DetailUrlProvider base={base ?? `/reports/payments-per-supplier/${supplier.id}`} search={page.search}>
           <SectionCard title="Payments" titleGap="none" className="min-w-0">
-            <CardSubtitle>Payments to the supplier on these orders, newest first</CardSubtitle>
+            <CardSubtitle>Payments to the supplier&apos;s account (and legacy ones recorded on these orders), newest first; voided ones count in no total</CardSubtitle>
             <div className="mt-3 flex flex-col gap-3">
               <PaymentDateFilter />
               <SupplierPaymentsList
@@ -170,18 +166,16 @@ export function SupplierDetailScreen({
           </div>
         </DetailUrlProvider>
 
-        {data.advance ? (
-          <SectionCard title="Supplier advance" titleGap="none" className="min-w-0">
-            <CardSubtitle>The whole advance account, not limited to the period: money paid before any order and what orders drew from it</CardSubtitle>
-            <div className="mt-3">
-              <AdvanceAccountView account={data.advance} supplierName={supplier.name} linkPos={linkPos} />
-            </div>
-          </SectionCard>
-        ) : null}
+        <SectionCard title="Supplier ledger" titleGap="none" className="min-w-0">
+          <CardSubtitle>The whole statement, not limited to the period: payments, order debits and corrections, newest first, with the balance after each</CardSubtitle>
+          <div className="mt-3">
+            <LedgerStatementTable entries={data.ledger.entries} supplier={supplier.name} linkPo={linkPos} />
+          </div>
+        </SectionCard>
 
         <Footnote>
-          Supplier payments only: payments to shipping agents (sea freight) on these orders are not included. Every order is
-          counted here, finished ones too; the Payments per supplier report counts open orders only.
+          Supplier payments only: payments to shipping agents (sea freight) are not included. Orders are settled from the supplier&apos;s account, oldest
+          first. Every order is counted here, finished ones too; the Payments per supplier report counts open orders only.
         </Footnote>
       </PageContainer>
     </>

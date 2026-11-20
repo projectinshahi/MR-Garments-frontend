@@ -1,13 +1,8 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { AdvanceSupplierScreen } from "@/features/deposits/advance-supplier-screen";
-import { getAdvanceSupplier } from "@/features/deposits/data/queries";
+import { ledgerHref } from "@/features/supplier-ledger/ledger-logic";
 
-export const metadata: Metadata = { title: "Supplier advance" };
-
-// One supplier's advance (any supplier id, known only at request time: params are read inside the shell's Suspense
-// boundary). An unknown supplier renders the not-found page.
+// A supplier's advance page is its supplier ledger now (D14).
 export default async function SupplierAdvanceDetailPage({ params }: PageProps<"/deposits/advance/[supplierId]">) {
-  const { supplierId } = await params;
-  return <AdvanceSupplierScreen data={await getAdvanceSupplier(supplierId)} />;
+  redirect(ledgerHref((await params).supplierId));
 }

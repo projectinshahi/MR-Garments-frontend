@@ -4,8 +4,8 @@
 
 import type { Access, Capability, Me } from "@/lib/api/types";
 
-/** `match`: the path that keeps the item highlighted, when wider than `href` (Deposits opens one tab, lit on every tab). */
-export type NavItem = { title: string; href: string; match?: string };
+/** `match`: the paths that keep the item highlighted, when wider than `href` (Supplier ledger is lit on the old /deposits addresses too). */
+export type NavItem = { title: string; href: string; match?: string[] };
 export type NavSection = { label?: string; items: NavItem[] };
 
 export const MANAGEMENT_NAV: NavSection[] = [
@@ -13,9 +13,9 @@ export const MANAGEMENT_NAV: NavSection[] = [
     items: [
       { title: "Dashboard", href: "/" },
       { title: "Orders", href: "/orders" },
-      { title: "Deposits & Payments", href: "/payments" },
-      // Opens the Supplier advance tab; the other Deposits tabs keep their own addresses (/deposits is All deposits).
-      { title: "Deposits", href: "/deposits/advance", match: "/deposits" },
+      { title: "Payments", href: "/payments" },
+      // D14: the supplier accounts (unified ledger). The old /deposits addresses redirect here, so they light it too.
+      { title: "Supplier ledger", href: "/supplier-ledger", match: ["/supplier-ledger", "/deposits"] },
       { title: "Delivery Calendar", href: "/calendar" },
     ],
   },
@@ -60,8 +60,8 @@ export const USER_MENU: NavItem[] = [
 export const isActivePath = (pathname: string | null, href: string) =>
   pathname === href || (href !== "/" && !!pathname?.startsWith(`${href}/`));
 
-/** Whether a sidebar item is the current page: by its `match` path when it has one, else by its `href`. */
-export const isActiveItem = (pathname: string | null, item: NavItem) => isActivePath(pathname, item.match ?? item.href);
+/** Whether a sidebar item is the current page: by its `match` paths when it has them, else by its `href`. */
+export const isActiveItem = (pathname: string | null, item: NavItem) => (item.match ?? [item.href]).some((path) => isActivePath(pathname, path));
 
 /** The session cookie set by the API (B9.7). */
 export const SESSION_COOKIE = "mrg.sid";
@@ -81,6 +81,7 @@ const ROUTE_CAPABILITY: [string, Capability][] = [
   ["/closed-orders", "ordersView"],
   ["/payments", "payments"],
   ["/deposits", "payments"],
+  ["/supplier-ledger", "payments"],
   ["/calendar", "calendar"],
   ["/receiving", "receiving"],
   ["/containers", "containers"],

@@ -23,15 +23,17 @@ const SHEETS = ["Order Overview", "Supplier Details", "Order Items", "China Rece
 const shotPath = (testInfo: TestInfo, name: string) => (process.env.SHOTS_DIR ? `${process.env.SHOTS_DIR}/${name}` : testInfo.outputPath(name));
 
 test("an order's Report tab shows its items, payments and timeline, and downloads the report as Excel and PDF", async ({ page, api }) => {
-  // 100 Denim jeans at ¥10 and 50 m Cotton fabric at ¥8 (¥1,400), ¥300 deposit; 120 pcs received (excess 20), 30 m (short 20).
+  // 100 Denim jeans at ¥10 and 50 m Cotton fabric at ¥8 (¥1,400), ¥300 paid to the supplier's account (it settles this,
+  // the supplier's only order); 120 pcs received (excess 20), 30 m (short 20).
+  const supplier = await api.newSupplier("Report Textile");
   const order = await api.createOrder({
-    supplier: "Guangzhou Textile Co.",
+    supplier: supplier.name,
     lines: [
       { item: "Denim jeans", quantity: 100, rateCny: 10 },
       { item: "Cotton fabric", quantity: 50, rateCny: 8 },
     ],
-    deposits: [{ amountCny: 300, rateInr: 12 }],
   });
+  await api.paySupplier(supplier.id, { amount: 300, rateInr: 12, reference: "TXN-R1" });
   await api.receive(order.po, { "Denim jeans": 120, "Cotton fabric": 30 });
 
   await page.goto(`/orders/${order.po}`);
@@ -45,13 +47,16 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(itemRow("Denim jeans").getByText("20", { exact: true })).toBeVisible(); // excess
   await expect(itemRow("Cotton fabric").getByText("20", { exact: true })).toBeVisible(); // pending
   await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
-  await expect(kpi(page, "Total paid to supplier")).toContainText("¥300");
-  await expect(kpi(page, "Outstanding balance").first()).toContainText("¥1,100");
-  await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ has: page.getByRole("cell", { name: "Deposit", exact: true }) })).toContainText("₹3,600");
+  await expect(kpi(page, "Settled from supplier account").first()).toContainText("¥300");
+  await expect(kpi(page, "Outstanding").first()).toContainText("¥1,100");
+  await expect(kpi(page, "Outstanding").first()).toContainText("Partly paid");
+  // Settled by: the supplier payment that settled it, at its own rate.
+  await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ hasText: "TXN-R1" })).toContainText("₹3,600");
   await expect(kv(page, "Supplier code")).toHaveText(/^SUP-\d{3,}$/);
+  await expect(kv(page, "Supplier balance (ledger)")).toHaveText("CNY: Payable to supplier ¥1,100.00");
   await expect(kv(page, "Deposit utilised for this PO")).toContainText("Not tracked");
   await expect(page.getByRole("heading", { level: 2, name: "Timeline" })).toBeVisible();
-  for (const step of ["Order placed", "Deposit paid", "Received in China"]) {
+  for (const step of ["Order placed", "Received in China"]) {
     await expect(page.locator("#timeline").filter({ visible: true }).getByText(new RegExp(`^${step} · `))).toBeVisible();
   }
   await expect(kv(page, "Stage")).toHaveText("2. Receiving in China");
@@ -66,21 +71,23 @@ test("an order's Report tab shows its items, payments and timeline, and download
   expect(pdf.text.startsWith("%PDF-")).toBe(true);
   expect(pdf.text).toContain(`(Order report ${order.po}) Tj`);
   expect(pdf.text).toContain("(Cotton fabric) Tj");
-  for (const heading of ["Supplier financial summary", "China receipts", "Payment ledger", "Landed cost breakdown", "Timeline"]) expect(pdf.text).toContain(`(${heading}) Tj`);
+  for (const heading of ["Supplier financial summary", "China receipts", "Payment summary", "Landed cost breakdown", "Timeline"]) expect(pdf.text).toContain(`(${heading}) Tj`);
   expect(pdf.text).toContain("Page 1 of");
   const csv = await downloadReport(page, "CSV");
   expect(csv.name).toMatch(new RegExp(`^order-report-${order.po}-\\d{4}-\\d{2}-\\d{2}\\.csv$`));
   expect(csv.text).toContain("Supplier code");
-  expect(csv.text).toContain("Payment ledger");
+  expect(csv.text).toContain("Settled by (supplier credits, oldest first)");
+  expect(csv.text).toContain("TXN-R1");
 });
 
 test("Reports › Order Report › a closed PO: every section from the records, the breadcrumb and the way back, with screenshots", async ({ page, api, browser }, testInfo) => {
   test.setTimeout(180_000);
-  // A closed order (received, shipped, cleared, trucked, stocked) with a deposit and a balance payment.
-  const { po } = await closedOrder(api);
-  const { id } = await api.order(po);
-  await api.pay(id, { kind: "Deposit", amountCny: 300, rateInr: 12, reference: "TXN-D1" });
-  await api.pay(id, { kind: "Balance", amountCny: 500, rateInr: 12.5 });
+  // A closed order (received, shipped, cleared, trucked, stocked) of its own supplier, with two payments to the
+  // supplier's account: ¥300 at 12 and ¥500 at 12.5 settle ¥800 of its ¥1,000.
+  const supplier = await api.newSupplier("Closed Report");
+  const { po } = await closedOrder(api, { supplier: supplier.name });
+  await api.paySupplier(supplier.id, { amount: 300, rateInr: 12, reference: "TXN-D1" });
+  await api.paySupplier(supplier.id, { amount: 500, rateInr: 12.5 });
 
   await page.goto("/reports/orders");
   await page.getByLabel("PO number").fill(po);
@@ -93,12 +100,13 @@ test("Reports › Order Report › a closed PO: every section from the records, 
   await expect(page.locator("header").getByRole("link", { name: "Reports › Order Report" })).toHaveAttribute("href", "/reports/orders");
   await expect(page.getByRole("link", { name: "Back to Order Reports" })).toHaveAttribute("href", "/reports/orders");
 
-  // Overview: closed, every lifecycle stage done; money from the two payments.
+  // Overview: closed, every lifecycle stage done; money settled from the two payments.
   await expect(kv(page, "Status").first()).toContainText("Closed on");
   await expect(page.getByRole("list", { name: "Order lifecycle" }).getByText("Done:")).toHaveCount(6);
   await expect(kpi(page, "Original PO value")).toContainText("¥1,000");
-  await expect(kpi(page, "Total paid to supplier")).toContainText("¥800");
-  await expect(kpi(page, "Outstanding balance").first()).toContainText("¥200");
+  await expect(kpi(page, "Settled from supplier account").first()).toContainText("¥800");
+  await expect(kpi(page, "Settled from supplier account").first()).toContainText("₹9,850");
+  await expect(kpi(page, "Outstanding").first()).toContainText("¥200");
   await page.screenshot({ path: shotPath(testInfo, "order-report-overview-1440.png"), fullPage: false });
 
   // The sections, each from its own records.
@@ -111,7 +119,10 @@ test("Reports › Order Report › a closed PO: every section from the records, 
   await expect(section("warehouse")).toContainText("KL 07 CL 1");
   await expect(section("warehouse").getByRole("row").filter({ hasText: "Stocked" })).toContainText("Retail team: 100 pcs");
   await expect(section("payments").getByRole("row").filter({ hasText: "TXN-D1" })).toContainText("₹3,600");
-  await expect(section("deposits").getByRole("row").filter({ hasText: "TXN-D1" })).toContainText("¥300.00");
+  await expect(section("payments").getByRole("row").filter({ hasText: "Settled" }).last()).toContainText("₹9,850");
+  // No deposit was recorded against the PO (supplier money is on the account), and the archive holds none.
+  await expect(section("deposits")).toContainText("No deposit recorded on this PO.");
+  await expect(section("deposits")).toContainText("This supplier holds no account-level deposit.");
   // Landed cost: ₹9,850 of goods + ₹1,000 clearing + ₹600 transport over 100 pieces; an estimate while ¥200 is unpaid.
   await expect(section("landed-cost")).toContainText("Estimate");
   await expect(section("landed-cost").getByRole("row").filter({ hasText: "Original purchase value" })).toContainText("₹9,850");
@@ -146,7 +157,8 @@ test("Reports › Order Report › a closed PO: every section from the records, 
 });
 
 test("Order reports lists the new order, filters by PO from the URL and downloads the filtered list; the hub card downloads too", async ({ page, api }) => {
-  const order = await api.createOrder({ supplier: "Foshan Fabrics", lines: [{ item: "Track pants", quantity: 40, rateCny: 5 }] });
+  const supplier = await api.newSupplier("Fosh Listing");
+  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Track pants", quantity: 40, rateCny: 5 }] });
 
   await page.goto("/reports");
   await expect(page.getByRole("heading", { level: 2, name: "Order Report", exact: true })).toBeVisible();
@@ -160,17 +172,17 @@ test("Order reports lists the new order, filters by PO from the URL and download
   await expect(page.getByText(`PO: ${order.po}`, { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: `Report: ${order.po}` })).toHaveAttribute("href", `/reports/orders/${order.po}`);
   await expect(page.getByRole("link", { name: /^Report: / })).toHaveCount(1);
-  await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText("Foshan Fabrics");
+  await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText(supplier.name);
   await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText("40 pcs");
   await expect(kpi(page, "Orders")).toContainText("1");
   await expect(kpi(page, "Order value")).toContainText("¥200");
   await expect(page.getByText("Unpaid", { exact: true })).toBeVisible();
 
   // The supplier-name text, the stage and the currency filters narrow the list and are echoed in the pill.
-  await page.getByLabel("Supplier name").fill("fosh");
+  await page.getByLabel("Supplier name").fill("fosh list");
   await page.getByRole("button", { name: "Apply" }).click();
-  await expect(page).toHaveURL(/supplierName=fosh/);
-  await expect(page.getByText(/Supplier: fosh/)).toBeVisible();
+  await expect(page).toHaveURL(/supplierName=fosh(\+|%20)list/);
+  await expect(page.getByText(/Supplier: fosh list/)).toBeVisible();
   await page.getByRole("button", { name: /^Shipment stage:/ }).click();
   await page.getByRole("menuitemradio", { name: "1. Order and deposit" }).click();
   await expect(page).toHaveURL(/stage=1/);

@@ -15,6 +15,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatExactINR, useStageSave } from "@/features/clearing/stage-form";
+import { balanceText } from "@/features/payments/money";
 import { formatINR, formatMoneyList, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -297,6 +298,11 @@ export function ReceiveGoodsScreen({ data }: { data: ReceiveGoodsData }) {
                             <span className="block text-[12.5px] leading-[15px] text-muted-foreground">
                               {owed.supplier} · {owed.orders} unpaid {owed.orders === 1 ? "order" : "orders"}
                             </span>
+                            {owed.ledgerBalance.length ? (
+                              <span className="block text-[12.5px] leading-[15px] text-muted-foreground">
+                                Supplier balance: {owed.ledgerBalance.map((b) => balanceText(b.balanceCny, b.currency)).join(" · ")}
+                              </span>
+                            ) : null}
                           </>
                         ),
                         value: <span className="font-bold">{formatMoneyList(owed.byCurrency, { decimals: 2 }, owed.currency)}</span>,

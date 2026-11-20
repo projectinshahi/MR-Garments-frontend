@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { getDeposits } from "@/features/deposits/data/queries";
-import { DepositsScreen } from "@/features/deposits/deposits-screen";
-
-export const metadata: Metadata = { title: "Paid deposits" };
-
-export default async function PaidDepositsPage() {
-  return <DepositsScreen data={await getDeposits()} view="paid" />;
+// Paid order deposits are the Deposit Required milestones now (D11).
+export default function PaidDepositsPage() {
+  redirect("/supplier-ledger/milestones");
 }

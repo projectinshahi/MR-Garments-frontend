@@ -67,19 +67,19 @@ test("sidebar links change pages without reloading the browser, and Back and For
   // A full page load would start a new window object and drop this mark.
   await page.evaluate(() => Object.assign(window, { sameDocument: true }));
 
-  await sidebar.getByRole("link", { name: "Deposits & Payments", exact: true }).click();
-  await expect(heading("Deposits & Payments")).toBeVisible();
+  await sidebar.getByRole("link", { name: "Payments", exact: true }).click();
+  await expect(heading("Payments")).toBeVisible();
   await sidebar.getByRole("link", { name: "Containers", exact: true }).click();
   await expect(heading("Containers")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("/payments");
-  await expect(heading("Deposits & Payments")).toBeVisible();
+  await expect(heading("Payments")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("/orders");
   await expect(heading("Orders")).toBeVisible();
   await page.goForward();
   await expect(page).toHaveURL("/payments");
-  await expect(heading("Deposits & Payments")).toBeVisible();
+  await expect(heading("Payments")).toBeVisible();
 
   expect(await page.evaluate(() => (window as Window & { sameDocument?: boolean }).sameDocument)).toBe(true);
   expect(problems).toEqual([]);
@@ -123,7 +123,7 @@ test("order detail tabs open", async ({ page, api }) => {
   await page.goto(`/orders/${po}`);
   await clickThrough(page, () => page.getByRole("navigation", { name: "Order sections" }), [
     { name: "Items", path: `/orders/${po}/items` },
-    { name: "Deposits & payments", path: `/orders/${po}/payments` },
+    { name: "Payments", path: `/orders/${po}/payments` },
     { name: "Receiving", path: `/orders/${po}/receiving` },
     { name: "Containers", path: `/orders/${po}/containers` },
     { name: "Overview", path: `/orders/${po}` },
@@ -183,13 +183,13 @@ test("the mobile menu closes at once; a progress bar shows until the page is rea
   const bar = page.getByRole("progressbar", { name: "Loading page" });
 
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("dialog").getByRole("link", { name: "Deposits & Payments", exact: true }).click();
+  await page.getByRole("dialog").getByRole("link", { name: "Payments", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(bar).toBeVisible();
   // The current page stays until the next one is ready.
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
 
-  await expect(page.getByRole("heading", { level: 1, name: "Deposits & Payments" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Payments" })).toBeVisible();
   await expect(bar).toHaveCount(0);
   expect(navigations).toHaveLength(1);
   expect(problems).toEqual([]);

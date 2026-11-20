@@ -51,16 +51,19 @@ describe("Payments per supplier report: the way into the detail", () => {
     supplierId,
     supplier,
     currency,
+    held: false,
     orders: [po],
     orderValueCny: 100,
-    paidCny: 40,
+    settledCny: 40,
+    outstandingCny: 60,
+    creditsCny: 40,
+    balanceCny: -60,
     paidInr: 480,
-    balanceCny: 60,
   });
   const rows = [row(FOSHAN, "Foshan Fabrics", "CNY", "PO-2051"), row(YIWU, "Yiwu Trims Ltd.", "CNY", "PO-2052"), row(FOSHAN, "Foshan Fabrics", "USD", "PO-2053")];
   const totals = [
-    { currency: "CNY" as const, orders: 2, orderValueCny: 200, paidCny: 80, paidInr: 960, balanceCny: 120 },
-    { currency: "USD" as const, orders: 1, orderValueCny: 100, paidCny: 40, paidInr: 480, balanceCny: 60 },
+    { currency: "CNY" as const, orders: 2, orderValueCny: 200, settledCny: 80, outstandingCny: 120, balanceCny: -120, payableCny: 120, availableCny: 0, paidInr: 960 },
+    { currency: "USD" as const, orders: 1, orderValueCny: 100, settledCny: 40, outstandingCny: 60, balanceCny: -60, payableCny: 60, availableCny: 0, paidInr: 480 },
   ];
 
   it("links each supplier name to its own detail, keeping the report's period and supplier filter", () => {
@@ -93,8 +96,12 @@ const payment = (id: string, more: Partial<Payment> = {}): Payment => ({
   id,
   orderId: "o-1",
   po: "PO-2051",
+  supplierId: FOSHAN,
+  supplier: "Foshan Fabrics",
   currency: "CNY",
   kind: "Deposit",
+  payee: "Foshan Fabrics",
+  payeeRole: "supplier",
   status: "paid",
   paidOn: "2026-10-01",
   dueDate: null,
@@ -102,6 +109,14 @@ const payment = (id: string, more: Partial<Payment> = {}): Payment => ({
   rateInr: 12,
   amountInr: 12000,
   mode: "Bank",
+  reference: "",
+  notes: "",
+  recordedAt: "2026-10-01T05:00:00.000Z",
+  voided: false,
+  voidedAt: null,
+  voidedBy: null,
+  voidReason: "",
+  held: false,
   ...more,
 });
 const order = (po: string, more: Partial<Order> = {}): Order => ({
@@ -116,8 +131,11 @@ const order = (po: string, more: Partial<Order> = {}): Order => ({
   received: 0,
   unit: "pcs",
   orderValueCny: 1000,
-  paidCny: 400,
-  balanceCny: 600,
+  held: false,
+  settledCny: 400,
+  outstandingCny: 600,
+  paymentStatus: "partly",
+  settledInr: 4800,
   ...more,
 });
 const line = (orderLineId: string, more: Partial<Line> = {}): Line => ({
@@ -188,6 +206,9 @@ describe("Supplier detail lists: every amount in its own currency", () => {
           payment(uuid(2), { currency: "USD", amountCny: 50, rateInr: 88, amountInr: 4400, mode: "Wire" }),
           payment(uuid(3), { currency: "INR", amountCny: 1500, rateInr: 1, amountInr: 1500 }),
           payment(uuid(4), { currency: "USD", status: "due", paidOn: null, dueDate: "2026-11-05", amountCny: 30, rateInr: null, amountInr: null, mode: null }),
+          // An orderless supplier payment (the unified Record payment) has no PO; a voided one is flagged.
+          payment(uuid(5), { orderId: null, po: null, kind: "Payment", amountCny: 2000, amountInr: 24000 }),
+          payment(uuid(6), { voided: true, voidReason: "Duplicate" }),
         ])}
         linkPos={false}
         empty=""
@@ -199,22 +220,23 @@ describe("Supplier detail lists: every amount in its own currency", () => {
       return within(reference.closest("tr")!).getAllByRole("cell").map((cell) => cell.textContent);
     };
     // Reference, Date, PO, Type, Method, Currency, Amount, INR, Status
-    expect(cells(1)).toEqual(["00000001", "1 Oct 2026", "PO-2051", "Deposit", "Bank", "CNY", "¥1,000", "₹12,000", "Paid"]);
-    expect(cells(2)).toEqual(["00000002", "1 Oct 2026", "PO-2051", "Deposit", "Wire", "USD", "$50", "₹4,400", "Paid"]);
-    expect(cells(3)).toEqual(["00000003", "1 Oct 2026", "PO-2051", "Deposit", "Bank", "INR", "₹1,500", "₹1,500", "Paid"]);
-    expect(cells(4)).toEqual(["00000004", "due 5 Nov 2026", "PO-2051", "Deposit", "–", "USD", "$30", "–", "Due"]);
+    expect(cells(1)).toEqual(["00000001", "1 Oct 2026", "PO-2051", "Deposit (legacy)", "Bank", "CNY", "¥1,000", "₹12,000", "Paid"]);
+    expect(cells(2)).toEqual(["00000002", "1 Oct 2026", "PO-2051", "Deposit (legacy)", "Wire", "USD", "$50", "₹4,400", "Paid"]);
+    expect(cells(3)).toEqual(["00000003", "1 Oct 2026", "PO-2051", "Deposit (legacy)", "Bank", "INR", "₹1,500", "₹1,500", "Paid"]);
+    expect(cells(4)).toEqual(["00000004", "due 5 Nov 2026", "PO-2051", "Deposit (legacy)", "–", "USD", "$30", "–", "Due 5 Nov"]);
+    expect(cells(5)).toEqual(["00000005", "1 Oct 2026", "–", "Supplier payment", "Bank", "CNY", "¥2,000", "₹24,000", "Paid"]);
+    expect(cells(6).at(-1)).toBe("Voided");
   });
 
-  it("orders: value, paid and balance in the order's currency (an overpayment below zero); pcs and m never added", () => {
+  it("orders: value, settled and outstanding (the ledger's FIFO projection) in the order's currency; pcs and m never added", () => {
     renderIn(
       <SupplierOrdersList
         list={page([
-          order("PO-2051", { quantities: [{ unit: "pcs", quantity: 100 }, { unit: "m", quantity: 200 }], orderValueCny: 1850, paidCny: 1500, balanceCny: 350 }),
-          order("PO-2052", { currency: "USD", orderValueCny: 200, paidCny: 50, balanceCny: 150 }),
-          order("PO-2053", { currency: "INR", orderValueCny: 1500, paidCny: 1000, balanceCny: 500 }),
-          order("PO-2054", { orderValueCny: 120, paidCny: 150, balanceCny: -30 }),
-          // The supplier advance applied has its own column (value - paid - advance = outstanding).
-          order("PO-2055", { orderValueCny: 500, paidCny: 100, advanceCny: 300, balanceCny: 100 }),
+          order("PO-2051", { quantities: [{ unit: "pcs", quantity: 100 }, { unit: "m", quantity: 200 }], orderValueCny: 1850, settledCny: 1500, outstandingCny: 350 }),
+          order("PO-2052", { currency: "USD", orderValueCny: 200, settledCny: 50, outstandingCny: 150 }),
+          order("PO-2053", { currency: "INR", orderValueCny: 1500, settledCny: 1500, outstandingCny: 0, paymentStatus: "paid" }),
+          // A held account (pending review) has no figures.
+          order("PO-2054", { orderValueCny: 120, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null }),
         ])}
         linkPos={false}
         today="2026-10-15"
@@ -222,11 +244,10 @@ describe("Supplier detail lists: every amount in its own currency", () => {
       />,
     );
     const money = (po: string) => within(rowOf(po)).getAllByRole("cell").slice(3, 8).map((cell) => cell.textContent);
-    expect(money("PO-2051")).toEqual(["100 pcs · 200 m", "¥1,850", "¥1,500", "¥0", "¥350"]);
-    expect(money("PO-2052")).toEqual(["100 pcs", "$200", "$50", "$0", "$150"]);
-    expect(money("PO-2053")).toEqual(["100 pcs", "₹1,500", "₹1,000", "₹0", "₹500"]);
-    expect(money("PO-2054")).toEqual(["100 pcs", "¥120", "¥150", "¥0", "−¥30"]);
-    expect(money("PO-2055")).toEqual(["100 pcs", "¥500", "¥100", "¥300", "¥100"]);
+    expect(money("PO-2051")).toEqual(["100 pcs · 200 m", "¥1,850", "¥1,500", "¥350", "Partly paid"]);
+    expect(money("PO-2052")).toEqual(["100 pcs", "$200", "$50", "$150", "Partly paid"]);
+    expect(money("PO-2053")).toEqual(["100 pcs", "₹1,500", "₹1,500", "₹0", "Paid"]);
+    expect(money("PO-2054")).toEqual(["100 pcs", "¥120", "–", "–", "Pending review"]);
   });
 
   it("products: one row per order line, rate to the cent and total in the order's currency", () => {

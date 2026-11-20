@@ -7,8 +7,8 @@ import type { ContainerRow } from "@/features/containers/containers-logic";
 import { dashboardFile } from "@/features/dashboard/dashboard-files";
 import { landedCostFile } from "@/features/landed-cost/landed-cost-files";
 import type { LandedCostData, LandedCostRow } from "@/features/landed-cost/data/queries";
-import type { OrderPaymentRow, Payment } from "@/features/payments/data/queries";
 import { paymentsFile } from "@/features/payments/payment-files";
+import { paymentOrder, paymentRow, SETTLED } from "@/features/payments/test-fixtures";
 import type { ReceiptRow } from "@/features/receiving/data/queries";
 import { receivingFile } from "@/features/receiving/receiving-files";
 import { suppliersListFile } from "@/features/suppliers/supplier-files";
@@ -47,69 +47,26 @@ const section = (file: ReportFile, title: string): Section => {
 const headers = (s: Section) => s.columns.map((c) => c.header);
 const column = (s: Section, header: string) => s.rows.map((row) => row[headers(s).indexOf(header)]);
 
-describe("Deposits & Payments", () => {
-  const order = (po: string, patch: Partial<OrderPaymentRow> = {}): OrderPaymentRow => ({
-    orderId: po,
-    po,
-    supplier: "Foshan Fabrics",
-    currency: "CNY",
-    supplierRate: 12,
-    orderValue: 1000,
-    paid: 700,
-    paidInr: 8400,
-    supplierPaid: 500,
-    supplierPaidInr: 6000,
-    balance: 500,
-    depositRequired: null,
-    depositPaid: 0,
-    depositPending: null,
-    depositStatus: "none",
-    nextDue: null,
-    ...patch,
-  });
-  const payment = (id: string, patch: Partial<Payment>): Payment => ({
-    id,
-    orderId: "PO-1",
-    po: "PO-1",
-    currency: "CNY",
-    kind: "Balance",
-    payee: "Foshan Fabrics",
-    payeeRole: "supplier",
-    amountCny: 500,
-    status: "paid",
-    paidOn: "2026-11-01",
-    dueDate: null,
-    rateInr: 12,
-    mode: "Wire",
-    reference: "UTR 1",
-    notes: "",
-    amountInr: 6000,
-    ...patch,
-  });
+describe("Payments", () => {
   const payments = [
-    payment("p1", {}),
-    payment("p2", { payee: "Sino Freight", payeeRole: "agent", kind: "Deposit", amountCny: 200, amountInr: 2400 }),
-    payment("p3", { po: "PO-2", amountCny: 90 }),
+    paymentRow("p1", { reference: "UTR 1" }),
+    paymentRow("p2", { orderId: "o-PO-1", po: "PO-1", payee: "Sino Freight", payeeRole: "agent", kind: "Deposit", amountCny: 200, amountInr: 2400 }),
   ];
 
-  it("keeps supplier and shipping-agent payments apart, each with its own rate and INR, for the orders the search keeps", () => {
-    const file = paymentsFile([order("PO-1")], payments, "po-1", TODAY);
+  it("keeps supplier and shipping-agent payments apart, each with its own rate and INR", () => {
+    const file = paymentsFile([paymentOrder("PO-1")], payments, "po-1", TODAY);
     expect(file.filters).toBe('Search: "po-1"');
     expect(titles(file)).toEqual(["Summary", "Payments by order (CNY)", "Supplier payments (CNY)", "Shipping-agent payments (CNY)"]);
     const supplier = section(file, "Supplier payments (CNY)");
     expect(column(supplier, "Reference")).toEqual(["UTR 1"]);
     expect(column(supplier, "Exchange rate (INR per 1 CNY)")).toEqual([12]);
-    expect(supplier.total).toEqual(["Total", null, null, null, null, null, null, null, 500, null, 6000, null, null]);
     expect(column(section(file, "Shipping-agent payments (CNY)"), "Paid to (agent)")).toEqual(["Sino Freight"]);
-    // PO-2 is not in the search: its payment is not in the file.
-    expect(file.sections.flatMap((s) => s.rows).some((row) => row.includes("PO-2"))).toBe(false);
   });
 
   it("writes no agent sheet when no agent was paid", () => {
-    expect(titles(paymentsFile([order("PO-1")], [payments[0]!], "", TODAY))).not.toContain("Shipping-agent payments (CNY)");
+    expect(titles(paymentsFile([paymentOrder("PO-1")], [payments[0]!], "", TODAY))).not.toContain("Shipping-agent payments (CNY)");
   });
 });
-
 describe("Receiving (China)", () => {
   const receipt: ReceiptRow = {
     id: "r1",
@@ -178,24 +135,8 @@ describe("Shipping (Containers)", () => {
     portOfLoading: "Nansha",
     portOfArrival: "Kochi",
   };
-  const agentPayment = (po: string): PaymentsResponse["payments"][number] => ({
-    id: po,
-    orderId: po,
-    po,
-    currency: "CNY",
-    kind: "Deposit",
-    payee: "Sino Freight",
-    payeeRole: "agent",
-    amountCny: 300,
-    status: "paid",
-    paidOn: "2026-10-03",
-    dueDate: null,
-    rateInr: 12,
-    mode: "Wire",
-    reference: "",
-    notes: "",
-    amountInr: 3600,
-  });
+  const agentPayment = (po: string) =>
+    paymentRow(po, { orderId: po, po, kind: "Deposit", payee: "Sino Freight", payeeRole: "agent", amountCny: 300, amountInr: 3600, paidOn: "2026-10-03", mode: "Wire" });
 
   it("lists containers, a row per PO, and the agent payments of those POs only", () => {
     const file = containersFile([container], "Status: Active", TODAY, [agentPayment("PO-1"), agentPayment("PO-9")]);
@@ -346,9 +287,10 @@ describe("Landed Cost", () => {
     final: true,
     waitingFor: null,
     teams: [{ teamId: "retail", team: "Retail team", pieces: 100, costInr: 18000 }],
+    // The supplier credits that settled the order (the ledger's FIFO slices), each at its own rate.
     goodsPayments: [
-      { id: "g1", orderId: "o1", kind: "Deposit", paidOn: "2026-10-02", amountCny: 400, rateInr: 12, amountInr: 4800 },
-      { id: "g2", orderId: "o1", kind: "Balance", paidOn: "2026-10-20", amountCny: 600, rateInr: 12.1667, amountInr: 7300 },
+      { entryId: "e1", entryType: "payment", paymentId: "g1", advanceEntryId: null, entryDate: "2026-10-02", amount: 400, exchangeRate: 12, amountInr: 4800, mode: "Wire", reference: "UTR 1", memoPo: "PO-1" },
+      { entryId: "e2", entryType: "payment", paymentId: "g2", advanceEntryId: null, entryDate: "2026-10-20", amount: 600, exchangeRate: 12.1667, amountInr: 7300, mode: "Wire", reference: "UTR 2", memoPo: null },
     ],
   };
   const data: LandedCostData = {
@@ -370,6 +312,10 @@ describe("Landed Cost", () => {
     expect(value("Average payment rate (INR per 1 CNY)")).toBe(12.1);
     expect(value("Total landed cost (INR)")).toBe(18000);
     expect(value("Landed cost per piece (INR)")).toBe(180);
+    expect(section(landedCostFile(data, "No filters", TODAY), "Goods payments (CNY)").rows).toEqual([
+      ["PO-1", "Foshan Fabrics", "2026-10-02", "Payment", "UTR 1", 400, 12, 4800],
+      ["PO-1", "Foshan Fabrics", "2026-10-20", "Payment", "UTR 2", 600, 12.1667, 7300],
+    ]);
   });
 
   it("shows no INR PO value for an order placed before rates were saved", () => {
@@ -407,7 +353,9 @@ describe("Supplier list and supplier detail", () => {
       { currency: "CNY", amount: 5000 },
       { currency: "USD", amount: 200 },
     ],
-    balance: [{ currency: "CNY", amount: 1200 }],
+    // The signed ledger balance: payable to the supplier.
+    balance: [{ currency: "CNY", amount: -1200 }],
+    heldCurrencies: [],
     hasTransactions: true,
   };
 
@@ -415,8 +363,12 @@ describe("Supplier list and supplier detail", () => {
     const file = suppliersListFile([row], "Status: Active", TODAY);
     expect(column(section(file, "Supplier list"), "Purchase value (this year)")).toEqual(["CNY 5,000.00 · USD 200.00"]);
     expect(column(section(file, "Supplier list"), "Current exchange rate (INR per 1)")).toEqual([12.0412]);
-    expect(section(file, "Purchases and balances (CNY)").rows).toEqual([["SUP-001", "Foshan Fabrics", 5000, 1200]]);
+    expect(section(file, "Purchases and balances (CNY)").rows).toEqual([["SUP-001", "Foshan Fabrics", 5000, -1200]]);
     expect(section(file, "Purchases and balances (USD)").rows).toEqual([["SUP-001", "Foshan Fabrics", 200, 0]]);
+    expect(section(file, "Summary").rows).toContainEqual(["Payable to suppliers", "CNY 1,200.00"]);
+    // A held account (pending review) has no balance and is named instead.
+    const held = suppliersListFile([{ ...row, balance: [], heldCurrencies: ["CNY"] }], "", TODAY);
+    expect(column(section(held, "Supplier list"), "Supplier balance (+ available, - payable)")).toEqual(["CNY pending review"]);
   });
 
   const page = (rows: number): SupplierPaymentDetail["orders"] => ({
@@ -432,8 +384,10 @@ describe("Supplier list and supplier detail", () => {
       received: 0,
       unit: "pcs",
       orderValueCny: 100,
-      paidCny: 0,
-      balanceCny: 100,
+      ...SETTLED,
+      settledCny: 0,
+      outstandingCny: 100,
+      paymentStatus: "unpaid" as const,
     })),
     total: rows,
     page: 1,
@@ -442,10 +396,18 @@ describe("Supplier list and supplier detail", () => {
   const detail: SupplierPaymentDetail = {
     supplier,
     filter: { from: null, to: null },
-    summary: { orders: 12, openOrders: 12, payments: 0, lineItems: 0, products: 0, byCurrency: [{ currency: "CNY", orders: 12, orderValueCny: 1200, paidCny: 0, paidInr: 0, depositsCny: 0, balanceCny: 1200 }] },
+    summary: {
+      orders: 12,
+      openOrders: 12,
+      payments: 0,
+      lineItems: 0,
+      products: 0,
+      byCurrency: [{ currency: "CNY", held: false, orders: 12, orderValueCny: 1200, settledCny: 0, outstandingCny: 1200, creditsCny: 0, balanceCny: -1200, paidInr: 0 }],
+    },
     payments: { rows: [], total: 0, page: 1, pageSize: 10 },
     orders: page(12),
     lines: { rows: [], total: 0, page: 1, pageSize: 10 },
+    ledger: { accounts: [], entries: [] },
   };
 
   it("holds every order of the supplier (more than one page), and says when deposits are not in the role's access", () => {
@@ -457,22 +419,20 @@ describe("Supplier list and supplier detail", () => {
     expect(csvRows(file)[0]).toEqual(["Purchase orders (CNY)"]);
   });
 
-  it("writes the supplier advance apart from paid, and its account once (from RPT-5D, not again from the statement)", () => {
-    const advance: NonNullable<SupplierPaymentDetail["advance"]> = { summary: [{ currency: "CNY", receivedCny: 500, allocatedCny: 300, reversedCny: 0, availableCny: 200, orders: 1 }], entries: [] };
-    const withAdvance: SupplierPaymentDetail = {
-      ...detail,
-      summary: { ...detail.summary, byCurrency: [{ ...detail.summary.byCurrency[0]!, advanceCny: 300, balanceCny: 900 }] },
-      advance,
-    };
-    const statement: SupplierStatement = { supplier: { id: "s1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", status: "Active" }, summary: [], deposits: [], advance };
-    const file = supplierDetailFile(withAdvance, statement, "Supplier: Foshan Fabrics", TODAY);
-    expect(section(file, "Money summary (CNY)").rows).toEqual([[12, 1200, 0, 0, 0, 300, 900]]);
-    expect(section(file, "Purchase orders (CNY)").columns.map((c) => c.header).slice(6)).toEqual(["Paid (CNY)", "Advance applied (CNY)", "Balance (CNY)"]);
-    expect(file.sections.filter((s) => s.sheet === "Advance Summary")).toHaveLength(1);
-    expect(section(file, "Supplier advance (CNY)").rows).toEqual([[500, 500, 0, 0, 300, 0, 300, 200, 1]]);
+  it("writes the money summary from the ledger, its accounts and statement, then the deposit archive", () => {
+    const account = { supplierId: "s1", currency: "CNY" as const, held: false, creditsCny: 0, debitsCny: 1200, balanceCny: -1200, paidInr: 0, paidInrComplete: true, outstandingCny: 1200, openOrders: 12, lastPaymentOn: null };
+    const statement: SupplierStatement = { supplier: { id: "s1", name: "Foshan Fabrics", contactPerson: "", phone: "", city: "", currency: "CNY", status: "Active" }, summary: [], deposits: [] };
+    const file = supplierDetailFile({ ...detail, ledger: { accounts: [account], entries: [] } }, statement, "Supplier: Foshan Fabrics", TODAY);
+    expect(section(file, "Money summary (CNY)").rows).toEqual([[12, 1200, 0, 1200, 0, 0, -1200]]);
+    expect(headers(section(file, "Purchase orders (CNY)")).slice(6)).toEqual(["Settled (CNY)", "Outstanding (CNY)", "Payment status"]);
+    expect(column(section(file, "Purchase orders (CNY)"), "Payment status")[0]).toBe("Unpaid");
+    expect(section(file, "Accounts")).toMatchObject({ sheet: "Ledger Accounts" });
+    expect(section(file, "Accounts").rows[0]!.slice(3, 5)).toEqual([-1200, "Payable to supplier ¥1,200.00"]);
+    // A held account (pending review): no figures, and it says so.
+    const held = supplierDetailFile({ ...detail, summary: { ...detail.summary, byCurrency: [{ ...detail.summary.byCurrency[0]!, held: true, settledCny: null, outstandingCny: null, creditsCny: null, balanceCny: null, paidInr: null }] } }, null, "", TODAY);
+    expect(section(held, "Money summary (CNY)").rows).toEqual([[12, 1200, "Opening balance pending review", null, null, null, null]]);
   });
 });
-
 describe("Dashboard", () => {
   const order = (po: string, stage: OrderListItem["stage"], patch: Partial<OrderListItem> = {}): OrderListItem => ({
     id: po,
@@ -491,14 +451,14 @@ describe("Dashboard", () => {
     closed: false,
     closedOn: null,
     orderValueCny: 1000,
-    paidCny: 400,
-    supplierPaidCny: 300,
-    supplierPaidInr: 3600,
+    ...SETTLED,
+    settledCny: 300,
+    outstandingCny: 700,
+    paymentStatus: "partly",
+    settledInr: 3600,
+    agentPaidCny: 100,
+    agentPaidInr: 1200,
     paidInr: 4800,
-    depositRequiredCny: null,
-    depositPaidCny: 0,
-    depositPendingCny: null,
-    depositStatus: "none",
     ...patch,
   });
 
@@ -508,9 +468,23 @@ describe("Dashboard", () => {
     expect(section(file, "Late and upcoming deliveries").rows).toHaveLength(7);
     expect(section(file, "Summary").rows).toContainEqual(["Payments due in next 30 days", "Not in your access"]);
     expect(section(file, "Summary").rows).toContainEqual(["Containers on the way", "Could not be loaded"]);
-    expect(section(file, "Summary").rows).toContainEqual(["Outstanding balance to suppliers", "CNY 1,400.00"]);
+    expect(section(file, "Summary").rows).toContainEqual(["Payable to suppliers", "Not in your access"]);
     expect(section(file, "Payments due").rows).toEqual([["Not in your access"]]);
+    // Settled and outstanding are the API's FIFO figures, added per supplier and currency.
     expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 1, 2000, 600, 1400]]);
+  });
+
+  it("reads the payable balances and the paid INR from PAY-1, voided payments left out; a held order has no supplier figure", () => {
+    const payments: PaymentsResponse = {
+      orders: [],
+      payments: [paymentRow("p1"), paymentRow("p2", { voided: true }), paymentRow("p3", { payeeRole: "agent", orderId: "o", po: "PO-1", kind: "Balance", amountInr: 1200 })],
+      totals: [{ currency: "CNY", accounts: 2, balanceCny: -500, payableCny: 700, availableCny: 200, outstandingCny: 700 }],
+    };
+    const held = order("PO-3", 2, { held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, paidInr: null });
+    const file = dashboardFile({ orders: [order("PO-1", 2), held], deliveries: [], payments, containers: [] }, TODAY);
+    expect(section(file, "Summary").rows).toContainEqual(["Payable to suppliers", "CNY 700.00"]);
+    expect(section(file, "Summary").rows).toContainEqual(["Paid so far, all payees (INR)", 61200]);
+    expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 2, 2000, null, null]]);
   });
 });
 
@@ -530,12 +504,13 @@ describe("Delivery calendar and the Reports hub", () => {
         deliveries: { dueNext7: 2, late: 1 },
         receiving: { shortOrders: 1, shortPcs: 20, shortM: 0 },
         containers: { onTheWay: 1, arrivingIn7Days: 1 },
-        payments: { dueNext30Cny: 500, dueNext30ByCurrency: [{ currency: "CNY", amount: 500 }] },
+        payments: { dueNext30Cny: 500, dueNext30ByCurrency: [{ currency: "CNY", amount: 500 }], payableByCurrency: [{ currency: "CNY", amount: 1200 }] },
         landedCost: { finishedOrders: 1, finishedTotalInr: 18000 },
       },
       TODAY,
     );
     expect(file.filters).toBe("1 Oct – 31 Oct 2026");
     expect(section(file, "Reports summary").rows).toContainEqual(["Payments", "Due in next 30 days", "CNY 500.00"]);
+    expect(section(file, "Reports summary").rows).toContainEqual(["Payments", "Payable to suppliers", "CNY 1,200.00"]);
   });
 });

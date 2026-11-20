@@ -10,6 +10,7 @@ import { FilterChips, FilterSelect, SearchInput, type FilterOption } from "@/com
 import { orderHref, PoLink } from "@/components/shared/po-link";
 import { StageProgress } from "@/components/shared/progress";
 import { StatusPill, TermsBadge } from "@/components/shared/status-pill";
+import { moneyOrDash } from "@/features/payments/money";
 import { formatINR, formatShortDate } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { STAGES } from "@/types/domain";
@@ -88,7 +89,8 @@ const columns: ColumnDef<OrderRow>[] = [
     accessorKey: "paidInr",
     header: "Paid so far (INR)",
     meta: { align: "right", className: "w-[137px]" },
-    cell: ({ row }) => formatINR(row.original.paidInr),
+    // Goods (settled from the supplier account, at each credit's rate) plus sea freight; "–" while held or unknown.
+    cell: ({ row }) => moneyOrDash(row.original.paidInr, formatINR),
   },
 ];
 

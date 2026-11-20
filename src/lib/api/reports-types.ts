@@ -1,7 +1,7 @@
 import type { Currency, MoneyTotal, RecordStatus } from "@/types/domain";
 
-import type { AdvanceAccount, AdvanceEntry, AdvanceSummary } from "./deposits-types";
-import type { AdvanceStatus, ContainerState, ContainerTerms, DepositStatus, OrderStage, PaymentKind, SupplierProfile, Unit } from "./types";
+import type { LedgerAccount, LedgerEntry, PaymentRow, SettlementSlice } from "./ledger-types";
+import type { ContainerState, ContainerTerms, MilestoneFields, OrderStage, SettlementFields, SupplierProfile, Unit } from "./types";
 
 // Landed cost and Reports (backend docs/wave3-contracts.md sections 6.4, 7 and 8). Owner: A6. INR amounts have 2
 // decimals; dates are YYYY-MM-DD; months YYYY-MM. Order-currency amounts (...Cny) come with their `currency`, and their
@@ -43,8 +43,8 @@ export type LandedCostRow = {
   waitingFor: WaitingFor | null;
   /** Stocked pieces per team (team creation order); costInr = pieces x perPieceInr. */
   teams: { teamId: string; team: string; pieces: number; costInr: number }[];
-  /** Paid payments to the supplier, oldest first; amountInr = round2(amountCny x rateInr). */
-  goodsPayments: { id: string; orderId: string; kind: PaymentKind; paidOn: string; amountCny: number; rateInr: number; amountInr: number }[];
+  /** The supplier credits that settled the order (the ledger's FIFO slices), oldest first, each at its own rate; they add up to goodsInr. */
+  goodsPayments: SettlementSlice[];
 };
 
 /** GET /api/v1/landed-cost?supplierId=&teamId= (both optional uuids; teamId keeps orders with stock for that team). */
@@ -75,7 +75,8 @@ export type ReportsSummary = Report<{
   deliveries: { dueNext7: number; late: number };
   receiving: { shortOrders: number; shortPcs: number; shortM: number };
   containers: { onTheWay: number; arrivingIn7Days: number };
-  payments: { dueNext30Cny: number; dueNext30ByCurrency: MoneyTotal[] };
+  /** `payableByCurrency`: Σ negative ledger balances as positive amounts, held left out. */
+  payments: { dueNext30Cny: number; dueNext30ByCurrency: MoneyTotal[]; payableByCurrency: MoneyTotal[] };
   landedCost: { finishedOrders: number; finishedTotalInr: number };
 }>;
 
@@ -140,13 +141,43 @@ export type ContainersTimelineReport = Report<{
   nextArrival: { date: string; number: string } | null;
 }>;
 
-/** `advanceCny`: the supplier advance applied (backend docs/supplier-advance.md), apart from paid; absent from an older backend. */
-type SupplierTotals = { orders: number; orderValueCny: number; paidCny: number; paidInr: number; advanceCny?: number; balanceCny: number };
+/** Held accounts left out. `payableCny`: Σ negative balances as a positive amount; `availableCny`: Σ positive ones. */
+type SupplierTotals = {
+  orders: number;
+  orderValueCny: number;
+  settledCny: number;
+  outstandingCny: number;
+  balanceCny: number;
+  payableCny: number;
+  availableCny: number;
+  paidInr: number;
+};
 
-/** GET /api/v1/reports/payments-per-supplier: open orders (stage below 6), supplier payments only. */
+/** One RPT-5 row: the open orders' value, settled and outstanding (FIFO projection) beside the ledger account. Null figures while held. */
+export type SupplierPaymentsRow = {
+  supplierId: string;
+  supplier: string;
+  currency: Currency;
+  held: boolean;
+  /** Open POs. */
+  orders: string[];
+  orderValueCny: number;
+  settledCny: number | null;
+  outstandingCny: number | null;
+  creditsCny: number | null;
+  /** The ledger balance, signed: + available with the supplier, − payable. */
+  balanceCny: number | null;
+  paidInr: number | null;
+};
+
+/**
+ * GET /api/v1/reports/payments-per-supplier (backend docs/unified-ledger.md RPT-5): per supplier and currency, its open
+ * orders (not closed) beside its ledger account. Without a period, accounts with a non-zero balance and no open order are
+ * listed too.
+ */
 export type PaymentsPerSupplierReport = Report<{
-  /** One row per supplier and order currency (CNY, USD, INR, then order value, largest first). */
-  suppliers: { supplierId: string; supplier: string; currency: Currency; orders: string[]; orderValueCny: number; paidCny: number; paidInr: number; advanceCny?: number; balanceCny: number }[];
+  /** One row per supplier and currency (CNY, USD, INR, then order value, largest first). */
+  suppliers: SupplierPaymentsRow[];
   /** CNY orders only (older frontends); use totalsByCurrency. */
   totals: SupplierTotals;
   totalsByCurrency: (SupplierTotals & { currency: Currency })[];
@@ -172,30 +203,30 @@ export type SupplierPaymentDetail = {
     orders: number;
     /** Of which stage < 6 (what the report row counts). */
     openOrders: number;
-    /** Supplier payment records (paid + due) on those orders. */
+    /** Supplier payment records (paid + due): those on the orders in the period plus its orderless ones; voided included. */
     payments: number;
     lineItems: number;
     /** Distinct items on those lines. */
     products: number;
-    /** One entry per order currency present, in CNY, USD, INR order. Empty when there are no orders. Deposits are part of paid. */
-    byCurrency: { currency: Currency; orders: number; orderValueCny: number; paidCny: number; paidInr: number; depositsCny: number; advanceCny?: number; balanceCny: number }[];
+    /**
+     * One entry per currency of the orders in the period (and, without a period, of its accounts), in CNY, USD, INR
+     * order: the orders' value, settled and outstanding (FIFO projection) and the account's credits, signed balance and
+     * payments' INR (whole account, never dated). Null figures while held.
+     */
+    byCurrency: {
+      currency: Currency;
+      held: boolean;
+      orders: number;
+      orderValueCny: number;
+      settledCny: number | null;
+      outstandingCny: number | null;
+      creditsCny: number | null;
+      balanceCny: number | null;
+      paidInr: number | null;
+    }[];
   };
-  /** Newest first: coalesce(paidOn, dueDate) desc. */
-  payments: Page<{
-    id: string;
-    orderId: string;
-    po: string;
-    currency: Currency;
-    kind: PaymentKind;
-    status: "paid" | "due";
-    paidOn: string | null;
-    dueDate: string | null;
-    amountCny: number;
-    rateInr: number | null;
-    /** null when due. */
-    amountInr: number | null;
-    mode: string | null;
-  }>;
+  /** Newest first: coalesce(paidOn, dueDate) desc. Orderless included, voided flagged. */
+  payments: Page<PaymentRow>;
   /** Newest first: order date desc, PO desc. */
   orders: Page<{
     id: string;
@@ -211,14 +242,11 @@ export type SupplierPaymentDetail = {
     received: number;
     unit: Unit;
     orderValueCny: number;
-    paidCny: number;
-    advanceCny?: number;
-    balanceCny: number;
-  }>;
+  } & SettlementFields>;
   /** One row per order line, never merged across orders: order date desc, PO desc, line position asc. */
   lines: Page<{ orderLineId: string; orderId: string; po: string; itemId: string; item: string; unit: Unit; quantity: number; rateCny: number; amountCny: number; currency: Currency }>;
-  /** The supplier's whole advance account (not limited to the period); absent from an older backend. */
-  advance?: AdvanceAccount;
+  /** The supplier's whole ledger (not limited to the period): its accounts and statement (newest first). */
+  ledger: { accounts: LedgerAccount[]; entries: LedgerEntry[] };
 };
 
 /** GET /api/v1/reports/landed-cost-by-month: finished orders by the month they were stocked. */
@@ -244,24 +272,8 @@ export type OrderTimelineStep = {
 /** When a record was written and by whom (null when the row keeps none), and when it last changed. */
 type Authored = { recordedAt: string | null; recordedBy: string | null; updatedAt: string | null; updatedBy: string | null };
 
-export type OrderReportPayment = {
-  id: string;
-  kind: PaymentKind;
-  payee: string;
-  payeeRole: "supplier" | "agent";
-  amountCny: number;
-  /** round2(amountCny x rateInr) when paid; null when due. */
-  amountInr: number | null;
-  status: "paid" | "due";
-  paidOn: string | null;
-  dueDate: string | null;
-  rateInr: number | null;
-  mode: string | null;
-  reference: string;
-  notes: string;
-  recordedAt: string | null;
-  recordedBy: string | null;
-};
+/** An order-linked payment (legacy supplier memo rows and agent rows) and who recorded it (null when unknown). */
+export type OrderReportPayment = PaymentRow & { recordedBy: string | null };
 
 /** One China receipt of the order (REC-3), with this order's lines. */
 export type OrderReportReceipt = {
@@ -276,7 +288,7 @@ export type OrderReportReceipt = {
   lines: { item: string; unit: Unit; quantity: number }[];
 };
 
-/** A supplier-level deposit (migration 0008) with its transactions: account money, linked to no order. */
+/** A supplier-level deposit (migration 0008, a read-only archive) with its transactions, linked to no order. */
 export type OrderReportDeposit = {
   id: string;
   direction: "give" | "receive";
@@ -293,17 +305,18 @@ export type OrderReportDeposit = {
   transactions: { id: string; paidOn: string; amount: number; mode: string; reference: string; notes: string }[];
 };
 
-/** The supplier's account beside the order: every order of the supplier, per currency, and the account-level deposits. */
+/**
+ * The supplier's account beside the order: every order of the supplier per currency (settled and outstanding from the
+ * FIFO projection, held accounts left out), its ledger accounts and statement (newest first), and the deposits archive.
+ */
 export type OrderReportSupplierAccount = {
   orders: number;
   openOrders: number;
   purchaseValue: MoneyTotal[];
-  paid: MoneyTotal[];
-  /** The supplier advance applied to the supplier's orders, per currency; absent from an older backend. */
-  advanceApplied?: MoneyTotal[];
-  balance: MoneyTotal[];
-  /** The supplier's advance account per currency; absent from an older backend. */
-  advance?: AdvanceSummary[];
+  settled: MoneyTotal[];
+  outstanding: MoneyTotal[];
+  accounts: LedgerAccount[];
+  entries: LedgerEntry[];
   deposits: {
     summary: { currency: Currency; direction: "give" | "receive"; amount: number; settled: number; pending: number }[];
     list: OrderReportDeposit[];
@@ -413,29 +426,19 @@ export type OrderReport = {
     rateCny: number;
     valueCny: number;
   }[];
-  /** Paid, balance, deposits and due count supplier payments only; agent payments (sea freight) are apart; `list` is every payment, oldest first. */
-  payments: {
-    paidCny: number;
-    paidInr: number;
-    /** The supplier advance applied (not a payment), its INR, status and entries; absent from an older backend. */
-    advanceCny?: number;
-    advanceInr?: number;
-    advanceStatus?: AdvanceStatus;
-    advanceEntries?: AdvanceEntry[];
-    /** Supplier payments beyond the order's value, moved to the supplier's available advance (0016). */
-    excessCny?: number;
-    excessInr?: number;
-    balanceCny: number;
-    depositsPaidCny: number;
-    dueCny: number;
+  /**
+   * The order's settlement (FIFO projection of its supplier's account) with the credits (`slices`) that settled it, the
+   * Deposit Required milestone, agent payments (sea freight) and due supplier rows. `list`: the order-linked payments,
+   * oldest first, voided flagged (they count in no figure).
+   */
+  payments: ({
+    list: OrderReportPayment[];
+    slices: SettlementSlice[];
     agentPaidCny: number;
     agentPaidInr: number;
-    /** The deposit the supplier asked for (0009) and what is still pending against it; null / "none" when none was agreed. */
-    depositRequiredCny: number | null;
-    depositPendingCny: number | null;
-    depositStatus: DepositStatus;
-    list: OrderReportPayment[];
-  } | null;
+    dueCny: number;
+  } & SettlementFields &
+    MilestoneFields) | null;
   /** The supplier's account (payments View): every order of the supplier and the account-level deposits; null below View. */
   supplierAccount: OrderReportSupplierAccount | null;
   /** The order's China receipts (receiving View), oldest first; null below View. */
@@ -461,7 +464,11 @@ export type OrderReport = {
 export type OrderState = "pending" | "active" | "closed";
 export type PaymentState = "unpaid" | "partly" | "paid";
 
-/** One row of RPT-O2: the ORD-1 figures with paid and balance counting supplier payments only. */
+/**
+ * One row of RPT-O2: settled, outstanding and payment status from the ledger's FIFO projection (value − settled =
+ * outstanding, never negative; null while held or not posted), the Deposit Required milestone, and `paidInr` = goods
+ * INR (settledInr) + agent INR.
+ */
 export type OrderReportRow = {
   id: string;
   po: string;
@@ -470,7 +477,7 @@ export type OrderReportRow = {
   stage: OrderStage;
   supplier: Named & { code: string };
   currency: Currency;
-  /** The rate saved on the order (null for older orders) and the PO value at it; `paidInr` stays at each payment's own rate. */
+  /** The rate saved on the order (null for older orders) and the PO value at it; `paidInr` stays at each credit's own rate. */
   exchangeRate: number | null;
   orderValueInr: number | null;
   item: string;
@@ -484,17 +491,13 @@ export type OrderReportRow = {
   closed: boolean;
   closedOn: string | null;
   orderValueCny: number;
-  paidCny: number;
-  paidInr: number;
-  /** The supplier advance applied; absent from an older backend. */
-  advanceCny?: number;
-  advanceInr?: number;
-  balanceCny: number;
-  paymentStatus: PaymentState;
+  agentPaidInr: number;
+  paidInr: number | null;
   /** null while the order has no cost at all. */
   landedCostInr: number | null;
   perPieceInr: number | null;
-};
+} & SettlementFields &
+  MilestoneFields;
 
 /**
  * RPT-O2 GET /api/v1/reports/orders?po&supplierId&from&to&status&warehouseId&paymentStatus: every order (newest
@@ -502,7 +505,7 @@ export type OrderReportRow = {
  */
 export type OrderReportsResponse = {
   rows: OrderReportRow[];
-  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; paidCny: number; advanceCny?: number; balanceCny: number }[]; paidInr: number; landedCostInr: number };
+  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; settledCny: number; outstandingCny: number }[]; paidInr: number; landedCostInr: number };
   filter: {
     po: string | null;
     /** The supplier-name text filter, as typed. */

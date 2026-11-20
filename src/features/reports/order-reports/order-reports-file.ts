@@ -1,4 +1,5 @@
 import { orderStatus, stageLabel } from "@/features/orders/order-status";
+import { PAYMENT_STATUS } from "@/features/payments/money";
 import type { OrderReportRow, OrderReportsResponse } from "@/lib/api/reports-types";
 import { orderedCurrencies } from "@/lib/currencies";
 import type { Currency } from "@/types/domain";
@@ -6,33 +7,24 @@ import type { Currency } from "@/types/domain";
 import { type Column, money, type ReportFile, type Section } from "../report-files";
 import { orderReportsFilterLabel } from "./params";
 
-// The Excel and PDF of the Order reports page (RPT-O2, backend docs/phase2-contracts.md 4.2): the rows the page shows
-// after its filters, one table per order currency (so each amount column names its currency and no total adds two
-// currencies), then a Summary sheet. The multiple-order report.
+// The Excel and PDF of the Order reports page (RPT-O2, backend docs/phase2-contracts.md 4.2; money per
+// docs/unified-ledger.md): the rows the page shows after its filters, one table per order currency (so each amount
+// column names its currency and no total adds two currencies), then a Summary sheet. The multiple-order report.
 
 const date = (header: string): Column => ({ header, date: true });
 const columns = (...list: (string | Column)[]) => list.map((column) => (typeof column === "string" ? { header: column } : column));
 const sum = <T>(rows: T[], pick: (row: T) => number) => Math.round(rows.reduce((total, row) => total + pick(row), 0) * 100) / 100;
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-/**
- * The Balance this report shows (page, PDF, Excel, CSV): what is still owed to the supplier, never below 0, so an
- * overpaid order reads 0 and adds nothing to a total. Display only: RPT-O2's `balanceCny`, the order's own balance and
- * every other report keep the true signed figure.
- */
-export const outstanding = (row: Pick<OrderReportRow, "balanceCny">) => Math.max(0, row.balanceCny);
-/** The report's Balance total in one order currency: the rows' floored balances added up, to the cent. */
-export const outstandingTotal = (rows: OrderReportRow[], currency: Currency) => sum(rows.filter((row) => row.currency === currency), outstanding);
-export const OUTSTANDING_NOTE = "Balance is what is still owed to the supplier: an overpaid order shows 0 and adds nothing to the totals.";
+export const OUTSTANDING_NOTE =
+  "Settled and outstanding are the supplier ledger's: the supplier's payments settle its orders oldest first, so outstanding is never below 0. An order of a held account (pending review) has no figures and adds nothing to the totals.";
 
-export const PAYMENT_STATE_LABEL: Record<OrderReportRow["paymentStatus"], string> = { unpaid: "Unpaid", partly: "Partly paid", paid: "Paid" };
+/** The row's payment status as the page and files write it: the API's FIFO status, "Pending review" while held. */
+export const paymentStatusLabel = (row: Pick<OrderReportRow, "held" | "paymentStatus">) => (row.held ? "Pending review" : row.paymentStatus ? PAYMENT_STATUS[row.paymentStatus].label : null);
 /** The row's status as the lists show it (a closed order reads "Closed", section 1.1). */
 export const rowStatus = (row: OrderReportRow, today: string) => orderStatus(row, today);
 
-// A backend that reports the supplier advance (backend docs/supplier-advance.md) adds an "Advance applied" column next
-// to Paid, so value - paid - advance = balance can be read on every row; an older one keeps the columns as they were.
-function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, withAdvance: boolean): Section {
-  const advance = <T>(value: T): T[] => (withAdvance ? [value] : []);
+function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): Section {
   return {
     sheet: "Orders",
     title: `Orders in ${currency}`,
@@ -53,9 +45,8 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, wi
       money("Order value", currency),
       "Rate (INR per 1)",
       money("Order value", "INR"),
-      money("Paid", currency),
-      ...advance(money("Advance applied", currency)),
-      money("Balance", currency),
+      money("Settled", currency),
+      money("Outstanding", currency),
       "Payment status",
       money("Paid", "INR"),
       money("Landed cost", "INR"),
@@ -79,10 +70,9 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, wi
       row.orderValueCny,
       row.exchangeRate,
       row.orderValueInr,
-      row.paidCny,
-      ...advance(row.advanceCny ?? 0),
-      outstanding(row),
-      PAYMENT_STATE_LABEL[row.paymentStatus],
+      row.settledCny,
+      row.outstandingCny,
+      paymentStatusLabel(row),
       row.paidInr,
       row.landedCostInr,
       row.perPieceInr,
@@ -107,11 +97,10 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, wi
           null,
           // Only when every order has a saved rate: a part total would read as the whole.
           rows.every((row) => row.orderValueInr !== null) ? sum(rows, (row) => row.orderValueInr ?? 0) : null,
-          sum(rows, (row) => row.paidCny),
-          ...advance(sum(rows, (row) => row.advanceCny ?? 0)),
-          sum(rows, outstanding),
+          sum(rows, (row) => row.settledCny ?? 0),
+          sum(rows, (row) => row.outstandingCny ?? 0),
           null,
-          sum(rows, (row) => row.paidInr),
+          sum(rows, (row) => row.paidInr ?? 0),
           sum(rows, (row) => row.landedCostInr ?? 0),
           null,
           null,
@@ -124,13 +113,11 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string, wi
 export function orderReportsFile(data: OrderReportsResponse, today: string): ReportFile {
   const { rows, summary, filter } = data;
   const currencies = orderedCurrencies(rows.map((row) => row.currency));
-  const withAdvance = rows.some((row) => row.advanceCny !== undefined);
   const tables = (currencies.length ? currencies : ["CNY" as const]).map((currency) =>
     rowsTable(
       currency,
       rows.filter((row) => row.currency === currency),
       today,
-      withAdvance,
     ),
   );
   const summaryTable: Section = {
@@ -141,9 +128,8 @@ export function orderReportsFile(data: OrderReportsResponse, today: string): Rep
       ["Orders", summary.orders],
       ...summary.byCurrency.flatMap((total) => [
         [`Order value (${total.currency})`, total.orderValueCny],
-        [`Paid (${total.currency})`, total.paidCny],
-        ...(total.advanceCny === undefined ? [] : [[`Advance applied (${total.currency})`, total.advanceCny]]),
-        [`Balance (${total.currency})`, outstandingTotal(rows, total.currency)],
+        [`Settled (${total.currency})`, total.settledCny],
+        [`Outstanding (${total.currency})`, total.outstandingCny],
       ]),
       ["Paid (INR)", summary.paidInr],
       ["Landed cost (INR)", summary.landedCostInr],

@@ -8,9 +8,8 @@ import { useNavigate } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterSelect, SearchInput, type FilterOption } from "@/components/shared/filters";
 import { orderHref } from "@/components/shared/po-link";
-import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
-import { PaidWithAdvance } from "@/features/payments/money";
+import { MilestonePill, moneyOrDash, PaymentStatusPill } from "@/features/payments/money";
 import type { ReportFile } from "@/features/reports/report-files";
 import type { OrderLineItem } from "@/lib/api/types";
 import { formatDate, formatMoney, formatQty, formatShortDate } from "@/lib/formatters";
@@ -18,7 +17,7 @@ import { todayInIndia } from "@/lib/today";
 
 import type { OrderRow, OrdersListData } from "./data/queries";
 import { rowActionClass } from "./delete-order";
-import { balanceCny, closedOrders, filterTabOrders, paymentStatus, pendingOrders, pendingQty, type TabFilters } from "./filter-orders";
+import { closedOrders, filterTabOrders, pendingOrders, pendingQty, type TabFilters } from "./filter-orders";
 import { closedOrdersFile, describeFilters, fetchOrderLines, pendingOrdersFile, rangeLabel } from "./order-files";
 import { stageLabel } from "./order-status";
 import { ClosedOrdersFrame, OrdersFrame } from "./orders-frame";
@@ -50,6 +49,8 @@ const orderedColumn: ColumnDef<OrderRow> = {
   meta: right,
   cell: ({ row }) => formatQty(row.original.quantity, row.original.unit),
 };
+/** An amount in the order's currency; "–" while the API has none (held account, not posted). */
+const money = (value: number | null, order: OrderRow) => moneyOrDash(value, (v) => formatMoney(v, order.currency, { decimals: 2 }));
 const valueColumn: ColumnDef<OrderRow> = {
   accessorKey: "orderValueCny",
   header: "Order value",
@@ -72,12 +73,15 @@ const PENDING: Spec = {
     { id: "pending", header: "Pending qty", meta: right, cell: ({ row }) => formatQty(pendingQty(row.original), row.original.unit) },
     valueColumn,
     {
+      // The API's FIFO payment status, with the Deposit Required milestone under it when one was agreed.
       id: "payment",
       header: "Deposit/payment",
-      cell: ({ row }) => {
-        const { label, tone } = paymentStatus(row.original);
-        return <StatusPill tone={tone}>{label}</StatusPill>;
-      },
+      cell: ({ row }) => (
+        <span className="flex flex-col items-start gap-1">
+          <PaymentStatusPill status={row.original.paymentStatus} held={row.original.held} />
+          <MilestonePill status={row.original.depositStatus} />
+        </span>
+      ),
     },
     { accessorKey: "stage", header: "Current stage", cell: ({ row }) => stageLabel(row.original.stage) },
   ],
@@ -95,9 +99,9 @@ const CLOSED: Spec = {
     valueColumn,
     orderedColumn,
     { accessorKey: "stocked", header: "Warehouse received", meta: right, cell: ({ row }) => formatQty(row.original.stocked, row.original.unit) },
-    // Supplier payments only, as the order report and Payments per supplier count them; the All tab's INR figure keeps every payee.
-    { accessorKey: "supplierPaidCny", header: "Paid to supplier", meta: right, cell: ({ row }) => <PaidWithAdvance paid={row.original.supplierPaidCny} advance={row.original.advanceCny} currency={row.original.currency} /> },
-    { id: "balance", header: "Balance to supplier", meta: right, cell: ({ row }) => formatMoney(balanceCny(row.original), row.original.currency, { decimals: 2 }) },
+    // The API's FIFO projection from the supplier's account; the All tab's INR figure adds sea freight.
+    { accessorKey: "settledCny", header: "Settled", meta: right, cell: ({ row }) => money(row.original.settledCny, row.original) },
+    { accessorKey: "outstandingCny", header: "Outstanding", meta: right, cell: ({ row }) => money(row.original.outstandingCny, row.original) },
     { accessorKey: "closedOn", header: "Closed date", cell: ({ row }) => (row.original.closedOn ? formatDate(row.original.closedOn) : "–") },
     {
       // The order's report page (phase 2 §4.3, Agent R); the row itself opens the order.

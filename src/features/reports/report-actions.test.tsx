@@ -20,7 +20,7 @@ const ID = "5f0c7a52-8a0e-4c1e-9d3b-2b9c1f7e4a10";
 const REPORT: PaymentsPerSupplierReport = {
   filter: { from: "2026-09-01", to: "2026-09-30", supplier: "Foshan Fabrics" },
   suppliers: [],
-  totals: { orders: 0, orderValueCny: 0, paidCny: 0, paidInr: 0, balanceCny: 0 },
+  totals: { orders: 0, orderValueCny: 0, settledCny: 0, outstandingCny: 0, balanceCny: 0, payableCny: 0, availableCny: 0, paidInr: 0 },
   totalsByCurrency: [],
   dueNext30Cny: 0,
   dueNext30ByCurrency: [],

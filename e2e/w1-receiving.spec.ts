@@ -79,21 +79,23 @@ test("the list shows each receipt with its totals, filters by search, office, su
 });
 
 test("Record receipt: the chosen order's lines, short and the effect on payment follow what you type", async ({ page, api }) => {
+  // A supplier of its own with ¥5,000 on its account: it settles ¥5,000 of this ¥33,000 order (unified ledger).
+  const supplier = await api.newSupplier("Receiving Textile");
   const order = await api.createOrder({
-    supplier: "Guangzhou Textile Co.",
+    supplier: supplier.name,
     lines: [
       { item: "Men's jackets", quantity: 500, rateCny: 60 },
       { item: "Cotton fabric", quantity: 300, rateCny: 10 },
     ],
-    deposits: [{ amountCny: 5000, rateInr: 12 }],
   });
+  await api.paySupplier(supplier.id, { amount: 5000, rateInr: 12 });
   await api.receive(order.po, { "Men's jackets": 20 }, { receivedOn: today(-1), bundles: 1 });
 
   await openForm(page, order.po);
   await expect(page.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/receiving");
   const details = page.getByRole("region", { name: "Receipt details" });
   await expect(details).toContainText("Men's jackets");
-  await expect(details).toContainText("Guangzhou Textile Co.");
+  await expect(details).toContainText(supplier.name);
   await expect(page.getByText("Partly received", { exact: true })).toBeVisible();
   await expect(field(page, "Received on")).toHaveValue(today());
   await expect(page.getByRole("combobox", { name: "Received at office" })).toHaveValue(/.+/);
@@ -105,7 +107,7 @@ test("Record receipt: the chosen order's lines, short and the effect on payment 
   await expect(jackets).toContainText("20 pcs");
   await expect(jackets.getByRole("cell").last()).toHaveText("480 pcs");
   await expect(kv(page, "Order value")).toHaveText("¥ 33,000");
-  await expect(kv(page, "Deposits paid")).toHaveText("¥ 5,000");
+  await expect(kv(page, "Settled from supplier payments")).toHaveText("¥ 5,000");
   await expect(kv(page, "Balance before this receipt")).toHaveText("¥ 28,000");
   await expect(page.getByText(`Deliveries for ${order.po}`)).toBeVisible();
   await expect(page.getByText(`${shortDate(today(-1))} · Guangzhou office`)).toBeVisible();

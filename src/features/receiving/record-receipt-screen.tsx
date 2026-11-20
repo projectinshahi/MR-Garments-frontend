@@ -81,9 +81,11 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
     receivedNow: Number(typed[i]?.quantity) || 0,
     unitPrice: line.unitPriceCny ?? undefined,
   }));
-  // REC-2 sends the money as null to users who can't view payments (China staff): no "Effect on payment" card for them.
-  const showPayment = order?.orderValueCny !== null;
-  const effect = paymentEffect({ orderValue: order?.orderValueCny ?? 0, depositsPaid: order?.depositsPaidCny ?? 0 }, lines);
+  // REC-2 sends the money as null to users who can't view payments (China staff), and the outstanding as null for an
+  // order whose supplier account is held or not posted yet: no "Effect on payment" card then.
+  const showPayment = order?.orderValueCny !== null && order?.outstandingCny !== null;
+  const outstanding = order?.outstandingCny ?? 0;
+  const effect = paymentEffect({ outstanding }, lines);
   const deliveries = deliveryEvents(data.receipts, orderId);
   const linesError = errors.lines?.message ?? errors.lines?.root?.message;
   const remarkNeeded = remarkRequired(order, typed);
@@ -272,7 +274,7 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                   className="mt-[10px]"
                   items={[
                     { label: "Order value", value: spaced(order?.orderValueCny ?? 0) },
-                    { label: "Deposits paid", value: spaced(order?.depositsPaidCny ?? 0) },
+                    { label: "Settled from supplier payments", value: spaced(Math.max(0, Math.round(((order?.orderValueCny ?? 0) - outstanding) * 100) / 100)) },
                     { label: "Balance before this receipt", value: spaced(effect.balanceBefore) },
                     ...effect.deductions
                       .filter((d) => d.short > 0)

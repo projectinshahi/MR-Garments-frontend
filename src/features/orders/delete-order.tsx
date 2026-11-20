@@ -20,11 +20,12 @@ export const DELETE_ORDER_TEXT = {
 export const rowActionClass = "inline-block rounded-sm font-bold text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /**
- * "Delete order" and its confirmation; Cancel calls nothing. The API decides: an order with payments, receipts or
- * container loads is refused (409 `in_use`) and the same dialog explains why with Close only (an order has no
- * deactivate). A 404 means it was deleted already, which ends like a delete. Any other failure toasts and keeps the
- * dialog open, so confirming again retries. On the order page (default) a delete goes to the list; `inList` draws the
- * row's text action and only reloads the list.
+ * "Delete order" and its confirmation; Cancel calls nothing. The API decides: an order with payments (voided ones too),
+ * receipts or container loads is refused (409 `in_use`) and the same dialog explains why with Close only (an order has no
+ * deactivate); a held supplier account (409 `account_held`) and maintenance (503) are toasted. A delete first posts the
+ * order's cancellation entry on the supplier's account (ORD-6). A 404 means it was deleted already, which ends like a
+ * delete. Any other failure toasts and keeps the dialog open, so confirming again retries. On the order page (default) a
+ * delete goes to the list; `inList` draws the row's text action and only reloads the list.
  */
 export function DeleteOrderButton({ po, supplier, inList = false }: { po: string; supplier: string; inList?: boolean }) {
   const router = useRouter();
@@ -58,7 +59,8 @@ export function DeleteOrderButton({ po, supplier, inList = false }: { po: string
           description: (
             <p>
               Are you sure you want to delete <strong className="text-foreground">{po}</strong> ({supplier})? This can&apos;t be undone. An order with
-              payments, receipts or container loads can&apos;t be deleted. Any supplier advance applied to it goes back to the supplier&apos;s advance account.
+              payments, receipts or container loads can&apos;t be deleted. A cancellation entry on the supplier&apos;s account takes the order&apos;s value back off
+              it.
             </p>
           ),
           confirmLabel: "Delete order",

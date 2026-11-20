@@ -23,7 +23,7 @@ describe("Closed Orders in the sidebar", () => {
 
   it("shows for anyone who may view orders, warehouse access or not, and never for roles without it or for staff", () => {
     const accounts = me({ dashboard: "Full", ordersView: "View", payments: "Enter" });
-    expect(titles(navFor(accounts))).toEqual(["Dashboard", "Orders", "Deposits & Payments", "Deposits", "Closed Orders"]);
+    expect(titles(navFor(accounts))).toEqual(["Dashboard", "Orders", "Payments", "Supplier ledger", "Closed Orders"]);
     expect(canOpen(accounts, "/closed-orders")).toBe(true);
 
     const warehouseOnly = me({ warehouse: "Full" });
@@ -37,21 +37,31 @@ describe("Closed Orders in the sidebar", () => {
   });
 });
 
-describe("Deposits in the sidebar opens its Supplier advance tab", () => {
-  const deposits = MANAGEMENT_NAV.flatMap((section) => section.items).find((item) => item.title === "Deposits")!;
+describe("Payments and Supplier ledger in the sidebar (D14)", () => {
+  const items = MANAGEMENT_NAV.flatMap((section) => section.items);
+  const payments = items.find((item) => item.title === "Payments")!;
+  const ledger = items.find((item) => item.title === "Supplier ledger")!;
 
-  it("links to /deposits/advance, open to the same people as every Deposits tab", () => {
-    expect(deposits.href).toBe("/deposits/advance");
-    expect(canOpen(me({ payments: "View" }), deposits.href)).toBe(true);
-    expect(canOpen(me({ payments: "None", dashboard: "Full" }), deposits.href)).toBe(false);
-    expect(titles(navFor(me({ payments: "View" })))).toContain("Deposits");
+  it("replaces Deposits & Payments and Deposits with Payments and Supplier ledger, both needing payments View", () => {
+    expect(items.map((item) => item.title)).not.toContain("Deposits");
+    expect(items.map((item) => item.title)).not.toContain("Deposits & Payments");
+    expect(payments.href).toBe("/payments");
+    expect(ledger.href).toBe("/supplier-ledger");
+    for (const href of [payments.href, ledger.href, "/supplier-ledger/s1", "/supplier-ledger/milestones"]) {
+      expect(canOpen(me({ payments: "View" }), href), href).toBe(true);
+      expect(canOpen(me({ payments: "None", dashboard: "Full" }), href), href).toBe(false);
+    }
+    expect(titles(navFor(me({ payments: "View" })))).toEqual(["Payments", "Supplier ledger"]);
+    expect(titles(navFor(me({ dashboard: "Full" })))).not.toContain("Supplier ledger");
   });
 
-  it("stays highlighted on every Deposits tab and a supplier's advance page, and nowhere else", () => {
-    for (const path of ["/deposits", "/deposits/pending", "/deposits/paid", "/deposits/suppliers", "/deposits/suppliers/s1", "/deposits/advance", "/deposits/advance/s1"]) {
-      expect(isActiveItem(path, deposits), path).toBe(true);
+  it("lights Supplier ledger on every ledger page and every old /deposits address, and nowhere else", () => {
+    for (const path of ["/supplier-ledger", "/supplier-ledger/s1", "/supplier-ledger/milestones", "/deposits", "/deposits/pending", "/deposits/advance/s1", "/deposits/suppliers/s1"]) {
+      expect(isActiveItem(path, ledger), path).toBe(true);
     }
-    for (const path of ["/payments", "/depositsx", "/"]) expect(isActiveItem(path, deposits), path).toBe(false);
+    for (const path of ["/payments", "/supplier-ledgerx", "/depositsx", "/"]) expect(isActiveItem(path, ledger), path).toBe(false);
+    expect(isActiveItem("/payments", payments)).toBe(true);
+    expect(isActiveItem("/supplier-ledger", payments)).toBe(false);
     // Items without a `match` keep matching by their own address.
     expect(isActiveItem("/orders/PO-1", { title: "Orders", href: "/orders" })).toBe(true);
   });

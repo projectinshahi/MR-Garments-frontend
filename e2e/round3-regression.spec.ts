@@ -1,6 +1,6 @@
 import type { APIRequestContext, Browser, BrowserContextOptions, Page } from "@playwright/test";
 
-import type { ContainerListItem } from "../src/lib/api/types";
+import type { ContainerListItem, PaymentsResponse } from "../src/lib/api/types";
 import { amountCell, ANITA, type Api, containerNumber, expect, field, kpi, kv, longDate, settled, shortDate, signInState, test, toast, today } from "./live-api";
 import { LOADING_STAFF_STATE, MANAGEMENT_STATE, PROCUREMENT_STATE, SIGNED_OUT, STAFF_STATE } from "./sessions";
 
@@ -21,19 +21,24 @@ const poSearch = (page: Page) => page.getByRole("searchbox", { name: "Search PO 
 const containerSearch = (page: Page) => page.getByRole("searchbox", { name: "Search container or PO" });
 const password = () => process.env.E2E_PASSWORD ?? "";
 
-/** A FOB PO with 2 lines (100 jackets @30, 200 t-shirts @5 = ¥4,000), a ¥1,000 deposit at 12, due in 5 days. */
-async function makeOrder(api: Api, extra: { deliveryDate?: string } = {}) {
-  return api.createOrder({
-    supplier: "Shenzhen Apparel",
+/**
+ * A FOB PO with 2 lines (100 jackets @30, 200 t-shirts @5 = ¥4,000), due in 5 days, for a supplier of its own (unless
+ * `supplier` names one) whose account then gets ¥1,000 at 12: the order is settled ¥1,000 (₹12,000), ¥3,000 outstanding.
+ */
+async function makeOrder(api: Api, extra: { deliveryDate?: string; supplier?: { id: string; name: string } } = {}) {
+  const supplier = extra.supplier ?? (await api.newSupplier("Shenzhen R3"));
+  const order = await api.createOrder({
+    supplier: supplier.name,
     lines: [
       { item: "Men's jackets", quantity: 100, rateCny: 30 },
       { item: "Kids t-shirts", quantity: 200, rateCny: 5 },
     ],
     deliveryDate: extra.deliveryDate ?? today(5),
-    deposits: [{ amountCny: 1000, rateInr: 12 }],
     // Its container terms (backend docs/order-container-terms.md): the container form takes them.
     terms: "FOB",
   });
+  if (!extra.supplier) await api.paySupplier(supplier.id, { amount: 1000, rateInr: 12 });
+  return { ...order, supplier: supplier.name };
 }
 
 /** Order + receipt + container in loading status. */
@@ -62,6 +67,7 @@ const noHScroll = async (page: Page, where: string) => {
 // ---------------------------------------------------------------------------------------------------------------
 
 type State = {
+  supplier: string;
   stage: string;
   paid: string;
   paidInr: string;
@@ -89,7 +95,8 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       `/orders/${po}`,
       async (page) => {
         await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
-        await expect(kv(page, `Paid to supplier ${s.paid}`)).toHaveText(s.paidInr);
+        await expect(kv(page, "Settled from supplier account")).toHaveText(`${s.paid}.00`);
+        await expect(kv(page, "Paid (INR), goods + sea freight")).toHaveText(s.paidInr);
       },
     ],
     [
@@ -102,11 +109,10 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
     [
       `/orders/${po}/payments`,
       async (page) => {
-        await expect(kpi(page, "Order value")).toContainText("¥4,000");
-        await expect(kpi(page, "Paid to supplier")).toContainText(s.paid);
-        await expect(kpi(page, "Paid to supplier")).toContainText(`${s.payments} payment`);
-        await expect(kpi(page, "Balance to supplier")).toContainText(s.balance);
-        await expect(kv(page, "Paid to supplier in INR")).toHaveText(s.paidInr);
+        await expect(kpi(page, "Order value")).toContainText("¥4,000.00");
+        await expect(kpi(page, "Settled")).toContainText(`${s.paid}.00`);
+        await expect(kpi(page, "Outstanding")).toContainText(`${s.balance}.00`);
+        await expect(page.getByText("Paid (INR), goods + sea freight").filter({ visible: true }).locator("..")).toContainText(s.paidInr);
       },
     ],
     [
@@ -131,15 +137,15 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       "/payments",
       async (page) => {
         await poSearch(page).fill(po);
+        const status = s.paid === "¥0" ? "Unpaid" : s.balance === "¥0" ? "Paid" : "Partly paid";
         await expect(rowOf(page, po).getByRole("cell")).toHaveText([
-          `${po}Shenzhen Apparel`,
-          amountCell("4,000"),
-          amountCell(s.paid.replace("¥", "")),
+          `${po}${s.supplier}`,
+          amountCell("4,000.00"),
+          amountCell(`${s.paid.replace("¥", "")}.00`),
+          amountCell(`${s.balance.replace("¥", "")}.00`),
+          status,
           s.paidInr,
-          amountCell(s.balance.replace("¥", "")),
           "Not yet due",
-          // Management (payments Full): the Delete menu, once the order has a payment.
-          ...(s.payments > 0 ? ["Delete"] : []),
         ]);
       },
     ],
@@ -194,12 +200,14 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
   test.setTimeout(420_000);
   const due = today(5);
   let po = "";
-  let s: State = { stage: "1. Order and deposit", paid: "¥1,000", paidInr: "₹12,000", balance: "¥3,000", payments: 1, receipts: [], onCalendar: true };
+  // A supplier of its own: its account settles this order only.
+  const supplier = await api.newSupplier("SZ Journey");
+  let s: State = { supplier: supplier.name, stage: "1. Order and deposit", paid: "¥1,000", paidInr: "₹12,000", balance: "¥3,000", payments: 1, receipts: [], onCalendar: true };
 
-  await test.step("place the order (Orders), reload on the new page", async () => {
+  await test.step("place the order (Orders), pay ¥1,000 to the supplier's account, reload on the new page", async () => {
     await page.goto("/orders/new");
     po = await page.getByRole("textbox", { name: "Purchase order no." }).inputValue();
-    await page.getByRole("combobox", { name: "Supplier", exact: true }).selectOption({ label: "Shenzhen Apparel" });
+    await page.getByRole("combobox", { name: "Supplier", exact: true }).selectOption({ label: supplier.name });
     await field(page, "Delivery date").fill(due);
     await page.getByRole("combobox", { name: "Item, line 1" }).selectOption({ label: "Men's jackets" });
     await page.getByRole("textbox", { name: "Rate (¥), line 1" }).fill("30");
@@ -208,17 +216,14 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.getByRole("combobox", { name: "Item, line 2" }).selectOption({ label: "Kids t-shirts" });
     await page.getByRole("textbox", { name: "Rate (¥), line 2" }).fill("5");
     await page.getByRole("textbox", { name: "Quantity, line 2" }).fill("200");
-    await page.getByRole("button", { name: "+ Add deposit" }).click();
-    await page.getByRole("textbox", { name: "Amount (¥), deposit 1" }).fill("1000");
-    await field(page, "Rate to INR").fill("12");
-    await field(page, "Mode").fill("Bank transfer");
     // Container terms are chosen on the order (backend docs/order-container-terms.md).
     await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(toast(page, `Order ${po} placed`)).toBeVisible();
     await expect(page).toHaveURL(`/orders/${po}`);
+    await api.paySupplier(supplier.id, { amount: 1000, rateInr: 12 });
     await page.reload();
-    await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
+    await expect(kv(page, "Settled from supplier account")).toHaveText("¥1,000.00");
     await everywhere(page, po, due, s, true);
   });
 
@@ -226,14 +231,13 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.goto("/payments");
     await poSearch(page).fill(po);
     await rowOf(page, po).getByRole("button", { name: po, exact: true }).click();
-    await page.getByRole("button", { name: `+ Record payment for ${po}` }).click();
-    const form = page.getByRole("dialog", { name: `Record payment for ${po}` });
-    await form.getByRole("combobox", { name: "Kind" }).selectOption("Balance");
+    await page.getByRole("button", { name: `+ Record payment for ${supplier.name}` }).click();
+    const form = page.getByRole("dialog", { name: "Record payment" });
     await form.getByRole("textbox", { name: "Amount (¥)" }).fill("500");
     await form.getByRole("textbox", { name: "Rate (₹ per ¥)" }).fill("12.5");
     await form.getByRole("textbox", { name: "Mode" }).fill("Wire");
     await form.getByRole("button", { name: "Record payment" }).click();
-    await expect(toast(page, `Payment recorded for ${po}`).first()).toBeVisible();
+    await expect(toast(page, `Payment recorded for ${supplier.name}`).first()).toBeVisible();
     await expect(form).toBeHidden();
     s = { ...s, paid: "¥1,500", paidInr: "₹18,250", balance: "¥2,500", payments: 2 };
     await everywhere(page, po, due, s, false);
@@ -330,15 +334,15 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
 // ---------------------------------------------------------------------------------------------------------------
 
 const ROLES = [
-  { name: "Management", email: "suresh@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Received (China)", "Containers"], pages: ["/orders", "/payments", "/calendar", "/receiving", "/containers"] },
-  { name: "Procurement", email: "priya@mrgarments.com", menu: ["Orders", "Deposits & Payments", "Delivery Calendar", "Received (China)"], pages: ["/orders", "/payments", "/calendar", "/receiving"] },
-  { name: "Accounts", email: "anita@mrgarments.com", menu: ["Orders", "Deposits & Payments"], pages: ["/orders", "/payments"] },
+  { name: "Management", email: "suresh@mrgarments.com", menu: ["Orders", "Payments", "Delivery Calendar", "Received (China)", "Containers"], pages: ["/orders", "/payments", "/calendar", "/receiving", "/containers"] },
+  { name: "Procurement", email: "priya@mrgarments.com", menu: ["Orders", "Payments", "Delivery Calendar", "Received (China)"], pages: ["/orders", "/payments", "/calendar", "/receiving"] },
+  { name: "Accounts", email: "anita@mrgarments.com", menu: ["Orders", "Payments"], pages: ["/orders", "/payments"] },
   { name: "China staff (Chen)", email: "chen@mrgarments.com", menu: ["Received (China)"], pages: ["/receiving"] },
   { name: "Loading staff (Wang)", email: "wang@mrgarments.com", menu: ["Received (China)", "Containers"], pages: ["/receiving", "/containers"] },
 ];
 const ALL_PAGES = ["/orders", "/payments", "/calendar", "/receiving", "/containers"];
 const MENU_LABEL: Record<string, string> = {
-  "/orders": "Orders", "/payments": "Deposits & Payments", "/calendar": "Delivery Calendar", "/receiving": "Receiving (China)", "/containers": "Containers",
+  "/orders": "Orders", "/payments": "Payments", "/calendar": "Delivery Calendar", "/receiving": "Receiving (China)", "/containers": "Containers",
 };
 
 for (const role of ROLES) {
@@ -368,12 +372,13 @@ for (const role of ROLES) {
       await expect(rowOf(page, flow.po)).toContainText("₹12,000");
       await page.goto(`/orders/${flow.po}`);
       await expect(page.getByRole("heading", { level: 1, name: flow.po })).toBeVisible();
-      await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
+      await expect(kv(page, "Settled from supplier account")).toHaveText("¥1,000.00");
+      await expect(kv(page, "Paid (INR), goods + sea freight")).toHaveText("₹12,000");
       // Sections the role can't view have no tab, and their URL says Not found.
       const hasTab = (label: string) => tabs(page).getByRole("link", { name: label });
-      const want = { "Deposits & payments": role.pages.includes("/payments"), Receiving: role.pages.includes("/receiving"), Containers: role.pages.includes("/containers") };
+      const want = { Payments: role.pages.includes("/payments"), Receiving: role.pages.includes("/receiving"), Containers: role.pages.includes("/containers") };
       for (const [label, shown] of Object.entries(want)) await expect(hasTab(label)).toHaveCount(shown ? 1 : 0);
-      for (const [seg, shown] of [["payments", want["Deposits & payments"]], ["receiving", want.Receiving], ["containers", want.Containers]] as const) {
+      for (const [seg, shown] of [["payments", want.Payments], ["receiving", want.Receiving], ["containers", want.Containers]] as const) {
         await page.goto(`/orders/${flow.po}/${seg}`);
         if (shown) await expect(page.getByText("Not found", { exact: true })).toHaveCount(0);
         else await expect(page.getByText("Not found", { exact: true })).toBeVisible();
@@ -382,7 +387,7 @@ for (const role of ROLES) {
     if (role.pages.includes("/payments")) {
       await page.goto("/payments");
       await poSearch(page).fill(flow.po);
-      await expect(rowOf(page, flow.po).getByRole("cell").nth(3)).toHaveText("₹12,000");
+      await expect(rowOf(page, flow.po).getByRole("cell").nth(5)).toHaveText("₹12,000");
     }
     if (role.pages.includes("/receiving")) {
       await page.goto("/receiving");
@@ -456,7 +461,7 @@ test("back/forward across list, detail, tab and container; breadcrumbs", async (
   await expect(page.getByRole("heading", { name: `Container ${f.number}` })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(`/orders/${f.po}`);
-  await expect(kv(page, "Paid to supplier ¥1,000")).toHaveText("₹12,000");
+  await expect(kv(page, "Settled from supplier account")).toHaveText("¥1,000.00");
   await page.goBack();
   await expect(page).toHaveURL("/orders");
   await page.goForward();
@@ -477,7 +482,7 @@ test("back/forward across list, detail, tab and container; breadcrumbs", async (
 test("PO links from Payments, Calendar (month, week, list), Receiving and Containers land on the right order; container links on the right container", async ({ page, api }) => {
   const due = today(6);
   const f = await makeOrder(api, { deliveryDate: due });
-  const other = await makeOrder(api, { deliveryDate: due });
+  const other = await makeOrder(api, { deliveryDate: due, supplier: { id: f.supplierId, name: f.supplier } });
   const received = await api.receive(f.po, { "Men's jackets": 100, "Kids t-shirts": 100 }, { shortRemark: "rest to follow" });
   expect(received.receipt.id).toBeTruthy();
   const monday = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) - ((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
@@ -489,7 +494,7 @@ test("PO links from Payments, Calendar (month, week, list), Receiving and Contai
   await page.getByRole("heading", { name: `${f.po} payments` }).getByRole("link", { name: f.po }).click();
   await expect(page).toHaveURL(`/orders/${f.po}`);
 
-  for (const url of [`/calendar?month=${due.slice(0, 7)}`, `/calendar/week?week=${monday(due)}`, `/calendar/list?range=next-30&supplier=Shenzhen+Apparel`]) {
+  for (const url of [`/calendar?month=${due.slice(0, 7)}`, `/calendar/week?week=${monday(due)}`, `/calendar/list?${new URLSearchParams({ range: "next-30", supplier: f.supplier })}`]) {
     await page.goto(url);
     await page.getByRole("link", { name: other.po, exact: true }).click();
     await expect(page, url).toHaveURL(`/orders/${other.po}`);
@@ -518,7 +523,9 @@ test("PO links from Payments, Calendar (month, week, list), Receiving and Contai
 test("filtered Calendar URLs and every order tab survive a reload", async ({ page, api }) => {
   test.setTimeout(150_000);
   const due = `${2060 + Math.floor(Math.random() * 30)}-05-14`;
-  const o = await makeOrder(api, { deliveryDate: due });
+  // A seeded supplier's name in the filter URLs (no money is checked here).
+  const shenzhen = (await api.options()).suppliers.find((s) => s.name === "Shenzhen Apparel")!;
+  const o = await makeOrder(api, { deliveryDate: due, supplier: shenzhen });
   const monday = new Date(Date.parse(`${due}T00:00:00Z`) - ((new Date(`${due}T00:00:00Z`).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
   for (const url of [`/calendar?month=${due.slice(0, 7)}&supplier=Shenzhen+Apparel`, `/calendar/week?week=${monday}&supplier=Shenzhen+Apparel`, `/calendar/list?supplier=Shenzhen+Apparel`]) {
     await page.goto(url);
@@ -590,10 +597,10 @@ test("the API refuses what each role may not do, with no inherited cookies", asy
     }
     // And a real, valid-looking mutation by a forbidden role changes nothing.
     if (!role.w[1]) {
-      const order = await api.order(f.po);
-      const r = await ctx.post("/api/v1/payments", { data: { orderId: order.id, kind: "Balance", payeeRole: "supplier", agentId: null, amountCny: 1, paidOn: today(), rateInr: 12, mode: "x" } });
+      const paymentsOf = async () => (await api.get<PaymentsResponse>("/payments")).payments.filter((p) => p.supplierId === f.supplierId);
+      const r = await ctx.post("/api/v1/payments", { data: { supplierId: f.supplierId, amount: 1, paidOn: today(), rateInr: 12, mode: "x", clientRequestId: crypto.randomUUID() } });
       expect(r.status()).toBe(403);
-      expect((await api.order(f.po)).payments).toHaveLength(1);
+      expect(await paymentsOf()).toHaveLength(1);
     }
     if (!role.w[3]) {
       const r = await ctx.patch(`/api/v1/containers/${f.id}`, { data: { eta: today(40) } });
@@ -610,7 +617,7 @@ test("UI hides the actions the role may not take", async ({ browser, api, playwr
   await priya.goto("/payments");
   await poSearch(priya).fill(f.po);
   await rowOf(priya, f.po).getByRole("button", { name: f.po }).click();
-  await expect(priya.getByRole("button", { name: /Record payment/ })).toHaveCount(0);
+  await expect(priya.getByRole("button", { name: /Record (sea freight )?payment/ })).toHaveCount(0);
   await priya.goto("/receiving");
   await expect(priya.getByRole("link", { name: "+ Record receipt" })).toHaveCount(0);
   await priya.goto("/receiving/new");
@@ -628,7 +635,8 @@ test("UI hides the actions the role may not take", async ({ browser, api, playwr
   await anita.goto("/payments");
   await poSearch(anita).fill(f.po);
   await rowOf(anita, f.po).getByRole("button", { name: f.po }).click();
-  await expect(anita.getByRole("button", { name: `+ Record payment for ${f.po}` })).toBeVisible();
+  await expect(anita.getByRole("button", { name: `+ Record payment for ${f.supplier}` })).toBeVisible();
+  await expect(anita.getByRole("button", { name: /^Void payment/ })).toHaveCount(0);
   await anita.close();
 
   const wang = await as(browser, LOADING_STAFF_STATE);
@@ -688,8 +696,8 @@ test("390x844: every page and dialog of the five tabs fits without page-level ho
   await page.goto("/payments");
   // The search box is hidden below 640px (reported), so pick the order from the list.
   await rowOf(page, fresh.po).getByRole("button", { name: fresh.po, exact: true }).click();
-  await page.getByRole("button", { name: `+ Record payment for ${fresh.po}` }).click();
-  await dialogFits(page.getByRole("dialog", { name: `Record payment for ${fresh.po}` }), "Record payment", "payment dialog");
+  await page.getByRole("button", { name: `+ Record payment for ${fresh.supplier}` }).click();
+  await dialogFits(page.getByRole("dialog", { name: "Record payment" }), "Record payment", "payment dialog");
   await page.keyboard.press("Escape");
   await page.goto(`/containers/${f.id}`);
   for (const [open, title, primary] of [["Change ETA", "Change ETA", "Save ETA"], ["Mark as sailed", "Mark as sailed", "Mark as sailed"]] as const) {
@@ -741,15 +749,14 @@ test("new order: 500, aborted and 403 requests show a message, keep the values a
 test("payment, receipt and container forms: 500, aborted and 401 keep the values and create nothing", async ({ page, api, browser }) => {
   test.setTimeout(180_000);
   const order = await makeOrder(api);
-  const paymentCount = async () => (await api.order(order.po)).payments!.length;
+  const paymentCount = async () => (await api.get<PaymentsResponse>("/payments")).payments.filter((p) => p.supplierId === order.supplierId).length;
 
   // Payment.
   await page.goto("/payments");
   await poSearch(page).fill(order.po);
   await rowOf(page, order.po).getByRole("button", { name: order.po, exact: true }).click();
-  await page.getByRole("button", { name: `+ Record payment for ${order.po}` }).click();
-  const form = page.getByRole("dialog", { name: `Record payment for ${order.po}` });
-  await form.getByRole("combobox", { name: "Kind" }).selectOption("Balance");
+  await page.getByRole("button", { name: `+ Record payment for ${order.supplier}` }).click();
+  const form = page.getByRole("dialog", { name: "Record payment" });
   await form.getByRole("textbox", { name: "Amount (¥)" }).fill("250");
   await form.getByRole("textbox", { name: "Rate (₹ per ¥)" }).fill("12");
   await form.getByRole("textbox", { name: "Mode" }).fill("Cheque");

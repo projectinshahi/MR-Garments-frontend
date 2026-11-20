@@ -6,8 +6,9 @@ import { PROCUREMENT_STATE } from "./sessions";
 
 // RPT-5D: Reports › Payments per supplier › one supplier (docs/supplier-payment-detail-contract.md), against the live
 // API. Each test makes its own supplier through the API (a new name, so the shared test database's other orders never
-// show up here), with a CNY and a USD order, twelve supplier payments (two pages), an agent payment and another
-// supplier's order that must stay out. Role/label locators: visited routes stay in the DOM hidden by <Activity>.
+// show up here), with a CNY and a USD order, twelve payments to the supplier's account (two pages; the unified ledger
+// settles the orders from them, oldest first, per currency), an agent payment and another supplier's order that must
+// stay out. Role/label locators: visited routes stay in the DOM hidden by <Activity>.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -33,7 +34,6 @@ async function newSupplier(api: Api, body: Record<string, string>) {
 }
 
 type Line = { item: string; quantity: number; rateCny: number };
-type Deposit = { amountCny: number; paidOn: string; rateInr: number };
 
 /** The supplier's currency (docs/supplier-currency.md): an order is in it, so a supplier paid in two currencies over time is switched between orders. */
 async function setCurrency(api: Api, supplierId: string, currency: Currency) {
@@ -41,8 +41,8 @@ async function setCurrency(api: Api, supplierId: string, currency: Currency) {
   expect(response.status(), await response.text()).toBe(200);
 }
 
-/** ORD-3 in `currency` (the supplier is switched to it first), ordered today, with supplier deposits. */
-async function placeOrder(api: Api, supplier: { id: string; name: string }, currency: Currency, lines: Line[], deposits: Deposit[]) {
+/** ORD-3 in `currency` (the supplier is switched to it first), ordered today. */
+async function placeOrder(api: Api, supplier: { id: string; name: string }, currency: Currency, lines: Line[]) {
   await setCurrency(api, supplier.id, currency);
   const { items } = await api.options();
   const body = {
@@ -51,7 +51,6 @@ async function placeOrder(api: Api, supplier: { id: string; name: string }, curr
     orderDate: today(),
     deliveryDate: addDays(today(), 30),
     lines: lines.map(({ item, ...line }) => ({ itemId: items.find((i) => i.name === item)!.id, ...line })),
-    deposits: deposits.map((deposit) => ({ payee: supplier.name, payeeRole: "supplier", mode: "Bank transfer", ...deposit })),
   };
   const response = await api.post("/orders", body);
   expect(response.status(), await response.text()).toBe(201);
@@ -68,25 +67,20 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     city: "Wenzhou",
     address: "8 Harbour Road, Wenzhou",
   });
-  // CNY: ¥1,200 (¥1,000 + ¥200), ten ¥50 deposits on the last ten days at 12 and a ¥100 balance today at 12.
-  const cny = await placeOrder(
-    api,
-    supplier,
-    "CNY",
-    [
-      { item: "Denim jeans", quantity: 100, rateCny: 10 },
-      { item: "Cotton fabric", quantity: 50, rateCny: 4 },
-    ],
-    Array.from({ length: 10 }, (_, index) => ({ amountCny: 50, paidOn: today(-(index + 1)), rateInr: 12 })),
-  );
-  // USD: $200, a $80 deposit today at 88 (₹7,040).
-  const usd = await placeOrder(api, supplier, "USD", [{ item: "Polo shirts", quantity: 40, rateCny: 5 }], [{ amountCny: 80, paidOn: today(), rateInr: 88 }]);
+  // CNY: ¥1,200 (¥1,000 + ¥200); ten ¥50 payments to the CNY account on the last ten days at 12, and ¥100 today at 12.
+  const cny = await placeOrder(api, supplier, "CNY", [
+    { item: "Denim jeans", quantity: 100, rateCny: 10 },
+    { item: "Cotton fabric", quantity: 50, rateCny: 4 },
+  ]);
+  for (let day = 1; day <= 10; day++) await api.paySupplier(supplier.id, { amount: 50, rateInr: 12, paidOn: today(-day) });
+  // USD: $200, $80 to the USD account today at 88 (₹7,040).
+  const usd = await placeOrder(api, supplier, "USD", [{ item: "Polo shirts", quantity: 40, rateCny: 5 }]);
+  await api.paySupplier(supplier.id, { amount: 80, currency: "USD", rateInr: 88 });
   // Back to yuan: the USD order keeps its currency (and the rate it was placed at), the supplier's page shows yuan.
   await setCurrency(api, supplier.id, "CNY");
-  await api.pay(cny.id, { amountCny: 100, rateInr: 12 });
+  await api.paySupplier(supplier.id, { amount: 100, currency: "CNY", rateInr: 12 });
   // Sea freight to a shipping agent on the same order, and another supplier's order: neither belongs on this page.
-  const sino = (await api.options()).agents.find((agent) => agent.name === "Sino Freight")!;
-  await api.pay(cny.id, { payeeRole: "agent", agentId: sino.id, amountCny: 999, rateInr: 12 });
+  await api.payAgent(cny.id, { amountCny: 999, rateInr: 12 });
   const other = await api.createOrder({ deposits: [{ amountCny: 77, rateInr: 12 }] });
 
   const detail = `${REPORT}/${supplier.id}`;
@@ -134,10 +128,14 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(kpiTexts(page, "Line items")).toHaveText(["Line items", "3", "3 products"]);
     // Yuan and dollars side by side, never one summed number; INR (payment-day rates) adds up; the agent's ¥999 is out.
     await expect(kpiTexts(page, "Order value")).toHaveText(["Order value", "¥1,200 · $200", "all stages"]);
-    await expect(kpiTexts(page, "Paid so far").nth(1)).toHaveText("¥600 · $80");
-    await expect(kpiTexts(page, "Paid so far").nth(2)).toContainText("of which deposits ¥500 · $80");
-    await expect(kpiTexts(page, "Paid so far").nth(2)).toContainText("₹14,240 at payment-day rates");
-    await expect(kpiTexts(page, "Balance to pay")).toHaveText(["Balance to pay", "¥600 · $120", "order value less paid and advance"]);
+    await expect(kpiTexts(page, "Settled").nth(1)).toHaveText("¥600 · $80");
+    await expect(kpiTexts(page, "Settled").nth(2)).toContainText("₹14,240 paid at payment-day rates");
+    await expect(kpiTexts(page, "Outstanding").nth(1)).toHaveText("¥600 · $120");
+    // The ledger accounts, one per currency, signed: both payable.
+    await expect(kpi(page, "CNY account")).toContainText("¥600.00");
+    await expect(kpi(page, "CNY account")).toContainText("Payable to supplier");
+    await expect(kpi(page, "USD account")).toContainText("$120.00");
+    await expect(kpi(page, "USD account")).toContainText("Payable to supplier");
   });
 
   const payments = card(page, "Payments");
@@ -150,10 +148,17 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
   await test.step("payments: this supplier's only, newest first, ten to a page", async () => {
     await expect(payments.getByText("Showing 1 to 10 of 12 payments")).toBeVisible();
     await expect(paymentRows).toHaveCount(11);
-    await expect(paymentRows.filter({ hasText: new RegExp(`${cny.po}|${usd.po}`) })).toHaveCount(10);
-    await expect(paymentRows.nth(1).getByRole("cell")).toHaveText([id, longDate(today()), cny.po, "Balance", "Bank transfer", "CNY", "¥100", "₹1,200", "Paid"]);
-    await expect(paymentRows.nth(2).getByRole("cell")).toHaveText([id, longDate(today()), usd.po, "Deposit", "Bank transfer", "USD", "$80", "₹7,040", "Paid"]);
-    await expect(paymentRows.nth(3).getByRole("cell")).toHaveText([id, longDate(today(-1)), cny.po, "Deposit", "Bank transfer", "CNY", "¥50", "₹600", "Paid"]);
+    // Payments to the account carry no PO; the agent's sea freight is not here.
+    await expect(paymentRows.filter({ hasText: "Supplier payment" })).toHaveCount(10);
+    await expect(payments.getByText("¥999")).toHaveCount(0);
+    const todays = [
+      [id, longDate(today()), "–", "Supplier payment", "Bank transfer", "CNY", "¥100", "₹1,200", "Paid"],
+      [id, longDate(today()), "–", "Supplier payment", "Bank transfer", "USD", "$80", "₹7,040", "Paid"],
+    ];
+    const first = (await paymentRows.nth(1).getByRole("cell").nth(5).textContent()) === "USD" ? todays.toReversed() : todays;
+    await expect(paymentRows.nth(1).getByRole("cell")).toHaveText(first[0]!);
+    await expect(paymentRows.nth(2).getByRole("cell")).toHaveText(first[1]!);
+    await expect(paymentRows.nth(3).getByRole("cell")).toHaveText([id, longDate(today(-1)), "–", "Supplier payment", "Bank transfer", "CNY", "¥50", "₹600", "Paid"]);
 
     await payments.getByRole("button", { name: "Page 2" }).click();
     await expect(page).toHaveURL(new RegExp(`\\?period=${month}&supplier=${supplier.id}&paymentsPage=2$`));
@@ -184,8 +189,8 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
   await test.step("orders: both, newest first, each in its own currency; the stage filter writes the URL", async () => {
     await expect(orderRows).toHaveCount(3);
     const dates = [longDate(today()), longDate(addDays(today(), 30))];
-    await expect(orderRows.nth(1).getByRole("cell")).toHaveText([usd.po, ...dates, "40 pcs", "$200", "$80", "$0", "$120", /\S/]);
-    await expect(orderRows.nth(2).getByRole("cell")).toHaveText([cny.po, ...dates, "100 pcs · 50 m", "¥1,200", "¥600", "¥0", "¥600", /\S/]);
+    await expect(orderRows.nth(1).getByRole("cell")).toHaveText([usd.po, ...dates, "40 pcs", "$200", "$80", "$120", "Partly paid", /\S/]);
+    await expect(orderRows.nth(2).getByRole("cell")).toHaveText([cny.po, ...dates, "100 pcs · 50 m", "¥1,200", "¥600", "¥600", "Partly paid", /\S/]);
 
     await orders.getByRole("button", { name: "Stage: All stages" }).click();
     await page.getByRole("menuitemradio", { name: "2. Receiving in China" }).click();
@@ -204,6 +209,13 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(products.getByRole("row").nth(2).getByRole("cell")).toHaveText(["Denim jeans", cny.po, "100 pcs", "¥10.00", "¥1,000", "CNY"]);
     await expect(products.getByRole("row").nth(3).getByRole("cell")).toHaveText(["Cotton fabric", cny.po, "50 m", "¥4.00", "¥200", "CNY"]);
     for (const list of [payments, orders, products]) await expect(list.getByText(other.po)).toHaveCount(0);
+  });
+
+  await test.step("the supplier ledger: the whole statement with the order debits and payments, newest first", async () => {
+    const ledger = card(page, "Supplier ledger");
+    await expect(ledger.getByRole("row").filter({ hasText: "Order debit" })).toHaveCount(2);
+    await expect(ledger.getByRole("row").filter({ hasText: cny.po })).toContainText("−¥1,200.00");
+    await expect(ledger.getByRole("row").filter({ hasText: usd.po })).toContainText("−$200.00");
   });
 
   await test.step("Back keeps the report's period and supplier, not the detail's own filters", async () => {
@@ -230,9 +242,10 @@ test("a supplier with no orders shows zeros and an empty state in each list", as
   await expect(kv(page, "Preferred currency")).toHaveText("$ US dollar");
   await expect(kpiTexts(page, "Orders")).toHaveText(["Orders", "0", "0 open"]);
   await expect(kpiTexts(page, "Order value").nth(1)).toHaveText("$0");
-  await expect(kpiTexts(page, "Balance to pay").nth(1)).toHaveText("$0");
+  await expect(kpiTexts(page, "Outstanding").nth(1)).toHaveText("$0");
   for (const text of ["No payments yet.", "No orders yet.", "No order lines yet."]) await expect(page.getByText(text, { exact: true })).toBeVisible();
-  await expect(page.getByRole("table")).toHaveCount(0);
+  // The ledger card's statement is empty too.
+  await expect(card(page, "Supplier ledger")).toContainText("No entries yet.");
 
   const month = today().slice(0, 7);
   await page.goto(`${REPORT}/${supplier.id}?period=${month}&stage=2&paymentFrom=${today(-5)}`);

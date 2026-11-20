@@ -29,7 +29,7 @@ const options: ReceiptOptions = {
       supplier: "Shenzhen Apparel",
       currency: "CNY",
       orderValueCny: 72000,
-      depositsPaidCny: 40000,
+      outstandingCny: 32000,
       lines: [
         { orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 },
         { orderLineId: "l2", item: "Care labels", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 0 },
@@ -41,7 +41,7 @@ const options: ReceiptOptions = {
       supplier: "Foshan Fabrics",
       currency: "CNY",
       orderValueCny: 5000,
-      depositsPaidCny: 1000,
+      outstandingCny: 4000,
       lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 1000, receivedEarlier: 0, unitPriceCny: 5 }],
     },
   ],
@@ -78,7 +78,7 @@ describe("RecordReceiptScreen", () => {
       orders: options.orders.map((o) => ({
         ...o,
         orderValueCny: null,
-        depositsPaidCny: null,
+        outstandingCny: null,
         lines: o.lines.map((line) => ({ ...line, unitPriceCny: null })),
       })),
     };
@@ -92,6 +92,16 @@ describe("RecordReceiptScreen", () => {
     render(<RecordReceiptScreen data={data} />);
     expect(screen.getByRole("heading", { name: "Effect on payment" })).toBeInTheDocument();
     expect(screen.getByText("¥ 72,000")).toBeInTheDocument();
+  });
+
+  it("reads the outstanding from the ledger and hides the card while the supplier account is held", () => {
+    const { unmount } = render(<RecordReceiptScreen data={data} />);
+    expect(screen.getByText("¥ 40,000")).toBeInTheDocument(); // settled = 72,000 − 32,000 outstanding
+    expect(screen.getByText("¥ 32,000")).toBeInTheDocument();
+    unmount();
+    const held: ReceiptOptions = { ...options, orders: options.orders.map((o) => ({ ...o, outstandingCny: null })) };
+    render(<RecordReceiptScreen data={{ ...data, options: held }} />);
+    expect(screen.queryByRole("heading", { name: "Effect on payment" })).not.toBeInTheDocument();
   });
 
   it("takes more than was ordered: Short shows 0, no remark is needed, and the quantity is sent as typed", async () => {

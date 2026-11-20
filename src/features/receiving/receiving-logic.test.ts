@@ -45,10 +45,10 @@ const options: ReceiptOptions = {
       supplier: "Shenzhen Apparel",
       currency: "CNY",
       orderValueCny: 72000,
-      depositsPaidCny: 40000,
+      outstandingCny: 32000,
       lines: [{ orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 }],
     },
-    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", currency: "CNY", orderValueCny: 1, depositsPaidCny: 0, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
+    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", currency: "CNY", orderValueCny: 1, outstandingCny: 1, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
   ],
 };
 
@@ -95,7 +95,7 @@ describe("short and balance", () => {
 
   it("reproduces the reference: 40 pcs short, balance ¥29,600", () => {
     expect(lineShort(jackets)).toBe(40);
-    expect(paymentEffect({ orderValue: 72000, depositsPaid: 40000 }, [jackets])).toEqual({
+    expect(paymentEffect({ outstanding: 32000 }, [jackets])).toEqual({
       balanceBefore: 32000,
       deductions: [{ unit: "pcs", short: 40, unitPrice: 60, amount: 2400 }],
       balanceNow: 29600,
@@ -107,7 +107,7 @@ describe("short and balance", () => {
     const fabric: ReceiptLine = { item: "Cotton fabric", unit: "m", ordered: 360, receivedEarlier: 0, receivedNow: 0, unitPrice: 3 };
     expect([360, 300, 400, 949].map((receivedNow) => lineShort({ ...fabric, receivedNow }))).toEqual([0, 60, 0, 0]);
     expect(lineShort({ ...fabric, receivedEarlier: 300, receivedNow: 100 })).toBe(0);
-    expect(paymentEffect({ orderValue: 1080, depositsPaid: 0 }, [{ ...fabric, receivedNow: 949 }])).toEqual({
+    expect(paymentEffect({ outstanding: 1080 }, [{ ...fabric, receivedNow: 949 }])).toEqual({
       balanceBefore: 1080,
       deductions: [{ unit: "m", short: 0, unitPrice: 3, amount: 0 }],
       balanceNow: 1080,

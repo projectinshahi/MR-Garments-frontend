@@ -82,7 +82,8 @@ test("the list's Edit opens the edit dialog on the order page; Cancel leaves the
 });
 
 test("an order with a deposit can't be deleted: the confirmation gives the API's reason with Close only", async ({ page, api }) => {
-  const { po } = await api.createOrder({ deposits: [{ amountCny: 500, rateInr: 12 }] });
+  // A sea freight deposit to the shipping agent (ORD-3 deposits are agent payments only since the unified ledger).
+  const { po } = await api.createOrder({ deposits: [{ amountCny: 500, rateInr: 12, payee: "Sino Freight" }] });
   await listOnly(page, po);
   await page.getByRole("button", { name: `Delete ${po}` }).click();
   await page.getByRole("alertdialog", { name: "Delete order?" }).getByRole("button", { name: "Delete order" }).click();

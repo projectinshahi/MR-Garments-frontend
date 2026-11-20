@@ -1,28 +1,20 @@
 import { z } from "zod";
 
-import { toAdvanceBody } from "@/features/deposits/advance-form";
-import type { CreatePaymentBody } from "@/lib/api/types";
+import type { AdvanceSupplierOption } from "@/lib/api/deposits-types";
+import type { CreateAgentPaymentBody, CreateSupplierPaymentBody } from "@/lib/api/types";
 import type { Currency } from "@/types/domain";
 
-// Record payment (PAY-2): what the inputs hold (strings, as typed), the client-side checks mirroring the API, and the
-// PAY-2 body. Messages are the API's own (backend payments.routes.ts MESSAGES), so both sides say the same thing.
-// The amount is in the order's currency; an INR order takes no rate (the server stores 1). On Deposits & Payments the
-// user first chooses the payment type: an order payment (PAY-2, as above) or a supplier advance with no order, recorded
-// as the chosen supplier's advance (ADV-2, backend docs/supplier-advance.md) in the supplier's currency: one advance
-// receipt, never a payment record as well.
-
-/** The "Paid to" value for the order's supplier; any other value is a shipping agent's id. */
-export const SUPPLIER_PAYEE = "supplier";
-
-/** What the money is for: an order payment, or the supplier's advance (no order). Chosen first on Deposits & Payments. */
-export type PaymentTarget = "order" | "advance";
+// Record payment (PAY-2) after the unified supplier ledger (backend docs/unified-ledger.md). A supplier payment is
+// recorded against the supplier, never an order: supplier, currency (one of its `currencyOptions`), amount, rate
+// (required for non-INR, none for INR), date, mode, reference, notes. It credits the supplier's account in that
+// currency; the orders settle from the account oldest first. A shipping-agent payment (sea freight) stays on its order
+// and is never posted. What the inputs hold is text, as typed; the checks mirror the API's.
 
 export const MESSAGES = {
-  target: "Choose Order payment or Supplier advance.",
-  order: "Choose an order from the list.",
   supplier: "Choose a supplier from the list.",
+  currency: "Choose one of this supplier's currencies.",
+  agent: "Choose the shipping agent.",
   kind: "Choose Deposit or Balance.",
-  payee: "Choose who the payment was paid to.",
   amount: "Enter an amount above 0.",
   paidOn: "Enter the date the payment was made.",
   paidOnFuture: "The payment date can't be in the future.",
@@ -38,84 +30,113 @@ const M = MESSAGES;
 export const toNumber = (text: string) => Number(text.replace(/,/g, "").trim());
 
 /** The INR equivalent shown as you type: amount × rate to the paisa, 0 until both are numbers. */
-export const paymentINR = (amountCny: string, rateInr: string) => {
-  const inr = Math.round(toNumber(amountCny) * toNumber(rateInr) * 100) / 100;
+export const paymentINR = (amount: string, rateInr: string) => {
+  const inr = Math.round(toNumber(amount) * toNumber(rateInr) * 100) / 100;
   return Number.isFinite(inr) ? inr : 0;
 };
 
 const decimal = (message: string, min: number, max: number) =>
   z.string().transform(toNumber).pipe(z.number({ error: message }).min(min, message).max(max, message));
 
-/**
- * `today` is the date in India (YYYY-MM-DD): a payment can't be dated after it. `currency` is the chosen order's (for
- * a supplier advance, the chosen supplier's): an INR one's rate is not asked, and not sent. `target` "advance": no order,
- * so the supplier is needed and the kind is Deposit (the money goes to the supplier's advance). The caller asks for the
- * payment type first; the schema is built for the one chosen, which is its output.
- */
-export const recordPaymentSchema = (today: string, currency: Currency = "CNY", target: PaymentTarget = "order") => {
-  const withOrder = target === "order";
-  return z.object({
-    target: z.string().optional().transform(() => target),
-    orderId: withOrder ? z.string().min(1, M.order) : z.string(),
-    supplierId: withOrder ? z.string().optional() : z.string().min(1, M.supplier),
-    kind: withOrder ? z.string().pipe(z.enum(["Deposit", "Balance"], { error: M.kind })) : z.string().transform(() => "Deposit" as const),
-    payee: z.string().min(1, M.payee),
-    amountCny: decimal(M.amount, 0.01, 999_999_999_999),
-    paidOn: z.iso.date({ error: M.paidOn }).refine((day) => day <= today, M.paidOnFuture),
-    rateInr: currency === "INR" ? z.string().transform(() => undefined) : decimal(M.rateInr, 0.0001, 99_999_999),
-    mode: z.string().trim().min(1, M.mode).max(100, M.modeTooLong),
-    // Transaction or receipt number and notes (migration 0008), optional: left out of the body when empty.
-    reference: z.string().trim().max(100, M.referenceTooLong).optional(),
-    notes: z.string().trim().max(1000, M.notesTooLong).optional(),
-  });
-};
-export type RecordPaymentInput = z.input<ReturnType<typeof recordPaymentSchema>>;
-export type RecordPaymentValues = z.output<ReturnType<typeof recordPaymentSchema>>;
-
-export const emptyPayment = (orderId: string, today: string): RecordPaymentInput => ({
-  // No payment type chosen: the dialog asks for it before anything else.
-  target: "",
-  orderId,
-  supplierId: "",
-  kind: "",
-  payee: SUPPLIER_PAYEE,
-  amountCny: "",
-  paidOn: today,
-  rateInr: "",
-  mode: "",
-  reference: "",
-  notes: "",
+/** The fields both payment forms share. `currency` decides the rate: INR takes none (the server stores 1). */
+const common = (today: string, currency: Currency | undefined) => ({
+  amount: decimal(M.amount, 0.01, 999_999_999_999),
+  paidOn: z.iso.date({ error: M.paidOn }).refine((day) => day <= today, M.paidOnFuture),
+  rateInr: currency === "INR" ? z.string().transform(() => undefined) : decimal(M.rateInr, 0.0001, 99_999_999),
+  mode: z.string().trim().min(1, M.mode).max(100, M.modeTooLong),
+  reference: z.string().trim().max(100, M.referenceTooLong),
+  notes: z.string().trim().max(1000, M.notesTooLong),
 });
 
-/** Empty reference and notes are left out (the API stores ""), so an older API that doesn't know them is fine too. */
-export function toCreatePaymentBody({ orderId, kind, amountCny, paidOn, mode, payee, rateInr, reference, notes }: RecordPaymentValues): CreatePaymentBody {
-  const supplier = payee === SUPPLIER_PAYEE;
+/**
+ * The supplier payment. `options`: the chosen supplier's currencies (D10), which the currency must be one of; built per
+ * chosen `currency`, so an INR payment's rate is neither asked nor sent.
+ */
+export const supplierSchemaFor = (today: string, options: Currency[], currency: Currency | undefined) =>
+  z.object({
+    supplierId: z.string().min(1, M.supplier),
+    currency: z.string().refine((code) => options.includes(code), M.currency),
+    ...common(today, currency),
+  });
+export type SupplierPaymentInput = z.input<ReturnType<typeof supplierSchemaFor>>;
+export type SupplierPaymentValues = z.output<ReturnType<typeof supplierSchemaFor>>;
+
+/** The currency a new payment starts in: the supplier's own when it may be used, else its first option. */
+export const defaultCurrency = (supplier: AdvanceSupplierOption | undefined): Currency =>
+  !supplier ? "" : supplier.currencyOptions.includes(supplier.currency) ? supplier.currency : (supplier.currencyOptions[0] ?? "");
+
+/**
+ * The rate a payment starts with: the supplier's saved rate, which is for its current currency only; "" for INR, for
+ * another currency, or while the supplier has none ("no saved rate").
+ */
+export const defaultRate = (supplier: Pick<AdvanceSupplierOption, "currency" | "exchangeRate"> | undefined, currency: Currency) =>
+  !supplier || currency === "INR" || currency !== supplier.currency || supplier.exchangeRate === null ? "" : String(supplier.exchangeRate);
+
+/** The supplier's signed balance in the currency now (ADV-5 `balances`; no account yet is 0). */
+export const balanceNow = (supplier: Pick<AdvanceSupplierOption, "balances"> | undefined, currency: Currency) =>
+  supplier?.balances.find((b) => b.currency === currency)?.balanceCny ?? 0;
+
+/** Every free account is a choice; held: the current-currency account is pending review and no option is left. */
+export const isBlocked = (supplier: Pick<AdvanceSupplierOption, "held" | "currencyOptions"> | undefined) => !!supplier && supplier.held && supplier.currencyOptions.length === 0;
+
+export const emptySupplierPayment = (supplier: AdvanceSupplierOption | undefined, today: string): SupplierPaymentInput => {
+  const currency = defaultCurrency(supplier);
+  return { supplierId: supplier?.id ?? "", currency, amount: "", paidOn: today, rateInr: defaultRate(supplier, currency), mode: "", reference: "", notes: "" };
+};
+
+/** The PAY-2 supplier body. Empty reference and notes are left out (the API stores ""); the id is the dialog's, reused on retry. */
+export function toSupplierPaymentBody(values: SupplierPaymentValues, clientRequestId: string): CreateSupplierPaymentBody {
+  const { supplierId, currency, amount, paidOn, rateInr, mode, reference, notes } = values;
   return {
-    orderId,
-    kind,
-    amountCny,
+    supplierId,
+    currency,
+    amount,
     paidOn,
-    mode,
     ...(rateInr === undefined ? {} : { rateInr }),
-    payeeRole: supplier ? "supplier" : "agent",
-    agentId: supplier ? null : payee,
+    mode,
     ...(reference ? { reference } : {}),
     ...(notes ? { notes } : {}),
+    clientRequestId,
   };
 }
 
-/** Without an order: the ADV-2 body for the chosen supplier's advance. Kind and payee don't apply (a deposit to the supplier). */
-export const toSupplierAdvanceBody = ({ amountCny, paidOn, rateInr, mode, reference = "", notes = "" }: RecordPaymentValues) =>
-  toAdvanceBody({ amount: amountCny, paidOn, rateInr, mode, reference, notes });
+/** The shipping-agent payment (sea freight) of one order, in the order's currency. */
+export const agentSchemaFor = (today: string, currency: Currency) =>
+  z.object({
+    agentId: z.string().min(1, M.agent),
+    kind: z.string().pipe(z.enum(["Deposit", "Balance"], { error: M.kind })),
+    ...common(today, currency),
+  });
+export type AgentPaymentInput = z.input<ReturnType<typeof agentSchemaFor>>;
+export type AgentPaymentValues = z.output<ReturnType<typeof agentSchemaFor>>;
 
-/** PAY-2 (or, without an order, ADV-2) 422 field → the form field it belongs under. Fields the form doesn't have are shown as a toast instead. */
-export const FORM_FIELD: Record<string, keyof RecordPaymentInput> = {
-  orderId: "orderId",
+export const emptyAgentPayment = (today: string, rateInr: string): AgentPaymentInput => ({ agentId: "", kind: "", amount: "", paidOn: today, rateInr, mode: "", reference: "", notes: "" });
+
+export function toAgentPaymentBody(values: AgentPaymentValues, orderId: string, clientRequestId: string): CreateAgentPaymentBody {
+  const { agentId, kind, amount, paidOn, rateInr, mode, reference, notes } = values;
+  return {
+    orderId,
+    payeeRole: "agent",
+    agentId,
+    kind,
+    amountCny: amount,
+    paidOn,
+    ...(rateInr === undefined ? {} : { rateInr }),
+    mode,
+    ...(reference ? { reference } : {}),
+    ...(notes ? { notes } : {}),
+    clientRequestId,
+  };
+}
+
+/** PAY-2 422 field → the form field it belongs under; fields a form doesn't have are toasted instead. */
+export const FORM_FIELD: Record<string, "supplierId" | "currency" | "agentId" | "kind" | "amount" | "paidOn" | "rateInr" | "mode" | "reference" | "notes"> = {
+  supplierId: "supplierId",
+  currency: "currency",
+  agentId: "agentId",
   kind: "kind",
-  payeeRole: "payee",
-  agentId: "payee",
-  amountCny: "amountCny",
-  amount: "amountCny",
+  amount: "amount",
+  amountCny: "amount",
   paidOn: "paidOn",
   rateInr: "rateInr",
   mode: "mode",

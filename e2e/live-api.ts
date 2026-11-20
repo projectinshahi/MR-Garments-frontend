@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
+
 import { type APIRequestContext, type APIResponse, test as base, expect, type Locator, type Page, type PlaywrightWorkerArgs } from "@playwright/test";
 
-import type { ContainerState, CreatePaymentBody, OrderDetail, OrderOptions, ReceiptOptions } from "../src/lib/api/types";
+import type { ContainerState, CreateAgentPaymentBody, CreateSupplierPaymentBody, OrderDetail, OrderOptions, ReceiptOptions, SupplierRow } from "../src/lib/api/types";
 import { MANAGEMENT_STATE } from "./sessions";
 
 // Live five-tab specs (Orders, Payments, Calendar, Receiving, Containers): the records a test needs are created inside
@@ -47,10 +49,15 @@ export const kpi = (page: Page, label: string) => page.locator("p").filter({ has
 export const toast = (page: Page, text: string | RegExp) => page.locator("[data-sonner-toast]").filter({ hasText: text });
 
 type LineInput = { item: string; quantity: number; rateCny: number };
-type DepositInput = { payee?: string; payeeRole?: "supplier" | "agent"; amountCny: number; paidOn?: string; rateInr: number; mode?: string };
+/** ORD-3 deposits are shipping-agent payments only (unified ledger); supplier money goes through `paySupplier`. */
+type DepositInput = { payee?: string; amountCny: number; paidOn?: string; rateInr: number; mode?: string };
 /** `terms`: the order's container terms (0015); left out, none (an API container load then gives it the container's). */
 export type OrderInput = { supplier?: string; orderDate?: string; deliveryDate?: string; lines?: LineInput[]; deposits?: DepositInput[]; depositRequiredCny?: number; terms?: "FOB" | "CNF" };
-export type CreatedOrder = { id: string; po: string };
+export type CreatedOrder = { id: string; po: string; supplierId: string };
+type SupplierPayment = Partial<Omit<CreateSupplierPaymentBody, "supplierId" | "amount">> & { amount: number };
+type AgentPayment = Partial<Omit<CreateAgentPaymentBody, "orderId" | "payeeRole" | "agentId" | "amountCny">> & { amountCny: number; agent?: string };
+/** Balances before and after a ledger write (PAY-2, PAY-3, LED-3). */
+export type LedgerChange = { supplierId: string; currency: string; balanceBefore: number; balanceAfter: number };
 
 async function json<T>(response: APIResponse, status: number): Promise<T> {
   expect(response.status(), `${response.url()}: ${await response.text()}`).toBe(status);
@@ -81,22 +88,41 @@ export class Api {
       return { itemId: item!.id, quantity: line.quantity, rateCny: line.rateCny };
     });
     const deposits = (input.deposits ?? []).map((d) => ({
-      payee: d.payee ?? supplierName,
-      payeeRole: d.payeeRole ?? "supplier",
+      payee: d.payee ?? "Sino Freight",
+      payeeRole: "agent",
       amountCny: d.amountCny,
       paidOn: d.paidOn ?? orderDate,
       rateInr: d.rateInr,
       mode: d.mode ?? "Bank transfer",
     }));
     const body = { supplierId: supplier!.id, orderDate, deliveryDate: input.deliveryDate ?? addDays(orderDate, 30), lines, deposits, depositRequiredCny: input.depositRequiredCny, terms: input.terms };
-    const { order } = await json<{ order: CreatedOrder }>(await this.post("/orders", body), 201);
-    return order;
+    const { order } = await json<{ order: { id: string; po: string } }>(await this.post("/orders", body), 201);
+    return { ...order, supplierId: supplier!.id };
   }
 
-  /** PAY-2 for an order, paid to its supplier today unless told otherwise. */
-  async pay(orderId: string, payment: Partial<CreatePaymentBody> & { amountCny: number; rateInr: number }) {
-    const body: CreatePaymentBody = { orderId, kind: "Balance", payeeRole: "supplier", agentId: null, paidOn: today(), mode: "Bank transfer", ...payment };
+  /** MD-2: a new active supplier (its own ledger accounts, so FIFO figures do not depend on other specs' orders). */
+  async newSupplier(prefix: string, extra: { currency?: string; exchangeRate?: number | null } = {}) {
+    const name = `${prefix} ${randomUUID().slice(0, 6)}`; // short: long names widen the 1440 px tables (order-container-terms measures one)
+    const { supplier } = await json<{ supplier: SupplierRow }>(await this.post("/suppliers", { name, currency: extra.currency ?? "CNY", exchangeRate: extra.exchangeRate === undefined ? 12.5 : extra.exchangeRate }), 201);
+    return supplier;
+  }
+
+  /** PAY-2, the supplier body: a payment into the supplier's account (no order), today by bank transfer unless told otherwise. */
+  async paySupplier(supplierId: string, payment: SupplierPayment) {
+    const body: CreateSupplierPaymentBody = { supplierId, paidOn: today(), mode: "Bank transfer", clientRequestId: randomUUID(), ...payment };
+    return json<{ payment: { id: string }; ledger: LedgerChange }>(await this.post("/payments", body), 201);
+  }
+
+  /** PAY-2, the shipping-agent body (sea freight on an order, never posted): Sino Freight unless `agent` names another. */
+  async payAgent(orderId: string, { agent = "Sino Freight", ...payment }: AgentPayment) {
+    const agentId = (await this.options()).agents.find((a) => a.name === agent)!.id;
+    const body: CreateAgentPaymentBody = { orderId, payeeRole: "agent", agentId, kind: "Balance", paidOn: today(), mode: "Bank transfer", clientRequestId: randomUUID(), ...payment };
     return json<{ payment: { id: string } }>(await this.post("/payments", body), 201);
+  }
+
+  /** PAY-3: voids a payment with a reason (Management). */
+  async voidPayment(id: string, reason = "Entered twice") {
+    return json<{ payment: { id: string; voided: boolean }; ledger: LedgerChange | null }>(await this.request.delete(`/api/v1/payments/${id}`, { data: { reason } }), 200);
   }
 
   /** The REC-3 body for `quantities` per item name (missing items: 0). */
@@ -216,10 +242,28 @@ export const test = base.extend<{ api: Api }>({
 
 /**
  * One order (100 Denim jeans) taken through China receiving, a container, clearing, an unloaded trip and a stocked
- * warehouse receipt, so it is closed (phase 2 §5). Returns its PO and container number.
+ * warehouse receipt, so it is closed (phase 2 §5). `input`: ORD-3 options (a supplier of the test's own). Returns its PO and container number.
  */
-export async function closedOrder(api: Api) {
-  const { po } = await api.createOrder();
+export async function closedOrder(api: Api, input: OrderInput = {}) {
+  const { po, number, tripId } = await unloadedTrip(api, input);
+  const receiving = await api.get<{ lines: { orderLineId: string }[]; teams: { id: string; name: string }[]; warehouses: { id: string }[] }>(`/warehouse-receipts/${tripId}`);
+  const stocked = await api.request.put(`/api/v1/warehouse-receipts/${tripId}`, {
+    data: {
+      locationId: receiving.warehouses[0]!.id,
+      receivedOn: today(),
+      receivedBy: "Joseph M",
+      bundlesReceived: 4,
+      lines: [{ orderLineId: receiving.lines[0]!.orderLineId, teamId: receiving.teams.find((t) => t.name === "Retail team")!.id, quantity: 100 }],
+      complete: true,
+    },
+  });
+  expect(stocked.status(), await stocked.text()).toBe(200);
+  return { po, number };
+}
+
+/** The same order up to an unloaded trip, its goods not yet received in the warehouse (WH-2 opens it). */
+export async function unloadedTrip(api: Api, input: OrderInput = {}) {
+  const { po } = await api.createOrder(input);
   await api.receive(po, { "Denim jeans": 100 });
   const container = await api.load([{ po, item: "Denim jeans", quantity: 100, bundles: 4 }], { loadedOn: today(-10), eta: today(-2) });
   await api.updateContainer(container.id, { status: "sea", sailedOn: today(-9) });
@@ -253,19 +297,7 @@ export async function closedOrder(api: Api) {
   });
   expect(trip.status(), await trip.text()).toBe(200);
   const tripId = ((await trip.json()) as { trip: { id: string } }).trip.id;
-  const receiving = await api.get<{ lines: { orderLineId: string }[]; teams: { id: string; name: string }[]; warehouses: { id: string }[] }>(`/warehouse-receipts/${tripId}`);
-  const stocked = await api.request.put(`/api/v1/warehouse-receipts/${tripId}`, {
-    data: {
-      locationId: receiving.warehouses[0]!.id,
-      receivedOn: today(),
-      receivedBy: "Joseph M",
-      bundlesReceived: 4,
-      lines: [{ orderLineId: receiving.lines[0]!.orderLineId, teamId: receiving.teams.find((t) => t.name === "Retail team")!.id, quantity: 100 }],
-      complete: true,
-    },
-  });
-  expect(stocked.status(), await stocked.text()).toBe(200);
-  return { po, number: container.number };
+  return { po, number: container.number, tripId };
 }
 
 export { expect };

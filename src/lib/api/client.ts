@@ -25,5 +25,6 @@ export const apiClient = {
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
-  delete: <T = void>(path: string) => request<T>("DELETE", path),
+  /** `body`: PAY-3 takes `{ reason }`; other deletes send none ({}). */
+  delete: <T = void>(path: string, body?: unknown) => request<T>("DELETE", path, body),
 };

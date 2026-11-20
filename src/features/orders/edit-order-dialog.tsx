@@ -7,6 +7,7 @@ import { useId } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { Callout } from "@/components/shared/cards";
 import { dialogFooterButtonClass } from "@/components/shared/confirm-dialog";
 import { NativeSelect, RequiredMark } from "@/components/shared/form";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,8 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONTAINER_TERMS, DEPOSIT_REQUIRED_MESSAGE, isDepositRequired, TERMS_HELP } from "@/features/order-form/new-order-form";
-import { lineAmount, orderTotals, parseNumber } from "@/features/order-form/order-totals";
-import { moneyOrDash } from "@/features/payments/money";
+import { lineAmount, orderTotal, parseNumber } from "@/features/order-form/order-totals";
+import { balanceText, HELD_MESSAGE } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
 import type { OrderDetail, OrderOptions, UpdateOrderBody, UpdateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
@@ -29,10 +30,8 @@ import { cn } from "@/lib/utils";
 // and the deposit required only.
 // Messages are proposed wording, the field checks the same as New order's.
 
-/** What the dialog needs from ORD-4. */
-/** What the dialog needs from ORD-4. `supplierPaidCny`: the ORD-5 guard counts supplier payments only (agent payments are sea freight). */
-export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "supplierPaidCny" | "depositRequiredCny" | "lines"> &
-  Partial<Pick<OrderDetail, "advanceCny" | "terms">>;
+/** What the dialog needs from ORD-4. `held`: the supplier's account is pending review, so ORD-5 refuses a line change (409). */
+export type EditableOrder = Pick<OrderDetail, "po" | "stage" | "orderDate" | "deliveryDate" | "currency" | "depositRequiredCny" | "lines"> & Partial<Pick<OrderDetail, "terms" | "held">>;
 /**
  * Container terms (backend docs/order-container-terms.md) change until a container holds the order: stages 1-2 (CON-3
  * moves it to 3). An older order without terms may set them once at any stage. The API checks the containers.
@@ -45,10 +44,9 @@ export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
   /** After a new PO number: the order is the same one, now under that number. */
   renumbered: (po: string) => `Order saved. Its PO number is now ${po}.`,
-  linesEditable:
-    "Change the PO number, the dates or the items. The supplier can't change, and the order total can't be less than what's already paid to the supplier.",
+  linesEditable: "Change the PO number, the dates or the items. The supplier can't change. A new order total changes the supplier's account by the difference.",
   receivedOnly: "Goods have been received for this order, so only the PO number, the delivery date and the deposit required can change.",
-  belowPaid: (paid: number, currency: Currency) => `The order total can't be less than the ${formatMoney(paid, currency, { decimals: 2 })} already paid to the supplier.`,
+  savedWithLedger: (before: number, after: number, currency: Currency) => `Order saved. Supplier balance: ${balanceText(before, currency)} → ${balanceText(after, currency)}`,
 };
 
 const MAX_LINES = 50;
@@ -70,10 +68,9 @@ const lineSchema = z.object({
 type LineValues = z.infer<typeof lineSchema>;
 
 const totalOf = (lines: Pick<LineValues, "rateCny" | "quantity">[]) =>
-  orderTotals(lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) })), []).orderTotal;
+  orderTotal(lines.map((line) => ({ rate: parseNumber(line.rateCny), quantity: parseNumber(line.quantity) })));
 
-const editSchema = (paid: number, linesEditable: boolean, currency: Currency) =>
-  z
+const editSchema = z
     .object({
       /** As New order's PO number (and ORD-3/ORD-5): any format, trimmed, 1-50 characters. */
       po: z.string().trim().min(1, "Enter the PO number.").max(50, "Use 50 characters or fewer."),
@@ -88,9 +85,8 @@ const editSchema = (paid: number, linesEditable: boolean, currency: Currency) =>
     .refine((order) => !order.orderDate || !order.deliveryDate || order.deliveryDate >= order.orderDate, {
       path: ["deliveryDate"],
       message: "The delivery date can't be before the order date.",
-    })
-    .refine((order) => !linesEditable || totalOf(order.lines) >= paid, { path: ["lines"], message: EDIT_ORDER_TEXT.belowPaid(paid, currency) });
-type EditValues = z.infer<ReturnType<typeof editSchema>>;
+    });
+type EditValues = z.infer<typeof editSchema>;
 
 /** The ORD-5 body: only the keys that changed; `lines` is the whole list (kept rows with their id) when any row changed. */
 function toUpdateOrderBody(values: EditValues, order: EditableOrder, linesEditable: boolean): UpdateOrderBody {
@@ -156,7 +152,7 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
   // would tie these labels to its copy of the form instead.
   const id = useId();
   const { register, control, handleSubmit, setError, formState } = useForm<EditValues>({
-    resolver: zodResolver(editSchema(order.supplierPaidCny ?? 0, linesEditable, order.currency)),
+    resolver: zodResolver(editSchema),
     defaultValues: {
       po: order.po,
       terms: order.terms ?? "",
@@ -173,7 +169,9 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
   const rows = useFieldArray({ control, name: "lines" });
   const lines = useWatch({ control, name: "lines" });
   const { errors, isSubmitting } = formState;
-  const total = linesEditable ? totalOf(lines) : orderTotals(order.lines.map((l) => ({ rate: l.rateCny, quantity: l.quantity })), []).orderTotal;
+  const saved = orderTotal(order.lines.map((l) => ({ rate: l.rateCny, quantity: l.quantity })));
+  const total = linesEditable ? totalOf(lines) : saved;
+  const change = Math.round((total - saved) * 100) / 100;
   // Money in the dialog is in the order's currency (phase 2 final fixes, 5), the deposit required included.
   const symbol = currencySymbol(order.currency);
 
@@ -181,12 +179,12 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
     const body = toUpdateOrderBody(values, order, linesEditable);
     // Nothing changed, so nothing to send (ORD-5 needs at least one key).
     if (Object.keys(body).length === 0) return onClose();
-    let saved: UpdateOrderResponse;
+    let response: UpdateOrderResponse;
     try {
-      saved = await apiClient.patch<UpdateOrderResponse>(`/orders/${encodeURIComponent(order.po)}`, body);
+      response = await apiClient.patch<UpdateOrderResponse>(`/orders/${encodeURIComponent(order.po)}`, body);
     } catch (error) {
       // 422: under its field, the first focused; a field this form doesn't show is toasted, never dropped. Anything
-      // else (409 without fields, 5xx, network) toasts in handleApiError, and the dialog keeps the values.
+      // else (409 `account_held`, 503 `ledger_maintenance`, 5xx, network) toasts in handleApiError, and the dialog keeps the values.
       Object.entries(handleApiError(error) ?? {}).forEach(([field, message], index) => {
         if (field === "po" || field === "terms" || field === "orderDate" || field === "deliveryDate" || field === "depositRequiredCny" || field === "lines")
           setError(field, { message }, { shouldFocus: index === 0 });
@@ -194,10 +192,11 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       });
       return;
     }
-    const po = saved?.order?.po ?? body.po ?? order.po;
+    const po = response?.order?.po ?? body.po ?? order.po;
+    const ledger = response?.ledger;
     onClose();
     if (po === order.po) {
-      notifySuccess(EDIT_ORDER_TEXT.saved);
+      notifySuccess(ledger ? EDIT_ORDER_TEXT.savedWithLedger(ledger.balanceBefore, ledger.balanceAfter, ledger.currency) : EDIT_ORDER_TEXT.saved);
       return router.refresh();
     }
     // A new number moves the order's pages: the same tab at /orders/<new PO>/..., which loads with the new number.
@@ -214,6 +213,11 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
   return (
     // min-w-0: the lines table scrolls inside the dialog on a phone instead of widening it.
     <form noValidate onSubmit={handleSubmit(save)} className="mt-[14px] min-w-0">
+      {order.held && linesEditable ? (
+        <Callout tone="warning" size="sm" role="status" className="mb-[14px]">
+          {HELD_MESSAGE} Its items can&apos;t change until the review is done.
+        </Callout>
+      ) : null}
       <div className="grid gap-x-4 gap-y-[14px] sm:grid-cols-2">
         <Field className={fieldClass} data-invalid={!!errors.po}>
           <FieldLabel htmlFor={`${id}-po`} className={labelClass}>
@@ -386,11 +390,11 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
-        <span className="text-sm leading-4 text-muted-foreground">Paid to supplier {moneyOrDash(order.supplierPaidCny, (v) => formatMoney(v, order.currency, { decimals: 2, spaced: true }))}</span>
-        {/* A new total re-applies the supplier advance (backend docs/supplier-advance.md): more if available, the excess back. */}
-        {order.advanceCny ? (
-          <span className="text-sm leading-4 text-muted-foreground" title="A new total re-applies the supplier advance: more when the order grows, the excess back when it shrinks.">
-            Supplier advance {formatMoney(order.advanceCny, order.currency, { decimals: 2, spaced: true })}
+        {/* The value change ORD-5 posts to the supplier's account (an order change entry); none while unchanged. */}
+        {change !== 0 ? (
+          <span className="text-sm leading-4 text-muted-foreground">
+            Was {formatMoney(saved, order.currency, { decimals: 2, spaced: true })} · change {change > 0 ? "+" : "−"}
+            {formatMoney(Math.abs(change), order.currency, { decimals: 2, spaced: true })} on the supplier&apos;s account
           </span>
         ) : null}
         <span className="text-[15px] leading-4">Order total</span>

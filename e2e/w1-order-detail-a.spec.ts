@@ -9,7 +9,7 @@ import { LOADING_STAFF_STATE, PROCUREMENT_STATE } from "./sessions";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const tabs = (page: Page) => page.getByRole("navigation", { name: "Order sections" });
-const ALL_TABS = ["Overview", "Items", "Deposits & payments", "Receiving", "Containers"];
+const ALL_TABS = ["Overview", "Items", "Payments", "Receiving", "Containers"];
 
 async function expectTabs(page: Page, names: string[]) {
   for (const name of ALL_TABS) await expect(tabs(page).getByRole("link", { name, exact: true })).toHaveCount(names.includes(name) ? 1 : 0);
@@ -21,15 +21,21 @@ const expectNotFound = async (page: Page) => {
 };
 
 test("Overview: header, tabs, facts, journey and money", async ({ page, api }) => {
+  // A supplier of its own (so the supplier account settles this order only), ¥14,700 with a ¥5,000 deposit required;
+  // ¥3,000 at 12.1 paid to the supplier's account.
+  const created = await api.post("/suppliers", { name: `Overview Textile ${today().slice(5)}-${Date.now() % 100000}`, currency: "CNY", exchangeRate: 12.1, contactPerson: "Mr. Zhao Lin" });
+  expect(created.status(), await created.text()).toBe(201);
+  const supplier = ((await created.json()) as { supplier: { id: string; name: string } }).supplier;
   const order = await api.createOrder({
-    supplier: "Guangzhou Textile Co.",
+    supplier: supplier.name,
     lines: [
       { item: "Denim jeans", quantity: 300, rateCny: 15 },
       { item: "Cotton fabric", quantity: 1200, rateCny: 8.5 },
     ],
     deliveryDate: today(30),
-    deposits: [{ amountCny: 3000, rateInr: 12.1 }],
+    depositRequiredCny: 5000,
   });
+  await api.paySupplier(supplier.id, { amount: 3000, rateInr: 12.1 });
 
   await page.goto(`/orders/${order.po}`);
   await expect(page.getByRole("heading", { level: 1, name: order.po })).toBeVisible();
@@ -38,7 +44,7 @@ test("Overview: header, tabs, facts, journey and money", async ({ page, api }) =
 
   await expect(page.getByRole("heading", { level: 2, name: "Denim jeans" })).toBeVisible();
   await expect(page.getByText("On track", { exact: true })).toBeVisible();
-  await expect(page.getByText("Guangzhou Textile Co. · Contact: Mr. Zhao Lin")).toBeVisible();
+  await expect(page.getByText(`${supplier.name} · Contact: Mr. Zhao Lin`)).toBeVisible();
   await expect(kv(page, "Order date")).toHaveText(longDate(today()));
   await expect(kv(page, "Delivery date")).toHaveText(longDate(today(30)));
   await expect(kv(page, "Quantity")).toHaveText("300 pcs");
@@ -49,7 +55,28 @@ test("Overview: header, tabs, facts, journey and money", async ({ page, api }) =
   await expect(journey.getByRole("listitem").first()).toContainText(shortDate(today()));
   await expect(journey.getByRole("listitem").nth(1)).toHaveText("2. Receiving in China");
 
-  await expect(kv(page, "Paid to supplier ¥3,000")).toHaveText("₹36,300");
+  // Money from the API's FIFO projection: settled, outstanding with its status, the Deposit Required milestone.
+  await expect(kv(page, "Order value")).toHaveText("¥14,700.00");
+  await expect(kv(page, "Settled from supplier account")).toHaveText("¥3,000.00");
+  const term = (start: string) => page.getByRole("term").filter({ hasText: new RegExp(`^${start}`), visible: true });
+  await expect(term("Outstanding")).toContainText("Partly paid");
+  await expect(term("Outstanding").locator("xpath=following-sibling::dd[1]")).toHaveText("¥11,700.00");
+  await expect(term("Deposit required")).toContainText("¥5,000.00");
+  await expect(term("Deposit required")).toContainText("Deposit partly met");
+  await expect(term("Deposit required").locator("xpath=following-sibling::dd[1]")).toHaveText("¥2,000.00 pending");
+  await expect(kv(page, "Paid (INR), goods + sea freight")).toHaveText("₹36,300");
+  // The supplier's account beside it: ¥11,700 payable.
+  const account = page.locator("section").filter({ has: page.getByRole("heading", { name: "Supplier account" }) });
+  await expect(account).toContainText("¥11,700.00");
+  await expect(account).toContainText("Payable to supplier");
+
+  // Paid in full: the milestone is met and nothing is outstanding.
+  await api.paySupplier(supplier.id, { amount: 11_700, rateInr: 12 });
+  await page.reload();
+  await expect(term("Outstanding")).toContainText("Paid");
+  await expect(term("Outstanding").locator("xpath=following-sibling::dd[1]")).toHaveText("¥0.00");
+  await expect(term("Deposit required")).toContainText("Deposit met");
+  await expect(term("Deposit required").locator("xpath=following-sibling::dd[1]")).toHaveText("¥0.00 pending");
 
   // The breadcrumb goes back to Orders.
   await page.getByRole("banner").getByRole("link", { name: "Orders", exact: true }).click();
@@ -140,7 +167,7 @@ test.describe("Procurement (receiving View, containers None)", () => {
   test("has no Containers tab, and its URL is not found", async ({ page, api }) => {
     const order = await api.createOrder();
     await page.goto(`/orders/${order.po}`);
-    await expectTabs(page, ["Overview", "Items", "Deposits & payments", "Receiving"]);
+    await expectTabs(page, ["Overview", "Items", "Payments", "Receiving"]);
     await page.goto(`/orders/${order.po}/containers`);
     await expectNotFound(page);
   });
@@ -152,8 +179,8 @@ test.describe("Accounts (payments Enter, no receiving or containers)", () => {
   test("has no Receiving or Containers tab, and their URLs are not found", async ({ page, api }) => {
     const order = await api.createOrder();
     await page.goto(`/orders/${order.po}`);
-    await expectTabs(page, ["Overview", "Items", "Deposits & payments"]);
-    await tabs(page).getByRole("link", { name: "Deposits & payments" }).click();
+    await expectTabs(page, ["Overview", "Items", "Payments"]);
+    await tabs(page).getByRole("link", { name: "Payments" }).click();
     await expect(page).toHaveURL(`/orders/${order.po}/payments`);
     for (const hidden of ["receiving", "containers"]) {
       await page.goto(`/orders/${order.po}/${hidden}`);

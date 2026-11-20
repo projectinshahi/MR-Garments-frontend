@@ -26,7 +26,7 @@ const performanceColumns = [
   text("Delayed"),
   text("Average delivery days"),
   text("Order value"),
-  text("Balance"),
+  text("Supplier balance (+ available, - payable)"),
 ];
 const performanceRow = (s: SupplierInsightRow) => [
   s.code || null,

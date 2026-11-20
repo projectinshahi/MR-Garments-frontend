@@ -130,7 +130,7 @@ test("New order and payments take the supplier's currency and rate; the API refu
   const item = options.items.find((row) => row.name === "Denim jeans")!;
   let po = "";
 
-  await test.step("New order: the currency is the supplier's, shown not chosen; a deposit starts at the supplier's rate", async () => {
+  await test.step("New order: the currency is the supplier's, shown not chosen; the supplier's USD balance after it", async () => {
     await page.goto("/orders/new");
     await page.getByRole("combobox", { name: "Supplier", exact: true }).selectOption({ label: name });
     await expect(page.getByRole("textbox", { name: "Currency", exact: true })).toHaveValue("USD ($)");
@@ -140,11 +140,8 @@ test("New order and payments take the supplier's currency and rate; the API refu
     await page.getByRole("combobox", { name: "Item, line 1", exact: true }).selectOption({ label: "Denim jeans" });
     await page.getByRole("textbox", { name: "Rate ($), line 1", exact: true }).fill("2");
     await page.getByRole("textbox", { name: "Quantity, line 1", exact: true }).fill("100");
-    await page.getByRole("button", { name: "+ Add deposit" }).click();
-    await expect(field(page, "Rate to INR")).toHaveValue("88");
-    await page.getByRole("textbox", { name: "Amount ($), deposit 1", exact: true }).fill("50");
-    await field(page, "Mode").fill("Wire");
-    await expect(kv(page, "Deposits in INR")).toHaveText("₹4,400");
+    await expect(kv(page, "Supplier balance now")).toHaveText("Settled");
+    await expect(kv(page, "Supplier balance after this order")).toHaveText("Payable to supplier $200.00");
     await shot(page, testInfo, "new-order-supplier-currency.png");
     // Container terms are chosen on the order (backend docs/order-container-terms.md).
     await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
@@ -154,27 +151,30 @@ test("New order and payments take the supplier's currency and rate; the API refu
     expect(await api.order(po)).toMatchObject({ currency: "USD", exchangeRate: 88, orderValueCny: 200 });
   });
 
-  await test.step("the API refuses an order or a deposit in another currency for this supplier", async () => {
+  await test.step("the API refuses an order or a payment in another currency for this supplier, and supplier deposits are gone", async () => {
     const body = { supplierId: supplier.id, currency: "CNY", orderDate: today(), deliveryDate: today(20), lines: [{ itemId: item.id, quantity: 1, rateCny: 1 }], deposits: [] };
     const refused = await api.post("/orders", body);
     expect(refused.status()).toBe(422);
     expect(((await refused.json()) as { error: { fields: object } }).error.fields).toEqual({ currency: "This supplier's orders are in USD." });
+    // CNY is neither the supplier's currency nor an account with a balance, so it is not one of its options (D10).
+    const payment = await api.post("/payments", { supplierId: supplier.id, amount: 100, currency: "CNY", rateInr: 12, paidOn: today(), mode: "Wire", clientRequestId: crypto.randomUUID() });
+    expect(payment.status()).toBe(422);
+    expect(((await payment.json()) as { error: { fields: object } }).error.fields).toEqual({ currency: "Choose one of this supplier's currencies." });
     const deposit = await api.post(`/suppliers/${supplier.id}/deposits`, { direction: "give", amount: 100, currency: "CNY", openedOn: today() });
-    expect(deposit.status()).toBe(422);
-    expect(((await deposit.json()) as { error: { fields: object } }).error.fields).toEqual({ currency: "This supplier's deposits are in USD." });
+    expect(deposit.status()).toBe(410);
   });
 
   await test.step("Record payment: the supplier's rate now is the default, still editable", async () => {
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = dialog(page, "Record payment");
-    await form.getByRole("combobox", { name: "Payment type", exact: true }).selectOption("order");
-    await form.getByRole("combobox", { name: "Order", exact: true }).selectOption({ label: `${po} · ${name}` });
+    await form.getByRole("combobox", { name: "Supplier", exact: true }).fill(name);
+    await expect(form.getByRole("combobox", { name: "Currency", exact: true })).toHaveValue("USD");
     await expect(form.getByRole("textbox", { name: "Rate (₹ per $)", exact: true })).toHaveValue("88");
     await expect(form.getByText("Supplier rate now: 1 USD = ₹88.00. Change it if this payment used another.")).toBeVisible();
-    await form.getByRole("combobox", { name: "Kind", exact: true }).selectOption("Balance");
     await form.getByRole("textbox", { name: "Amount ($)", exact: true }).fill("150");
-    await expect(form.getByRole("status")).toHaveText("₹13,200");
+    await expect(form.getByRole("status").first()).toHaveText("₹13,200");
+    await expect(form.getByRole("status", { name: "Balance now and after" })).toHaveText("Payable to supplier $200.00 → Payable to supplier $50.00");
     await shot(page, testInfo, "payment-supplier-currency.png");
     await form.getByRole("button", { name: "Cancel" }).click();
   });
@@ -194,11 +194,10 @@ test("New order and payments take the supplier's currency and rate; the API refu
     await expect(edit).toBeHidden();
     await expect(toast(page, "Supplier saved")).toBeVisible();
     expect(await supplierNamed(api, name)).toMatchObject({ currency: "USD", exchangeRate: 90, hasTransactions: true });
-    // The order placed at 88 keeps 88; a deposit opened now snapshots 90; the payment form's default is 90.
+    // The order placed at 88 keeps 88; the payment form's default (ADV-5's supplier rate) is 90.
     expect(await api.order(po)).toMatchObject({ exchangeRate: 88 });
-    const opened = await api.post(`/suppliers/${supplier.id}/deposits`, { direction: "give", amount: 100, openedOn: today() });
-    expect(opened.status(), await opened.text()).toBe(201);
-    expect(((await opened.json()) as { deposit: object }).deposit).toMatchObject({ currency: "USD", exchangeRate: 90 });
+    const choices = await api.get<{ suppliers: { id: string; currency: string; exchangeRate: number | null; currencyOptions: string[] }[] }>("/supplier-advances/suppliers");
+    expect(choices.suppliers.find((row) => row.id === supplier.id)).toMatchObject({ currency: "USD", exchangeRate: 90, currencyOptions: ["USD"] });
     const payments = await api.get<{ orders: { po: string; supplierRate: number | null }[] }>("/payments");
     expect(payments.orders.find((row) => row.po === po)).toMatchObject({ supplierRate: 90 });
   });

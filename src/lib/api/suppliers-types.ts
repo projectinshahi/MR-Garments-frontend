@@ -1,7 +1,9 @@
 import type { MoneyTotal } from "@/types/domain";
 
 // The Suppliers page's own endpoints (backend docs/suppliers.md). Money is one total per order currency, never
-// added across currencies. Coordinator-owned.
+// added across currencies. A supplier's `balance` is its signed ledger balance per currency (backend
+// docs/unified-ledger.md): + available with the supplier, − payable; held accounts are left out and named in
+// `heldCurrencies`. Coordinator-owned.
 
 /** SUP-1 GET /api/v1/suppliers/summary: the five KPI cards. */
 export type SuppliersSummary = {
@@ -10,7 +12,7 @@ export type SuppliersSummary = {
   openPos: { count: number; value: MoneyTotal[] };
   /** Orders at stages 3-5 (left China, not yet stocked); the nearest ETA of their containers not yet arrived. */
   inTransit: { orders: number; nextEta: string | null; arrivingNext7: number };
-  /** Positive supplier balances only, and how many suppliers owe. */
+  /** The payable (negative) ledger balances as positive amounts, held left out, and how many suppliers are owed. */
   unpaid: { amount: MoneyTotal[]; suppliers: number };
   /** Due supplier payments, today to today + 6. */
   upcomingPayments: { windowDays: number; count: number; amount: MoneyTotal[] };
@@ -35,6 +37,7 @@ export type SupplierInsightRow = SupplierStats & {
   country: string;
   value: MoneyTotal[];
   balance: MoneyTotal[];
+  heldCurrencies: string[];
 };
 
 /** SUP-2 GET /api/v1/suppliers/insights?from&to&supplierId: the Performance and Analytics tabs. */

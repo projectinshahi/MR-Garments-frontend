@@ -38,11 +38,10 @@ const ORDER: EditableOrder = {
   orderDate: "2026-10-01",
   deliveryDate: "2026-11-15",
   currency: "CNY",
-  supplierPaidCny: 1000,
   depositRequiredCny: null,
   lines: [line("l-1", { id: "i-1", name: "Denim jeans" }, 100, 10), line("l-2", { id: "i-9", name: "Silk scarves" }, 50, 20)],
 };
-const BELOW_PAID = "The order total can't be less than the ¥1,000.00 already paid to the supplier.";
+const LINES_ERROR = "Add at least one item.";
 const DEPOSIT_MESSAGE = "Enter the deposit the supplier asked for: above 0, with at most 2 decimals.";
 
 function open(order: EditableOrder = ORDER) {
@@ -63,9 +62,11 @@ describe("Edit order at stage 1", () => {
     let finish: () => void = () => {};
     patch.mockReturnValue(new Promise((resolve) => (finish = () => resolve({}))));
     const { user, onClose, setDate, box, save } = open();
-    expect(screen.getByRole("dialog", { name: "Edit order" })).toHaveTextContent("the order total can't be less than what's already paid to the supplier");
+    expect(screen.getByRole("dialog", { name: "Edit order" })).toHaveTextContent("A new order total changes the supplier's account by the difference.");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 2,000.00");
-    expect(screen.getByText("Paid to supplier ¥ 1,000.00")).toBeVisible();
+    // No "paid to supplier" or advance footer any more; the value change shows once the lines change.
+    expect(screen.queryByText(/Paid to supplier|Supplier advance/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/on the supplier's account/)).not.toBeInTheDocument();
 
     setDate(/^Delivery date/, "2026-11-20");
     await user.clear(box("Quantity, line 1"));
@@ -76,6 +77,7 @@ describe("Edit order at stage 1", () => {
     await user.type(box("Rate (¥), line 2"), "8");
     await user.type(box("Quantity, line 2"), "500");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 5,200.00");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was ¥ 2,000.00 · change +¥ 3,200.00 on the supplier's account");
 
     await user.click(save);
     expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -103,25 +105,39 @@ describe("Edit order at stage 1", () => {
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { orderDate: "2026-09-28" }));
   });
 
-  it("refuses a total below what's paid before calling the API, and keeps at least one line", async () => {
+  it("no longer refuses a total below what's paid (D9): a lower total is sent, and the API's ledger change is toasted", async () => {
+    patch.mockResolvedValue({ order: { po: "PO-2051" }, ledger: { supplierId: "s1", currency: "CNY", changeCny: -1990, balanceBefore: -2000, balanceAfter: -10 } });
     const { user, box, save } = open();
     await user.click(screen.getByRole("button", { name: "Remove line 2" }));
     expect(screen.getByRole("button", { name: "Remove line 1" })).toBeDisabled();
     await user.clear(box("Quantity, line 1"));
     await user.type(box("Quantity, line 1"), "1");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("change −¥ 1,990.00");
     await user.click(save);
-    expect(await screen.findByText(BELOW_PAID)).toBeVisible();
-    expect(patch).not.toHaveBeenCalled();
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { lines: [{ id: "l-1", itemId: "i-1", quantity: 1, rateCny: 10 }] }));
+    expect(toast.success).toHaveBeenCalledWith("Order saved. Supplier balance: Payable to supplier ¥2,000.00 → Payable to supplier ¥10.00");
+  });
+
+  it("warns on a held supplier account and toasts the API's 409 and the 503 maintenance message", async () => {
+    const { user, setDate, save } = open({ ...ORDER, held: true });
+    expect(screen.getByText(/This supplier's account is pending review\./)).toBeVisible();
+    patch.mockRejectedValueOnce(new ApiError(409, "account_held", "This supplier's account is pending review."));
+    setDate(/^Delivery date/, "2026-11-20");
+    await user.click(save);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("This supplier's account is pending review."));
+    patch.mockRejectedValueOnce(new ApiError(503, "ledger_maintenance", "Paused."));
+    await user.click(save);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Payments are paused for maintenance", { description: "Paused." }));
   });
 
   it("shows the API's field errors under their fields, the lines one under the table, and stays open", async () => {
     const before = "The delivery date can't be before the order date.";
-    patch.mockRejectedValue(new ApiError(422, "validation_failed", "Check the highlighted fields.", { deliveryDate: before, lines: BELOW_PAID }));
+    patch.mockRejectedValue(new ApiError(422, "validation_failed", "Check the highlighted fields.", { deliveryDate: before, lines: LINES_ERROR }));
     const { user, onClose, setDate, save } = open();
     setDate(/^Delivery date/, "2026-11-20");
     await user.click(save);
     expect(await screen.findByText(before)).toBeVisible();
-    expect(screen.getByText(BELOW_PAID)).toBeVisible();
+    expect(screen.getByText(LINES_ERROR)).toBeVisible();
     expect(toast.error).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -141,26 +157,19 @@ describe("Edit order at stage 1", () => {
 });
 
 describe("Money in the order's currency (phase 2 final fixes, 5)", () => {
-  it("labels the deposit required, the rates, the amounts, the total and what's paid in the order's currency, keeping the saved requirement", async () => {
-    const { user, box, save } = open({ ...ORDER, currency: "USD", supplierPaidCny: 250, depositRequiredCny: 1500.5 });
+  it("labels the deposit required, the rates, the amounts, the total and the value change in the order's currency, keeping the saved requirement", async () => {
+    const { user, box } = open({ ...ORDER, currency: "USD", depositRequiredCny: 1500.5 });
     expect(box("Deposit required ($)")).toHaveValue("1500.5");
-    expect(screen.getByText("Paid to supplier $ 250.00")).toBeVisible();
     expect(screen.getByRole("columnheader", { name: "Rate ($)" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Amount ($)" })).toBeInTheDocument();
     expect(screen.getByText("$ 2,000.00")).toBeVisible();
     expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
-    // The "below what's paid" message names the same currency.
     await user.click(screen.getByRole("button", { name: "Remove line 2" }));
-    await user.clear(box("Quantity, line 1"));
-    await user.type(box("Quantity, line 1"), "1");
-    await user.click(save);
-    expect(await screen.findByText("The order total can't be less than the $250.00 already paid to the supplier.")).toBeVisible();
-    expect(patch).not.toHaveBeenCalled();
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was $ 2,000.00 · change −$ 1,000.00");
   });
 
-  it("shows a dash for what's paid when an older API left it out, still opens, and a no-change save sends nothing", async () => {
-    const { user, onClose, save } = open({ ...ORDER, supplierPaidCny: undefined as unknown as number, depositRequiredCny: undefined as unknown as null });
-    expect(screen.getByText("Paid to supplier –")).toBeVisible();
+  it("still opens when an older API left the requirement out, and a no-change save sends nothing", async () => {
+    const { user, onClose, save } = open({ ...ORDER, depositRequiredCny: undefined as unknown as null });
     expect(screen.getByRole("textbox", { name: "Deposit required (¥)" })).toHaveValue("");
     // The missing requirement is "none": an untouched field must not become `depositRequiredCny: null` in the body
     // (an older ORD-5 rejects the key), so saving unchanged just closes.

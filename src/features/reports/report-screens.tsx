@@ -194,15 +194,16 @@ export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsP
     <ReportFrame title="Payments per supplier" page={page} file={reportFile("payments-per-supplier", data, page.today)}>
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub={plural(sum((t) => t.orders), "open order")} />
-        <KpiCard size="xs" label="Paid so far" value={each((t) => t.paidCny)} sub={`${formatINR(sum((t) => t.paidInr))} at payment-day rates`} />
-        <KpiCard size="xs" label="Balance to pay" value={each((t) => t.balanceCny)} sub={`next 30 days ${formatMoneyList(data.dueNext30ByCurrency)} due`} />
+        <KpiCard size="xs" label="Settled so far" value={each((t) => t.settledCny)} sub={`${formatINR(sum((t) => t.paidInr))} paid at payment-day rates`} />
+        <KpiCard size="xs" label="Payable to suppliers" value={each((t) => t.payableCny)} sub={`next 30 days ${formatMoneyList(data.dueNext30ByCurrency)} due`} />
       </KpiRow>
       <div className="min-w-0">
         {data.suppliers.length ? <SupplierPaymentsTable rows={data.suppliers} totals={totals} query={page.query} /> : <EmptyState title="No open orders." />}
       </div>
       {/* "Paid payments page" is plain text: that page is not designed. */}
       <Footnote>
-        Open orders only.{data.finishedPos.length ? ` Finished orders (${few(data.finishedPos, ", ")}) are in the Paid payments page.` : null}
+        Open orders only; the supplier balance is the whole ledger account (payments less every order&apos;s value), held accounts left out of the totals.
+        {data.finishedPos.length ? ` Finished orders (${few(data.finishedPos, ", ")}) are in the Paid payments page.` : null}
       </Footnote>
     </ReportFrame>
   );

@@ -23,7 +23,7 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
     filename: `landed-cost-${today}`,
     filters,
     notes: [
-      "Goods are the payments to the supplier, each in INR at the rate typed for that payment; the average rate is goods INR / goods paid. Sea freight is the shipping-agent payments of FOB orders.",
+      "Goods are the supplier payments that settled the order (the supplier ledger settles orders oldest first), each in INR at the rate typed for that payment; the average rate is goods INR / goods settled. Sea freight is the shipping-agent payments of FOB orders.",
       "PO value in INR is the PO at the rate saved on the order (none for orders placed before rates were saved); it is not part of the landed cost.",
       "Insurance, GST and other expenses are not recorded, so the landed cost holds only the parts listed.",
     ],
@@ -109,8 +109,17 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
         ([currency, list]) => ({
           sheet: "Goods Payments",
           title: `Goods payments (${currency})`,
-          columns: [text("PO"), text("Supplier"), date("Paid on"), text("Payment type"), money("Amount", currency), rate("Exchange rate", currency), inr("INR")],
-          rows: list.map((p) => [p.po, p.supplier, p.paidOn, p.kind, p.amountCny, p.rateInr, p.amountInr]),
+          columns: [text("PO"), text("Supplier"), date("Paid on"), text("Credit"), text("Reference"), money("Amount", currency), rate("Exchange rate", currency), inr("INR")],
+          rows: list.map((p) => [
+            p.po,
+            p.supplier,
+            p.entryDate,
+            p.entryType === "adjustment" ? "Adjustment" : "Payment",
+            p.reference ?? "",
+            p.amount,
+            p.exchangeRate,
+            p.amountInr,
+          ]),
         }),
       ),
       {

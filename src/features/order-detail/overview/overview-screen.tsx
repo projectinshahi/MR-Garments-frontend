@@ -1,12 +1,10 @@
 import { PageContainer } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/shared/cards";
-import { KeyValueList } from "@/components/shared/key-value-list";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Journey } from "@/components/shared/timeline";
 import type { OrderView } from "@/features/order-detail/data/queries";
-import { AdvanceBreakdown, PartialAdvanceWarning } from "@/features/order-detail/shared/advance-breakdown";
-import { agentPaid, DepositStatusPill } from "@/features/payments/money";
-import { formatDate, formatINR, formatMoney, formatQty } from "@/lib/formatters";
+import { OrderMoney, SupplierAccountCard } from "@/features/order-detail/shared/order-money";
+import { formatDate, formatQty } from "@/lib/formatters";
 
 import { journeySteps } from "./journey";
 
@@ -21,10 +19,6 @@ export function OverviewScreen({ order }: { order: OrderView }) {
     { label: "Quantity", value: formatQty(order.quantity, order.unit) },
   ];
   const contact = order.supplier.contactPerson;
-  // Phase 2 fixes, 1 and 2: supplier payments apart from the agents' sea freight; the deposit only while something is pending.
-  const money = (value: number) => formatMoney(value, order.currency);
-  const agentsCny = agentPaid(order.paidCny, order.supplierPaidCny);
-  const pendingDeposit = order.depositRequiredCny != null && order.depositPendingCny != null && order.depositPendingCny > 0 ? order.depositPendingCny : null;
 
   return (
     <PageContainer>
@@ -51,8 +45,6 @@ export function OverviewScreen({ order }: { order: OrderView }) {
         </dl>
       </SectionCard>
 
-      <PartialAdvanceWarning order={order} />
-
       <SectionCard title="Journey of this order" titleGap="none">
         <div className="overflow-x-auto">
           <Journey size="sm" className="mt-3 min-w-[720px]" steps={journeySteps(order)} />
@@ -61,22 +53,9 @@ export function OverviewScreen({ order }: { order: OrderView }) {
 
       <div className="grid gap-(--page-gap) lg:grid-cols-3">
         <SectionCard title="Money" titleGap="none">
-          <KeyValueList
-            size="sm"
-            className="mt-3"
-            items={[
-              // An older API without the supplier split shows the all-payee figure under its honest label.
-              ...(order.supplierPaidCny == null || order.supplierPaidInr == null
-                ? [{ label: `Paid (all payees) ${money(order.paidCny)}`, value: formatINR(order.paidInr) }]
-                : [
-                    { label: `Paid to supplier ${money(order.supplierPaidCny)}`, value: formatINR(order.supplierPaidInr) },
-                    ...(agentsCny !== null && agentsCny > 0 ? [{ label: `Paid to agents (sea freight) ${money(agentsCny)}`, value: formatINR(agentPaid(order.paidInr, order.supplierPaidInr) ?? 0) }] : []),
-                  ]),
-              ...(pendingDeposit === null ? [] : [{ label: `Deposit pending ${money(pendingDeposit)}`, value: <DepositStatusPill status={order.depositStatus} /> }]),
-            ]}
-          />
+          <OrderMoney order={order} />
         </SectionCard>
-        <AdvanceBreakdown order={order} />
+        <SupplierAccountCard order={order} />
       </div>
     </PageContainer>
   );

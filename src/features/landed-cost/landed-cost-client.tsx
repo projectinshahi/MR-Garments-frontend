@@ -205,7 +205,7 @@ function Breakdown({ row }: { row: LandedCostRow }) {
   );
 }
 
-type GoodsRow = { id: string; label: string; date?: string; amountCny: number; rate: string; amountInr: number; total?: boolean };
+type GoodsRow = { id: string; label: string; date?: string; amountCny: number; rate: string; amountInr: number | null; total?: boolean };
 
 // Reference rows are 43 px with their rule: the compact row's 8 px cell padding around a 26 px line. The table sits 1 px
 // lower than the title row's 16 px gap (padding, because a margin would collapse into that gap).
@@ -233,19 +233,27 @@ const goodsColumns = (currency: Currency): ColumnDef<GoodsRow>[] => [
     accessorKey: "amountInr",
     header: () => goodsHead("Amount (INR)"),
     meta: col("w-[128px]", "right"),
-    cell: ({ row }) => goodsCell(row.original, formatINR(row.original.amountInr)),
+    cell: ({ row }) => goodsCell(row.original, row.original.amountInr === null ? "Not set" : formatINR(row.original.amountInr)),
   },
 ];
 
 /**
- * "Goods cost, changed to INR on each payment date". The Total row is a bold body row: the reference separates it
- * with the ordinary row rule, not the DataTable footer's navy rule and tint.
+ * "Goods cost, changed to INR on each payment date": the supplier credits that settled the order (the ledger's FIFO
+ * slices), each at its own rate. The Total row is a bold body row: the reference separates it with the ordinary row
+ * rule, not the DataTable footer's navy rule and tint.
  */
 function GoodsCostTable({ payments, currency }: { payments: LandedCostRow["goodsPayments"]; currency: Currency }) {
   if (payments.length === 0) return <EmptyState title="Nothing paid to the supplier yet." />;
   const { totalCny, totalInr, averageRate } = convertPayments(payments);
   const data: GoodsRow[] = [
-    ...payments.map((p) => ({ id: p.id, label: p.kind, date: p.paidOn, amountCny: p.amountCny, rate: formatRate(p.rateInr), amountInr: p.amountInr })),
+    ...payments.map((p) => ({
+      id: p.entryId,
+      label: p.entryType === "adjustment" ? "Adjustment" : "Payment",
+      date: p.entryDate,
+      amountCny: p.amount,
+      rate: p.exchangeRate === null ? "Not set" : formatRate(p.exchangeRate),
+      amountInr: p.amountInr,
+    })),
     { id: "total", label: "Total", amountCny: totalCny, rate: `${formatRate(averageRate)} avg`, amountInr: totalInr, total: true },
   ];
   return <DataTable columns={goodsColumns(currency)} data={data} getRowId={(row) => row.id} density="compact" variant="plain" className="pt-px" />;

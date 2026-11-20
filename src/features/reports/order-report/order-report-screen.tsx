@@ -8,15 +8,15 @@ import { Timeline } from "@/components/shared/timeline";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONTAINER_STATUS } from "@/features/containers/containers-logic";
-import { ADVANCE_KIND_LABEL, ADVANCE_STATUS_LABEL, ADVANCE_STATUS_TONE, depositsOf, netApplied, recordedOf } from "@/features/deposits/advance-logic";
-import { DepositStatusPill } from "@/features/payments/money";
+import { HELD_BALANCE, HELD_MESSAGE, MilestonePill, moneyOrDash, PaymentStatus, paymentType, round2 } from "@/features/payments/money";
 import { ReportDownload } from "@/features/reports/report-actions";
+import { LedgerStatementTable } from "@/features/supplier-ledger/supplier-ledger-screen";
 import type { OrderReport, OrderReportContainer, OrderReportDeposit } from "@/lib/api/reports-types";
 import { currencyTitle, formatDate, formatDateTime, formatINR, formatMoney, formatMoneyList, formatNumber, formatQty, rateText, formatRate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { type MoneyTotal, STAGES } from "@/types/domain";
 
-import { closureLabel, costStatus, landedCostBreakdown, orderReportFile, REPORT_SECTIONS, stageLabel, TIMELINE_LABEL } from "./order-report-file";
+import { accountsText, closureLabel, costStatus, landedCostBreakdown, orderReportFile, REPORT_SECTIONS, settlementLabel, stageLabel, TIMELINE_LABEL } from "./order-report-file";
 
 // The comprehensive order report (RPT-O1, backend docs/order-report.md): every section the API gave, in the order of
 // the section navigation, from the order detail parts (cards, key-value lists, bordered tables, the shared Timeline).
@@ -320,11 +320,9 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
   const completion = order.totals.map((total) => `${total.unit}: ${total.ordered ? Math.min(100, Math.round((total.received / total.ordered) * 100)) : 0}% received`).join(" · ") || DASH;
   const supplier = order.supplier;
   // Paid rows only in the sea freight and PO deposit tables (their totals are paid money); due rows stay in the ledger.
-  const agentPayments = payments?.list.filter((payment) => payment.payeeRole === "agent" && payment.status === "paid") ?? [];
-  const poDeposits = payments?.list.filter((payment) => payment.payeeRole === "supplier" && payment.kind === "Deposit" && payment.status === "paid") ?? [];
+  const agentPayments = payments?.list.filter((payment) => payment.payeeRole === "agent" && payment.status === "paid" && !payment.voided) ?? [];
+  const poDeposits = payments?.list.filter((payment) => payment.payeeRole === "supplier" && payment.kind === "Deposit" && payment.status === "paid" && !payment.voided) ?? [];
   const breakdown = landedCost ? landedCostBreakdown(landedCost, logistics) : null;
-  // The supplier advance applied to this PO (backend docs/supplier-advance.md); undefined from an older backend.
-  const advance = payments?.advanceCny;
   const exports = <ReportDownload file={orderReportFile(report, today)} size="sm" />;
   const section = (id: string) => ({ id, className: "scroll-mt-[calc(3.5rem+var(--header-height)+52px)] md:scroll-mt-[calc(var(--header-height)+52px)]" });
 
@@ -370,13 +368,18 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
           <div className="mt-3 flex flex-col gap-4">
             <KpiRow gap="sm" className="grid-cols-2 md:grid-flow-row md:grid-cols-4">
               <KpiCard size="xs" label="Original PO value" value={money(order.orderValueCny)} sub={`${plural(order.products, "product")} · ${quantities((t) => t.ordered)}`} />
-              <KpiCard size="xs" label="Paid to supplier" value={payments ? money(payments.paidCny) : DASH} sub={payments ? `${formatINR(payments.paidInr)} at payment-day rates` : "outside your access"} />
               <KpiCard
                 size="xs"
-                label="Outstanding balance"
-                value={payments ? money(payments.balanceCny) : DASH}
-                sub={payments ? `${money(payments.dueCny)} due${advance ? ` · ${money(advance)} advance applied` : ""}` : "outside your access"}
-                tone={payments && payments.balanceCny > 0 ? "danger" : "default"}
+                label="Settled from supplier account"
+                value={payments ? (payments.held ? HELD_BALANCE : moneyOrDash(payments.settledCny, (v) => money(v))) : DASH}
+                sub={payments ? `${moneyOrDash(payments.settledInr, (v) => formatINR(v))} at payment-day rates` : "outside your access"}
+              />
+              <KpiCard
+                size="xs"
+                label="Outstanding"
+                value={payments ? moneyOrDash(payments.outstandingCny, (v) => money(v)) : DASH}
+                sub={payments ? `${money(payments.dueCny)} due · ${settlementLabel(payments)}` : "outside your access"}
+                tone={payments && (payments.outstandingCny ?? 0) > 0 ? "danger" : "default"}
               />
               <KpiCard size="xs" label="Received · pending" value={quantities((t) => t.received)} sub={`pending ${quantities((t) => t.pending)}`} />
             </KpiRow>
@@ -473,11 +476,10 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   boldValues
                   items={[
                     { label: "Total purchase value with this supplier", value: `${moneyList(supplierAccount.purchaseValue)} · ${plural(supplierAccount.orders, "order")}` },
-                    { label: "Supplier's overall balance (every order)", value: moneyList(supplierAccount.balance) },
-                    { label: "Amount paid for this PO", value: money(payments.paidCny, 2) },
-                    ...(advance === undefined ? [] : [{ label: "Supplier advance applied to this PO", value: money(advance, 2) }]),
-                    ...(payments?.excessCny ? [{ label: "Paid beyond the order value (to supplier advance)", value: money(payments.excessCny, 2) }] : []),
-                    { label: "Outstanding balance for this PO", value: money(payments.balanceCny, 2) },
+                    { label: "Supplier balance (ledger)", value: accountsText(supplierAccount.accounts) },
+                    { label: "Settled · outstanding (every order)", value: `${moneyList(supplierAccount.settled)} · ${moneyList(supplierAccount.outstanding)}` },
+                    { label: "Settled for this PO", value: payments.held ? HELD_BALANCE : moneyOrDash(payments.settledCny, (v) => money(v, 2)) },
+                    { label: "Outstanding for this PO", value: moneyOrDash(payments.outstandingCny, (v) => money(v, 2)) },
                   ]}
                 />
                 <KeyValueList
@@ -485,18 +487,11 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   boldValues
                   className="border-t border-border-subtle lg:border-t-0"
                   items={[
-                    { label: "Deposits paid on this PO", value: money(payments.depositsPaidCny, 2) },
                     ...supplierAccount.deposits.summary.map((line) => ({
                       label: `Supplier deposit ${line.direction === "give" ? "to give" : "to receive"} (${line.currency})`,
                       value: `${formatMoney(line.amount, line.currency, { decimals: 2 })} agreed · ${formatMoney(line.settled, line.currency, { decimals: 2 })} settled · ${formatMoney(line.pending, line.currency, { decimals: 2 })} remaining`,
                     })),
-                    ...(supplierAccount.deposits.summary.length ? [] : [{ label: "Supplier deposits (account level)", value: "None" }]),
-                    ...(supplierAccount.advanceApplied ? [{ label: "Supplier advance applied (every order)", value: moneyList(supplierAccount.advanceApplied) }] : []),
-                    ...(supplierAccount.advance ?? []).map((line) => ({
-                      label: `Supplier advance (${line.currency})`,
-                      // Recorded = added as advance + order deposits; applied (net) includes the deposits; available is the ledger's.
-                      value: `${formatMoney(recordedOf(line), line.currency, { decimals: 2 })} recorded (${formatMoney(line.receivedCny, line.currency, { decimals: 2 })} added · ${formatMoney(depositsOf(line), line.currency, { decimals: 2 })} order deposits) · ${formatMoney(netApplied(line), line.currency, { decimals: 2 })} applied · ${formatMoney(line.availableCny, line.currency, { decimals: 2 })} available`,
-                    })),
+                    ...(supplierAccount.deposits.summary.length ? [] : [{ label: "Supplier deposits (archive)", value: "None" }]),
                     { label: "Deposit utilised for this PO", value: "Not tracked: account deposits are not linked to orders" },
                   ]}
                 />
@@ -504,9 +499,15 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
             ) : (
               <NotVisible what="Payments and the supplier's account" />
             )}
+            {payments && supplierAccount ? (
+              <div className="mt-4">
+                <h3 className="mb-2 text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">Supplier statement</h3>
+                <LedgerStatementTable entries={supplierAccount.entries} supplier={supplier.name} linkPo={false} pageSize={10} />
+              </div>
+            ) : null}
             <Note>
-              This PO&apos;s paid and balance count payments on this order only. The supplier&apos;s overall figures add every order of the supplier, one total
-              per currency. Account-level deposits are never counted as payments on this PO.
+              The supplier&apos;s payments go to its account and settle its orders oldest first; this PO&apos;s settled and outstanding are its share. The
+              supplier&apos;s overall figures add every order, one total per currency. Account-level deposits are an archive, never payments on this PO.
             </Note>
           </div>
         </SectionCard>
@@ -676,20 +677,21 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
           <div className="mt-3 flex flex-col gap-4">
             {payments ? (
               <>
-                <KpiRow gap="sm" className={cn("grid-cols-2 md:grid-flow-row", advance === undefined ? "md:grid-cols-5" : "md:grid-cols-3 xl:grid-cols-6")}>
+                <KpiRow gap="sm" className="grid-cols-2 md:grid-flow-row md:grid-cols-4">
                   <KpiCard size="xs" label="Original PO amount" value={money(order.orderValueCny)} />
-                  <KpiCard size="xs" label="Total paid to supplier" value={money(payments.paidCny)} sub={`${formatINR(payments.paidInr)} in INR`} />
-                  {advance === undefined ? null : (
-                    <KpiCard size="xs" label="Supplier advance applied" value={money(advance)} sub={`${formatINR(payments.advanceInr ?? 0)} at the advance's rate`} />
-                  )}
-                  <KpiCard size="xs" label="Of which deposits" value={money(payments.depositsPaidCny)} sub="kind Deposit on this PO" />
+                  <KpiCard
+                    size="xs"
+                    label="Settled from supplier account"
+                    value={payments.held ? HELD_BALANCE : moneyOrDash(payments.settledCny, (v) => money(v))}
+                    sub={`${moneyOrDash(payments.settledInr, (v) => formatINR(v))} in INR`}
+                  />
                   <KpiCard size="xs" label="Due (recorded)" value={money(payments.dueCny)} sub="payments marked due" />
                   <KpiCard
                     size="xs"
-                    label="Outstanding balance"
-                    value={money(payments.balanceCny)}
-                    sub={advance === undefined ? "PO amount less paid" : "PO amount less paid and advance"}
-                    tone={payments.balanceCny > 0 ? "danger" : "default"}
+                    label="Outstanding"
+                    value={moneyOrDash(payments.outstandingCny, (v) => money(v))}
+                    sub={settlementLabel(payments)}
+                    tone={(payments.outstandingCny ?? 0) > 0 ? "danger" : "default"}
                   />
                 </KpiRow>
                 {payments.depositRequiredCny != null ? (
@@ -701,60 +703,59 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                         label: "Deposit still pending",
                         value: (
                           <>
-                            {money(payments.depositPendingCny ?? 0)} <DepositStatusPill status={payments.depositStatus} className="ml-1 align-middle" />
+                            {moneyOrDash(payments.depositPendingCny, (v) => money(v))} <MilestonePill status={payments.depositStatus} className="ml-1 align-middle" />
                           </>
                         ),
                       },
                     ]}
                   />
                 ) : null}
-                <ReportTable
-                  columns={[{ header: "Payment date" }, { header: "Reference" }, { header: "Type" }, { header: "Method" }, right("Amount"), { header: "Currency" }, right("Rate"), right("INR"), { header: "Payee" }, { header: "Deposit ref." }, { header: "Notes" }, { header: "Status" }, { header: "Recorded by" }]}
-                  rows={payments.list.map((payment) => [
-                    payment.paidOn ? formatDate(payment.paidOn) : payment.dueDate ? `due ${formatDate(payment.dueDate)}` : DASH,
-                    orDash(payment.reference),
-                    payment.kind,
-                    orDash(payment.mode),
-                    formatNumber(payment.amountCny, 2),
-                    cur,
-                    payment.rateInr === null ? DASH : formatRate(payment.rateInr),
-                    inr(payment.amountInr),
-                    <span key="payee">
-                      {payment.payee}
-                      {payment.payeeRole === "agent" ? <span className="text-muted-foreground"> (shipping agent)</span> : null}
-                    </span>,
-                    DASH,
-                    orDash(payment.notes),
-                    payment.status === "paid" ? <StatusPill tone="success">Paid</StatusPill> : <StatusPill tone="warning">Due</StatusPill>,
-                    orDash(payment.recordedBy),
-                  ])}
-                  empty="No payments recorded yet."
-                />
-                {payments.advanceStatus && payments.advanceStatus !== "none" ? (
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">
-                      Supplier advance applied <StatusPill tone={ADVANCE_STATUS_TONE[payments.advanceStatus]} className="ml-1 align-middle">{ADVANCE_STATUS_LABEL[payments.advanceStatus]}</StatusPill>
-                    </h3>
-                    <ReportTable
-                      columns={[{ header: "Date" }, { header: "Type" }, right(`Amount (${cur})`), right("Rate"), right("INR"), { header: "From advance paid on" }, { header: "Advance reference" }, { header: "Recorded by" }]}
-                      rows={(payments.advanceEntries ?? []).map((entry) => [
-                        formatDate(entry.entryDate),
-                        ADVANCE_KIND_LABEL[entry.kind],
-                        `${entry.kind === "reversal" ? "−" : ""}${money(entry.amount, 2)}`,
-                        formatRate(entry.exchangeRate),
-                        `${entry.kind === "reversal" ? "−" : ""}${formatINR(entry.amountInr, 2)}`,
-                        day(entry.advancePaidOn),
-                        orDash(entry.advanceReference),
-                        orDash(entry.recordedBy),
-                      ])}
-                      total={["", "Advance applied", money(advance ?? 0, 2), "", formatINR(payments.advanceInr ?? 0, 2), "", "", ""]}
-                      empty="No advance applied."
-                    />
-                  </div>
-                ) : null}
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">Settled by (supplier credits, oldest first)</h3>
+                  <ReportTable
+                    columns={[{ header: "Date" }, { header: "Credit" }, { header: "Reference" }, { header: "Method" }, { header: "Recorded against" }, right(`Amount (${cur})`), right("Rate"), right("INR")]}
+                    rows={payments.slices.map((slice) => [
+                      formatDate(slice.entryDate),
+                      slice.entryType === "adjustment" ? "Adjustment" : "Payment",
+                      orDash(slice.reference),
+                      orDash(slice.mode),
+                      orDash(slice.memoPo),
+                      money(slice.amount, 2),
+                      slice.exchangeRate === null ? DASH : formatRate(slice.exchangeRate),
+                      inr(slice.amountInr),
+                    ])}
+                    total={payments.slices.length ? ["", "Settled", "", "", "", moneyOrDash(payments.settledCny, (v) => money(v, 2)), "", inr(payments.settledInr)] : undefined}
+                    empty={payments.held ? HELD_MESSAGE : "Nothing settled yet."}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">Payments recorded on this PO</h3>
+                  <ReportTable
+                    columns={[{ header: "Payment date" }, { header: "Reference" }, { header: "Type" }, { header: "Method" }, right("Amount"), { header: "Currency" }, right("Rate"), right("INR"), { header: "Payee" }, { header: "Notes" }, { header: "Status" }, { header: "Recorded by" }]}
+                    rows={payments.list.map((payment) => [
+                      payment.paidOn ? formatDate(payment.paidOn) : payment.dueDate ? `due ${formatDate(payment.dueDate)}` : DASH,
+                      orDash(payment.reference),
+                      paymentType(payment),
+                      orDash(payment.mode),
+                      formatNumber(payment.amountCny, 2),
+                      payment.currency,
+                      payment.rateInr === null ? DASH : formatRate(payment.rateInr),
+                      inr(payment.amountInr),
+                      <span key="payee">
+                        {payment.payee}
+                        {payment.payeeRole === "agent" ? <span className="text-muted-foreground"> (shipping agent)</span> : null}
+                      </span>,
+                      orDash(payment.notes),
+                      <PaymentStatus key="status" payment={payment} />,
+                      orDash(payment.recordedBy),
+                    ])}
+                    empty="No payments recorded on this PO."
+                  />
+                </div>
                 <Note>
-                  Paid, deposits and balance count payments to the supplier only; a shipping agent&apos;s row is sea freight. Payments are recorded as paid or
-                  due; refunds, reversals and credits are not recorded in this system, and no deposit reference links a payment to an account deposit.
+                  Supplier payments go to the supplier&apos;s account and settle its orders oldest first; legacy payments recorded on this PO are listed as a
+                  memo. A shipping agent&apos;s row is sea freight. Voided payments are listed and count in no figure; refunds and corrections are voids and
+                  Management adjustments on the supplier ledger.
                 </Note>
               </>
             ) : (
@@ -769,7 +770,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
             {payments && supplierAccount ? (
               <>
                 <div>
-                  <h3 className="mb-2 text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">Deposits paid on this PO</h3>
+                  <h3 className="mb-2 text-[12.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase">Legacy deposits recorded against this PO</h3>
                   <ReportTable
                     columns={[{ header: "Date" }, { header: "Reference" }, right(`Amount (${cur})`), right("Rate"), right("INR"), { header: "Mode" }, { header: "Status" }, { header: "Notes" }]}
                     rows={poDeposits.map((payment) => [
@@ -782,8 +783,8 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                       payment.status === "paid" ? <StatusPill tone="success">Paid</StatusPill> : <StatusPill tone="warning">Due</StatusPill>,
                       orDash(payment.notes),
                     ])}
-                    total={["", "Deposits paid", money(payments.depositsPaidCny, 2), "", "", "", "", ""]}
-                    empty="No deposit paid on this PO."
+                    total={poDeposits.length ? ["", "Deposits", money(round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), 2), "", "", "", "", ""] : undefined}
+                    empty="No deposit recorded on this PO."
                   />
                 </div>
                 <div className="border-t border-border-subtle pt-4">
@@ -842,7 +843,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   <KeyValueList
                     size="sm"
                     items={[
-                      { label: "Total purchase cost (supplier payments and advance applied, INR)", value: formatINR(landedCost.goodsInr) },
+                      { label: "Total purchase cost (supplier payments that settled the order, INR)", value: formatINR(landedCost.goodsInr) },
                       { label: "Total additional expenses", value: formatINR(breakdown.additionalInr) },
                     ]}
                     total={{ label: "Total landed cost", value: formatINR(landedCost.totalInr) }}

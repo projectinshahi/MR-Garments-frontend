@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";
 import type { PaymentsResponse } from "@/lib/api/types";
 
-import { getPayments, type Payment, toPaymentsData } from "./queries";
+import { paymentOrder, paymentRow } from "../test-fixtures";
+import { getPayments, toPaymentsData } from "./queries";
 
 const apiGet = vi.fn();
 const getMe = vi.fn();
@@ -11,168 +12,64 @@ vi.mock("@/lib/api/server", () => ({ apiGet: (...args: unknown[]) => apiGet(...a
 vi.mock("@/lib/session", () => ({ getMe: () => getMe() }));
 vi.mock("@/lib/today", () => ({ todayInIndia: () => "2026-11-10" }));
 
-type Order = PaymentsResponse["orders"][number];
-const order = (po: string, over: Partial<Order> = {}): Order => ({
-  orderId: `o-${po}`,
-  supplierRate: null,
-  po,
-  supplier: "Ningbo Knits",
-  currency: "CNY",
-  orderValueCny: 10_000,
-  paidCny: 4_000,
-  paidInr: 48_000,
-  supplierPaidCny: 4_000,
-  supplierPaidInr: 48_000,
-  balanceCny: 6_000,
-  depositRequiredCny: null,
-  depositPaidCny: 0,
-  depositPendingCny: null,
-  depositStatus: "none",
-  nextDue: null,
-  ...over,
-});
-const due = (id: string, po: string, dueDate: string, amountCny: number): Payment => ({
-  id,
-  orderId: `o-${po}`,
-  po,
-  currency: "CNY",
-  kind: "Balance",
-  payee: "Ningbo Knits",
-  payeeRole: "supplier",
-  amountCny,
-  status: "due",
-  paidOn: null,
-  dueDate,
-  rateInr: null,
-  amountInr: null,
-  mode: null,
-  reference: "",
-  notes: "",
-});
-const paid = (id: string, po: string): Payment => ({
-  ...due(id, po, "2026-11-12", 4_000),
-  kind: "Deposit",
-  status: "paid",
-  paidOn: "2026-10-01",
-  dueDate: null,
-  rateInr: 12,
-  mode: "Bank transfer",
-});
-
 const today = "2026-11-10";
+const due = (id: string, dueDate: string, amountCny: number, over = {}) =>
+  paymentRow(id, { orderId: "o-PO-1", po: "PO-1", kind: "Balance", status: "due", paidOn: null, dueDate, amountCny, rateInr: null, amountInr: null, ...over });
+const TOTALS: NonNullable<PaymentsResponse["totals"]> = [
+  { currency: "CNY", accounts: 3, balanceCny: -700, payableCny: 1200, availableCny: 500, outstandingCny: 6000 },
+  { currency: "USD", accounts: 1, balanceCny: 80, payableCny: 0, availableCny: 80, outstandingCny: 0 },
+];
 
-describe("toPaymentsData", () => {
-  it("sums paid INR and counts the orders it comes from, paid off or not", () => {
-    const { kpis } = toPaymentsData(
-      {
-        orders: [
-          order("PO-3001"),
-          order("PO-3002", { paidInr: 2_000, balanceCny: 0 }),
-          order("PO-3003", { paidCny: 0, paidInr: 0, balanceCny: 10_000 }),
-        ],
-        payments: [],
-      },
-      today,
-    );
-    expect(kpis.paidSoFarInr).toBe(50_000);
-    expect(kpis.paidOrders).toBe(2);
-  });
-
-  it("counts due payments from today to +7 and +30 days, in CNY, naming the earliest", () => {
+describe("toPaymentsData (PAY-1, unified ledger)", () => {
+  it("sums the INR of non-void paid payments of every payee; a voided payment counts in no total", () => {
     const payments = [
-      due("p1", "PO-3001", "2026-11-09", 100), // overdue: in neither window
-      due("p2", "PO-3002", "2026-11-17", 200), // today + 7: both windows
-      due("p3", "PO-3003", "2026-11-10", 300), // today: both, and the earliest
-      due("p4", "PO-3004", "2026-11-18", 400), // today + 8: 30 days only
-      due("p5", "PO-3005", "2026-12-10", 500), // today + 30: 30 days only
-      due("p6", "PO-3006", "2026-12-11", 600), // today + 31: neither
-      paid("p7", "PO-3007"), // paid: never due
+      paymentRow("p1", { amountInr: 60_000 }),
+      paymentRow("p2", { payeeRole: "agent", payee: "Sino Freight", kind: "Balance", po: "PO-1", amountInr: 6_000 }),
+      paymentRow("p3", { amountInr: 12_000, voided: true, voidReason: "Twice" }),
+      paymentRow("p4", { currency: "USD", rateInr: null, amountInr: null }),
     ];
-    const { kpis } = toPaymentsData({ orders: [], payments }, today);
-    expect(kpis.dueNext7).toEqual({ amounts: [{ currency: "CNY", amount: 500 }], count: 2, first: { po: "PO-3003", due: "2026-11-10" } });
-    expect(kpis.dueNext30).toEqual({ amounts: [{ currency: "CNY", amount: 1_400 }], count: 4, first: { po: "PO-3003", due: "2026-11-10" } });
+    const { kpis } = toPaymentsData({ orders: [], payments, totals: TOTALS }, today);
+    expect(kpis).toMatchObject({ paidSoFarInr: 66_000, paidCount: 3, unrated: 1 });
   });
 
-  it("never adds due amounts in different currencies", () => {
-    const payments = [due("p1", "PO-3001", "2026-11-12", 100), { ...due("p2", "PO-3002", "2026-11-13", 40), currency: "USD" as const }, due("p3", "PO-3003", "2026-11-14", 50)];
-    expect(toPaymentsData({ orders: [], payments }, today).kpis.dueNext7.amounts).toEqual([
-      { currency: "CNY", amount: 150 },
-      { currency: "USD", amount: 40 },
+  it("takes payable and available per currency from LED-2's totals, never adding currencies", () => {
+    const { kpis } = toPaymentsData({ orders: [], payments: [], totals: TOTALS }, today);
+    expect(kpis.payable).toEqual([{ currency: "CNY", amount: 1200 }]);
+    expect(kpis.available).toEqual([
+      { currency: "CNY", amount: 500 },
+      { currency: "USD", amount: 80 },
     ]);
+    // A backend before 0017 sends no totals: none, not zeros made up.
+    expect(toPaymentsData({ orders: [], payments: [] }, today).kpis.payable).toEqual([]);
   });
 
-  it("names nobody when nothing is due", () => {
-    expect(toPaymentsData({ orders: [], payments: [] }, today).kpis.dueNext7).toEqual({ amounts: [], count: 0, first: null });
+  it("counts non-void due payments from today to +30 days, naming the earliest", () => {
+    const payments = [due("d1", "2026-11-12", 1_000), due("d2", "2026-12-09", 2_000), due("d3", "2026-12-11", 4_000), due("d4", "2026-11-11", 8_000, { voided: true })];
+    expect(toPaymentsData({ orders: [], payments }, today).kpis.dueNext30).toEqual({ amounts: [{ currency: "CNY", amount: 3_000 }], count: 2, first: { po: "PO-1", due: "2026-11-12" } });
   });
 
-  it("maps order rows and tones overdue and soon next-due dates", () => {
-    const { orders } = toPaymentsData(
-      {
-        orders: [
-          order("PO-3001", { nextDue: "2026-11-09" }),
-          order("PO-3002", { nextDue: "2026-11-17" }),
-          order("PO-3003", { nextDue: "2026-11-18" }),
-          order("PO-3004"),
-        ],
-        payments: [],
-      },
-      today,
-    );
-    expect(orders[0]).toEqual({
-      orderId: "o-PO-3001",
-      po: "PO-3001",
-      supplier: "Ningbo Knits",
-      currency: "CNY",
-      supplierRate: null,
-      orderValue: 10_000,
-      paid: 4_000,
-      paidInr: 48_000,
-      supplierPaid: 4_000,
-      // No advanceCny from this API: no supplier advance applied.
-      advance: 0,
-      supplierPaidInr: 48_000,
-      balance: 6_000,
-      depositRequired: null,
-      depositPaid: 0,
-      depositPending: null,
-      depositStatus: "none",
-      nextDue: "2026-11-09",
-      nextDueTone: "danger",
-    });
-    expect(orders.map((o) => o.nextDueTone)).toEqual(["danger", "warning", undefined, undefined]);
+  it("keeps the API's order figures as they are and tones the next due date", () => {
+    const orders = [paymentOrder("PO-1", { nextDue: "2026-11-09" }), paymentOrder("PO-2", { nextDue: "2026-11-15" }), paymentOrder("PO-3", { nextDue: "2026-12-30" })];
+    const rows = toPaymentsData({ orders, payments: [] }, today).orders;
+    expect(rows.map((r) => r.nextDueTone)).toEqual(["danger", "warning", undefined]);
+    expect(rows[0]).toMatchObject({ settledCny: 4_000, outstandingCny: 6_000, paymentStatus: "partly", paidInr: 48_000 });
   });
 
-  it("keeps the supplier's figures apart from every payee's, and the deposit the supplier asked for", () => {
-    const { orders } = toPaymentsData(
-      { orders: [order("PO-3001", { paidCny: 4_500, paidInr: 54_000, depositRequiredCny: 1_000, depositPaidCny: 400, depositPendingCny: 600, depositStatus: "partly" })], payments: [] },
-      today,
-    );
-    expect(orders[0]).toMatchObject({ paid: 4_500, paidInr: 54_000, supplierPaid: 4_000, supplierPaidInr: 48_000, balance: 6_000, depositRequired: 1_000, depositPaid: 400, depositPending: 600, depositStatus: "partly" });
-  });
-
-  it("maps an older PAY-1 response, without the supplier split or the deposit fields, to nulls (shown as dashes), never to every payee's figures", () => {
-    // A backend from before phase 2: its balanceCny counted every payee, so it must not appear as the supplier's balance.
-    const legacy = { orderId: "o-PO-3001", po: "PO-3001", supplier: "Ningbo Knits", currency: "CNY", orderValueCny: 10_000, paidCny: 4_500, paidInr: 54_000, balanceCny: 5_500, nextDue: null } as unknown as Order;
-    const { orders, kpis } = toPaymentsData({ orders: [legacy], payments: [] }, today);
-    expect(orders[0]).toMatchObject({ paid: 4_500, paidInr: 54_000, supplierPaid: null, supplierPaidInr: null, balance: null, depositRequired: null, depositPaid: 0, depositPending: null, depositStatus: "none" });
-    expect(kpis.paidSoFarInr).toBe(54_000);
-  });
-
-  it("selects the first order that has payments, else the first order, else none", () => {
-    const orders = [order("PO-3001"), order("PO-3002")];
-    expect(toPaymentsData({ orders, payments: [paid("p1", "PO-3002")] }, today).defaultPo).toBe("PO-3002");
-    expect(toPaymentsData({ orders, payments: [] }, today).defaultPo).toBe("PO-3001");
+  it("selects the first order with a payment naming it, else the first order, else none", () => {
+    const orders = [paymentOrder("PO-1"), paymentOrder("PO-2")];
+    expect(toPaymentsData({ orders, payments: [paymentRow("p1", { po: "PO-2" })] }, today).defaultPo).toBe("PO-2");
+    expect(toPaymentsData({ orders, payments: [paymentRow("p1")] }, today).defaultPo).toBe("PO-1");
     expect(toPaymentsData({ orders: [], payments: [] }, today).defaultPo).toBeNull();
   });
 });
 
 describe("getPayments", () => {
   const AGENTS = [{ id: "a1", name: "Sino Freight" }];
+  const SUPPLIERS = [{ id: "s1", name: "Boston Denim", currency: "USD", exchangeRate: 88, held: false, currencyOptions: ["USD"], balances: [] }];
   const me = (payments: string, ordersView: string) => ({ shell: "management", permissions: { payments, ordersView } });
-  const SUPPLIERS = [{ id: "s1", name: "Boston Denim", currency: "USD", exchangeRate: 88 }];
-  const answer = (options: () => Promise<unknown>, advanceSuppliers: () => Promise<unknown> = () => Promise.resolve({ suppliers: SUPPLIERS })) =>
+  const answer = (options: () => Promise<unknown>, suppliers: () => Promise<unknown> = () => Promise.resolve({ suppliers: SUPPLIERS })) =>
     apiGet.mockImplementation((path: string) =>
-      path === "/orders/options" ? options() : path === "/supplier-advances/suppliers" ? advanceSuppliers() : Promise.resolve({ orders: [], payments: [] }),
+      path === "/orders/options" ? options() : path === "/supplier-advances/suppliers" ? suppliers() : Promise.resolve({ orders: [], payments: [], totals: [] }),
     );
 
   beforeEach(() => {
@@ -180,57 +77,36 @@ describe("getPayments", () => {
     getMe.mockReset().mockResolvedValue(null);
   });
 
-  it("reads PAY-1 and derives with today in India", async () => {
-    apiGet.mockResolvedValue({ orders: [order("PO-3001", { nextDue: "2026-11-12" })], payments: [due("p1", "PO-3001", "2026-11-12", 6_000)] });
-    const data = await getPayments();
-    expect(apiGet).toHaveBeenCalledWith("/payments");
-    expect(data.orders.map((o) => [o.po, o.nextDueTone])).toEqual([["PO-3001", "warning"]]);
-    expect(data.kpis.dueNext7.count).toBe(1);
-    expect(data.defaultPo).toBe("PO-3001");
-  });
-
-  it("offers recording, with ORD-2's agents, to payments Enter or better, and links POs for Orders viewers", async () => {
+  it("offers Record payment (ADV-5) and sea freight (ORD-2 agents) to payments Enter; Void to payments Full only", async () => {
     getMe.mockResolvedValue(me("Enter", "View"));
-    answer(() => Promise.resolve({ agents: AGENTS, suppliers: [{ id: "x", name: "ORD-2 supplier", currency: "CNY", exchangeRate: null }] }));
-    const data = await getPayments();
-    expect(apiGet).toHaveBeenCalledWith("/orders/options");
-    expect(data.agents).toEqual(AGENTS);
-    // ADV-5's active suppliers (a supplier advance with no order), never ORD-2's.
-    expect(apiGet).toHaveBeenCalledWith("/supplier-advances/suppliers");
-    expect(data.suppliers).toEqual(SUPPLIERS);
-    expect(data.linkPo).toBe(true);
+    answer(() => Promise.resolve({ agents: AGENTS }));
+    const enter = await getPayments();
+    expect(apiGet).toHaveBeenCalledWith("/payments");
+    expect(enter).toMatchObject({ agents: AGENTS, suppliers: SUPPLIERS, linkPo: true, canVoid: false });
+
+    getMe.mockResolvedValue(me("Full", "None"));
+    expect(await getPayments()).toMatchObject({ canVoid: true, linkPo: false });
   });
 
-  it("doesn't offer recording to viewers, nor read ORD-2 or ADV-5 for them", async () => {
+  it("offers no recording to viewers, nor reads ORD-2 or ADV-5 for them", async () => {
     getMe.mockResolvedValue(me("View", "None"));
     answer(
       () => Promise.reject(new Error("ORD-2 must not be read")),
       () => Promise.reject(new Error("ADV-5 must not be read")),
     );
-    const data = await getPayments();
-    expect(apiGet).not.toHaveBeenCalledWith("/orders/options");
-    expect(apiGet).not.toHaveBeenCalledWith("/supplier-advances/suppliers");
-    expect(data.agents).toBeNull();
-    expect(data.suppliers).toEqual([]);
-    expect(data.linkPo).toBe(false);
+    expect(await getPayments()).toMatchObject({ agents: null, suppliers: null, canVoid: false });
   });
 
-  it("without order access (ORD-2 403), still loads ADV-5's suppliers for a supplier advance; no agents", async () => {
+  it("a failing list just means none of it", async () => {
     getMe.mockResolvedValue(me("Enter", "None"));
-    answer(() => Promise.reject(new ApiError(403, "forbidden", "no")));
-    expect(await getPayments()).toMatchObject({ agents: [], suppliers: SUPPLIERS });
-  });
-
-  it("an ADV-5 failure (an older API) just means no supplier advance: the order payment form as before", async () => {
-    getMe.mockResolvedValue(me("Full", "Full"));
     answer(
-      () => Promise.resolve({ agents: AGENTS }),
-      () => Promise.reject(new ApiError(404, "not_found", "no")),
+      () => Promise.reject(new ApiError(403, "forbidden", "no")),
+      () => Promise.reject(new ApiError(500, "internal", "no")),
     );
-    expect(await getPayments()).toMatchObject({ agents: AGENTS, suppliers: [] });
+    expect(await getPayments()).toMatchObject({ agents: [], suppliers: [] });
   });
 
-  it("rejects when the API fails (no fixture fallback)", async () => {
+  it("rejects when PAY-1 fails (no fixture fallback)", async () => {
     apiGet.mockRejectedValue(new ApiError(500, "internal", "boom"));
     await expect(getPayments()).rejects.toBeInstanceOf(ApiError);
   });

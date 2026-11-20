@@ -28,7 +28,7 @@ describe("Delete order", () => {
   it("names the PO and supplier, and Cancel sends nothing", async () => {
     const { user, dialog } = await ask();
     expect(dialog).toHaveTextContent(
-      "Are you sure you want to delete PO-2051 (Foshan Fabrics)? This can't be undone. An order with payments, receipts or container loads can't be deleted. Any supplier advance applied to it goes back to the supplier's advance account.",
+      "Are you sure you want to delete PO-2051 (Foshan Fabrics)? This can't be undone. An order with payments, receipts or container loads can't be deleted. A cancellation entry on the supplier's account takes the order's value back off it.",
     );
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());

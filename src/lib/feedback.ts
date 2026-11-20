@@ -36,6 +36,7 @@ export const MESSAGES = {
   somethingWrong: "Something went wrong.", // M24 title (existing ErrorState default)
   tryAgain: "Please try again.", // M24 description (existing ErrorState default)
   signOutFailed: "Couldn't sign you out. Please try again.", // M26
+  ledgerMaintenance: "Payments are paused for maintenance", // unified ledger: 503 `ledger_maintenance` on every financial write
 } as const;
 
 export const SUCCESS = {
@@ -55,7 +56,8 @@ export const notifyError = (message: string) => toast.error(message);
  * - 403: toast M23 (E8).
  * - 409/422 with `fields`: returned for the form (E1-E3); nothing else is shown. The form must show every one.
  * - 409/422 without `fields`: toast the API's own message. It is written for users ("This container has arrived and
- *   can't be changed.") and never carries internals; 5xx bodies always say M24.
+ *   can't be changed.", "This supplier's account is pending review.") and never carries internals; 5xx bodies always say M24.
+ * - 503 `ledger_maintenance` (unified ledger write guard): toast "Payments are paused for maintenance" with the API's message.
  * - Anything else (400, 5xx, network): toast M24 and keep the entered values (E11, E12).
  */
 export function handleApiError(error: unknown): Record<string, string> | undefined {
@@ -71,6 +73,10 @@ export function handleApiError(error: unknown): Record<string, string> | undefin
     if (error.status === 409 || error.status === 422) {
       if (error.fields) return error.fields;
       toast.error(error.message);
+      return undefined;
+    }
+    if (error.status === 503 && error.code === "ledger_maintenance") {
+      toast.error(MESSAGES.ledgerMaintenance, { description: error.message });
       return undefined;
     }
   }

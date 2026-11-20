@@ -10,7 +10,8 @@ import { downloadReport } from "./report-download";
 // API and walked from order to container, checking each report as it goes; the shared test database holds other specs'
 // rows too, so assertions look for this order's PO.
 //
-// Order: Hangzhou Knits, 100 Polo shirts at ¥10 (¥1,000), due in 3 days, ¥400 deposit at 12.00 (₹4,800). 60 received
+// Order: a supplier of its own ("Knits A6 …"), 100 Polo shirts at ¥10 (¥1,000), due in 3 days, ¥400 paid to the
+// supplier's account at 12.00 (₹4,800; it settles ¥400 of the order, unified supplier ledger). 60 received
 // (40 short, ¥400), then the 60 loaded into a container.
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -29,12 +30,14 @@ async function choose(page: Page, current: string, option: string) {
 
 test("landed cost and every report show the new order's real figures, filters narrow them, exports download them", async ({ page, api }) => {
   test.setTimeout(240_000);
+  const knits = await api.newSupplier("Knits A6");
+  const KNITS = knits.name;
   const order = await api.createOrder({
-    supplier: "Hangzhou Knits",
+    supplier: KNITS,
     deliveryDate: today(3),
     lines: [{ item: "Polo shirts", quantity: 100, rateCny: 10 }],
-    deposits: [{ amountCny: 400, rateInr: 12 }],
   });
+  await api.paySupplier(knits.id, { amount: 400, rateInr: 12 });
   const { po } = order;
 
   await test.step("13.2 and 13.1: the order is due in 3 days and waits at stage 1", async () => {
@@ -57,12 +60,13 @@ test("landed cost and every report show the new order's real figures, filters na
     await expect(row).toContainText("waiting for supplier payment");
     await row.getByRole("button", { name: po }).click();
     await expect(page.getByRole("heading", { level: 2, name: `${po} · Polo shirts: where the ${inr(4800)} goes` })).toBeVisible();
-    await expect(rowOf(page, "Deposit").filter({ hasText: "12.00" })).toContainText(inr(4800));
+    // The supplier credit that settled it, at its own rate.
+    await expect(rowOf(page, "Payment").filter({ hasText: "12.00" })).toContainText(inr(4800));
 
-    await choose(page, "Supplier: All suppliers", "Hangzhou Knits");
+    await choose(page, "Supplier: All suppliers", KNITS);
     await expect(page).toHaveURL(/supplier=/);
     await expect(rowOf(page, po)).toBeVisible();
-    await choose(page, "Supplier: Hangzhou Knits", "Yiwu Trims Ltd.");
+    await choose(page, `Supplier: ${KNITS}`, "Yiwu Trims Ltd.");
     await expect(rowOf(page, po)).toHaveCount(0);
 
     const views = page.getByRole("group", { name: "Group landed cost" });
@@ -89,23 +93,23 @@ test("landed cost and every report show the new order's real figures, filters na
   await test.step("13.5: the supplier's open order, narrowed by the supplier filter, exported as CSV, Excel and PDF", async () => {
     const suppliers = (await api.options()).suppliers;
     const id = (name: string) => suppliers.find((s) => s.name === name)!.id;
-    await page.goto(`/reports/payments-per-supplier?supplier=${id("Hangzhou Knits")}`);
-    await expect(page.getByText("Hangzhou Knits", { exact: true }).first()).toBeVisible(); // the filter pill and the row
-    await expect(rowOf(page, "Hangzhou Knits")).toContainText(po);
-    await expect(page.getByRole("table").getByRole("row")).toHaveCount(3); // header, Hangzhou Knits, total
+    await page.goto(`/reports/payments-per-supplier?supplier=${id(KNITS)}`);
+    await expect(page.getByText(KNITS, { exact: true }).first()).toBeVisible(); // the filter pill and the row
+    await expect(rowOf(page, KNITS)).toContainText(po);
+    await expect(page.getByRole("table").getByRole("row")).toHaveCount(3); // header, the supplier, total
 
     const { name, text: csv } = await downloadReport(page, "CSV");
     expect(name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(csv).toContain("Supplier,Orders,Order value (CNY),Paid (CNY),Paid (INR),Balance (CNY)");
-    // Other specs' orders share the cell, and a cell with commas is quoted ("PO-2142, PO-2128").
-    expect(csv).toMatch(new RegExp(`^Hangzhou Knits,"?[^\\n]*\\b${po}\\b`, "m"));
+    expect(csv).toContain("Supplier,Open orders,Order value (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance");
+    // Settled ¥400 (₹4,800), outstanding ¥600; the account is ¥600 payable.
+    expect(csv).toContain(`${KNITS},${po},1000,400,600,400,4800,-600,Payable to supplier`);
     // The .xlsx zip is uncompressed and the PDF's text uncompressed too, so their bytes hold the cell text.
     const excel = await downloadReport(page, "Excel");
     expect(excel.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.xlsx$/);
-    for (const text of ["Supplier: Hangzhou Knits", "Paid (INR)", ">Hangzhou Knits<", po]) expect(excel.text).toContain(text);
+    for (const text of [`Supplier: ${KNITS}`, "Paid (INR)", `>${KNITS}<`, po]) expect(excel.text).toContain(text);
     const pdf = await downloadReport(page, "PDF");
     expect(pdf.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.pdf$/);
-    for (const text of ["(Payments per supplier) Tj", "Supplier: Hangzhou Knits", "(Paid \\(INR\\)) Tj", "(Hangzhou Knits) Tj"]) expect(pdf.text).toContain(text);
+    for (const text of ["(Payments per supplier) Tj", `Supplier: ${KNITS}`, "(Paid \\(INR\\)) Tj", `(${KNITS}) Tj`]) expect(pdf.text).toContain(text);
 
     await page.goto(`/reports/payments-per-supplier?supplier=${id("Yiwu Trims Ltd.")}`);
     await expect(rowOf(page, po)).toHaveCount(0);
@@ -124,7 +128,7 @@ test("landed cost and every report show the new order's real figures, filters na
     await expect(page.getByText(/^\d[\d,]* orders? · \d[\d,]* pending$/)).toBeVisible(); // the Order Report card
     await expect(page.getByText(/^\d[\d,]* orders? short · \d[\d,]* pcs missing/)).toBeVisible();
     await expect(page.getByText("No downloads to show.")).toBeVisible();
-    await choose(page, "Supplier: All suppliers", "Hangzhou Knits");
+    await choose(page, "Supplier: All suppliers", KNITS);
     await expect(page.getByRole("link", { name: "Open report: Order Report" })).toHaveAttribute("href", /supplier=/);
     const month = periodLabel(today().slice(0, 7));
     await choose(page, "Period: All dates", month);
@@ -132,11 +136,11 @@ test("landed cost and every report show the new order's real figures, filters na
     // A card's file is its report with the hub's filters, named by the period.
     const card = await download(page, "Excel export: Payments and balance due");
     expect(card.name).toBe(`payments-per-supplier-${today().slice(0, 7)}.xlsx`);
-    for (const text of ["Supplier: Hangzhou Knits", po]) expect(card.text).toContain(text);
+    for (const text of [`Supplier: ${KNITS}`, po]) expect(card.text).toContain(text);
     // The Order status report has no hub card any more (the Order Report took its slot); its page keeps the hub's filters.
     await page.goto(`/reports/order-status${new URL(page.url()).search}`);
     await expect(heading(page, "Order status")).toBeVisible();
-    await expect(page.getByText(`${month} · Hangzhou Knits`)).toBeVisible(); // the header pill
+    await expect(page.getByText(`${month} · ${KNITS}`)).toBeVisible(); // the header pill
     // The order was received and loaded above, so it now counts at stage 3.
     await expect(page.getByRole("meter", { name: "3. Container loading" })).toHaveAttribute("aria-valuenow", /^[1-9]/);
   });

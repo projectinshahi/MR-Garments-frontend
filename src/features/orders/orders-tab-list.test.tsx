@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { SETTLED } from "@/features/payments/test-fixtures";
+
 import type { OrderRow } from "./data/queries";
 import { ClosedList, ClosedOrdersPageList, PendingList } from "./orders-tab-list";
 
@@ -30,23 +32,22 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   closed: false,
   closedOn: null,
   orderValueCny: 1000,
-  paidCny: 0,
-  supplierPaidCny: 0,
-  supplierPaidInr: 0,
+  ...SETTLED,
+  settledCny: 0,
+  outstandingCny: 1000,
+  paymentStatus: "unpaid",
+  agentPaidCny: 0,
+  agentPaidInr: 0,
   paidInr: 0,
-  depositRequiredCny: null,
-  depositPaidCny: 0,
-  depositPendingCny: null,
-  depositStatus: "none",
   status: "On track",
   tone: "success",
   chip: null,
   ...patch,
 });
 const orders = [
-  row("PO-2053", { received: 60, paidCny: 500, supplierPaidCny: 500, orderDate: "2026-10-05" }),
+  row("PO-2053", { received: 60, settledCny: 500, outstandingCny: 500, paymentStatus: "partly", orderDate: "2026-10-05", depositRequiredCny: 600, depositStatus: "partly" }),
   row("PO-2052", { stage: 2, received: 100 }),
-  row("PO-2040", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", paidCny: 600, supplierPaidCny: 600 }),
+  row("PO-2040", { stage: 6, received: 100, stocked: 100, closed: true, closedOn: "2026-10-20", settledCny: 600, outstandingCny: 400, paymentStatus: "partly" }),
   row("PO-2039", { stage: 6, received: 100, stocked: 0 }),
 ];
 const cells = (po: string) =>
@@ -55,7 +56,7 @@ const cells = (po: string) =>
     .map((cell) => cell.textContent);
 
 describe("Pending tab", () => {
-  it("lists stage-1 orders only, with pending quantity, value and payment status, under the shared header", () => {
+  it("lists stage-1 orders only, with pending quantity, value, the API's payment status and the deposit milestone, under the shared header", () => {
     render(<PendingList orders={orders} supplierNames={["Foshan Fabrics"]} canEdit />);
     expect(screen.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
     const tabs = screen.getByRole("navigation", { name: "Orders lists" });
@@ -67,7 +68,7 @@ describe("Pending tab", () => {
     expect(screen.getByRole("link", { name: "+ New order" })).toHaveAttribute("href", "/orders/new");
 
     expect(screen.getAllByRole("row")).toHaveLength(2);
-    expect(cells("PO-2053")).toEqual(["PO-2053", "Foshan Fabrics", "5 Oct", "15 Nov", "100 pcs", "40 pcs", "¥1,000.00", "Partly paid", "1. Order and deposit"]);
+    expect(cells("PO-2053")).toEqual(["PO-2053", "Foshan Fabrics", "5 Oct", "15 Nov", "100 pcs", "40 pcs", "¥1,000.00", "Partly paidDeposit partly met", "1. Order and deposit"]);
     expect(screen.getByText("Showing 1 to 1 of 1 orders")).toBeVisible();
   });
 
@@ -91,7 +92,7 @@ describe("Pending tab", () => {
 });
 
 describe("Closed tab", () => {
-  it("lists closed orders only (not every stage 6), with stocked quantity, payments, balance, date and a Report link", () => {
+  it("lists closed orders only (not every stage 6), with stocked quantity, the API's settled and outstanding, date and a Report link", () => {
     render(<ClosedList orders={orders} supplierNames={["Foshan Fabrics"]} canEdit={false} />);
     expect(screen.getAllByRole("row")).toHaveLength(2);
     expect(cells("PO-2040")).toEqual(["PO-2040", "Foshan Fabrics", "¥1,000.00", "100 pcs", "100 pcs", "¥600.00", "¥400.00", "20 Oct 2026", "Report"]);
@@ -123,5 +124,16 @@ describe("Closed Orders page", () => {
     expect(screen.getByLabelText("Search PO, item or supplier")).toBeVisible();
     fireEvent.change(screen.getByLabelText("Closed date to"), { target: { value: "2026-10-19" } });
     expect(screen.getByText("No orders match these filters.")).toBeVisible();
+  });
+});
+
+describe("held accounts in the lists", () => {
+  it("show pending review and dashes, never a made-up figure", () => {
+    const held = row("PO-2060", { held: true, settledCny: null, outstandingCny: null, paymentStatus: null, depositStatus: null, closed: true, stage: 6, stocked: 100, closedOn: "2026-10-21" });
+    const { unmount } = render(<PendingList orders={[{ ...held, stage: 1, closed: false }]} supplierNames={[]} canEdit={false} />);
+    expect(cells("PO-2060")).toContain("Pending review");
+    unmount();
+    render(<ClosedList orders={[held]} supplierNames={[]} canEdit={false} />);
+    expect(cells("PO-2060").slice(5, 7)).toEqual(["–", "–"]);
   });
 });
