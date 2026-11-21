@@ -119,7 +119,7 @@ test("AT-S4: adding Ningbo Denim Works closes the dialog, toasts and persists wi
   const response = await page.request.get("/api/v1/suppliers?search=ningbo");
   expect(response.ok()).toBe(true);
   // The profile fields (docs/suppliers.md) stay empty, the code is the next SUP-nnn, and the money lists are empty without orders.
-  const profile = { code: expect.stringMatching(/^SUP-\d{3,}$/), country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "", openPos: 0, ytdValue: [], balance: [], heldCurrencies: [], exchangeRate: 12.5, rateUpdatedAt: expect.any(String), hasTransactions: false };
+  const profile = { code: expect.stringMatching(/^SUP-\d{3,}$/), country: "", email: "", state: "", postalCode: "", paymentTerms: "", taxNumber: "", openPos: 0, heldOpenPos: 0, ytdValue: [], balance: [], heldCurrencies: [], exchangeRate: 12.5, rateUpdatedAt: expect.any(String), hasTransactions: false };
   expect(await response.json()).toEqual([{ ...NINGBO, ...profile, id: expect.any(String), currency: "CNY", openOrders: 0, status: "Active" }]);
 });
 

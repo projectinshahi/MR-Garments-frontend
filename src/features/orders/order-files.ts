@@ -64,7 +64,7 @@ function itemSheet(rows: OrderRow[], lines: OrderLineItem[]): Section[] {
 const orderSummary = (rows: OrderRow[]) =>
   summarySection([
     ["Orders", rows.length],
-    ["PO value", amountsText(sumByCurrency(rows, (o) => o.currency, (o) => o.orderValueCny))],
+    ["PO value", amountsText(sumByCurrency(rows.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny))],
     ["Settled", amountsText(sumByCurrency(rows.filter((o) => o.settledCny !== null), (o) => o.currency, (o) => o.settledCny ?? 0))],
     ["Outstanding", amountsText(sumByCurrency(rows.filter((o) => o.outstandingCny !== null), (o) => o.currency, (o) => o.outstandingCny ?? 0))],
     ["Paid, all payees (INR)", totalOf(rows, (o) => o.paidInr)],
@@ -89,8 +89,8 @@ function file(title: string, slug: string, today: string, filters: string, secti
   };
 }
 
-/** Σ of a figure, its nulls (held, unknown) left out. */
-const totalOf = (list: OrderRow[], pick: (o: OrderRow) => number | null) => Math.round(list.reduce((sum, o) => sum + (pick(o) ?? 0), 0) * 100) / 100;
+/** Σ of a figure, its nulls (unknown) and a held account's orders (D4, even their PO value) left out. */
+const totalOf = (list: OrderRow[], pick: (o: OrderRow) => number | null) => Math.round(list.reduce((sum, o) => sum + (o.held ? 0 : (pick(o) ?? 0)), 0) * 100) / 100;
 
 /** All orders (05): every order matching the filters, per currency, with its saved rate, value, payments and balance. */
 export const ordersFile = (rows: OrderRow[], filters: string, today: string, lines: OrderLineItem[] | null = null) =>

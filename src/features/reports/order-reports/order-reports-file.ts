@@ -25,6 +25,8 @@ export const paymentStatusLabel = (row: Pick<OrderReportRow, "held" | "paymentSt
 export const rowStatus = (row: OrderReportRow, today: string) => orderStatus(row, today);
 
 function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): Section {
+  // A held account's orders (D4) are listed, but their money adds nothing to the totals, as on the Summary sheet.
+  const counted = rows.filter((row) => !row.held);
   return {
     sheet: "Orders",
     title: `Orders in ${currency}`,
@@ -93,15 +95,15 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
           null,
           null,
           null,
-          sum(rows, (row) => row.orderValueCny),
+          sum(counted, (row) => row.orderValueCny),
           null,
           // Only when every order has a saved rate: a part total would read as the whole.
-          rows.every((row) => row.orderValueInr !== null) ? sum(rows, (row) => row.orderValueInr ?? 0) : null,
-          sum(rows, (row) => row.settledCny ?? 0),
-          sum(rows, (row) => row.outstandingCny ?? 0),
+          counted.every((row) => row.orderValueInr !== null) ? sum(counted, (row) => row.orderValueInr ?? 0) : null,
+          sum(counted, (row) => row.settledCny ?? 0),
+          sum(counted, (row) => row.outstandingCny ?? 0),
           null,
-          sum(rows, (row) => row.paidInr ?? 0),
-          sum(rows, (row) => row.landedCostInr ?? 0),
+          sum(counted, (row) => row.paidInr ?? 0),
+          sum(counted, (row) => row.landedCostInr ?? 0),
           null,
           null,
         ]

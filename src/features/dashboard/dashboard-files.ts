@@ -56,9 +56,10 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
         ["Containers on the way", kpi(d.containers, (c) => c.onTheWay)],
         ["Containers arriving this week", kpi(d.containers, (c) => c.arrivingThisWeek)],
         ["Payments due in next 30 days", kpi(d.paymentsDue, (p) => amountsText(p.amounts))],
-        // Every paid, not voided payment (supplier and shipping agent, orderless ones included) at its own rate.
-        ["Paid so far, all payees (INR)", kpi(sources.payments, (p) => round2(p.payments.reduce((sum, row) => sum + (!row.voided && row.status === "paid" ? (row.amountInr ?? 0) : 0), 0)))],
-        ["PO value", kpi(orders, (list) => amountsText(sumByCurrency(list, (o) => o.currency, (o) => o.orderValueCny)))],
+        // Every paid payment (supplier and shipping agent, orderless ones included) at its own rate; voided and held (D4) left out.
+        ["Paid so far, all payees (INR)", kpi(sources.payments, (p) => round2(p.payments.reduce((sum, row) => sum + (!row.voided && !row.held && row.status === "paid" ? (row.amountInr ?? 0) : 0), 0)))],
+        // A held account's orders (D4) are listed but add nothing to any value.
+        ["PO value", kpi(orders, (list) => amountsText(sumByCurrency(list.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny)))],
         // The supplier ledger accounts below zero (PAY-1's LED-2 totals), held accounts left out.
         ["Payable to suppliers", kpi(sources.payments, (p) => amountsText((p.totals ?? []).filter((t) => t.payableCny > 0).map((t) => ({ currency: t.currency, amount: t.payableCny }))))],
       ]),
@@ -87,7 +88,8 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
             currency: mine[0]!.currency,
             orders: mine.length,
             active: mine.filter((o) => o.stage < 6).length,
-            value: round2(mine.reduce((sum, o) => sum + o.orderValueCny, 0)),
+            // Null while the account is held (D4), as settled and outstanding: no figure, never a made-up value.
+            value: mine.some((o) => o.held) ? null : round2(mine.reduce((sum, o) => sum + o.orderValueCny, 0)),
             // The FIFO settlement; null while the account is held or an order is not posted (no figure, never a made-up 0).
             settled: mine.some((o) => o.settledCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.settledCny!, 0)),
             outstanding: mine.some((o) => o.outstandingCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.outstandingCny!, 0)),

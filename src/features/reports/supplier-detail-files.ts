@@ -123,7 +123,7 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           money("INR equivalent", "INR"),
           text("Status"),
         ],
-        rows: list.map((p) => [p.paidOn, p.dueDate, p.po, paymentType(p), p.mode, p.amountCny, p.rateInr, p.amountInr, p.voided ? `Voided: ${p.voidReason}` : p.status === "paid" ? "Paid" : "Due"]),
+        rows: list.map((p) => [p.paidOn, p.dueDate, p.po, paymentType(p), p.mode, p.amountCny, p.rateInr, p.amountInr, p.voided ? `Voided: ${p.voidReason}` : p.held ? "Pending review" : p.status === "paid" ? "Paid" : "Due"]),
       })),
       ...ledger,
       ...deposits,

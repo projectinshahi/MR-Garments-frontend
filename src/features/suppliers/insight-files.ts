@@ -5,6 +5,7 @@ import type { SupplierInsightRow } from "@/lib/api/suppliers-types";
 import type { Currency } from "@/types/domain";
 
 import type { SupplierInsightsData } from "./data/queries";
+import { balanceText } from "./supplier-files";
 
 // Supplier Performance / Analytics report download (backend docs/suppliers.md SUP-2, docs/report-downloads.md): the
 // tab's figures for the URL's period and supplier, as SUP-2 counts them: performance per supplier, the top suppliers,
@@ -26,7 +27,7 @@ const performanceColumns = [
   text("Delayed"),
   text("Average delivery days"),
   text("Order value"),
-  text("Supplier balance (+ available, - payable)"),
+  text("Supplier balance"),
 ];
 const performanceRow = (s: SupplierInsightRow) => [
   s.code || null,
@@ -41,7 +42,8 @@ const performanceRow = (s: SupplierInsightRow) => [
   s.delayed,
   s.averageDeliveryDays,
   amountsText(s.value),
-  amountsText(s.balance),
+  // In words (available with the supplier, payable to it), then any held currency (pending review).
+  balanceText(s),
 ];
 
 export function supplierInsightsFile(page: SupplierInsightsData, tab: "performance" | "analytics"): ReportFile {

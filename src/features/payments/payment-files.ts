@@ -14,7 +14,7 @@ import { live, MILESTONE_STATUS, PAYMENT_STATUS, paymentType } from "./money";
 const text = (header: string): Column => ({ header });
 const date = (header: string): Column => ({ header, date: true });
 const round2 = (value: number) => Math.round(value * 100) / 100;
-const statusOf = (p: Payment) => (p.voided ? "Voided" : p.status === "paid" ? "Paid" : "Due");
+const statusOf = (p: Payment) => (p.voided ? "Voided" : p.held ? "Pending review" : p.status === "paid" ? "Paid" : "Due");
 
 function paymentTables(list: Payment[], sheet: string, heading: string, agent: boolean): Section[] {
   return perCurrency(list).map(([currency, rows]) => {
@@ -56,10 +56,10 @@ function paymentTables(list: Payment[], sheet: string, heading: string, agent: b
         p.voided ? p.voidReason || null : null,
         p.notes || null,
       ]),
-      // Voided payments are not in the totals.
+      // Voided payments and held accounts are not in the totals.
       total: rows.length
         ? [
-            "Total (voided left out)",
+            rows.some((p) => p.held) ? "Total (voided and pending review left out)" : "Total (voided left out)",
             ...Array<null>(agent ? 8 : 7).fill(null),
             round2(counted.reduce((sum, p) => sum + p.amountCny, 0)),
             null,
@@ -79,7 +79,9 @@ export function paymentsFile(orders: OrderPaymentRow[], payments: Payment[], que
   const toSupplier = payments.filter((p) => p.payeeRole === "supplier");
   const toAgents = payments.filter((p) => p.payeeRole === "agent");
   const due = counted.filter((p) => p.status === "due");
-  const known = (pick: (o: OrderPaymentRow) => number | null) => amountsText(sumByCurrency(orders.filter((o) => pick(o) !== null), (o) => o.currency, (o) => pick(o) ?? 0));
+  // A held account's orders (D4) are listed but count in no total: their value too, not only their (null) settlement.
+  const known = (pick: (o: OrderPaymentRow) => number | null) => amountsText(sumByCurrency(orders.filter((o) => !o.held && pick(o) !== null), (o) => o.currency, (o) => pick(o) ?? 0));
+  const held = payments.filter((p) => p.held && !p.voided);
   return {
     title: "Payments",
     filename: `payments-${today}`,
@@ -104,7 +106,8 @@ export function paymentsFile(orders: OrderPaymentRow[], payments: Payment[], que
         ["Paid, all payees (INR)", round2(counted.filter((p) => p.status === "paid").reduce((sum, p) => sum + (p.amountInr ?? 0), 0))],
         ["Supplier payments", live(toSupplier).length],
         ["Shipping-agent payments", live(toAgents).length],
-        ["Voided payments", payments.length - counted.length],
+        ["Voided payments", payments.filter((p) => p.voided).length],
+        ...(held.length ? ([["Payments pending review (held account)", held.length]] satisfies [string, number][]) : []),
         ["Due payments", `${due.length} · ${amountsText(sumByCurrency(due, (p) => p.currency, (p) => p.amountCny))}`],
       ]),
       ...perCurrency(orders).map(([currency, list]) => ({

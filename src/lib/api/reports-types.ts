@@ -45,6 +45,8 @@ export type LandedCostRow = {
   teams: { teamId: string; team: string; pieces: number; costInr: number }[];
   /** The supplier credits that settled the order (the ledger's FIFO slices), oldest first, each at its own rate; they add up to goodsInr. */
   goodsPayments: SettlementSlice[];
+  /** The order's account is held (D4): listed, its PO value in no total. Absent from a backend before the audit fixes. */
+  held?: boolean;
 };
 
 /** GET /api/v1/landed-cost?supplierId=&teamId= (both optional uuids; teamId keeps orders with stock for that team). */
@@ -434,9 +436,10 @@ export type OrderReport = {
   payments: ({
     list: OrderReportPayment[];
     slices: SettlementSlice[];
-    agentPaidCny: number;
-    agentPaidInr: number;
-    dueCny: number;
+    /** Null while the order's account is held (D4): it carries no money figure, sea freight and due rows included. */
+    agentPaidCny: number | null;
+    agentPaidInr: number | null;
+    dueCny: number | null;
   } & SettlementFields &
     MilestoneFields) | null;
   /** The supplier's account (payments View): every order of the supplier and the account-level deposits; null below View. */
@@ -491,7 +494,8 @@ export type OrderReportRow = {
   closed: boolean;
   closedOn: string | null;
   orderValueCny: number;
-  agentPaidInr: number;
+  /** Null while the order's account is held (D4). */
+  agentPaidInr: number | null;
   paidInr: number | null;
   /** null while the order has no cost at all. */
   landedCostInr: number | null;

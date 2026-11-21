@@ -81,6 +81,8 @@ export type SupplierRow = Contact &
     openOrders: number;
     /** Orders not closed (phase 2 §1): the Suppliers list's "Active POs", the same rule as its Open POs card. */
     openPos: number;
+    /** The same orders of its held accounts (pending review), counted apart from `openPos`; absent (older rows) is 0. */
+    heldOpenPos?: number;
     ytdValue: MoneyTotal[];
     balance: MoneyTotal[];
     heldCurrencies: string[];

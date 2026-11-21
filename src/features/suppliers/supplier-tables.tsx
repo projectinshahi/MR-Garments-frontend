@@ -6,14 +6,40 @@ import Link from "next/link";
 import { LinkPending } from "@/components/layout/navigation-progress";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusPill } from "@/components/shared/status-pill";
+import { BalanceFigure } from "@/features/payments/money";
 import type { SupplierInsightRow } from "@/lib/api/suppliers-types";
 import { formatNumber } from "@/lib/formatters";
+import type { Currency } from "@/types/domain";
 
 import { daysText, moneyText, rateText } from "./suppliers-logic";
 
 // The dashboards' tables (backend docs/suppliers.md SUP-2). Client-side because column definitions hold functions.
 
 const right = { align: "right" } as const;
+
+/**
+ * A supplier's signed ledger balances, each as the amount without its sign over its direction in words (available with
+ * the supplier, payable to the supplier, settled), then any held currency (pending review, no figure).
+ */
+export function SupplierBalance({ balance, heldCurrencies }: { balance: { currency: Currency; amount: number }[]; heldCurrencies: string[] }) {
+  if (!balance.length && !heldCurrencies.length) return "–";
+  return (
+    <span className="flex flex-col items-end gap-1">
+      {balance.map((total) =>
+        // Several currencies can sit in one cell: a settled one says which.
+        total.amount === 0 ? (
+          <span key={total.currency} className="text-muted-foreground">
+            Settled ({total.currency})
+          </span>
+        ) : (
+          // The label may wrap (table cells don't), so the column stays narrow.
+          <BalanceFigure key={total.currency} balance={total.amount} currency={total.currency} className="whitespace-normal" />
+        ),
+      )}
+      {heldCurrencies.length ? <span className="text-xs text-muted-foreground">{heldCurrencies.join(", ")} pending review</span> : null}
+    </span>
+  );
+}
 const supplierHref = (row: SupplierInsightRow) => `/suppliers/${row.supplierId}`;
 
 const supplierColumn: ColumnDef<SupplierInsightRow> = {
@@ -64,7 +90,7 @@ export function PerformanceTable({ rows }: { rows: SupplierInsightRow[] }) {
     },
     { accessorKey: "averageDeliveryDays", header: "Avg. delivery", meta: right, cell: ({ row }) => daysText(row.original.averageDeliveryDays) },
     { id: "value", header: "Purchase value", meta: right, cell: ({ row }) => moneyText(row.original.value) },
-    { id: "balance", header: "Balance", meta: right, cell: ({ row }) => moneyText(row.original.balance) },
+    { id: "balance", header: "Balance", meta: right, cell: ({ row }) => <SupplierBalance balance={row.original.balance} heldCurrencies={row.original.heldCurrencies} /> },
   ];
   return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplierId} size="sm" header="tall" density="snug" emptyState="No orders in this period." />;
 }
@@ -77,7 +103,7 @@ export function TopValueTable({ rows }: { rows: SupplierInsightRow[] }) {
     { accessorKey: "country", header: "Country", cell: ({ row }) => row.original.country || "–" },
     { accessorKey: "orders", header: "Orders", meta: right, cell: ({ row }) => formatNumber(row.original.orders) },
     { id: "value", header: "Purchase value", meta: right, cell: ({ row }) => moneyText(row.original.value) },
-    { id: "balance", header: "Balance", meta: right, cell: ({ row }) => moneyText(row.original.balance) },
+    { id: "balance", header: "Balance", meta: right, cell: ({ row }) => <SupplierBalance balance={row.original.balance} heldCurrencies={row.original.heldCurrencies} /> },
   ];
   return <DataTable columns={columns} data={rows.slice(0, 5)} getRowId={(row) => row.supplierId} size="sm" header="tall" density="snug" emptyState="No orders in this period." />;
 }

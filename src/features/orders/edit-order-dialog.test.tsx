@@ -77,7 +77,7 @@ describe("Edit order at stage 1", () => {
     await user.type(box("Rate (¥), line 2"), "8");
     await user.type(box("Quantity, line 2"), "500");
     expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 5,200.00");
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was ¥ 2,000.00 · change +¥ 3,200.00 on the supplier's account");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was ¥ 2,000.00 · −¥ 3,200.00 on the supplier's account (more payable to the supplier)");
 
     await user.click(save);
     expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -112,7 +112,7 @@ describe("Edit order at stage 1", () => {
     expect(screen.getByRole("button", { name: "Remove line 1" })).toBeDisabled();
     await user.clear(box("Quantity, line 1"));
     await user.type(box("Quantity, line 1"), "1");
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("change −¥ 1,990.00");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("+¥ 1,990.00 on the supplier's account (less payable to the supplier)");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { lines: [{ id: "l-1", itemId: "i-1", quantity: 1, rateCny: 10 }] }));
     expect(toast.success).toHaveBeenCalledWith("Order saved. Supplier balance: Payable to supplier ¥2,000.00 → Payable to supplier ¥10.00");
@@ -127,7 +127,7 @@ describe("Edit order at stage 1", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("This supplier's account is pending review."));
     patch.mockRejectedValueOnce(new ApiError(503, "ledger_maintenance", "Paused."));
     await user.click(save);
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Payments are paused for maintenance", { description: "Paused." }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Paused for maintenance", { description: "Paused." }));
   });
 
   it("shows the API's field errors under their fields, the lines one under the table, and stays open", async () => {
@@ -165,7 +165,7 @@ describe("Money in the order's currency (phase 2 final fixes, 5)", () => {
     expect(screen.getByText("$ 2,000.00")).toBeVisible();
     expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Remove line 2" }));
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was $ 2,000.00 · change −$ 1,000.00");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was $ 2,000.00 · +$ 1,000.00 on the supplier's account (less payable to the supplier)");
   });
 
   it("still opens when an older API left the requirement out, and a no-change save sends nothing", async () => {

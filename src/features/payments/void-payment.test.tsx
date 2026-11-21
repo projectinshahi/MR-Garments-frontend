@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 
+import { HELD_MESSAGE, PaymentStatus } from "./money";
 import { VOID_TEXT, VoidPaymentButton, type VoidablePayment } from "./void-payment";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -98,7 +99,31 @@ describe("VoidPaymentButton (PAY-3: a void with a reason, never a delete)", () =
 
     remove.mockRejectedValueOnce(new ApiError(503, "ledger_maintenance", "Paused."));
     await user.click(confirm);
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Payments are paused for maintenance", { description: "Paused." }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Paused for maintenance", { description: "Paused." }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("a held account's payment (D4, pre-release audit M1)", () => {
+  it("shows Void disabled with the review message and opens nothing: the API refuses every write to it (409)", async () => {
+    const user = userEvent.setup();
+    render(<VoidPaymentButton payment={{ ...PAYMENT, held: true }} />);
+    const button = screen.getByRole("button", { name: `Void unavailable: ${HELD_MESSAGE}` });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", HELD_MESSAGE);
+    await user.click(button);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("its status reads Pending review, never Paid; a voided payment stays Voided", () => {
+    const row = { voided: false, voidReason: "", status: "paid", dueDate: null } as const;
+    const { rerender } = render(<PaymentStatus payment={{ ...row, held: true }} />);
+    expect(screen.getByText("Pending review")).toHaveAttribute("title", HELD_MESSAGE);
+    expect(screen.queryByText("Paid")).not.toBeInTheDocument();
+    rerender(<PaymentStatus payment={{ ...row, held: false }} />);
+    expect(screen.getByText("Paid")).toBeInTheDocument();
+    rerender(<PaymentStatus payment={{ ...row, held: true, voided: true, voidReason: "Entered twice" }} />);
+    expect(screen.getByText("Voided")).toBeInTheDocument();
   });
 });

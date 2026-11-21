@@ -14,6 +14,8 @@ const date = (header: string): Column => ({ header, date: true });
 const inr = (header: string) => money(header, "INR");
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const sum = (rows: LandedCostRow[], pick: (row: LandedCostRow) => number | null | undefined) => round2(rows.reduce((total, row) => total + (pick(row) ?? 0), 0));
+/** The rows a total counts: a held account's orders (D4, pending review) are listed but in no total. */
+const counted = (rows: LandedCostRow[]) => rows.filter((row) => !row.held);
 const status = (row: LandedCostRow) => (row.final ? "Final" : `Estimate, waiting for ${row.waitingFor ?? "costs"}`);
 
 export function landedCostFile(data: LandedCostData, filters: string, today: string): ReportFile {
@@ -34,7 +36,7 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
         ["Total landed cost, final orders (INR)", kpis.finishedTotalInr],
         ["Pieces costed, final orders", kpis.finishedPieces],
         ["Still an estimate", kpis.estimatePos.length],
-        ["Total landed cost, all orders shown (INR)", sum(orders, (row) => row.totalInr)],
+        ["Total landed cost, all orders shown (INR)", sum(counted(orders), (row) => row.totalInr)],
       ]),
       ...perCurrency(orders).map(([currency, list]) => ({
         sheet: "Landed Cost",
@@ -89,17 +91,18 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
               null,
               null,
               null,
-              sum(list, (row) => row.orderValueCny),
+              // A held account's orders (D4) are listed, their money and pieces in no total.
+              sum(counted(list), (row) => row.orderValueCny),
               null,
               null,
-              sum(list, (row) => convertPayments(row.goodsPayments).totalCny),
+              sum(counted(list), (row) => convertPayments(row.goodsPayments).totalCny),
               null,
-              sum(list, (row) => row.goodsInr),
-              sum(list, (row) => row.seaFreightInr),
-              sum(list, (row) => row.clearingInr),
-              sum(list, (row) => row.transportInr),
-              sum(list, (row) => row.totalInr),
-              list.reduce((total, row) => total + row.stockedPieces, 0),
+              sum(counted(list), (row) => row.goodsInr),
+              sum(counted(list), (row) => row.seaFreightInr),
+              sum(counted(list), (row) => row.clearingInr),
+              sum(counted(list), (row) => row.transportInr),
+              sum(counted(list), (row) => row.totalInr),
+              counted(list).reduce((total, row) => total + row.stockedPieces, 0),
               null,
               null,
             ]

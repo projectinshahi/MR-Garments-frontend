@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { toPaymentsData } from "./data/queries";
 import { paymentsFile } from "./payment-files";
-import { paymentOrder, paymentRow } from "./test-fixtures";
+import { HELD, paymentOrder, paymentRow } from "./test-fixtures";
 
 const TODAY = "2026-11-10";
 const payments = [
@@ -37,5 +37,29 @@ describe("paymentsFile (unified ledger)", () => {
     expect(column("Payments by order (CNY)", "Outstanding (CNY)")).toEqual([6_000]);
     expect(column("Payments by order (CNY)", "Payment status")).toEqual(["Partly paid"]);
     expect(column("Shipping-agent payments (CNY)", "Paid to (agent)")).toEqual(["Sino Freight"]);
+  });
+});
+
+describe("paymentsFile: a held account (D4, pre-release audit M1/M3)", () => {
+  const list = [...payments, paymentRow("p4", { supplierId: "s9", supplier: "Shantou Toys", amountCny: 12_000, amountInr: 144_000, held: true })];
+  const held = toPaymentsData({ orders: [paymentOrder("PO-1"), paymentOrder("PO-9", { ...HELD, orderValueCny: 7_000 })], payments: list }, TODAY);
+  const heldFile = paymentsFile(held.orders, list, "", TODAY, totals);
+  const of = (title: string) => heldFile.sections.find((s) => s.title === title)!;
+
+  it("writes its payment as Pending review, counts it apart from the voided ones and leaves it out of every total", () => {
+    const status = of("Supplier payments (CNY)").columns.findIndex((c) => c.header === "Status");
+    expect(of("Supplier payments (CNY)").rows.map((r) => r[status])).toEqual(["Paid", "Voided", "Pending review"]);
+    const total = of("Supplier payments (CNY)").total!;
+    expect(total[0]).toBe("Total (voided and pending review left out)");
+    expect(total.filter((cell) => typeof cell === "number")).toEqual([5_000, 60_000]);
+    const summary = Object.fromEntries(of("Summary").rows.map(([k, v]) => [k, v]));
+    expect(summary).toMatchObject({ "Voided payments": 1, "Payments pending review (held account)": 1, "Supplier payments": 1, "Paid, all payees (INR)": 63_600 });
+  });
+
+  it("lists its order as Pending review, and its value adds nothing to the order totals", () => {
+    const summary = Object.fromEntries(of("Summary").rows.map(([k, v]) => [k, v]));
+    expect(summary).toMatchObject({ Orders: 2, "Order value": "CNY 10,000.00", Settled: "CNY 4,000.00", Outstanding: "CNY 6,000.00" });
+    const status = of("Payments by order (CNY)").columns.findIndex((c) => c.header === "Payment status");
+    expect(of("Payments by order (CNY)").rows.map((r) => r[status])).toEqual(["Partly paid", "Pending review"]);
   });
 });

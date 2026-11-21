@@ -19,7 +19,7 @@ import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-import { balanceText } from "./money";
+import { balanceText, HELD_MESSAGE } from "./money";
 
 // PAY-3 after the unified ledger: a payment is never deleted, only voided with a reason (payments Full). The row stays,
 // marked voided, and leaves every total; a posted supplier payment also gets a void entry on its account, whose balance
@@ -30,14 +30,17 @@ export const VOID_TEXT = {
   voided: "Payment voided",
 };
 
-/** The facts a void shows; a PAY-1, ORD-4 or ledger payment row. */
-export type VoidablePayment = Pick<PaymentRow, "id" | "po" | "supplier" | "currency" | "kind" | "payee" | "payeeRole" | "amountCny" | "status" | "paidOn" | "dueDate" | "rateInr" | "amountInr" | "mode" | "reference">;
+/** The facts a void shows; a PAY-1, ORD-4 or ledger payment row. `held`: its account is pending review (D4). */
+export type VoidablePayment = Pick<PaymentRow, "id" | "po" | "supplier" | "currency" | "kind" | "payee" | "payeeRole" | "amountCny" | "status" | "paidOn" | "dueDate" | "rateInr" | "amountInr" | "mode" | "reference"> & {
+  held?: boolean;
+};
 
 const dateOf = (p: VoidablePayment) => (p.status === "paid" ? p.paidOn : p.dueDate);
 
 /**
  * "Void" in a row's Actions, and its dialog: the reason, then the API's balance before and after. `voided`: no Void
  * button, but an open dialog stays: the refresh after a void marks the row voided while its result is still showing.
+ * A held account's payment (D4): the API refuses every write to it (409), so Void is shown disabled with the reason.
  */
 export function VoidPaymentButton({ payment, voided = false }: { payment: VoidablePayment; voided?: boolean }) {
   const router = useRouter();
@@ -55,7 +58,11 @@ export function VoidPaymentButton({ payment, voided = false }: { payment: Voidab
   const date = dateOf(payment);
   return (
     <>
-      {voided ? null : (
+      {voided ? null : payment.held ? (
+        <button type="button" disabled title={HELD_MESSAGE} aria-label={`Void unavailable: ${HELD_MESSAGE}`} className={cn(rowActionClass, "cursor-not-allowed text-muted-foreground")}>
+          Void
+        </button>
+      ) : (
         <button
           type="button"
           aria-label={`Void payment of ${date ? formatDate(date) : "no date"}, ${formatMoney(payment.amountCny, payment.currency)}`}

@@ -68,7 +68,7 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
     expect(summary).toMatchObject({ sheet: "Summary", csv: false });
     expect(summary!.rows).toEqual([
       ["Orders", 3],
-      ["PO value", "CNY 2,000.00 · USD 2,250.00"],
+      ["PO value", "CNY 1,000.00 · USD 2,250.00"], // the held PO-2051's value too is left out (pre-release audit M3)
       ["Settled", "CNY 300.00 · USD 2,250.00"],
       ["Outstanding", "CNY 700.00 · USD 0.00"],
       ["Paid, all payees (INR)", 191787.36],
@@ -83,7 +83,7 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
       ["PO-2053", "2026-10-01", "Foshan Fabrics", "CNY", 12.0412, "CNF", "Denim jeans", 100, "pcs", "2026-10-30", "2. Receiving in China", "On track", 1000, 300, 700, "Partly paid", "Deposit not met", 4812.36],
       ["PO-2051", "2026-10-01", "Foshan Fabrics", "CNY", null, null, "Denim jeans", 100, "pcs", "2026-10-30", "1. Order and deposit", "On track", 1000, null, null, "Pending review", null, null],
     ]);
-    expect(cny!.total).toEqual(["Total", null, null, null, null, null, null, null, null, null, null, null, 2000, 300, 700, null, null, 4812.36]);
+    expect(cny!.total).toEqual(["Total", null, null, null, null, null, null, null, null, null, null, null, 1000, 300, 700, null, null, 4812.36]);
     expect(headers(file, 2)[12]).toBe("PO total (USD)");
     // An order whose container terms aren't set yet leaves the cell empty.
     expect(usd!.rows[0]!.slice(0, 6)).toEqual(["PO-2052", "2026-10-01", "Shenzhen Apparel", "USD", 83.1, null]);

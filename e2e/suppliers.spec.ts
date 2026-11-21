@@ -41,6 +41,12 @@ test("Suppliers sits between Landed Cost and Reports; the list has the cards, se
   await expect(page.getByRole("heading", { level: 1, name: "Suppliers" })).toBeVisible();
   for (const label of ["Total Suppliers", "Open POs", "In Transit", "Unpaid Amount", "Upcoming Payments"]) await expect(kpi(page, label)).toBeVisible();
   await expect(kpi(page, "Total Suppliers")).toContainText(/Active: \d+ · Inactive: \d+/);
+  // Five cards in one row at 1440 (the reference); three, then two, at 1280, where five would be too narrow.
+  const cardRows = async () => new Set(await Promise.all(["Total Suppliers", "Open POs", "In Transit", "Unpaid Amount", "Upcoming Payments"].map(async (label) => Math.round((await kpi(page, label).boundingBox())!.y)))).size;
+  expect(await cardRows()).toBe(1);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(cardRows).toBe(2);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(tabs(page).getByRole("link", { name: "Supplier List" })).toHaveAttribute("aria-current", "page");
   for (const header of ["Supplier Code", "Supplier Name", "Country", "Contact Person", "Email / Phone", "Active POs", "YTD Value", "Balance", "Status"]) {
     await expect(page.getByRole("columnheader", { name: new RegExp(header) })).toBeVisible();

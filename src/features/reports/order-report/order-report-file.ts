@@ -254,7 +254,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         sheet: "Shipping",
         title: "Sea freight paid to shipping agents",
         columns: columns(date("Paid on"), date("Due date"), "Agent", "Reference", money("Amount", cur), "Rate (INR)", money("Amount", "INR"), "Status", "Notes"),
-        rows: agentPayments.map((p) => [p.paidOn, p.dueDate, p.payee, p.reference, p.amountCny, p.rateInr, p.amountInr, p.status, p.notes]),
+        rows: agentPayments.map((p) => [p.paidOn, p.dueDate, p.payee, p.reference, p.amountCny, p.rateInr, p.amountInr, p.held ? "pending review" : p.status, p.notes]),
         // null, not "", under the date columns: the PDF formats a date column's text as a date.
         total: agentPayments.length ? [null, null, "Sea freight paid", "", payments.agentPaidCny, null, payments.agentPaidInr, "", ""] : undefined,
       });
@@ -423,7 +423,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
           p.payee,
           p.payeeRole,
           p.notes,
-          p.voided ? `voided: ${p.voidReason}` : p.status,
+          p.voided ? `voided: ${p.voidReason}` : p.held ? "pending review" : p.status,
           p.dueDate,
           orDash(p.recordedBy),
           when(p.recordedAt),
@@ -439,8 +439,9 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         sheet: "Deposit History",
         title: "Legacy deposits recorded against this PO",
         columns: columns(date("Paid on"), date("Due date"), "Reference", money("Amount", cur), "Rate (INR)", money("Amount", "INR"), "Mode", "Status", "Notes"),
-        rows: poDeposits.map((p) => [p.paidOn, p.dueDate, p.reference, p.amountCny, p.rateInr, p.amountInr, p.mode, p.status, p.notes]),
-        total: poDeposits.length ? [null, null, "Deposits", round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), null, null, "", "", ""] : undefined,
+        rows: poDeposits.map((p) => [p.paidOn, p.dueDate, p.reference, p.amountCny, p.rateInr, p.amountInr, p.mode, p.held ? "pending review" : p.status, p.notes]),
+        // A held account's deposits (D4) are listed as records and count in no total.
+        total: poDeposits.length ? [null, null, "Deposits", payments.held ? null : round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), null, null, "", "", ""] : undefined,
       },
       {
         sheet: "Deposit History",

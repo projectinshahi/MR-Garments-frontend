@@ -364,7 +364,7 @@ test("while the ledger is in maintenance a payment is refused with the maintenan
   await sql((db) => db.query("update ledger_state set state = 'maintenance', note = 'E2E maintenance check'"));
   try {
     await form.getByRole("button", { name: "Record payment" }).click();
-    const message = toast(page, "Payments are paused for maintenance").first();
+    const message = toast(page, "Paused for maintenance").first();
     await expect(message).toBeVisible();
     await expect(message).toContainText("Payments and order money are paused for maintenance. Try again later.");
     await expect(form).toBeVisible();
@@ -376,6 +376,46 @@ test("while the ledger is in maintenance a payment is refused with the maintenan
   // Live again: the same dialog records it.
   await form.getByRole("button", { name: "Record payment" }).click();
   await expect(toast(page, `Payment recorded for ${supplier.name}`).first()).toBeVisible();
+});
+
+test("in maintenance, Edit order refuses a new order date (the cutover baseline holds it) but saves a new delivery date", async ({ page, api }) => {
+  const supplier = await api.newSupplier("Ledger Maintenance Edit");
+  const { po } = await api.createOrder({ supplier: supplier.name });
+  await page.goto(`/orders/${po}`);
+  await page.getByRole("button", { name: "Edit order" }).click();
+  const edit = dialog(page, "Edit order");
+  await sql((db) => db.query("update ledger_state set state = 'maintenance', note = 'E2E maintenance check'"));
+  try {
+    await field(edit, "Order date").fill(today(-1));
+    await edit.getByRole("button", { name: "Save order" }).click();
+    await expect(toast(page, "Order dates, PO numbers, deposits and items are paused for maintenance. The delivery date and container terms can still change.").first()).toBeVisible();
+    await expect(edit).toBeVisible();
+    expect((await api.order(po)).orderDate).toBe(today());
+    // The same date back and a new delivery date: only the delivery date is sent, and it saves.
+    await field(edit, "Order date").fill(today());
+    await field(edit, "Delivery date").fill(today(25));
+    await edit.getByRole("button", { name: "Save order" }).click();
+    await expect(toast(page, "Order saved")).toBeVisible();
+    expect((await api.order(po)).deliveryDate).toBe(today(25));
+  } finally {
+    await sql((db) => db.query("update ledger_state set state = 'live', note = 'browser-test reset'"));
+  }
+});
+
+test("a held account's open order is not an Active PO: the Suppliers page names it pending review, on the row and the card", async ({ page, api }) => {
+  const supplier = await api.newSupplier("Ledger Held POs");
+  await api.createOrder({ supplier: supplier.name });
+  await sql((db) => db.query("insert into supplier_ledger_holds (supplier_id, currency, reason) values ($1, 'CNY', 'E2E: open orders pending review')", [supplier.id]));
+  try {
+    await page.goto("/suppliers");
+    await expect(kpi(page, "Open POs")).toContainText(/\d+ POs? pending review, not counted/);
+    await page.getByRole("searchbox", { name: "Search supplier name, code or country" }).fill(supplier.name);
+    const row = page.getByRole("row").filter({ hasText: supplier.name });
+    await expect(row).toContainText("+1 pending review");
+    await expect(row).toContainText("CNY pending review");
+  } finally {
+    await sql((db) => db.query("delete from supplier_ledger_holds where supplier_id = $1", [supplier.id]));
+  }
 });
 
 test("the old Supplier advance address opens the supplier ledger, and the statement downloads", async ({ page, api }) => {

@@ -378,7 +378,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                 size="xs"
                 label="Outstanding"
                 value={payments ? moneyOrDash(payments.outstandingCny, (v) => money(v)) : DASH}
-                sub={payments ? `${money(payments.dueCny)} due · ${settlementLabel(payments)}` : "outside your access"}
+                sub={payments ? `${moneyOrDash(payments.dueCny, (v) => money(v))} due · ${settlementLabel(payments)}` : "outside your access"}
                 tone={payments && (payments.outstandingCny ?? 0) > 0 ? "danger" : "default"}
               />
               <KpiCard size="xs" label="Received · pending" value={quantities((t) => t.received)} sub={`pending ${quantities((t) => t.pending)}`} />
@@ -606,9 +606,10 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                     money(payment.amountCny, 2),
                     payment.rateInr === null ? DASH : formatRate(payment.rateInr),
                     inr(payment.amountInr),
-                    payment.status === "paid" ? <StatusPill tone="success">Paid</StatusPill> : <StatusPill tone="warning">Due</StatusPill>,
+                    // Pending review on a held account (D4), never Paid.
+                    <PaymentStatus key="status" payment={payment} />,
                   ])}
-                  total={["", "Sea freight paid", "", money(payments.agentPaidCny, 2), "", formatINR(payments.agentPaidInr), ""]}
+                  total={["", "Sea freight paid", "", moneyOrDash(payments.agentPaidCny, (v) => money(v, 2)), "", moneyOrDash(payments.agentPaidInr, formatINR), ""]}
                   empty="No payments to shipping agents (CNF terms, or none recorded yet)."
                 />
               </div>
@@ -685,7 +686,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                     value={payments.held ? HELD_BALANCE : moneyOrDash(payments.settledCny, (v) => money(v))}
                     sub={`${moneyOrDash(payments.settledInr, (v) => formatINR(v))} in INR`}
                   />
-                  <KpiCard size="xs" label="Due (recorded)" value={money(payments.dueCny)} sub="payments marked due" />
+                  <KpiCard size="xs" label="Due (recorded)" value={moneyOrDash(payments.dueCny, (v) => money(v))} sub="payments marked due" />
                   <KpiCard
                     size="xs"
                     label="Outstanding"
@@ -780,10 +781,14 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                       payment.rateInr === null ? DASH : formatRate(payment.rateInr),
                       inr(payment.amountInr),
                       orDash(payment.mode),
-                      payment.status === "paid" ? <StatusPill tone="success">Paid</StatusPill> : <StatusPill tone="warning">Due</StatusPill>,
+                      // Pending review on a held account (D4), never Paid.
+                    <PaymentStatus key="status" payment={payment} />,
                       orDash(payment.notes),
                     ])}
-                    total={poDeposits.length ? ["", "Deposits", money(round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), 2), "", "", "", "", ""] : undefined}
+                    total={
+                      // A held account's deposits are listed as records and count in no total (D4).
+                      poDeposits.length ? ["", "Deposits", payments.held ? DASH : money(round2(poDeposits.reduce((sum, p) => sum + p.amountCny, 0)), 2), "", "", "", "", ""] : undefined
+                    }
                     empty="No deposit recorded on this PO."
                   />
                 </div>

@@ -345,6 +345,18 @@ describe("order report file", () => {
     expect(rows).toContainEqual(["Outstanding (CNY)", null]);
   });
 
+  it("a held account's order: its payments listed as pending review, no due, sea freight or deposit total (pre-release audit M3)", () => {
+    const list = report.payments!.list.map((p) => ({ ...p, held: true }));
+    const held = { ...report.payments!, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, slices: [], agentPaidCny: null, agentPaidInr: null, dueCny: null, list };
+    const heldFile = orderReportFile({ ...report, payments: held }, TODAY);
+    const of = (title: string) => heldFile.sections.find((s) => s.title === title)!;
+    expect(of("Payment summary").rows).toContainEqual(["Due (CNY)", null]);
+    expect(of("Payment summary").rows).toContainEqual(["Sea freight paid to agents (CNY)", null]);
+    expect(of("Payments recorded on this PO").rows[0]![11]).toBe("pending review");
+    expect(of("Legacy deposits recorded against this PO").rows).toHaveLength(1); // listed as a record
+    expect(of("Legacy deposits recorded against this PO").total?.[3]).toBeNull(); // counted nowhere
+  });
+
   it("explains a CNF order's sea freight and marks the parts the records never hold", () => {
     const { components, additionalInr } = landedCostBreakdown(report.landedCost!, report.logistics);
     expect(components.map((component) => component.status)).toEqual(["recorded", "not tracked", "not tracked", "not tracked", "not applicable", "not tracked", "recorded", "not tracked", "missing", "not tracked", "not tracked"]);

@@ -28,8 +28,8 @@ export const fetchAgentPayments = (): Promise<AgentPayments> =>
 export function containersFile(rows: ContainerRow[], filters: string, today: string, payments: AgentPayments): ReportFile {
   const pos = rows.flatMap((c) => c.orders.map((o) => ({ ...o, container: c })));
   const shipped = new Set(pos.map((o) => o.po));
-  // Agent payments are always on an order; a voided one is not freight paid (unified ledger: voids leave every total).
-  const freight = payments === "denied" ? [] : payments.filter((p) => p.payeeRole === "agent" && !p.voided && p.po !== null && shipped.has(p.po));
+  // Agent payments are always on an order; a voided one, or one of a held account (D4), is not freight paid (neither counts in any total).
+  const freight = payments === "denied" ? [] : payments.filter((p) => p.payeeRole === "agent" && !p.voided && !p.held && p.po !== null && shipped.has(p.po));
   const freightTables: Section[] =
     payments === "denied"
       ? []

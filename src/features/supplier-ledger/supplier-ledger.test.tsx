@@ -317,6 +317,20 @@ describe("AdjustmentDialog (LED-3, Management)", () => {
     expect(router.refresh).toHaveBeenCalledOnce();
   });
 
+  it("a refusal for a final order's settlement shows under Date and the values stay (owner decision 2026-11-21)", async () => {
+    const message = "An adjustment on this date would change the payments that settle PO-1, whose landed cost is already final. Choose a later date.";
+    post.mockRejectedValueOnce(new ApiError(422, "validation_failed", "Check the fields.", { entryDate: message }));
+    const { user, dialog, field, submit } = await openAdjust();
+    await user.click(within(dialog).getByLabelText(/Decrease/));
+    await user.type(field("Amount"), "100");
+    await user.type(field("Reason"), "Supplier refund");
+    await user.click(submit);
+    expect(await within(dialog).findByText(message)).toBeInTheDocument();
+    expect(field("Date")).toHaveAttribute("aria-invalid", "true");
+    expect(field("Reason")).toHaveValue("Supplier refund");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it("an increase is positive; INR takes no rate; the key stays the same on a retry", async () => {
     post.mockRejectedValueOnce(new ApiError(503, "ledger_maintenance", "Paused.")).mockResolvedValueOnce({ entry: entry("e9", { currency: "INR" }), balanceBefore: 300, balanceAfter: 400 });
     const { user, dialog, field, submit } = await openAdjust();
@@ -326,7 +340,7 @@ describe("AdjustmentDialog (LED-3, Management)", () => {
     await user.type(field("Amount"), "100");
     await user.type(field("Reason"), "Rounding");
     await user.click(submit);
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Payments are paused for maintenance", { description: "Paused." }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Paused for maintenance", { description: "Paused." }));
     await user.click(submit);
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post.mock.calls[0]![1]).toEqual({ currency: "INR", amount: 100, entryDate: "2026-11-10", reason: "Rounding", idempotencyKey: "00000000-0000-4000-8000-000000000001" });

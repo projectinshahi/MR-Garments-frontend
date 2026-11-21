@@ -390,11 +390,15 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
-        {/* The value change ORD-5 posts to the supplier's account (an order change entry); none while unchanged. */}
+        {/*
+          The order change entry ORD-5 posts to the supplier's account (+ available, − payable), none while unchanged:
+          a higher value is a negative entry (more payable to the supplier), a lower one a positive entry.
+        */}
         {change !== 0 ? (
           <span className="text-sm leading-4 text-muted-foreground">
-            Was {formatMoney(saved, order.currency, { decimals: 2, spaced: true })} · change {change > 0 ? "+" : "−"}
-            {formatMoney(Math.abs(change), order.currency, { decimals: 2, spaced: true })} on the supplier&apos;s account
+            Was {formatMoney(saved, order.currency, { decimals: 2, spaced: true })} · {change > 0 ? "−" : "+"}
+            {formatMoney(Math.abs(change), order.currency, { decimals: 2, spaced: true })} on the supplier&apos;s account ({change > 0 ? "more" : "less"} payable to the
+            supplier)
           </span>
         ) : null}
         <span className="text-[15px] leading-4">Order total</span>

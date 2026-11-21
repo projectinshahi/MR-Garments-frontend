@@ -30,6 +30,7 @@ import type { MoneyTotal } from "@/types/domain";
 
 import { countryCode } from "./countries";
 import { suppliersListFile } from "./supplier-files";
+import { SupplierBalance } from "./supplier-tables";
 import { countryOptions, filterSuppliers, moneyText } from "./suppliers-logic";
 
 const PATH = "/suppliers";
@@ -153,8 +154,14 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
       header: "Active POs",
       meta: { align: "center", className: "w-[92px]" },
       cell: ({ row }) => (
-        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-md bg-info-soft px-2 text-[13px] font-bold text-primary">
-          {formatNumber(row.original.openPos)}
+        <span className="inline-flex flex-col items-center gap-1">
+          <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-md bg-info-soft px-2 text-[13px] font-bold text-primary">
+            {formatNumber(row.original.openPos)}
+          </span>
+          {/* A held account's open orders (pending review) are not in the count: named under it. */}
+          {row.original.heldOpenPos ? (
+            <span className="text-xs whitespace-normal text-muted-foreground">+{formatNumber(row.original.heldOpenPos)} pending review</span>
+          ) : null}
         </span>
       ),
     },
@@ -163,15 +170,10 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
       id: "balance",
       accessorFn: (row) => firstAmount(row.balance),
       enableSorting: false,
-      header: yuanOnly ? "Balance (¥)" : "Balance",
-      meta: { ...right, className: "w-[104px]" },
-      // The signed ledger balance (+ available with the supplier, − payable); a held account has none, only its note.
-      cell: ({ row }) => (
-        <>
-          {money(row.original.balance)}
-          {row.original.heldCurrencies.length ? <span className="block text-xs text-muted-foreground">{row.original.heldCurrencies.join(", ")} pending review</span> : null}
-        </>
-      ),
+      header: "Balance",
+      meta: { ...right, className: "w-[112px]" },
+      // The signed ledger balance, in words: available with the supplier or payable to it; a held account has only its note.
+      cell: ({ row }) => <SupplierBalance balance={row.original.balance} heldCurrencies={row.original.heldCurrencies} />,
     },
     {
       accessorKey: "status",

@@ -175,7 +175,7 @@ describe("RecordPaymentDialog (one supplier payment, no order)", () => {
     post.mockRejectedValueOnce(new ApiError(503, "ledger_maintenance", "Payments and order money are paused for maintenance. Try again later."));
     await form.user.click(form.submit);
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Payments are paused for maintenance", { description: "Payments and order money are paused for maintenance. Try again later." }),
+      expect(toast.error).toHaveBeenCalledWith("Paused for maintenance", { description: "Payments and order money are paused for maintenance. Try again later." }),
     );
     expect(form.field("Amount")).toHaveValue("2,345.67");
     expect(screen.getByRole("dialog")).toBeInTheDocument();

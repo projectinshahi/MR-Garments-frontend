@@ -63,10 +63,10 @@ function paymentsDue({ payments }: PaymentsResponse, today: string, limit = ROWS
   const until = format(addDays(parseISO(today), PAYMENTS_WINDOW_DAYS), "yyyy-MM-dd");
   const due = payments
     // Due rows are legacy or shipping-agent ones (on an order, Deposit or Balance): an orderless supplier payment is
-    // always paid. Voided rows count nowhere.
+    // always paid. Voided and held (D4) rows count nowhere.
     .filter(
       (p): p is typeof p & { dueDate: string; po: string; kind: "Deposit" | "Balance" } =>
-        p.status === "due" && !p.voided && p.po !== null && p.kind !== "Payment" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until,
+        p.status === "due" && !p.voided && !p.held && p.po !== null && p.kind !== "Payment" && !!p.dueDate && p.dueDate >= today && p.dueDate <= until,
     )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return {

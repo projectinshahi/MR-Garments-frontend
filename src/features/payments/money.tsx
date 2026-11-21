@@ -71,9 +71,10 @@ export function MilestonePill({ status, className }: { status: MilestoneStatus |
   );
 }
 
-/** A payment's status: Voided (with its reason as the title), Paid, or Due. */
-export function PaymentStatus({ payment }: { payment: Pick<PaymentRow, "voided" | "voidReason" | "status" | "dueDate"> }) {
+/** A payment's status: Voided (with its reason as the title), Pending review (a held account, D4), Paid, or Due. */
+export function PaymentStatus({ payment }: { payment: Pick<PaymentRow, "voided" | "voidReason" | "status" | "dueDate"> & { held?: boolean } }) {
   if (payment.voided) return <StatusPill tone="danger" title={payment.voidReason || undefined}>Voided</StatusPill>;
+  if (payment.held) return <StatusPill tone="neutral" title={HELD_MESSAGE}>Pending review</StatusPill>;
   if (payment.status === "paid") return <StatusPill tone="success">Paid</StatusPill>;
   return <StatusPill tone="warning">{payment.dueDate ? `Due ${formatShortDate(payment.dueDate)}` : "Due"}</StatusPill>;
 }

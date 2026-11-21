@@ -156,6 +156,10 @@ describe("order reports settlement figures", () => {
       ["PO-3003", null, null, "Pending review", null],
     ]);
     expect(cny!.total!.slice(at, at + 4)).toEqual([1600, 600, null, 19450]);
+    // Its PO value is listed but not totalled either, as on the Summary sheet (pre-release audit M3): 1,400 + 800.
+    const value = cny!.columns.findIndex((column) => column.header === "Order value (CNY)");
+    expect(cny!.rows.map((cells) => cells[value])).toEqual([1400, 800, 1000]);
+    expect(cny!.total![value]).toBe(2200);
   });
 
   it("writes the same figures into the CSV, Excel and PDF files, with no negative outstanding anywhere", () => {
