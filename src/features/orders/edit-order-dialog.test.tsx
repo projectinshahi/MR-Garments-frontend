@@ -143,7 +143,7 @@ describe("Edit order at stage 1", () => {
   });
 
   it("a 409 without fields toasts the API's message and keeps the dialog and its values", async () => {
-    const locked = "Goods have been received for this order, so only the delivery date can change.";
+    const locked = "Goods have been received for this order, so its order date and items can't change.";
     patch.mockRejectedValue(new ApiError(409, "order_locked", locked));
     const { user, onClose, date, setDate, save } = open();
     setDate(/^Delivery date/, "2026-11-20");

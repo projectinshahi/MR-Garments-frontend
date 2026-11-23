@@ -44,7 +44,7 @@ export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
   /** After a new PO number: the order is the same one, now under that number. */
   renumbered: (po: string) => `Order saved. Its PO number is now ${po}.`,
-  linesEditable: "Change the PO number, the dates or the items. The supplier can't change. A new order total changes the supplier's account by the difference.",
+  linesEditable: "Change the PO number, the dates or the items. The supplier and currency can't change. A new order total changes the supplier's account by the difference.",
   receivedOnly: "Goods have been received for this order, so only the PO number, the delivery date and the deposit required can change.",
   savedWithLedger: (before: number, after: number, currency: Currency) => `Order saved. Supplier balance: ${balanceText(before, currency)} → ${balanceText(after, currency)}`,
 };
