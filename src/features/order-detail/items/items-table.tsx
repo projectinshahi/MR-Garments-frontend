@@ -31,8 +31,15 @@ function columns(lines: Line[], currency: Currency): ColumnDef<Line>[] {
       meta: { align: "right" },
     },
     {
+      accessorKey: "poValueCny",
+      header: "PO value",
+      cell: ({ row }) => formatMoney(row.original.poValueCny, currency),
+      footer: () => formatMoney(lines.reduce((sum, line) => sum + line.poValueCny, 0), currency),
+      meta: { align: "right" },
+    },
+    {
       accessorKey: "valueCny",
-      header: "Line total",
+      header: "Value (received)",
       cell: ({ row }) => formatMoney(row.original.valueCny, currency),
       footer: () => formatMoney(lines.reduce((sum, line) => sum + line.valueCny, 0), currency),
       meta: { align: "right", className: "font-bold" },

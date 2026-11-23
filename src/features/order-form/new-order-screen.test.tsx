@@ -70,7 +70,8 @@ describe("NewOrderScreen", () => {
   });
 
   it("posts ORD-3 with lines and no payments, shows the supplier balance now and after, toasts the debit, empties the form and opens the order", async () => {
-    post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" }, ledger: { supplierId: "s-foshan", currency: "CNY", debitCny: 47_900, balanceBefore: 10_000, balanceAfter: -37_900 } });
+    // Owner rule of 2026-11-23: an order is worth what is received, so ORD-3 debits 0 and the balance stays.
+    post.mockResolvedValue({ order: { id: "o-1", po: "PO-2050" }, ledger: { supplierId: "s-foshan", currency: "CNY", debitCny: 0, balanceBefore: 10_000, balanceAfter: 10_000 } });
     const ui = open();
     await fillOrder(ui);
     expect(screen.getByText("m")).toBeVisible();
@@ -86,8 +87,8 @@ describe("NewOrderScreen", () => {
     // No deposits section (D6): supplier payments are recorded with Record payment.
     expect(screen.queryByRole("button", { name: "+ Add deposit" })).not.toBeInTheDocument();
     expect(screen.getByText("Supplier balance now").nextSibling).toHaveTextContent("Available with supplier ¥10,000.00");
-    expect(screen.getByText("Supplier balance after this order").parentElement!.nextSibling).toHaveTextContent("Payable to supplier ¥37,900.00");
-    expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 47,900.00");
+    expect(screen.getByText("Supplier balance after this order").parentElement!.nextSibling).toHaveTextContent("Available with supplier ¥10,000.00");
+    expect(screen.getByRole("status", { name: "PO value" })).toHaveTextContent("¥ 47,900.00");
     await ui.user.type(ui.field("Deposit required (¥)"), "25,000");
 
     await ui.user.click(ui.place);
@@ -106,7 +107,7 @@ describe("NewOrderScreen", () => {
         { itemId: "i-buttons", quantity: 10000, rateCny: 0.35 },
       ],
     });
-    expect(toast.success).toHaveBeenCalledWith("Order PO-2050 placed. Debited ¥47,900.00; supplier balance Payable to supplier ¥37,900.00.");
+    expect(toast.success).toHaveBeenCalledWith("Order PO-2050 placed. Supplier balance Available with supplier ¥10,000.00: it changes as goods are received.");
     expect(router.push).toHaveBeenCalledWith("/orders/PO-2050");
     expect(router.push.mock.invocationCallOrder[0]).toBeLessThan(router.refresh.mock.invocationCallOrder[0]!);
     // The route stays mounted, so the next visit must not show this order again.
@@ -255,7 +256,7 @@ describe("NewOrderScreen", () => {
     await ui.user.selectOptions(ui.field("Item, line 1"), "i-buttons");
     await ui.user.type(screen.getByLabelText("Rate ($), line 1"), "0.35");
     await ui.user.type(ui.field("Quantity, line 1"), "1000");
-    expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("$ 350.00");
+    expect(screen.getByRole("status", { name: "PO value" })).toHaveTextContent("$ 350.00");
     // No account yet in USD: settled now, payable after.
     expect(screen.getByText("Supplier balance now").nextSibling).toHaveTextContent("Settled");
     await ui.user.click(ui.place);

@@ -27,7 +27,7 @@ const line = (id: string, item: { id: string; name: string }, quantity: number, 
   unit: "pcs",
   quantity,
   rateCny,
-  valueCny: quantity * rateCny,
+  valueCny: quantity * rateCny, poValueCny: quantity * rateCny,
   received: 0,
   loaded: 0,
 });
@@ -62,8 +62,8 @@ describe("Edit order at stage 1", () => {
     let finish: () => void = () => {};
     patch.mockReturnValue(new Promise((resolve) => (finish = () => resolve({}))));
     const { user, onClose, setDate, box, save } = open();
-    expect(screen.getByRole("dialog", { name: "Edit order" })).toHaveTextContent("A new order total changes the supplier's account by the difference.");
-    expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 2,000.00");
+    expect(screen.getByRole("dialog", { name: "Edit order" })).toHaveTextContent("The supplier's account follows the goods received, never the PO value.");
+    expect(screen.getByRole("status", { name: "PO value" })).toHaveTextContent("¥ 2,000.00");
     // No "paid to supplier" or advance footer any more; the value change shows once the lines change.
     expect(screen.queryByText(/Paid to supplier|Supplier advance/)).not.toBeInTheDocument();
     expect(screen.queryByText(/on the supplier's account/)).not.toBeInTheDocument();
@@ -76,8 +76,8 @@ describe("Edit order at stage 1", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Item, line 2" }), "Cotton fabric");
     await user.type(box("Rate (¥), line 2"), "8");
     await user.type(box("Quantity, line 2"), "500");
-    expect(screen.getByRole("status", { name: "Order total" })).toHaveTextContent("¥ 5,200.00");
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was ¥ 2,000.00 · −¥ 3,200.00 on the supplier's account (more payable to the supplier)");
+    expect(screen.getByRole("status", { name: "PO value" })).toHaveTextContent("¥ 5,200.00");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was ¥ 2,000.00 · no change on the supplier's account until goods are received");
 
     await user.click(save);
     expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -112,7 +112,7 @@ describe("Edit order at stage 1", () => {
     expect(screen.getByRole("button", { name: "Remove line 1" })).toBeDisabled();
     await user.clear(box("Quantity, line 1"));
     await user.type(box("Quantity, line 1"), "1");
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("+¥ 1,990.00 on the supplier's account (less payable to the supplier)");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("no change on the supplier's account until goods are received");
     await user.click(save);
     await waitFor(() => expect(patch).toHaveBeenCalledWith("/orders/PO-2051", { lines: [{ id: "l-1", itemId: "i-1", quantity: 1, rateCny: 10 }] }));
     expect(toast.success).toHaveBeenCalledWith("Order saved. Supplier balance: Payable to supplier ¥2,000.00 → Payable to supplier ¥10.00");
@@ -165,7 +165,7 @@ describe("Money in the order's currency (phase 2 final fixes, 5)", () => {
     expect(screen.getByText("$ 2,000.00")).toBeVisible();
     expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Remove line 2" }));
-    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was $ 2,000.00 · +$ 1,000.00 on the supplier's account (less payable to the supplier)");
+    expect(screen.getByText(/on the supplier's account/)).toHaveTextContent("Was $ 2,000.00 · no change on the supplier's account until goods are received");
   });
 
   it("still opens when an older API left the requirement out, and a no-change save sends nothing", async () => {

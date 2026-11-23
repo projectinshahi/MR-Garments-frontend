@@ -15,7 +15,18 @@ import { ReceivingTable } from "./receiving-table";
  * receipt with every line's totals, and each receipt in the history. No photos or papers are recorded, so that card
  * is left out. `canDelete` (receiving Full): each receipt in the history has Delete (REC-4).
  */
-export function ReceivingScreen({ order, receipts, canDelete = false }: { order: OrderView; receipts: OrderReceipt[]; canDelete?: boolean }) {
+export function ReceivingScreen({
+  order,
+  receipts,
+  canDelete = false,
+  canApprove = false,
+}: {
+  order: OrderView;
+  receipts: OrderReceipt[];
+  canDelete?: boolean;
+  /** Management (payments Full): approves a delete that changes a final landed cost (REC-4 409). */
+  canApprove?: boolean;
+}) {
   const latest = receipts.at(-1);
   if (!latest) {
     return (
@@ -44,6 +55,7 @@ export function ReceivingScreen({ order, receipts, canDelete = false }: { order:
     <DeleteRecordButton
       path={`/receipts/${receipt.id}`}
       noun="receipt"
+      canApprove={canApprove}
       label={`Delete receipt of ${formatDate(receipt.receivedOn)}, ${received(receipt)}`}
       title="Delete Goods Receipt?"
       description={

@@ -141,14 +141,18 @@ test("New order and payments take the supplier's currency and rate; the API refu
     await page.getByRole("textbox", { name: "Rate ($), line 1", exact: true }).fill("2");
     await page.getByRole("textbox", { name: "Quantity, line 1", exact: true }).fill("100");
     await expect(kv(page, "Supplier balance now")).toHaveText("Settled");
-    await expect(kv(page, "Supplier balance after this order")).toHaveText("Payable to supplier $200.00");
+    // An order is worth what is received (owner rule of 2026-11-23): placing it changes no balance.
+    await expect(kv(page, "Supplier balance after this order")).toHaveText("Settled");
     await shot(page, testInfo, "new-order-supplier-currency.png");
     // Container terms are chosen on the order (backend docs/order-container-terms.md).
     await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(page).toHaveURL(/\/orders\/PO-\d+$/);
     po = new URL(page.url()).pathname.split("/").pop()!;
-    expect(await api.order(po)).toMatchObject({ currency: "USD", exchangeRate: 88, orderValueCny: 200 });
+    expect(await api.order(po)).toMatchObject({ currency: "USD", exchangeRate: 88, orderValueCny: 0, poValueCny: 200, paymentStatus: "awaiting_goods" });
+    // The goods arrive: worth 100 x $2, payable to the supplier.
+    await api.receive(po, { "Denim jeans": 100 });
+    expect(await api.order(po)).toMatchObject({ orderValueCny: 200, poValueCny: 200, outstandingCny: 200 });
   });
 
   await test.step("the API refuses an order or a payment in another currency for this supplier, and supplier deposits are gone", async () => {
@@ -266,12 +270,14 @@ test("the currency picker: searchable by name, code and symbol over the ISO 4217
   const placed = await api.post("/orders", body);
   expect(placed.status(), await placed.text()).toBe(201);
   const po = ((await placed.json()) as { order: { po: string } }).order.po;
-  expect(await api.order(po)).toMatchObject({ currency: "SAR", exchangeRate: 23.5, orderValueCny: 40 });
+  expect(await api.order(po)).toMatchObject({ currency: "SAR", exchangeRate: 23.5, orderValueCny: 0, poValueCny: 40 });
+  await api.receive(po, { "Denim jeans": 10 });
+  expect(await api.order(po)).toMatchObject({ orderValueCny: 40, poValueCny: 40 });
   await page.goto(`/orders/${po}/payments`);
-  await expect(kpi(page, "Order value")).toContainText("SAR 40");
+  await expect(kpi(page, "Order value (received)")).toContainText("SAR 40");
   await page.goto(`/reports/orders/${po}`);
   await expect(kv(page, "Exchange rate on this PO")).toHaveText("1 SAR = ₹23.50");
-  await expect(kv(page, "PO value in INR")).toHaveText("₹940.00 at the PO rate");
+  await expect(kv(page, "Order value in INR")).toHaveText("₹940.00 at the PO rate");
 });
 
 test("the supplier form at 390 px: currency and rate stacked, no sideways scroll", async ({ page }, testInfo) => {

@@ -51,6 +51,9 @@ test("landed cost and every report show the new order's real figures, filters na
   });
 
   await test.step("Landed Cost: an estimate waiting for the supplier payment, with its breakdown and goods payment", async () => {
+    // An order is worth what is received (owner rule of 2026-11-23): 60 of the 100 arrive, worth ¥600, and the ¥400 of
+    // credit settles ¥400 of it (₹4,800 of goods); ¥200 is still to pay.
+    await api.receive(po, { "Polo shirts": 60 });
     await page.goto("/landed-cost");
     await expect(heading(page, "Landed Cost")).toBeVisible();
     const row = rowOf(page, po);
@@ -77,7 +80,6 @@ test("landed cost and every report show the new order's real figures, filters na
   });
 
   await test.step("13.3: receiving 60 of 100 shows 40 pcs short, worth ¥400", async () => {
-    await api.receive(po, { "Polo shirts": 60 });
     await page.goto("/reports/ordered-vs-received");
     await expect(rowOf(page, po)).toContainText("100 pcs60 pcs40 pcs¥400Reduced");
   });
@@ -100,9 +102,9 @@ test("landed cost and every report show the new order's real figures, filters na
 
     const { name, text: csv } = await downloadReport(page, "CSV");
     expect(name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(csv).toContain("Supplier,Open orders,Order value (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance");
-    // Settled ¥400 (₹4,800), outstanding ¥600; the account is ¥600 payable.
-    expect(csv).toContain(`${KNITS},${po},1000,400,600,400,4800,-600,Payable to supplier`);
+    expect(csv).toContain("Supplier,Open orders,Order value (received) (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance");
+    // Worth ¥600 (60 received), settled ¥400 (₹4,800), outstanding ¥200; the account is ¥200 payable.
+    expect(csv).toContain(`${KNITS},${po},600,400,200,400,4800,-200,Payable to supplier`);
     // The .xlsx zip is uncompressed and the PDF's text uncompressed too, so their bytes hold the cell text.
     const excel = await downloadReport(page, "Excel");
     expect(excel.name).toMatch(/^payments-per-supplier-\d{4}-\d{2}-\d{2}\.xlsx$/);

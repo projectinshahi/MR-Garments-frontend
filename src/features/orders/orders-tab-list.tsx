@@ -53,9 +53,16 @@ const orderedColumn: ColumnDef<OrderRow> = {
 const money = (value: number | null, order: OrderRow) => moneyOrDash(value, (v) => formatMoney(v, order.currency, { decimals: 2 }));
 const valueColumn: ColumnDef<OrderRow> = {
   accessorKey: "orderValueCny",
-  header: "Order value",
+  header: "Order value (received)",
   meta: right,
   cell: ({ row }) => formatMoney(row.original.orderValueCny, row.original.currency, { decimals: 2 }),
+};
+/** Pending orders have nothing received yet (worth 0), so the tab shows what was ordered: the PO value. */
+const poValueColumn: ColumnDef<OrderRow> = {
+  accessorKey: "poValueCny",
+  header: "PO value",
+  meta: right,
+  cell: ({ row }) => formatMoney(row.original.poValueCny, row.original.currency, { decimals: 2 }),
 };
 
 const PENDING: Spec = {
@@ -71,7 +78,7 @@ const PENDING: Spec = {
     { accessorKey: "deliveryDate", header: "Expected delivery", cell: ({ row }) => formatShortDate(row.original.deliveryDate) },
     orderedColumn,
     { id: "pending", header: "Pending qty", meta: right, cell: ({ row }) => formatQty(pendingQty(row.original), row.original.unit) },
-    valueColumn,
+    poValueColumn,
     {
       // The API's FIFO payment status, with the Deposit Required milestone under it when one was agreed.
       id: "payment",

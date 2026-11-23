@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { rowActionClass } from "@/features/orders/delete-order";
+import { FinalApprovalDialog, needsFinalApproval } from "@/features/receiving/final-approval-dialog";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { handleApiError, notifySuccess } from "@/lib/feedback";
@@ -26,7 +27,9 @@ export const ACTIONS_COLUMN_CLASS = `${PLAIN_ACTIONS_COLUMN_CLASS} [&:is(th)]:bg
  * dialog open, so confirming again retries. Done: a toast and a refresh, so the order's figures and stage follow.
  * `opened`: mounted already asking, without its own button (a menu picked the record); `onClosed` runs when the dialog
  * closes, whichever way. `refused`: the page already knows what depends on the record, so Delete opens that "Can't
- * delete" explanation (Close only) instead of a confirmation the API would refuse. Proposed wording.
+ * delete" explanation (Close only) instead of a confirmation the API would refuse. Proposed wording. `canApprove`
+ * (REC-4, Management): a 409 final_settlement_approval asks for the reason and deletes again with it (owner rule of
+ * 2026-11-23, 6); without it the API's message is toasted.
  */
 export function DeleteRecordButton({
   path,
@@ -37,6 +40,7 @@ export function DeleteRecordButton({
   opened = false,
   onClosed,
   refused,
+  canApprove = false,
 }: {
   /** The DELETE path, "/receipts/<id>" or "/containers/<id>". */
   path: string;
@@ -48,10 +52,13 @@ export function DeleteRecordButton({
   opened?: boolean;
   onClosed?: () => void;
   refused?: React.ReactNode;
+  canApprove?: boolean;
 }) {
   const router = useRouter();
   // null: closed. "ask": the confirmation. An object: why the record can't be deleted (the API's reason or `refused`).
   const [step, setStep] = useState<null | "ask" | { inUse: React.ReactNode }>(opened ? "ask" : null);
+  // The API's message while a Management user gives the reason for a change to a final landed cost.
+  const [approval, setApproval] = useState<string | null>(null);
   const Noun = `${noun[0]!.toUpperCase()}${noun.slice(1)}`;
 
   function close() {
@@ -63,10 +70,15 @@ export function DeleteRecordButton({
     notifySuccess(message);
     router.refresh();
   }
-  async function remove() {
+  async function remove(reason?: string) {
     try {
-      await apiClient.delete(path);
+      await (reason ? apiClient.delete(path, { finalSettlementApproval: { reason } }) : apiClient.delete(path));
     } catch (error) {
+      const final = needsFinalApproval(error);
+      if (final && canApprove && !reason) {
+        setStep(null);
+        return setApproval(final);
+      }
       // The record's own 404 ("Receipt not found.", "Payment not found." for a deposit too) means it is gone; "Endpoint
       // not found." is a backend without the delete.
       if (error instanceof ApiError && error.status === 404 && error.message !== "Endpoint not found.") return done(`${Noun} was already deleted.`);
@@ -74,13 +86,14 @@ export function DeleteRecordButton({
       handleApiError(error);
       return;
     }
+    setApproval(null);
     done(`${Noun} deleted`);
   }
 
   const dialog =
     typeof step === "object" && step !== null
       ? { title: `Can't delete ${noun}`, description: step.inUse }
-      : { tone: "danger" as const, title, description, confirmLabel: `Delete ${noun}`, pendingLabel: "Deleting…", onConfirm: remove };
+      : { tone: "danger" as const, title, description, confirmLabel: `Delete ${noun}`, pendingLabel: "Deleting…", onConfirm: () => remove() };
 
   return (
     <>
@@ -95,6 +108,14 @@ export function DeleteRecordButton({
         </button>
       )}
       <ConfirmDialog open={step !== null} onCancel={close} {...dialog} />
+      <FinalApprovalDialog
+        message={approval}
+        onCancel={() => {
+          setApproval(null);
+          onClosed?.();
+        }}
+        onApprove={(reason) => remove(reason)}
+      />
     </>
   );
 }

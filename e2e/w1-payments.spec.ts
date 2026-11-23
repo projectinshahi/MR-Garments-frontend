@@ -31,7 +31,8 @@ async function openOrder(page: Page, po: string) {
 
 test("KPIs, the payments list, an order's FIFO figures and card, with search and its empty states", async ({ page, api }) => {
   const supplier = await api.newSupplier("Knit Ledger");
-  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Ladies kurtis", quantity: 500, rateCny: 16 }] });
+  // Each order here is received in full: an order is worth its received quantity x rate (owner rule of 2026-11-23).
+  const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Ladies kurtis", quantity: 500, rateCny: 16 }] });
   await api.paySupplier(supplier.id, { amount: 2000, rateInr: 12, paidOn: today(-3), reference: "TXN-K1" });
   const response = await api.get<PaymentsResponse>("/payments");
   const paidInr = response.payments.filter((p) => !p.voided && !p.held && p.status === "paid").reduce((sum, p) => sum + (p.amountInr ?? 0), 0);
@@ -86,7 +87,7 @@ test("KPIs, the payments list, an order's FIFO figures and card, with search and
 
 test("an unpaid order shows its whole value outstanding", async ({ page, api }) => {
   const supplier = await api.newSupplier("Unpaid Ledger");
-  const order = await api.createOrder({ supplier: supplier.name });
+  const order = await api.createReceivedOrder({ supplier: supplier.name });
   await page.goto("/payments");
   await openOrder(page, order.po);
   await expect(rowOf(page, order.po).getByRole("cell").nth(2)).toHaveText(amountCell("0.00"));
@@ -96,7 +97,7 @@ test("an unpaid order shows its whole value outstanding", async ({ page, api }) 
 
 test("Record payment: opens, cancels, checks every field, shows the balance before and after, and saves to the supplier's account", async ({ page, api }) => {
   const supplier = await api.newSupplier("Trim Ledger");
-  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Kids t-shirts", quantity: 1000, rateCny: 5 }] });
+  const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Kids t-shirts", quantity: 1000, rateCny: 5 }] });
   await page.goto("/payments");
 
   // Open and cancel; open and close with Escape.
@@ -155,7 +156,7 @@ test("Record payment: opens, cancels, checks every field, shows the balance befo
 
 test("the card records a sea freight payment to a shipping agent; the supplier's settlement does not change", async ({ page, api }) => {
   const supplier = await api.newSupplier("Freight Ledger");
-  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Men's shorts", quantity: 300, rateCny: 10 }] });
+  const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Men's shorts", quantity: 300, rateCny: 10 }] });
   await api.paySupplier(supplier.id, { amount: 1000, rateInr: 12 });
   await page.goto("/payments");
   await openOrder(page, order.po);
@@ -188,7 +189,7 @@ test("the card records a sea freight payment to a shipping agent; the supplier's
 
 test("a server refusal (422) shows under its field; a failed or lost request keeps the dialog and its values", async ({ page, api }) => {
   const supplier = await api.newSupplier("Refusal Ledger");
-  const order = await api.createOrder({ supplier: supplier.name });
+  const order = await api.createReceivedOrder({ supplier: supplier.name });
   await page.goto("/payments");
   await openOrder(page, order.po);
   await card(page, order.po).getByRole("button", { name: `+ Record payment for ${supplier.name}` }).click();
@@ -229,7 +230,7 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
 
 test("double-clicking Record payment records one payment", async ({ page, api }) => {
   const supplier = await api.newSupplier("Double Ledger");
-  const order = await api.createOrder({ supplier: supplier.name });
+  const order = await api.createReceivedOrder({ supplier: supplier.name });
   await page.goto("/payments");
   await openOrder(page, order.po);
   await card(page, order.po).getByRole("button", { name: `+ Record payment for ${supplier.name}` }).click();
@@ -247,7 +248,7 @@ test.describe("Accounts (payments Enter)", () => {
 
   test("records a payment that Management then sees, and has no Void", async ({ page, api, browser }) => {
     const supplier = await api.newSupplier("Accounts Ledger");
-    const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 100, rateCny: 30 }] });
+    const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 100, rateCny: 30 }] });
     await page.goto("/payments");
     await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
     const form = dialog(page);

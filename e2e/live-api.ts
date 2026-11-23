@@ -145,6 +145,17 @@ export class Api {
     return json<{ receipt: { id: string } }>(await this.post("/receipts", body), 201);
   }
 
+  /**
+   * ORD-3 then REC-3 of every line in full: an order worth its PO value (owner rule of 2026-11-23, an order is worth its
+   * received quantity x rate). The receipt moves it to stage 2 (Receiving in China).
+   */
+  async createReceivedOrder(input: OrderInput = {}): Promise<CreatedOrder> {
+    const created = await this.createOrder(input);
+    const lines = input.lines ?? [{ item: "Denim jeans", quantity: 100, rateCny: 10 }];
+    await this.receive(created.po, Object.fromEntries(lines.map((line) => [line.item, line.quantity])));
+    return created;
+  }
+
   /** The CON-3 body: `lines` per PO and item name. */
   async containerBody(
     lines: { po: string; item: string; quantity: number; bundles?: number }[],

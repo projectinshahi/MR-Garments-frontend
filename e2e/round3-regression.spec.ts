@@ -69,6 +69,10 @@ const noHScroll = async (page: Page, where: string) => {
 type State = {
   supplier: string;
   stage: string;
+  /** The order's value: its received quantity x rate (owner rule of 2026-11-23). */
+  value: string;
+  /** The payment status when it isn't read from the figures ("Awaiting goods" before any receipt). */
+  status?: string;
   paid: string;
   paidInr: string;
   balance: string;
@@ -109,7 +113,8 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
     [
       `/orders/${po}/payments`,
       async (page) => {
-        await expect(kpi(page, "Order value")).toContainText("¥4,000.00");
+        await expect(kpi(page, "Order value (received)")).toContainText(`${s.value}.00`);
+        await expect(kpi(page, "Order value (received)")).toContainText("PO value ¥4,000.00");
         await expect(kpi(page, "Settled")).toContainText(`${s.paid}.00`);
         await expect(kpi(page, "Outstanding")).toContainText(`${s.balance}.00`);
         await expect(page.getByText("Paid (INR), goods + sea freight").filter({ visible: true }).locator("..")).toContainText(s.paidInr);
@@ -137,10 +142,10 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       "/payments",
       async (page) => {
         await poSearch(page).fill(po);
-        const status = s.paid === "¥0" ? "Unpaid" : s.balance === "¥0" ? "Paid" : "Partly paid";
+        const status = s.status ?? (s.paid === "¥0" ? "Unpaid" : s.balance === "¥0" ? "Paid" : "Partly paid");
         await expect(rowOf(page, po).getByRole("cell")).toHaveText([
           `${po}${s.supplier}`,
-          amountCell("4,000.00"),
+          amountCell(`${s.value.replace("¥", "")}.00`),
           amountCell(`${s.paid.replace("¥", "")}.00`),
           amountCell(`${s.balance.replace("¥", "")}.00`),
           status,
@@ -202,7 +207,8 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
   let po = "";
   // A supplier of its own: its account settles this order only.
   const supplier = await api.newSupplier("SZ Journey");
-  let s: State = { supplier: supplier.name, stage: "1. Order and deposit", paid: "¥1,000", paidInr: "₹12,000", balance: "¥3,000", payments: 1, receipts: [], onCalendar: true };
+  // Paid before any goods: the ¥1,000 is supplier credit; the order is worth ¥0 and awaits its goods.
+  let s: State = { supplier: supplier.name, stage: "1. Order and deposit", value: "¥0", status: "Awaiting goods", paid: "¥0", paidInr: "₹0", balance: "¥0", payments: 1, receipts: [], onCalendar: true };
 
   await test.step("place the order (Orders), pay ¥1,000 to the supplier's account, reload on the new page", async () => {
     await page.goto("/orders/new");
@@ -223,7 +229,7 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await expect(page).toHaveURL(`/orders/${po}`);
     await api.paySupplier(supplier.id, { amount: 1000, rateInr: 12 });
     await page.reload();
-    await expect(kv(page, "Settled from supplier account")).toHaveText("¥1,000.00");
+    await expect(kv(page, "Settled from supplier account")).toHaveText("¥0.00");
     await everywhere(page, po, due, s, true);
   });
 
@@ -239,7 +245,7 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await form.getByRole("button", { name: "Record payment" }).click();
     await expect(toast(page, `Payment recorded for ${supplier.name}`).first()).toBeVisible();
     await expect(form).toBeHidden();
-    s = { ...s, paid: "¥1,500", paidInr: "₹18,250", balance: "¥2,500", payments: 2 };
+    s = { ...s, payments: 2 };
     await everywhere(page, po, due, s, false);
     await everywhere(page, po, due, s, true);
   });
@@ -253,7 +259,8 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.getByRole("textbox", { name: "Short remark" }).fill("40 jackets to follow");
     await page.getByRole("button", { name: "Save receipt" }).click();
     await expect(page).toHaveURL("/receiving");
-    s = { ...s, stage: "2. Receiving in China", receipts: [{ cells: ["60", "60"] }], receivedMain: "60 pcs", shortMain: "40 pcs" };
+    // The receipt values the order (60 x ¥30 + 200 x ¥5 = ¥2,800): the ¥1,500 of credit settles it in part.
+    s = { ...s, stage: "2. Receiving in China", value: "¥2,800", status: undefined, paid: "¥1,500", paidInr: "₹18,250", balance: "¥1,300", receipts: [{ cells: ["60", "60"] }], receivedMain: "60 pcs", shortMain: "40 pcs" };
     await everywhere(page, po, due, s, false);
     await everywhere(page, po, due, s, true);
     await page.goto("/receiving/new");
@@ -263,7 +270,7 @@ test("journey by UI: place, pay, receive, load, sail, arrive; every tab agrees b
     await page.getByRole("button", { name: "Save receipt" }).click();
     await expect(page).toHaveURL("/receiving");
     // The main line is now fully received: nothing is awaited from the supplier, so the order leaves the Calendar.
-    s = { ...s, receipts: [...s.receipts, { cells: ["40", "100"] }], receivedMain: "100 pcs", shortMain: "0 pcs", onCalendar: false };
+    s = { ...s, value: "¥4,000", balance: "¥2,500", receipts: [...s.receipts, { cells: ["40", "100"] }], receivedMain: "100 pcs", shortMain: "0 pcs", onCalendar: false };
     await everywhere(page, po, due, s, true);
   });
 
@@ -415,7 +422,8 @@ test("a signed-out deep link goes to sign-in and (report) whether it returns to 
   // Observed behaviour is annotated rather than asserted: the app need not support return-to-link.
   test.info().annotations.push({ type: "return-to-link", description: `landed on ${new URL(page.url()).pathname}` });
   await page.goto(`/orders/${order.po}/payments`);
-  await expect(kpi(page, "Order value")).toContainText("¥4,000");
+  // Nothing received yet: worth ¥0, its PO value ¥4,000 (owner rule of 2026-11-23).
+  await expect(kpi(page, "Order value (received)")).toContainText("PO value ¥4,000");
   await page.close();
 });
 

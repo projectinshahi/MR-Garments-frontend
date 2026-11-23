@@ -81,6 +81,8 @@ export async function getReceivingList() {
     suppliers: uniqueSorted(items.map((r) => r.supplier)),
     canRecord: !!me && hasAccess(me, "receiving", "Enter"),
     canDelete: !!me && hasAccess(me, "receiving", "Full"),
+    // Management (payments Full) approves a delete that changes a final landed cost (REC-4 409, owner rule 2026-11-23).
+    canApprove: !!me && hasAccess(me, "payments", "Full"),
     linkPos: !!me && canOpen(me, "/orders"),
   };
 }
@@ -94,5 +96,6 @@ export async function getRecordReceipt() {
   if (!me || !hasAccess(me, "receiving", "Enter")) return null;
   // ponytail: reads every receipt for the deliveries panel; filter server-side (REC-1 ?orderId=) if the list grows large.
   const [options, receipts] = await Promise.all([apiGet<ReceiptOptions>("/receipts/options"), apiGet<ReceiptListItem[]>("/receipts")]);
-  return { options, receipts, receivedBy: me.name, today: todayInIndia() };
+  // canApprove: Management (payments Full) may approve a receipt that changes a final landed cost (REC-3 409).
+  return { options, receipts, receivedBy: me.name, today: todayInIndia(), canApprove: hasAccess(me, "payments", "Full") };
 }

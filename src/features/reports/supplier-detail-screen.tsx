@@ -117,7 +117,7 @@ export function SupplierDetailScreen({
         {/* Stacked until lg: three side by side at 768 px leave ~106 px per value, and "¥12,51,66,500 · $12,34,500"
             pushed the page sideways. */}
         <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
-          <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />
+          <KpiCard size="xs" label="Order value (received)" value={each((t) => t.orderValueCny)} sub="all stages" />
           <KpiCard size="xs" label="Settled" value={each((t) => t.settledCny ?? 0)} sub={`${formatINR(paidInr)} paid at payment-day rates`} />
           <KpiCard size="xs" label="Outstanding" value={each((t) => t.outstandingCny ?? 0)} sub="order value less what the account settled, oldest first" />
         </KpiRow>

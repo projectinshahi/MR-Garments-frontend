@@ -176,7 +176,7 @@ export function SupplierOrdersList({ list, linkPos, today, empty }: { list: List
       header: "Total quantity",
       cell: ({ row }) => row.original.quantities.map((q) => formatQty(q.quantity, q.unit)).join(" · ") || DASH,
     },
-    { accessorKey: "orderValueCny", header: "Order value", meta: { align: "right" }, cell: money((o) => o.orderValueCny) },
+    { accessorKey: "orderValueCny", header: "Order value (received)", meta: { align: "right" }, cell: money((o) => o.orderValueCny) },
     // The ledger's FIFO projection: settled from the supplier's account oldest first; outstanding = value - settled.
     { accessorKey: "settledCny", header: "Settled", meta: { align: "right" }, cell: money((o) => o.settledCny) },
     { accessorKey: "outstandingCny", header: "Outstanding", meta: { align: "right" }, cell: money((o) => o.outstandingCny) },

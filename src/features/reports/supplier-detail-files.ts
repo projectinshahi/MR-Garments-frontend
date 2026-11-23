@@ -66,7 +66,7 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
         csv: false as const,
         columns: [
           text("Orders"),
-          money("Order value", currency),
+          money("Order value (received)", currency),
           money("Settled", currency),
           money("Outstanding", currency),
           money("Payments", currency),
@@ -86,7 +86,7 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
           date("Delivery date"),
           text("Stage"),
           text("Quantity"),
-          money("Order value", currency),
+          money("Order value (received)", currency),
           money("Settled", currency),
           money("Outstanding", currency),
           text("Payment status"),

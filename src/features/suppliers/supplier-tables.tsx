@@ -89,7 +89,7 @@ export function PerformanceTable({ rows }: { rows: SupplierInsightRow[] }) {
       cell: ({ row }) => (row.original.delayed > 0 ? <span className="font-bold text-danger">{formatNumber(row.original.delayed)}</span> : "0"),
     },
     { accessorKey: "averageDeliveryDays", header: "Avg. delivery", meta: right, cell: ({ row }) => daysText(row.original.averageDeliveryDays) },
-    { id: "value", header: "Purchase value", meta: right, cell: ({ row }) => moneyText(row.original.value) },
+    { id: "value", header: "Purchase value (received)", meta: right, cell: ({ row }) => moneyText(row.original.value) },
     { id: "balance", header: "Balance", meta: right, cell: ({ row }) => <SupplierBalance balance={row.original.balance} heldCurrencies={row.original.heldCurrencies} /> },
   ];
   return <DataTable columns={columns} data={rows} getRowId={(row) => row.supplierId} size="sm" header="tall" density="snug" emptyState="No orders in this period." />;
@@ -102,7 +102,7 @@ export function TopValueTable({ rows }: { rows: SupplierInsightRow[] }) {
     supplierColumn,
     { accessorKey: "country", header: "Country", cell: ({ row }) => row.original.country || "–" },
     { accessorKey: "orders", header: "Orders", meta: right, cell: ({ row }) => formatNumber(row.original.orders) },
-    { id: "value", header: "Purchase value", meta: right, cell: ({ row }) => moneyText(row.original.value) },
+    { id: "value", header: "Purchase value (received)", meta: right, cell: ({ row }) => moneyText(row.original.value) },
     { id: "balance", header: "Balance", meta: right, cell: ({ row }) => <SupplierBalance balance={row.original.balance} heldCurrencies={row.original.heldCurrencies} /> },
   ];
   return <DataTable columns={columns} data={rows.slice(0, 5)} getRowId={(row) => row.supplierId} size="sm" header="tall" density="snug" emptyState="No orders in this period." />;

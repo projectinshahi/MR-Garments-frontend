@@ -193,7 +193,7 @@ export function PaymentsPerSupplierScreen({ page }: { page: ReportPage<PaymentsP
   return (
     <ReportFrame title="Payments per supplier" page={page} file={reportFile("payments-per-supplier", data, page.today)}>
       <KpiRow gap="sm">
-        <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub={plural(sum((t) => t.orders), "open order")} />
+        <KpiCard size="xs" label="Order value (received)" value={each((t) => t.orderValueCny)} sub={plural(sum((t) => t.orders), "open order")} />
         <KpiCard size="xs" label="Settled so far" value={each((t) => t.settledCny)} sub={`${formatINR(sum((t) => t.paidInr))} paid at payment-day rates`} />
         <KpiCard size="xs" label="Payable to suppliers" value={each((t) => t.payableCny)} sub={`next 30 days ${formatMoneyList(data.dueNext30ByCurrency)} due`} />
       </KpiRow>

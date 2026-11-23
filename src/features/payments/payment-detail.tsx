@@ -53,7 +53,8 @@ export function PaymentDetailCard({ order, payments, suppliers, agents, linkPo, 
         className="mt-3"
         boldValues
         items={[
-          { label: "Order value", value: money(order.orderValueCny) },
+          { label: "Order value (received)", value: money(order.orderValueCny) },
+          { label: "PO value (ordered)", value: money(order.poValueCny) },
           { label: "Settled from supplier account", value: money(order.settledCny) },
           ...(order.agentPaidCny ? [{ label: "Paid to agents (sea freight)", value: money(order.agentPaidCny), muted: true }] : []),
           { label: "Paid (INR), goods + sea freight", value: moneyOrDash(order.paidInr, formatINR) },
@@ -103,7 +104,7 @@ export function PaymentDetailCard({ order, payments, suppliers, agents, linkPo, 
       {payable || agents ? (
         <div className="mt-3.5 flex flex-col gap-2">
           {payable ? (
-            <RecordPaymentDialog suppliers={suppliers!} supplierId={payable.id}>
+            <RecordPaymentDialog suppliers={suppliers!} supplierId={payable.id} canApprove={canVoid}>
               <Button type="button" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
                 + Record payment for {supplier}
               </Button>

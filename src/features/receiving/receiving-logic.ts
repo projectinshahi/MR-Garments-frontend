@@ -85,16 +85,19 @@ export function receivingKpis(items: ReceiptListItem[], options: ReceiptOptions 
 /** Quantity still missing after this receipt; never negative. */
 export const lineShort = (line: ReceiptLine) => Math.max(0, line.ordered - line.receivedEarlier - line.receivedNow);
 
-/** Effect on payment: the order's outstanding (the ledger's FIFO projection) before this receipt, less the value of short priced lines. */
-export function paymentEffect(payment: { outstanding: number }, lines: ReceiptLine[]) {
-  const balanceBefore = payment.outstanding;
-  const deductions = lines.flatMap((line) => {
-    if (line.unitPrice === undefined) return [];
-    const short = lineShort(line);
-    return [{ unit: line.unit, short, unitPrice: line.unitPrice, amount: short * line.unitPrice }];
-  });
-  const balanceNow = balanceBefore - deductions.reduce((sum, d) => sum + d.amount, 0);
-  return { balanceBefore, deductions, balanceNow };
+const cents = (value: number) => Math.round(value * 100);
+
+/**
+ * Effect on the order's value (owner rule of 2026-11-23): an order is worth its received quantity x rate, so this
+ * receipt adds what it receives x each line's rate; the API posts that difference to the supplier's account on save.
+ * Short goods are simply not valued. `value` is the order's value so far (REC-2, before this receipt).
+ */
+export function paymentEffect(order: { value: number }, lines: ReceiptLine[]) {
+  const additions = lines.flatMap((line) =>
+    line.unitPrice === undefined || line.receivedNow <= 0 ? [] : [{ unit: line.unit, quantity: line.receivedNow, unitPrice: line.unitPrice, amount: cents(line.receivedNow * line.unitPrice) / 100 }],
+  );
+  const added = additions.reduce((sum, d) => sum + cents(d.amount), 0) / 100;
+  return { valueBefore: order.value, additions, added, valueAfter: (cents(order.value) + cents(added)) / 100 };
 }
 
 /** Deliveries panel: the order's earlier receipts (REC-1, oldest first) and the total so far. Main-line figures. */

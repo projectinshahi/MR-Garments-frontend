@@ -31,7 +31,7 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   stocked: 0,
   closed: false,
   closedOn: null,
-  orderValueCny: 1000,
+  orderValueCny: 1000, poValueCny: 1000,
   ...SETTLED,
   settledCny: 0,
   outstandingCny: 1000,

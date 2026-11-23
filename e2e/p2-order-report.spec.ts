@@ -23,8 +23,9 @@ const SHEETS = ["Order Overview", "Supplier Details", "Order Items", "China Rece
 const shotPath = (testInfo: TestInfo, name: string) => (process.env.SHOTS_DIR ? `${process.env.SHOTS_DIR}/${name}` : testInfo.outputPath(name));
 
 test("an order's Report tab shows its items, payments and timeline, and downloads the report as Excel and PDF", async ({ page, api }) => {
-  // 100 Denim jeans at ¥10 and 50 m Cotton fabric at ¥8 (¥1,400), ¥300 paid to the supplier's account (it settles this,
-  // the supplier's only order); 120 pcs received (excess 20), 30 m (short 20).
+  // 100 Denim jeans at ¥10 and 50 m Cotton fabric at ¥8 (PO value ¥1,400), ¥300 paid to the supplier's account (it settles
+  // this, the supplier's only order); 120 pcs received (excess 20), 30 m (short 20): worth 120 x ¥10 + 30 x ¥8 = ¥1,440
+  // (an order is worth its received quantity x rate, owner rule of 2026-11-23).
   const supplier = await api.newSupplier("Report Textile");
   const order = await api.createOrder({
     supplier: supplier.name,
@@ -48,12 +49,12 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(itemRow("Cotton fabric").getByText("20", { exact: true })).toBeVisible(); // pending
   await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
   await expect(kpi(page, "Settled from supplier account").first()).toContainText("¥300");
-  await expect(kpi(page, "Outstanding").first()).toContainText("¥1,100");
+  await expect(kpi(page, "Outstanding").first()).toContainText("¥1,140");
   await expect(kpi(page, "Outstanding").first()).toContainText("Partly paid");
   // Settled by: the supplier payment that settled it, at its own rate.
   await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ hasText: "TXN-R1" })).toContainText("₹3,600");
   await expect(kv(page, "Supplier code")).toHaveText(/^SUP-\d{3,}$/);
-  await expect(kv(page, "Supplier balance (ledger)")).toHaveText("CNY: Payable to supplier ¥1,100.00");
+  await expect(kv(page, "Supplier balance (ledger)")).toHaveText("CNY: Payable to supplier ¥1,140.00");
   await expect(kv(page, "Deposit utilised for this PO")).toContainText("Not tracked");
   await expect(page.getByRole("heading", { level: 2, name: "Timeline" })).toBeVisible();
   for (const step of ["Order placed", "Received in China"]) {
@@ -103,7 +104,8 @@ test("Reports › Order Report › a closed PO: every section from the records, 
   // Overview: closed, every lifecycle stage done; money settled from the two payments.
   await expect(kv(page, "Status").first()).toContainText("Closed on");
   await expect(page.getByRole("list", { name: "Order lifecycle" }).getByText("Done:")).toHaveCount(6);
-  await expect(kpi(page, "Original PO value")).toContainText("¥1,000");
+  await expect(kpi(page, "Order value (received)")).toContainText("¥1,000");
+  await expect(kpi(page, "Order value (received)")).toContainText("PO value ¥1,000");
   await expect(kpi(page, "Settled from supplier account").first()).toContainText("¥800");
   await expect(kpi(page, "Settled from supplier account").first()).toContainText("₹9,850");
   await expect(kpi(page, "Outstanding").first()).toContainText("¥200");
@@ -175,8 +177,10 @@ test("Order reports lists the new order, filters by PO from the URL and download
   await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText(supplier.name);
   await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText("40 pcs");
   await expect(kpi(page, "Orders")).toContainText("1");
-  await expect(kpi(page, "Order value")).toContainText("¥200");
-  await expect(page.getByText("Unpaid", { exact: true })).toBeVisible();
+  // Nothing received yet: worth ¥0 (its PO value ¥200), awaiting goods, never "Paid".
+  await expect(kpi(page, "Order value (received)")).toContainText("¥0");
+  await expect(page.getByRole("row").filter({ hasText: order.po })).toContainText("PO ¥200");
+  await expect(page.getByText("Awaiting goods", { exact: true })).toBeVisible();
 
   // The supplier-name text, the stage and the currency filters narrow the list and are echoed in the pill.
   await page.getByLabel("Supplier name").fill("fosh list");

@@ -19,7 +19,7 @@ import { paymentStatusLabel, rowStatus } from "./order-reports-file";
 // ordered quantity per unit, currency, PO value, settled, outstanding, stage and status, and the link to the order's detailed
 // report. Amounts in the row's currency. Sortable, paged by 10. Client-side because column definitions hold functions.
 
-const PAYMENT_TONE = { unpaid: "danger", partly: "warning", paid: "success" } as const;
+const PAYMENT_TONE = { awaiting_goods: "neutral", unpaid: "danger", partly: "warning", paid: "success" } as const;
 const right = { align: "right" } as const;
 // Table cells never wrap by default; these columns may, so twelve columns fit a 1440 px page with every row's text.
 const wrap = "whitespace-normal";
@@ -69,13 +69,14 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
     },
     {
       accessorKey: "orderValueCny",
-      header: "PO Value",
+      header: "Value (received)",
       meta: { ...right, className: `w-[104px] ${wrap}` },
       // The INR value at the order's own rate under the amount (none without a rate).
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end leading-[18px]">
           {formatMoney(row.original.orderValueCny, row.original.currency)}
           {row.original.orderValueInr === null || row.original.currency === "INR" ? null : <span className="text-[12.5px] text-muted-foreground">{formatINR(row.original.orderValueInr)}</span>}
+          <span className="text-[12.5px] text-muted-foreground">PO {formatMoney(row.original.poValueCny, row.original.currency)}</span>
         </span>
       ),
     },

@@ -25,6 +25,8 @@ export type LandedCostRow = {
   /** The PO date, its value in `currency` and the rate saved on the order (null for older orders). Backend docs/report-downloads.md; absent from an older backend. */
   orderDate?: string;
   orderValueCny?: number;
+  /** Ordered quantity × rate (reference); absent from an older backend. */
+  poValueCny?: number;
   exchangeRate?: number | null;
   /** The terms of every container carrying the order; "mixed" when they differ, null before loading. */
   terms: ContainerTerms | "mixed" | null;
@@ -246,7 +248,7 @@ export type SupplierPaymentDetail = {
     orderValueCny: number;
   } & SettlementFields>;
   /** One row per order line, never merged across orders: order date desc, PO desc, line position asc. */
-  lines: Page<{ orderLineId: string; orderId: string; po: string; itemId: string; item: string; unit: Unit; quantity: number; rateCny: number; amountCny: number; currency: Currency }>;
+  lines: Page<{ orderLineId: string; orderId: string; po: string; itemId: string; item: string; unit: Unit; quantity: number; rateCny: number; received: number; amountCny: number; poAmountCny: number; currency: Currency }>;
   /** The supplier's whole ledger (not limited to the period): its accounts and statement (newest first). */
   ledger: { accounts: LedgerAccount[]; entries: LedgerEntry[] };
 };
@@ -402,8 +404,10 @@ export type OrderReport = {
     closed: boolean;
     closedOn: string | null;
     currency: Currency;
+    /** Received quantity × rate; poValueCny ordered quantity × rate (reference). */
     orderValueCny: number;
-    /** The rate saved when the order was placed (null for older orders) and the PO value at it, never at a later rate. */
+    poValueCny: number;
+    /** The rate saved when the order was placed (null for older orders) and the order value at it, never at a later rate. */
     exchangeRate: number | null;
     orderValueInr: number | null;
     /** Distinct lines on the order. */
@@ -426,7 +430,9 @@ export type OrderReport = {
     loaded: number;
     stocked: number;
     rateCny: number;
+    /** Received × rate (the line's value); poValueCny ordered × rate (reference). */
     valueCny: number;
+    poValueCny: number;
   }[];
   /**
    * The order's settlement (FIFO projection of its supplier's account) with the credits (`slices`) that settled it, the
@@ -465,7 +471,7 @@ export type OrderReport = {
 };
 
 export type OrderState = "pending" | "active" | "closed";
-export type PaymentState = "unpaid" | "partly" | "paid";
+export type PaymentState = "awaiting_goods" | "unpaid" | "partly" | "paid";
 
 /**
  * One row of RPT-O2: settled, outstanding and payment status from the ledger's FIFO projection (value − settled =
@@ -493,7 +499,9 @@ export type OrderReportRow = {
   quantities: { unit: Unit; quantity: number }[];
   closed: boolean;
   closedOn: string | null;
+  /** Received quantity × rate; poValueCny ordered quantity × rate (reference). */
   orderValueCny: number;
+  poValueCny: number;
   /** Null while the order's account is held (D4). */
   agentPaidInr: number | null;
   paidInr: number | null;
@@ -509,7 +517,7 @@ export type OrderReportRow = {
  */
 export type OrderReportsResponse = {
   rows: OrderReportRow[];
-  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; settledCny: number; outstandingCny: number }[]; paidInr: number; landedCostInr: number };
+  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; poValueCny: number; settledCny: number; outstandingCny: number }[]; paidInr: number; landedCostInr: number };
   filter: {
     po: string | null;
     /** The supplier-name text filter, as typed. */

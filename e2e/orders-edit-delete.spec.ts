@@ -37,7 +37,7 @@ test("Management places an order, edits its delivery date, then deletes it after
   const edit = page.getByRole("dialog", { name: "Edit order" });
   await expect(field(edit, "Order date")).toHaveValue(today());
   await expect(edit.getByRole("combobox", { name: "Item, line 1" })).toHaveValue(/.+/);
-  await expect(edit.getByRole("status", { name: "Order total" })).toHaveText("¥ 2,500.00");
+  await expect(edit.getByRole("status", { name: "PO value" })).toHaveText("¥ 2,500.00");
   const patch = page.waitForRequest((request) => request.method() === "PATCH" && request.url().endsWith(`/api/v1/orders/${po}`));
   await field(edit, "Delivery date").fill(today(25));
   await edit.getByRole("button", { name: "Save order" }).click();

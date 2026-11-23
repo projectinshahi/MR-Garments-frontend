@@ -110,7 +110,7 @@ export function SupplierPaymentsTable({ rows, totals, query }: { rows: SupplierR
     { id: "orders", header: "Orders", cell: ({ row }) => row.original.orders.join(", "), footer: `${orders} open order${orders === 1 ? "" : "s"}` },
     {
       accessorKey: "orderValueCny",
-      header: "Order value",
+      header: "Order value (received)",
       meta: { align: "right", className: "w-[146px]" },
       cell: ({ row }) => formatMoney(row.original.orderValueCny, row.original.currency),
       footer: each((total) => total.orderValueCny),

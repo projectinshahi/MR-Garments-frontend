@@ -64,7 +64,8 @@ export function SupplierKpis({ summary }: { summary: SuppliersSummary }) {
         sub={
           <>
             {/* Several currencies wrap between amounts (each "·" stays with the amount before it), never past the card. */}
-            <span className="whitespace-normal">PO value: {wrapping(openPos.value)}</span>
+            {/* Open POs are mostly still to be delivered, so the card shows their PO value (ordered x rate); an older API has value only. */}
+            <span className="whitespace-normal">PO value: {wrapping(openPos.poValue ?? openPos.value)}</span>
             {/* A held account's orders are in neither figure above: named apart. */}
             {openPos.heldCount > 0 ? (
               <span className="block whitespace-normal">

@@ -135,7 +135,7 @@ const REPORTS: { [N in ReportName]: Spec<Reports[N]> } = {
           columns: columns(
             "Supplier",
             "Open orders",
-            money("Order value", currency),
+            money("Order value (received)", currency),
             money("Settled", currency),
             money("Outstanding", currency),
             money("Payments", currency),

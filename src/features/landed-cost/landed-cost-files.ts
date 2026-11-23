@@ -26,7 +26,7 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
     filters,
     notes: [
       "Goods are the supplier payments that settled the order (the supplier ledger settles orders oldest first), each in INR at the rate typed for that payment; the average rate is goods INR / goods settled. Sea freight is the shipping-agent payments of FOB orders.",
-      "PO value in INR is the PO at the rate saved on the order (none for orders placed before rates were saved); it is not part of the landed cost.",
+      "Order value is the received quantity x rate (what the supplier is owed); PO value is the ordered quantity x rate, for reference. Order value in INR is the order value at the rate saved on the order (none for orders placed before rates were saved); neither is part of the landed cost.",
       "Insurance, GST and other expenses are not recorded, so the landed cost holds only the parts listed.",
     ],
     sections: [
@@ -48,8 +48,9 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
           text("Main item"),
           text("Terms"),
           money("PO value", currency),
+          money("Order value (received)", currency),
           rate("Rate saved on order", currency),
-          inr("PO value at saved rate"),
+          inr("Order value at saved rate"),
           money("Goods paid", currency),
           rate("Average payment rate", currency),
           inr("Goods"),
@@ -69,6 +70,7 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
             row.supplier.name,
             row.item,
             row.terms === "mixed" ? "Mixed" : row.terms,
+            row.poValueCny ?? null,
             row.orderValueCny ?? null,
             row.exchangeRate ?? null,
             row.orderValueCny !== undefined && row.exchangeRate != null ? round2(row.orderValueCny * row.exchangeRate) : null,
@@ -92,6 +94,7 @@ export function landedCostFile(data: LandedCostData, filters: string, today: str
               null,
               null,
               // A held account's orders (D4) are listed, their money and pieces in no total.
+              sum(counted(list), (row) => row.poValueCny ?? 0),
               sum(counted(list), (row) => row.orderValueCny),
               null,
               null,

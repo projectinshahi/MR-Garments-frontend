@@ -54,7 +54,10 @@ async function placeOrder(api: Api, supplier: { id: string; name: string }, curr
   };
   const response = await api.post("/orders", body);
   expect(response.status(), await response.text()).toBe(201);
-  return ((await response.json()) as { order: CreatedOrder }).order;
+  const order = ((await response.json()) as { order: CreatedOrder }).order;
+  // Received in full: an order is worth its received quantity x rate (owner rule of 2026-11-23).
+  await api.receive(order.po, Object.fromEntries(lines.map((line) => [line.item, line.quantity])));
+  return order;
 }
 
 test("a supplier's detail: opened from the report, its totals per currency, its own lists, filters, pages and the way back", async ({ page, api }) => {
@@ -127,7 +130,7 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(kpiTexts(page, "Payment transactions")).toHaveText(["Payment transactions", "12", "paid and due"]);
     await expect(kpiTexts(page, "Line items")).toHaveText(["Line items", "3", "3 products"]);
     // Yuan and dollars side by side, never one summed number; INR (payment-day rates) adds up; the agent's ¥999 is out.
-    await expect(kpiTexts(page, "Order value")).toHaveText(["Order value", "¥1,200 · $200", "all stages"]);
+    await expect(kpiTexts(page, "Order value (received)")).toHaveText(["Order value (received)", "¥1,200 · $200", "all stages"]);
     await expect(kpiTexts(page, "Settled").nth(1)).toHaveText("¥600 · $80");
     await expect(kpiTexts(page, "Settled").nth(2)).toContainText("₹14,240 paid at payment-day rates");
     await expect(kpiTexts(page, "Outstanding").nth(1)).toHaveText("¥600 · $120");
@@ -193,13 +196,14 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
     await expect(orderRows.nth(2).getByRole("cell")).toHaveText([cny.po, ...dates, "100 pcs · 50 m", "¥1,200", "¥600", "¥600", "Partly paid", /\S/]);
 
     await orders.getByRole("button", { name: "Stage: All stages" }).click();
-    await page.getByRole("menuitemradio", { name: "2. Receiving in China" }).click();
-    await expect(page).toHaveURL(new RegExp(`&stage=2$`));
+    // Both are received (stage 2), so none is at stage 3.
+    await page.getByRole("menuitemradio", { name: "3. Container loading" }).click();
+    await expect(page).toHaveURL(new RegExp(`&stage=3$`));
     await expect(orders.getByText("No orders at this stage.")).toBeVisible();
     await expect(kpiTexts(page, "Orders").nth(1)).toHaveText("2");
-    await orders.getByRole("button", { name: "Stage: 2. Receiving in China" }).click();
-    await page.getByRole("menuitemradio", { name: "1. Order and deposit" }).click();
-    await expect(page).toHaveURL(new RegExp(`&stage=1$`));
+    await orders.getByRole("button", { name: "Stage: 3. Container loading" }).click();
+    await page.getByRole("menuitemradio", { name: "2. Receiving in China" }).click();
+    await expect(page).toHaveURL(new RegExp(`&stage=2$`));
     await expect(orderRows).toHaveCount(3);
   });
 
@@ -213,9 +217,12 @@ test("a supplier's detail: opened from the report, its totals per currency, its 
 
   await test.step("the supplier ledger: the whole statement with the order debits and payments, newest first", async () => {
     const ledger = card(page, "Supplier ledger");
-    await expect(ledger.getByRole("row").filter({ hasText: "Order debit" })).toHaveCount(2);
-    await expect(ledger.getByRole("row").filter({ hasText: cny.po })).toContainText("−¥1,200.00");
-    await expect(ledger.getByRole("row").filter({ hasText: usd.po })).toContainText("−$200.00");
+    // Each order: placed with nothing received (no change), then its receipt's order change (owner rule of 2026-11-23).
+    await expect(ledger.getByRole("row").filter({ hasText: "Nothing received" })).toHaveCount(2);
+    const changes = ledger.getByRole("row").filter({ hasText: "Order change" });
+    await expect(changes).toHaveCount(2);
+    await expect(changes.filter({ hasText: cny.po })).toContainText("−¥1,200.00");
+    await expect(changes.filter({ hasText: usd.po })).toContainText("−$200.00");
   });
 
   await test.step("Back keeps the report's period and supplier, not the detail's own filters", async () => {
@@ -241,7 +248,7 @@ test("a supplier with no orders shows zeros and an empty state in each list", as
   for (const label of ["Contact person", "Phone", "City", "Address"]) await expect(kv(page, label)).toHaveText("–");
   await expect(kv(page, "Preferred currency")).toHaveText("$ US dollar");
   await expect(kpiTexts(page, "Orders")).toHaveText(["Orders", "0", "0 open"]);
-  await expect(kpiTexts(page, "Order value").nth(1)).toHaveText("$0");
+  await expect(kpiTexts(page, "Order value (received)").nth(1)).toHaveText("$0");
   await expect(kpiTexts(page, "Outstanding").nth(1)).toHaveText("$0");
   for (const text of ["No payments yet.", "No orders yet.", "No order lines yet."]) await expect(page.getByText(text, { exact: true })).toBeVisible();
   // The ledger card's statement is empty too.

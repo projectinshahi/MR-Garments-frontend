@@ -67,7 +67,7 @@ export const paymentOrder = (po: string, over: Partial<PaymentOrder> = {}): Paym
   supplier: "Hangzhou Silk",
   currency: "CNY",
   supplierRate: 12,
-  orderValueCny: 10_000,
+  orderValueCny: 10_000, poValueCny: 10_000,
   ...SETTLED,
   settledCny: 4_000,
   outstandingCny: 6_000,

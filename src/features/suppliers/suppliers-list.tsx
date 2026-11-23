@@ -165,7 +165,7 @@ export function SuppliersList({ suppliers, draft, currencies }: { suppliers: Sup
         </span>
       ),
     },
-    { id: "ytdValue", accessorFn: (row) => firstAmount(row.ytdValue), enableSorting: false, header: yuanOnly ? "YTD Value (¥)" : "YTD Value", meta: { ...right, className: "w-[112px]" }, cell: ({ row }) => money(row.original.ytdValue) },
+    { id: "ytdValue", accessorFn: (row) => firstAmount(row.ytdValue), enableSorting: false, header: yuanOnly ? "YTD Value received (¥)" : "YTD Value received", meta: { ...right, className: "w-[112px]" }, cell: ({ row }) => money(row.original.ytdValue) },
     {
       id: "balance",
       accessorFn: (row) => firstAmount(row.balance),

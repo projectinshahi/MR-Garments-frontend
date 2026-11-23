@@ -274,7 +274,7 @@ describe("Landed Cost", () => {
     quantity: 100,
     unit: "pcs",
     orderDate: "2026-10-01",
-    orderValueCny: 1000,
+    orderValueCny: 1000, poValueCny: 1000,
     exchangeRate: 12.5,
     terms: "FOB",
     goodsInr: 12100,
@@ -307,7 +307,7 @@ describe("Landed Cost", () => {
     const value = (header: string) => column(table, header)[0];
     expect(value("PO value (CNY)")).toBe(1000);
     expect(value("Rate saved on order (INR per 1 CNY)")).toBe(12.5);
-    expect(value("PO value at saved rate (INR)")).toBe(12500);
+    expect(value("Order value at saved rate (INR)")).toBe(12500);
     expect(value("Goods (INR)")).toBe(12100);
     expect(value("Average payment rate (INR per 1 CNY)")).toBe(12.1);
     expect(value("Total landed cost (INR)")).toBe(18000);
@@ -320,11 +320,11 @@ describe("Landed Cost", () => {
 
   it("shows no INR PO value for an order placed before rates were saved", () => {
     const table = section(landedCostFile({ ...data, orders: [{ ...order, exchangeRate: null }] }, "No filters", TODAY), "Landed cost by order (CNY orders)");
-    expect(column(table, "PO value at saved rate (INR)")).toEqual([null]);
+    expect(column(table, "Order value at saved rate (INR)")).toEqual([null]);
   });
 
   it("lists a held account's order but leaves its money and pieces out of every total (pre-release audit M3)", () => {
-    const held = { ...order, orderId: "o2", po: "0000066", orderValueCny: 189.4, clearingInr: 500, transportInr: 300, totalInr: 800, stockedPieces: 7, held: true };
+    const held = { ...order, orderId: "o2", po: "0000066", orderValueCny: 189.4, poValueCny: 189.4, clearingInr: 500, transportInr: 300, totalInr: 800, stockedPieces: 7, held: true };
     const table = section(landedCostFile({ ...data, orders: [order, held] }, "No filters", TODAY), "Landed cost by order (CNY orders)");
     expect(column(table, "PO value (CNY)")).toEqual([1000, 189.4]);
     const totalOf = (header: string) => table.total![table.columns.findIndex((c) => c.header === header)];
@@ -415,7 +415,7 @@ describe("Supplier list and supplier detail", () => {
       quantity: 10,
       received: 0,
       unit: "pcs",
-      orderValueCny: 100,
+      orderValueCny: 100, poValueCny: 100,
       ...SETTLED,
       settledCny: 0,
       outstandingCny: 100,
@@ -482,7 +482,7 @@ describe("Dashboard", () => {
     stocked: 0,
     closed: false,
     closedOn: null,
-    orderValueCny: 1000,
+    orderValueCny: 1000, poValueCny: 1000,
     ...SETTLED,
     settledCny: 300,
     outstandingCny: 700,
@@ -503,7 +503,7 @@ describe("Dashboard", () => {
     expect(section(file, "Summary").rows).toContainEqual(["Payable to suppliers", "Not in your access"]);
     expect(section(file, "Payments due").rows).toEqual([["Not in your access"]]);
     // Settled and outstanding are the API's FIFO figures, added per supplier and currency.
-    expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 1, 2000, 600, 1400]]);
+    expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 1, 2000, 2000, 600, 1400]]);
   });
 
   it("reads the payable balances and the paid INR from PAY-1, voided payments left out; a held order has no supplier figure", () => {
@@ -523,8 +523,9 @@ describe("Dashboard", () => {
     expect(section(file, "Summary").rows).toContainEqual(["Payable to suppliers", "CNY 700.00"]);
     expect(section(file, "Summary").rows).toContainEqual(["Paid so far, all payees (INR)", 61200]);
     // A held account's PO value adds nothing either (pre-release audit M3): PO-1 only, and no value on its supplier row.
-    expect(section(file, "Summary").rows).toContainEqual(["PO value", "CNY 1,000.00"]);
-    expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 2, null, null, null]]);
+    expect(section(file, "Summary").rows).toContainEqual(["PO value (ordered)", "CNY 1,000.00"]);
+    expect(section(file, "Summary").rows).toContainEqual(["Order value (received)", "CNY 1,000.00"]);
+    expect(section(file, "Supplier summary (CNY orders)").rows).toEqual([["Foshan Fabrics", 2, 2, null, null, null, null]]);
   });
 });
 

@@ -44,7 +44,7 @@ export const EDIT_ORDER_TEXT = {
   saved: "Order saved",
   /** After a new PO number: the order is the same one, now under that number. */
   renumbered: (po: string) => `Order saved. Its PO number is now ${po}.`,
-  linesEditable: "Change the PO number, the dates or the items. The supplier and currency can't change. A new order total changes the supplier's account by the difference.",
+  linesEditable: "Change the PO number, the dates or the items. The supplier and currency can't change. The supplier's account follows the goods received, never the PO value.",
   receivedOnly: "Goods have been received for this order, so only the PO number, the delivery date and the deposit required can change.",
   savedWithLedger: (before: number, after: number, currency: Currency) => `Order saved. Supplier balance: ${balanceText(before, currency)} → ${balanceText(after, currency)}`,
 };
@@ -391,18 +391,16 @@ function EditOrderForm({ order, items, linesEditable, onClose }: { order: Editab
 
       <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-7 gap-y-1 border-t pt-[12.5px]">
         {/*
-          The order change entry ORD-5 posts to the supplier's account (+ available, − payable), none while unchanged:
-          a higher value is a negative entry (more payable to the supplier), a lower one a positive entry.
+          The items are editable only before any goods are received, and an order's value is its received quantity x rate
+          (owner rule of 2026-11-23): a new PO value changes nothing on the supplier's account.
         */}
         {change !== 0 ? (
           <span className="text-sm leading-4 text-muted-foreground">
-            Was {formatMoney(saved, order.currency, { decimals: 2, spaced: true })} · {change > 0 ? "−" : "+"}
-            {formatMoney(Math.abs(change), order.currency, { decimals: 2, spaced: true })} on the supplier&apos;s account ({change > 0 ? "more" : "less"} payable to the
-            supplier)
+            Was {formatMoney(saved, order.currency, { decimals: 2, spaced: true })} · no change on the supplier&apos;s account until goods are received
           </span>
         ) : null}
-        <span className="text-[15px] leading-4">Order total</span>
-        <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
+        <span className="text-[15px] leading-4">PO value</span>
+        <output aria-label="PO value" className="text-[17px] leading-[19px] font-bold">
           {formatMoney(total, order.currency, { decimals: 2, spaced: true })}
         </output>
       </div>

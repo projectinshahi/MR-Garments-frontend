@@ -89,7 +89,7 @@ const orderColumns = (currency: Currency | null): ColumnDef<OrderPaymentRow>[] =
         </>
       ),
     },
-    { accessorKey: "orderValueCny", header: () => label("Order value"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.orderValueCny, row.original) },
+    { accessorKey: "orderValueCny", header: () => label("Order value (received)"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.orderValueCny, row.original) },
     { accessorKey: "settledCny", header: () => label("Settled"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.settledCny, row.original) },
     { accessorKey: "outstandingCny", header: () => label("Outstanding"), meta: { align: "right", className: PAD }, cell: ({ row }) => amount(row.original.outstandingCny, row.original) },
     {
@@ -169,7 +169,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, suppliers, age
             </form>
             <ReportDownload file={() => paymentsFile(visible, shownPayments, query, todayInIndia(), totals)} />
             {suppliers ? (
-              <RecordPaymentDialog suppliers={suppliers}>
+              <RecordPaymentDialog suppliers={suppliers} canApprove={canVoid}>
                 <Button type="button" size="header">
                   + Record payment
                 </Button>

@@ -30,7 +30,7 @@ const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
   quantities: [{ unit: "pcs", quantity: 100 }],
   closed: false,
   closedOn: null,
-  orderValueCny: 2000,
+  orderValueCny: 2000, poValueCny: 2000,
   held: false,
   settledCny: 1000,
   outstandingCny: 1000,
@@ -49,10 +49,10 @@ const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
 const data: OrderReportsResponse = {
   rows: [
     row({}),
-    row({ id: "o2", po: "PO-3002", orderValueCny: 800, settledCny: 800, outstandingCny: 0, paidInr: 10000, paymentStatus: "paid" }),
-    row({ id: "o3", po: "PO-3003", orderValueCny: 1000, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, paidInr: null, depositStatus: null }),
+    row({ id: "o2", po: "PO-3002", orderValueCny: 800, poValueCny: 800, settledCny: 800, outstandingCny: 0, paidInr: 10000, paymentStatus: "paid" }),
+    row({ id: "o3", po: "PO-3003", orderValueCny: 1000, poValueCny: 1000, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, paidInr: null, depositStatus: null }),
   ],
-  summary: { orders: 3, byCurrency: [{ currency: "CNY", orderValueCny: 3800, settledCny: 1800, outstandingCny: 1000 }], paidInr: 22500, landedCostInr: 0 },
+  summary: { orders: 3, byCurrency: [{ currency: "CNY", orderValueCny: 3800, poValueCny: 3800, settledCny: 1800, outstandingCny: 1000 }], paidInr: 22500, landedCostInr: 0 },
   filter: { po: null, supplierName: null, supplier: null, from: null, to: null, status: null, stage: null, currency: null, warehouse: null, paymentStatus: null },
   options: { suppliers: [], warehouses: [] },
 };

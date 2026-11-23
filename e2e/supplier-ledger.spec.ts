@@ -59,7 +59,7 @@ async function recordPayment(page: Page, supplier: string, amount: string, extra
 
 test("Record payment: pick the supplier, its currency and rate, see the balance now → after; the ledger shows it with the running balance", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Pay");
-  const order = await api.createOrder({ supplier: supplier.name });
+  const order = await api.createReceivedOrder({ supplier: supplier.name });
 
   await page.goto("/payments");
   await page.getByRole("button", { name: "+ Record payment", exact: true }).click();
@@ -83,19 +83,23 @@ test("Record payment: pick the supplier, its currency and rate, see the balance 
   await expect(page.getByRole("heading", { level: 1, name: supplier.name })).toBeVisible();
   await expect(account(page)).toContainText("¥400.00");
   await expect(account(page)).toContainText("Payable to supplier");
-  // Newest first: the payment (+, balance after ¥400 payable), then the order's debit (−, ¥1,000 payable).
-  await expect(statement(page)).toHaveCount(3);
+  // Newest first: the payment (+, balance after ¥400 payable), the receipt's order change (−, ¥1,000 payable), then the
+  // order's debit of 0 when it was placed with nothing received.
+  await expect(statement(page)).toHaveCount(4);
   const payment = entry(page, "TXN-L1");
   await expect(payment).toContainText("Payment");
   await expect(payment).toContainText("+¥600.00");
   await expect(payment).toContainText("12.50");
   await expect(payment).toContainText("₹7,500.00");
   await expect(payment).toContainText("¥400.00Payable to supplier");
-  const debit = entry(page, "Order debit");
-  await expect(debit).toContainText(order.po);
-  await expect(debit).toContainText("−¥1,000.00");
-  await expect(debit).toContainText("¥1,000.00Payable to supplier");
-  await expect(debit.getByRole("link", { name: order.po })).toHaveAttribute("href", `/orders/${order.po}`);
+  const received = entry(page, "Order change");
+  await expect(received).toContainText(order.po);
+  await expect(received).toContainText("−¥1,000.00");
+  await expect(received).toContainText("¥1,000.00Payable to supplier");
+  await expect(received.getByRole("link", { name: order.po })).toHaveAttribute("href", `/orders/${order.po}`);
+  const placed = entry(page, "Nothing received");
+  await expect(placed).toContainText(order.po);
+  await expect(placed).toContainText("No change");
 
   // The Orders tab: the account settles the order, oldest first.
   await page.getByRole("tab", { name: "Orders" }).click();
@@ -113,7 +117,7 @@ test("Record payment: pick the supplier, its currency and rate, see the balance 
   await expect(line).toContainText("¥600.00"); // credits
 });
 
-test("New order shows the supplier's balance; the order's debit makes it payable", async ({ page, api }) => {
+test("New order shows the supplier's balance; placing an order changes nothing until its goods are received", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Order");
   await api.paySupplier(supplier.id, { amount: 1500, rateInr: 12 });
 
@@ -124,25 +128,35 @@ test("New order shows the supplier's balance; the order's debit makes it payable
   await page.getByRole("combobox", { name: "Item, line 1" }).selectOption({ label: "Denim jeans" });
   await page.getByRole("textbox", { name: "Rate (¥), line 1" }).fill("20");
   await page.getByRole("textbox", { name: "Quantity, line 1" }).fill("100");
-  await expect(kv(page, "Supplier balance after this order")).toHaveText("Payable to supplier ¥500.00");
+  await expect(kv(page, "Supplier balance after this order")).toHaveText("Available with supplier ¥1,500.00");
   await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(page).toHaveURL(/\/orders\/PO-\d+$/);
   const po = new URL(page.url()).pathname.split("/").pop()!;
-  await expect(toast(page, `Order ${po} placed. Debited ¥2,000.00; supplier balance Payable to supplier ¥500.00.`)).toBeVisible();
+  await expect(toast(page, `Order ${po} placed. Supplier balance Available with supplier ¥1,500.00: it changes as goods are received.`)).toBeVisible();
 
   await page.goto(ledgerPage(supplier.id));
-  const debit = entry(page, "Order debit");
-  await expect(debit).toContainText(po);
-  await expect(debit).toContainText("−¥2,000.00");
-  await expect(debit).toContainText("¥500.00Payable to supplier");
-  await expect(account(page)).toContainText("¥500.00");
+  // Its debit of 0 reads as what it is, never as a payment.
+  const placed = entry(page, "Nothing received");
+  await expect(placed).toContainText(po);
+  await expect(placed).toContainText("No change");
+  await expect(placed).not.toContainText("+¥0.00");
+  await expect(placed).toContainText("¥1,500.00Available with supplier");
+  await expect(account(page)).toContainText("¥1,500.00");
+  await expect(account(page)).toContainText("Available with supplier");
+
+  // The goods arrive: the receipt posts the order's value and the credit settles it.
+  await api.receive(po, { "Denim jeans": 100 });
+  await page.reload();
+  const received = entry(page, "Order change");
+  await expect(received).toContainText("−¥2,000.00");
+  await expect(received).toContainText("¥500.00Payable to supplier");
   await expect(account(page)).toContainText("Payable to supplier");
 });
 
 test("an order's settled, outstanding and status, and its Deposit Required milestone: not met, partly met, met", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Milestone");
-  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 200, rateCny: 10 }], depositRequiredCny: 800 });
+  const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Denim jeans", quantity: 200, rateCny: 10 }], depositRequiredCny: 800 });
   const term = (start: string) => page.getByRole("term").filter({ hasText: new RegExp(`^${start}`), visible: true });
   const value = (start: string) => term(start).locator("xpath=following-sibling::dd[1]");
 
@@ -179,7 +193,7 @@ test("an order's settled, outstanding and status, and its Deposit Required miles
 
 test("Management voids a payment with a reason: it stays listed, voided, and leaves every total", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Void");
-  const order = await api.createOrder({ supplier: supplier.name });
+  const order = await api.createReceivedOrder({ supplier: supplier.name });
   await api.paySupplier(supplier.id, { amount: 400, rateInr: 12, reference: "TXN-KEEP" });
   const { payment } = await api.paySupplier(supplier.id, { amount: 300, rateInr: 12, reference: "TXN-VOID" });
 
@@ -223,7 +237,7 @@ test("Management voids a payment with a reason: it stays listed, voided, and lea
 
 test("Management adjustments, increase and decrease, with a reason: the statement shows each with its balance before and after", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Adjust");
-  await api.createOrder({ supplier: supplier.name });
+  await api.createReceivedOrder({ supplier: supplier.name });
   await page.goto(ledgerPage(supplier.id));
 
   async function adjust(direction: "Increase" | "Decrease", amount: string, reason: string, before: string, after: string) {
@@ -288,7 +302,7 @@ test.describe("Accounts (payments Enter)", () => {
 
 test("after the supplier's currency changes, Record payment still offers the old currency while it has a balance", async ({ page, api }) => {
   const supplier = await api.newSupplier("Ledger Currency");
-  await api.createOrder({ supplier: supplier.name });
+  await api.createReceivedOrder({ supplier: supplier.name });
   const changed = await api.patch(`/suppliers/${supplier.id}`, { currency: "USD", exchangeRate: 88 });
   expect(changed.status(), await changed.text()).toBe(200);
 
@@ -444,7 +458,7 @@ test("Receive goods shows the supplier's earlier unpaid orders as previous outst
   test.setTimeout(120_000);
   const supplier = await api.newSupplier("Ledger Warehouse");
   // An earlier ¥500 order, unpaid; the trip's own order ¥1,000; ¥200 paid settles the earlier one in part (oldest first).
-  const earlier = await api.createOrder({ supplier: supplier.name, orderDate: today(-30), deliveryDate: today(-5), lines: [{ item: "Track pants", quantity: 50, rateCny: 10 }] });
+  const earlier = await api.createReceivedOrder({ supplier: supplier.name, orderDate: today(-30), deliveryDate: today(-5), lines: [{ item: "Track pants", quantity: 50, rateCny: 10 }] });
   const { tripId } = await unloadedTrip(api, { supplier: supplier.name, orderDate: today(-20), deliveryDate: today(-1) });
   await api.paySupplier(supplier.id, { amount: 200, rateInr: 12 });
 

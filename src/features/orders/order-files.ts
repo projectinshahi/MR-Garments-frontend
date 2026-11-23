@@ -51,12 +51,13 @@ function itemSheet(rows: OrderRow[], lines: OrderLineItem[]): Section[] {
       text("Unit"),
       text("Ordered qty"),
       money("Saved rate", currency),
-      money("Amount", currency),
+      money("PO amount (ordered)", currency),
+      money("Amount (received)", currency),
       text("Received in China"),
       text("Pending in China"),
       text("Stocked in India"),
     ],
-    rows: list.map((l) => [l.po, l.supplier, l.position + 1, l.item, l.unit, l.quantity, l.rateCny, l.valueCny, l.received, Math.max(0, l.quantity - l.received), l.stocked]),
+    rows: list.map((l) => [l.po, l.supplier, l.position + 1, l.item, l.unit, l.quantity, l.rateCny, l.poValueCny, l.valueCny, l.received, Math.max(0, l.quantity - l.received), l.stocked]),
   }));
 }
 
@@ -64,7 +65,8 @@ function itemSheet(rows: OrderRow[], lines: OrderLineItem[]): Section[] {
 const orderSummary = (rows: OrderRow[]) =>
   summarySection([
     ["Orders", rows.length],
-    ["PO value", amountsText(sumByCurrency(rows.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny))],
+    ["Order value (received)", amountsText(sumByCurrency(rows.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny))],
+    ["PO value (ordered)", amountsText(sumByCurrency(rows.filter((o) => !o.held), (o) => o.currency, (o) => o.poValueCny))],
     ["Settled", amountsText(sumByCurrency(rows.filter((o) => o.settledCny !== null), (o) => o.currency, (o) => o.settledCny ?? 0))],
     ["Outstanding", amountsText(sumByCurrency(rows.filter((o) => o.outstandingCny !== null), (o) => o.currency, (o) => o.outstandingCny ?? 0))],
     ["Paid, all payees (INR)", totalOf(rows, (o) => o.paidInr)],
@@ -180,7 +182,8 @@ export const pendingOrdersFile = (rows: OrderRow[], filters: string, today: stri
         text("Received qty"),
         text("Pending qty"),
         text("Unit"),
-        money("Order value", currency),
+        money("PO value", currency),
+        money("Order value (received)", currency),
         money("Settled", currency),
         money("Outstanding", currency),
         text("Payment status"),
@@ -197,6 +200,7 @@ export const pendingOrdersFile = (rows: OrderRow[], filters: string, today: stri
         o.received,
         pendingQty(o),
         o.unit,
+        o.poValueCny,
         o.orderValueCny,
         o.settledCny,
         o.outstandingCny,
@@ -205,7 +209,7 @@ export const pendingOrdersFile = (rows: OrderRow[], filters: string, today: stri
         stageLabel(o.stage),
       ]),
       total: list.length
-        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), null, null, null]
+        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.poValueCny), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), null, null, null]
         : undefined,
     })),
     lines,
@@ -232,7 +236,8 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         text("Ordered qty"),
         text("Warehouse received qty"),
         text("Unit"),
-        money("Order value", currency),
+        money("PO value", currency),
+        money("Order value (received)", currency),
         money("Settled", currency),
         money("Outstanding", currency),
         money("Paid, all payees", "INR"),
@@ -248,6 +253,7 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         o.quantity,
         o.stocked,
         o.unit,
+        o.poValueCny,
         o.orderValueCny,
         o.settledCny,
         o.outstandingCny,
@@ -255,7 +261,7 @@ export const closedOrdersFile = (rows: OrderRow[], filters: string, today: strin
         o.status,
       ]),
       total: list.length
-        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), totalOf(list, (o) => o.paidInr), null]
+        ? ["Total", ...Array<null>(8).fill(null), totalOf(list, (o) => o.poValueCny), totalOf(list, (o) => o.orderValueCny), totalOf(list, (o) => o.settledCny), totalOf(list, (o) => o.outstandingCny), totalOf(list, (o) => o.paidInr), null]
         : undefined,
     })),
     lines,

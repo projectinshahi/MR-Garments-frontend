@@ -31,19 +31,23 @@ test("a USD supplier's order is placed in dollars at its rate, paid at typed INR
     await combo(page, "Item, line 1").selectOption({ label: "Denim jeans" });
     await box(page, "Rate ($), line 1").fill("2.5");
     await box(page, "Quantity, line 1").fill("400");
-    await expect(page.getByRole("status", { name: "Order total" })).toHaveText("$ 1,000.00");
+    await expect(page.getByRole("status", { name: "PO value" })).toHaveText("$ 1,000.00");
     // No deposits on the order any more: supplier money is recorded with Record payment.
     await expect(page.getByRole("button", { name: "+ Add deposit" })).toHaveCount(0);
     await expect(kv(page, "Supplier balance now")).toHaveText("Settled");
-    await expect(kv(page, "Supplier balance after this order")).toHaveText("Payable to supplier $1,000.00");
+    // An order is worth what is received (owner rule of 2026-11-23): placing it changes no balance.
+    await expect(kv(page, "Supplier balance after this order")).toHaveText("Settled");
     // Container terms are chosen on the order (backend docs/order-container-terms.md).
     await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(page).toHaveURL(/\/orders\/PO-\d+$/);
   });
   const po = new URL(page.url()).pathname.split("/").pop()!;
-  await expect(toast(page, `Order ${po} placed. Debited $1,000.00; supplier balance Payable to supplier $1,000.00.`)).toBeVisible();
-  expect(await api.order(po)).toMatchObject({ currency: "USD", orderValueCny: 1000, settledCny: 0, outstandingCny: 1000, paymentStatus: "unpaid" });
+  await expect(toast(page, `Order ${po} placed. Supplier balance Settled: it changes as goods are received.`)).toBeVisible();
+  expect(await api.order(po)).toMatchObject({ currency: "USD", orderValueCny: 0, poValueCny: 1000, settledCny: 0, outstandingCny: 0, paymentStatus: "awaiting_goods" });
+  // The goods arrive in China: the order is now worth 400 x $2.50, payable to the supplier.
+  await api.receive(po, { "Denim jeans": 400 });
+  expect(await api.order(po)).toMatchObject({ orderValueCny: 1000, poValueCny: 1000, settledCny: 0, outstandingCny: 1000, paymentStatus: "unpaid" });
   // $300 to the supplier's USD account at its rate (88): ₹26,400.
   await api.paySupplier(supplierId, { amount: 300, rateInr: 88, mode: "Wire" });
   expect(await api.order(po)).toMatchObject({ settledCny: 300, settledInr: 26400, outstandingCny: 700 });
@@ -82,7 +86,7 @@ test("a USD supplier's order is placed in dollars at its rate, paid at typed INR
 
   await test.step("The order's payments tab: dollars, each credit that settled it changed to INR at its own rate", async () => {
     await page.goto(`/orders/${po}/payments`);
-    await expect(kpi(page, "Order value")).toContainText("$1,000.00");
+    await expect(kpi(page, "Order value (received)")).toContainText("$1,000.00");
     // first(): the KPI card; the Supplier account card's balance also reads "Settled".
     await expect(kpi(page, "Settled").first()).toContainText("$1,000.00");
     await expect(kpi(page, "Outstanding")).toContainText("Paid");
@@ -95,7 +99,7 @@ test("a USD supplier's order is placed in dollars at its rate, paid at typed INR
   await test.step("Payments per supplier: a USD row of its own, never added to the yuan figures", async () => {
     await page.goto("/reports/payments-per-supplier");
     await expect(page.getByRole("table").getByRole("row").filter({ hasText: name })).toContainText("$1,000");
-    await expect(kpi(page, "Order value")).toContainText("$1,000");
+    await expect(kpi(page, "Order value (received)")).toContainText("$1,000");
   });
 
   await test.step("The order keeps the rate it was placed at: a new supplier rate shows beside it, the PO value in INR stays at the old one", async () => {
@@ -104,7 +108,7 @@ test("a USD supplier's order is placed in dollars at its rate, paid at typed INR
     expect(changed.status(), await changed.text()).toBe(200);
     await page.goto(`/reports/orders/${po}`);
     await expect(kv(page, "Exchange rate on this PO")).toHaveText("1 USD = ₹88.00");
-    await expect(kv(page, "PO value in INR")).toHaveText("₹88,000.00 at the PO rate");
+    await expect(kv(page, "Order value in INR")).toHaveText("₹88,000.00 at the PO rate");
     await expect(kv(page, "Exchange rate now")).toHaveText("1 USD = ₹90.00");
     expect(await api.order(po)).toMatchObject({ exchangeRate: 88 });
   });

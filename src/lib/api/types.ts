@@ -233,7 +233,10 @@ export type OrderListItem = {
   stocked: number;
   closed: boolean;
   closedOn: string | null;
+  /** Received quantity × rate (owner rule of 2026-11-23): the value the supplier ledger holds and settles. */
   orderValueCny: number;
+  /** Ordered quantity × rate, for reference only (never posted or settled). */
+  poValueCny: number;
   /** Paid to shipping agents (sea freight, never posted to the ledger), non-void; null without payments View. */
   agentPaidCny: number | null;
   agentPaidInr: number | null;
@@ -246,7 +249,8 @@ export type OrderListItem = {
  * SettlementFields (backend docs/unified-ledger.md): the order's FIFO settlement from its supplier account, read-only.
  * Null figures while the account is held or the order's debit is not posted. `outstandingCny` is never negative.
  */
-export type PaymentStatus = "unpaid" | "partly" | "paid";
+/** `awaiting_goods`: nothing received yet, so nothing is due (never "paid" just because the value is 0). */
+export type PaymentStatus = "awaiting_goods" | "unpaid" | "partly" | "paid";
 export type SettlementFields = {
   held: boolean;
   settledCny: number | null;
@@ -268,7 +272,8 @@ export type MilestoneFields = {
 
 /**
  * ORD-7 GET /api/v1/order-lines (backend docs/report-downloads.md): every line of every order, ORD-1's order then
- * position. `rateCny` is the rate saved on the line (never the item's price now), `valueCny` quantity x rate.
+ * position. `rateCny` is the rate saved on the line (never the item's price now), `valueCny` received quantity x rate
+ * (the line's value), `poValueCny` ordered quantity x rate (reference).
  */
 export type OrderLineItem = {
   orderId: string;
@@ -280,6 +285,7 @@ export type OrderLineItem = {
   quantity: number;
   rateCny: number;
   valueCny: number;
+  poValueCny: number;
   /** Received in China over every receipt, and on stocked warehouse receipts in India. */
   received: number;
   stocked: number;
@@ -383,7 +389,9 @@ export type PaymentsResponse = {
     currency: Currency;
     /** The supplier's rate now (INR per 1 of `currency`), a new payment's default; null while not set. */
     supplierRate: number | null;
+    /** Received quantity × rate; poValueCny ordered quantity × rate (reference). */
     orderValueCny: number;
+    poValueCny: number;
     agentPaidCny: number | null;
     agentPaidInr: number | null;
     /** settledInr + agentPaidInr; null when settledInr is null. */
@@ -435,7 +443,9 @@ export type ReceiptOptions = {
     supplier: string;
     /** Always given: it is not an amount. */
     currency: Currency;
+    /** Received so far × rate (before this receipt); poValueCny ordered × rate. Null without payments View. */
     orderValueCny: number | null;
+    poValueCny: number | null;
     /** What the supplier is still owed for the order (the ledger's FIFO projection); null without payments View, while held or not posted. */
     outstandingCny: number | null;
     lines: { orderLineId: string; item: string; unit: Unit; ordered: number; receivedEarlier: number; unitPriceCny: number | null }[];
@@ -519,7 +529,9 @@ export type OrderDetail = Omit<OrderListItem, "supplier"> & {
     unit: Unit;
     quantity: number;
     rateCny: number;
+    /** Received × rate (the line's value); poValueCny ordered × rate (reference). */
     valueCny: number;
+    poValueCny: number;
     received: number;
     loaded: number;
   }[];

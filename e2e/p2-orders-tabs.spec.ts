@@ -36,7 +36,8 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
   await expect(tabs(page).getByRole("link", { name: "Pending" })).toHaveAttribute("aria-current", "page");
   await expectExports(page);
 
-  // Pending columns: ordered and pending quantities, value in the order's currency, payment status, stage.
+  // Pending columns: ordered and pending quantities, PO value in the order's currency, payment status, stage. Nothing is
+  // received yet, so both await goods (owner rule of 2026-11-23); the ¥500 paid waits as supplier credit.
   await search(page).fill(unpaid.po);
   await expect(rowOf(page, unpaid.po).getByRole("cell")).toHaveText([
     unpaid.po,
@@ -46,7 +47,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
     "100 pcs",
     "100 pcs",
     `${cny(1000)}.00`,
-    "Unpaid",
+    "Awaiting goods",
     "1. Order and deposit",
   ]);
   await search(page).fill(partly.po);
@@ -58,7 +59,7 @@ test("a new order is pending until its first China receipt; All keeps it, Closed
     "75 pcs",
     "75 pcs",
     `${cny(2250)}.00`,
-    "Partly paid",
+    "Awaiting goods",
     "1. Order and deposit",
   ]);
 

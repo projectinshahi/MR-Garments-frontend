@@ -38,14 +38,14 @@ export function PaymentsScreen({
 
   return (
     <PageContainer>
-      <OrderContextStrip order={order} fact={`Order value ${money(order.orderValueCny)}`} />
+      <OrderContextStrip order={order} fact={`Order value (received) ${money(order.orderValueCny)} · PO value ${money(order.poValueCny)}`} />
       {order.held ? (
         <Callout tone="warning" size="sm" role="status">
           {HELD_MESSAGE} This order&apos;s figures are not shown until the review is done.
         </Callout>
       ) : null}
       <KpiRow gap="sm">
-        <KpiCard size="xs" label="Order value" value={money(order.orderValueCny)} />
+        <KpiCard size="xs" label="Order value (received)" value={money(order.orderValueCny)} sub={`PO value ${money(order.poValueCny)}`} />
         <KpiCard size="xs" label="Settled" value={money(order.settledCny)} sub="from the supplier account" />
         <KpiCard size="xs" label="Outstanding" value={money(order.outstandingCny)} sub={status} />
         {order.depositRequiredCny == null ? null : (
@@ -89,7 +89,7 @@ export function PaymentsScreen({
           {supplier || agents ? (
             <div className="flex flex-col gap-2">
               {supplier ? (
-                <RecordPaymentDialog suppliers={[supplier]} supplierId={supplier.id}>
+                <RecordPaymentDialog suppliers={[supplier]} supplierId={supplier.id} canApprove={canVoid}>
                   <Button type="button" className="h-auto min-h-11 w-full rounded-[10px] py-2 text-[15px] whitespace-normal">
                     + Record payment for {supplier.name}
                   </Button>

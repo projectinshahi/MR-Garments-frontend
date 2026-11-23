@@ -63,7 +63,7 @@ const row = (po: string, stage: OrderRow["stage"]): OrderRow => ({
   stocked: 0,
   closed: false,
   closedOn: null,
-  orderValueCny: 1000,
+  orderValueCny: 1000, poValueCny: 1000,
   ...SETTLED,
   agentPaidCny: 0,
   agentPaidInr: 0,

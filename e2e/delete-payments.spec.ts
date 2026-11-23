@@ -8,9 +8,10 @@ import { ANITA, expect, freshSignIn, test, toast } from "./live-api";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test("Management voids a supplier payment on Payments: reason required, once on a double-click, the order settles again", async ({ page, api }) => {
-  // ¥1,000 order; ¥300 at 12 and ¥200 at 12.5 paid to the supplier's account: settled ¥500, outstanding ¥500.
+  // ¥1,000 order, received in full (an order is worth what is received); ¥300 at 12 and ¥200 at 12.5 paid to the
+  // supplier's account: settled ¥500, outstanding ¥500.
   const supplier = await api.newSupplier("Void Ledger");
-  const { po } = await api.createOrder({ supplier: supplier.name });
+  const { po } = await api.createReceivedOrder({ supplier: supplier.name });
   await api.paySupplier(supplier.id, { amount: 300, rateInr: 12, reference: "TXN-V300" });
   const { payment } = await api.paySupplier(supplier.id, { amount: 200, rateInr: 12.5, reference: "TXN-V200" });
   expect(await api.order(po)).toMatchObject({ settledCny: 500, outstandingCny: 500, paymentStatus: "partly", paidInr: 6100 });
@@ -59,7 +60,7 @@ test("Management voids a supplier payment on Payments: reason required, once on 
 
 test("Management voids a sea freight payment on the order's tab: the order keeps its settlement, sea freight drops", async ({ page, api }) => {
   const supplier = await api.newSupplier("Void Freight");
-  const { id, po } = await api.createOrder({ supplier: supplier.name });
+  const { id, po } = await api.createReceivedOrder({ supplier: supplier.name });
   await api.paySupplier(supplier.id, { amount: 400, rateInr: 12 });
   await api.payAgent(id, { amountCny: 150, rateInr: 12, kind: "Deposit" });
   expect(await api.order(po)).toMatchObject({ settledCny: 400, agentPaidCny: 150 });

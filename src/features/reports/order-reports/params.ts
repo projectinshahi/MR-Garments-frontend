@@ -18,9 +18,9 @@ export const SUPPLIER_PARAM = "supplierName";
 export const DATE_PARAMS = ["from", "to"] as const;
 
 const ORDER_STATES: OrderState[] = ["pending", "active", "closed"];
-const PAYMENT_STATES: PaymentState[] = ["unpaid", "partly", "paid"];
+const PAYMENT_STATES: PaymentState[] = ["awaiting_goods", "unpaid", "partly", "paid"];
 const STATE_LABEL: Record<OrderState, string> = { pending: "Pending", active: "Active", closed: "Closed" };
-const PAYMENT_LABEL: Record<PaymentState, string> = { unpaid: "Unpaid", partly: "Partly paid", paid: "Paid" };
+const PAYMENT_LABEL: Record<PaymentState, string> = { awaiting_goods: "Awaiting goods", unpaid: "Unpaid", partly: "Partly paid", paid: "Paid" };
 
 export const STATUS_OPTIONS: FilterOption[] = [{ value: "all", label: "All statuses" }, ...ORDER_STATES.map((value) => ({ value, label: STATE_LABEL[value] }))];
 export const PAYMENT_OPTIONS: FilterOption[] = [{ value: "all", label: "Any payment status" }, ...PAYMENT_STATES.map((value) => ({ value, label: PAYMENT_LABEL[value] }))];

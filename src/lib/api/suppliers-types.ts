@@ -8,8 +8,11 @@ import type { MoneyTotal } from "@/types/domain";
 /** SUP-1 GET /api/v1/suppliers/summary: the five KPI cards. */
 export type SuppliersSummary = {
   suppliers: { total: number; active: number; inactive: number };
-  /** Orders not closed (phase 2 §1) and their order value; a held account's (pending review) are only in `heldCount`. */
-  openPos: { count: number; value: MoneyTotal[]; heldCount: number };
+  /**
+   * Orders not closed (phase 2 §1): their value (received × rate) and PO value (ordered × rate, absent from an older
+   * backend); a held account's (pending review) are only in `heldCount`.
+   */
+  openPos: { count: number; value: MoneyTotal[]; poValue?: MoneyTotal[]; heldCount: number };
   /** Orders at stages 3-5 (left China, not yet stocked); the nearest ETA of their containers not yet arrived. */
   inTransit: { orders: number; nextEta: string | null; arrivingNext7: number };
   /** The payable (negative) ledger balances as positive amounts, held left out, and how many suppliers are owed. */

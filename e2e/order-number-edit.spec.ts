@@ -63,7 +63,8 @@ test("Edit order renumbers the order in place, refusing a blank or taken number,
 
   await test.step("the same order: id, value and payment unchanged; the old number is gone", async () => {
     const detail = await api.order(renamed);
-    expect(detail).toMatchObject({ id: order.id, po: renamed, orderValueCny: 1200, agentPaidCny: 400 });
+    // Nothing received yet: worth 0, its PO value 1,200 (owner rule of 2026-11-23).
+    expect(detail).toMatchObject({ id: order.id, po: renamed, orderValueCny: 0, poValueCny: 1200, paymentStatus: "awaiting_goods", agentPaidCny: 400 });
     expect(detail.payments?.map((p) => p.id)).toEqual([payment.id]);
     expect((await api.request.get(`/api/v1/orders/${order.po}`)).status()).toBe(404);
   });

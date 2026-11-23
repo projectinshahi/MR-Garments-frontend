@@ -79,7 +79,8 @@ test("the list shows each receipt with its totals, filters by search, office, su
 });
 
 test("Record receipt: the chosen order's lines, short and the effect on payment follow what you type", async ({ page, api }) => {
-  // A supplier of its own with ¥5,000 on its account: it settles ¥5,000 of this ¥33,000 order (unified ledger).
+  // A supplier of its own with ¥5,000 on its account. An order is worth its received quantity x rate (owner rule of
+  // 2026-11-23): the first receipt (20 jackets) makes this ¥33,000 PO worth ¥1,200, which the credit settles in full.
   const supplier = await api.newSupplier("Receiving Textile");
   const order = await api.createOrder({
     supplier: supplier.name,
@@ -106,21 +107,30 @@ test("Record receipt: the chosen order's lines, short and the effect on payment 
   await expect(jackets).toContainText("500 pcs");
   await expect(jackets).toContainText("20 pcs");
   await expect(jackets.getByRole("cell").last()).toHaveText("480 pcs");
-  await expect(kv(page, "Order value")).toHaveText("¥ 33,000");
-  await expect(kv(page, "Settled from supplier payments")).toHaveText("¥ 5,000");
-  await expect(kv(page, "Balance before this receipt")).toHaveText("¥ 28,000");
+  await expect(kv(page, "PO value (ordered)")).toHaveText("¥ 33,000");
+  await expect(kv(page, "Order value received so far")).toHaveText("¥ 1,200");
+  await expect(kv(page, "Outstanding before this receipt")).toHaveText("¥ 0");
   await expect(page.getByText(`Deliveries for ${order.po}`)).toBeVisible();
   await expect(page.getByText(`${shortDate(today(-1))} · Guangzhou office`)).toBeVisible();
 
   await receivedNow(page, "Men's jackets").fill("470");
   await receivedNow(page, "Cotton fabric").fill("300");
   await expect(jackets.getByRole("cell").last()).toHaveText("10 pcs");
-  await expect(kv(page, "Short: 10 pcs × ¥60")).toHaveText("− ¥ 600");
-  await expect(kv(page, "Balance to pay now")).toHaveText("¥ 27,400");
+  // What this receipt receives adds to the value; the 10 short jackets add nothing.
+  await expect(kv(page, "Received now: 470 pcs × ¥60")).toHaveText("+ ¥ 28,200");
+  await expect(kv(page, "Received now: 300 m × ¥10")).toHaveText("+ ¥ 3,000");
+  await expect(kv(page, "Order value after this receipt")).toHaveText("¥ 32,400");
   // Still short, so the remark is required.
   await expect(page.getByRole("textbox", { name: "Short remark" })).toHaveAttribute("aria-required", "true");
   await receivedNow(page, "Men's jackets").fill("480");
   await expect(page.getByRole("textbox", { name: "Short remark" })).toHaveAttribute("aria-required", "false");
+  await expect(kv(page, "Order value after this receipt")).toHaveText("¥ 33,000");
+
+  // Saved: the second receipt posts its value (a second order change) and the account settles ¥5,000 of ¥33,000.
+  await page.getByRole("textbox", { name: "Bundles received now" }).fill("12");
+  await save(page).click();
+  await expect(page).toHaveURL("/receiving");
+  expect(await api.order(order.po)).toMatchObject({ orderValueCny: 33000, poValueCny: 33000, settledCny: 5000, outstandingCny: 28000, paymentStatus: "partly" });
 });
 
 test("Record receipt: every client check, and nothing is saved", async ({ page, api }) => {

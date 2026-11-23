@@ -24,7 +24,7 @@ const row = (po: string, patch: Partial<OrderRow> = {}): OrderRow => ({
   stocked: 0,
   closed: false,
   closedOn: null,
-  orderValueCny: 1000,
+  orderValueCny: 1000, poValueCny: 1000,
   ...SETTLED,
   settledCny: 0,
   outstandingCny: 1000,
@@ -48,7 +48,7 @@ const line = (orderId: string, po: string, patch: Partial<OrderLineItem> = {}): 
   unit: "pcs",
   quantity: 100,
   rateCny: 10,
-  valueCny: 1000,
+  valueCny: 1000, poValueCny: 1000,
   received: 0,
   stocked: 0,
   ...patch,
@@ -58,7 +58,7 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
   it("All orders: a summary, then per currency the saved rate, PO total, the API's settled, outstanding, status and milestone, and INR paid, with totals", () => {
     const rows = [
       row("PO-2053", { stage: 2, exchangeRate: 12.0412, settledCny: 300, outstandingCny: 700, paymentStatus: "partly", paidInr: 4812.36, terms: "CNF", depositRequiredCny: 500, depositStatus: "unmet" }),
-      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", orderValueCny: 2250, exchangeRate: 83.1, settledCny: 2250, outstandingCny: 0, paymentStatus: "paid", paidInr: 186975 }),
+      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", orderValueCny: 2250, poValueCny: 2250, exchangeRate: 83.1, settledCny: 2250, outstandingCny: 0, paymentStatus: "paid", paidInr: 186975 }),
       // A held account (pending review): no figures, left out of the totals.
       row("PO-2051", { ...HELD, agentPaidCny: null, agentPaidInr: null, paidInr: null }),
     ];
@@ -68,7 +68,8 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
     expect(summary).toMatchObject({ sheet: "Summary", csv: false });
     expect(summary!.rows).toEqual([
       ["Orders", 3],
-      ["PO value", "CNY 1,000.00 · USD 2,250.00"], // the held PO-2051's value too is left out (pre-release audit M3)
+      ["Order value (received)", "CNY 1,000.00 · USD 2,250.00"], // the held PO-2051's value too is left out (pre-release audit M3)
+      ["PO value (ordered)", "CNY 1,000.00 · USD 2,250.00"],
       ["Settled", "CNY 300.00 · USD 2,250.00"],
       ["Outstanding", "CNY 700.00 · USD 0.00"],
       ["Paid, all payees (INR)", 191787.36],
@@ -94,40 +95,40 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
   it("adds the Order Items sheet: every line of the exported orders only, with its saved rate, per currency", () => {
     const rows = [row("PO-2053"), row("PO-2052", { id: "o-usd", po: "PO-2052", currency: "USD" })];
     const lines = [
-      line("PO-2053", "PO-2053", { rateCny: 12.5, valueCny: 1250, received: 60 }),
-      line("PO-2053", "PO-2053", { position: 1, item: "Cotton fabric", unit: "m", quantity: 40, rateCny: 5, valueCny: 200, received: 50, stocked: 30 }),
-      line("o-usd", "PO-2052", { currency: "USD", rateCny: 3, valueCny: 300 }),
+      line("PO-2053", "PO-2053", { rateCny: 12.5, valueCny: 1250, poValueCny: 1250, received: 60 }),
+      line("PO-2053", "PO-2053", { position: 1, item: "Cotton fabric", unit: "m", quantity: 40, rateCny: 5, valueCny: 200, poValueCny: 200, received: 50, stocked: 30 }),
+      line("o-usd", "PO-2052", { currency: "USD", rateCny: 3, valueCny: 300, poValueCny: 300 }),
       line("not-exported", "PO-9999"),
     ];
     const file = ordersFile(rows, "No filters", TODAY, lines);
     const items = file.sections.filter((s) => s.sheet === "Order Items");
     expect(items.map((s) => s.title)).toEqual(["Order items (CNY)", "Order items (USD)"]);
     expect(items[0]!.columns.map((c) => c.header)).toEqual([
-      "PO", "Supplier", "Line", "Item", "Unit", "Ordered qty", "Saved rate (CNY)", "Amount (CNY)", "Received in China", "Pending in China", "Stocked in India",
+      "PO", "Supplier", "Line", "Item", "Unit", "Ordered qty", "Saved rate (CNY)", "PO amount (ordered) (CNY)", "Amount (received) (CNY)", "Received in China", "Pending in China", "Stocked in India",
     ]);
     expect(items[0]!.rows).toEqual([
-      ["PO-2053", "Foshan Fabrics", 1, "Denim jeans", "pcs", 100, 12.5, 1250, 60, 40, 0],
+      ["PO-2053", "Foshan Fabrics", 1, "Denim jeans", "pcs", 100, 12.5, 1250, 1250, 60, 40, 0],
       // Excess received never shows a negative pending.
-      ["PO-2053", "Foshan Fabrics", 2, "Cotton fabric", "m", 40, 5, 200, 50, 0, 30],
+      ["PO-2053", "Foshan Fabrics", 2, "Cotton fabric", "m", 40, 5, 200, 200, 50, 0, 30],
     ]);
-    expect(items[1]!.rows).toEqual([["PO-2052", "Foshan Fabrics", 1, "Denim jeans", "pcs", 100, 3, 300, 0, 100, 0]]);
+    expect(items[1]!.rows).toEqual([["PO-2052", "Foshan Fabrics", 1, "Denim jeans", "pcs", 100, 3, 300, 300, 0, 100, 0]]);
     expect(file.notes!.join(" ")).not.toMatch(/could not be loaded/);
   });
 
   it("Pending: ordered, received and pending quantities, value, settled, outstanding, payment status and milestone per currency", () => {
     const rows = [
       row("PO-2053", { received: 60, settledCny: 500, outstandingCny: 500, paymentStatus: "partly" }),
-      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", quantity: 75, orderValueCny: 2250, settledCny: 2250, outstandingCny: 0, paymentStatus: "paid", depositRequiredCny: 100, depositStatus: "met" }),
+      row("PO-2052", { currency: "USD", supplier: "Shenzhen Apparel", quantity: 75, orderValueCny: 2250, poValueCny: 2250, settledCny: 2250, outstandingCny: 0, paymentStatus: "paid", depositRequiredCny: 100, depositStatus: "met" }),
     ];
     const file = pendingOrdersFile(rows, "Supplier: All suppliers", TODAY);
     expect(file).toMatchObject({ title: "Pending orders", filename: "pending-orders-2026-11-09" });
     expect(file.sections.map((s) => s.title)).toEqual(["Summary", "Pending orders (CNY)", "Pending orders (USD)"]);
     expect(headers(file, 1)).toEqual([
       "PO", "Supplier", "Order date", "Expected delivery", "Main item", "Ordered qty", "Received qty", "Pending qty", "Unit",
-      "Order value (CNY)", "Settled (CNY)", "Outstanding (CNY)", "Payment status", "Deposit milestone", "Current stage",
+      "PO value (CNY)", "Order value (received) (CNY)", "Settled (CNY)", "Outstanding (CNY)", "Payment status", "Deposit milestone", "Current stage",
     ]);
-    expect(file.sections[1]!.rows).toEqual([["PO-2053", "Foshan Fabrics", "2026-10-01", "2026-10-30", "Denim jeans", 100, 60, 40, "pcs", 1000, 500, 500, "Partly paid", null, "1. Order and deposit"]]);
-    expect(file.sections[2]!.rows).toEqual([["PO-2052", "Shenzhen Apparel", "2026-10-01", "2026-10-30", "Denim jeans", 75, 0, 75, "pcs", 2250, 2250, 0, "Paid", "Deposit met", "1. Order and deposit"]]);
+    expect(file.sections[1]!.rows).toEqual([["PO-2053", "Foshan Fabrics", "2026-10-01", "2026-10-30", "Denim jeans", 100, 60, 40, "pcs", 1000, 1000, 500, 500, "Partly paid", null, "1. Order and deposit"]]);
+    expect(file.sections[2]!.rows).toEqual([["PO-2052", "Shenzhen Apparel", "2026-10-01", "2026-10-30", "Denim jeans", 75, 0, 75, "pcs", 2250, 2250, 2250, 0, "Paid", "Deposit met", "1. Order and deposit"]]);
   });
 
   it("Closed: closing date, item count, stocked quantity, payments and the final balance to the cent; no rows gives one empty CNY table", () => {
@@ -136,14 +137,14 @@ describe("orders report files (phase 2 §5, §6; docs/report-downloads.md)", () 
     expect(file).toMatchObject({ title: "Closed orders", filename: "closed-orders-2026-11-09", filters: "Closed date: from 1 Oct 2026" });
     expect(headers(file, 1)).toEqual([
       "PO", "Supplier", "Order date", "Closed date", "Items", "Main item", "Ordered qty", "Warehouse received qty", "Unit",
-      "Order value (CNY)", "Settled (CNY)", "Outstanding (CNY)", "Paid, all payees (INR)", "Final status",
+      "PO value (CNY)", "Order value (received) (CNY)", "Settled (CNY)", "Outstanding (CNY)", "Paid, all payees (INR)", "Final status",
     ]);
-    expect(file.sections[1]!.rows).toEqual([["PO-2050", "Foshan Fabrics", "2026-10-01", "2026-10-20", 2, "Denim jeans", 100, 100, "pcs", 1000, 600.5, 399.5, 7206, "Closed"]]);
+    expect(file.sections[1]!.rows).toEqual([["PO-2050", "Foshan Fabrics", "2026-10-01", "2026-10-20", 2, "Denim jeans", 100, 100, "pcs", 1000, 1000, 600.5, 399.5, 7206, "Closed"]]);
 
     const empty = closedOrdersFile([], "No filters", TODAY);
     expect(empty.sections.filter((s) => s.sheet === "Closed Orders")).toHaveLength(1);
     expect(empty.sections[1]).toMatchObject({ rows: [], total: undefined });
-    expect(headers(empty, 1)[9]).toBe("Order value (CNY)");
+    expect(headers(empty, 1)[10]).toBe("Order value (received) (CNY)");
   });
 
   it("spells out the filters in force", () => {

@@ -21,7 +21,8 @@ async function choose(page: Page, current: RegExp, option: string) {
 
 test("a new order is listed with its figures; the row and the PO link open it", async ({ page, api }) => {
   const due = today(40);
-  // A supplier of its own whose account holds ¥1,000 at 12: it settles ¥1,000 of this order (₹12,000).
+  // A supplier of its own whose account holds ¥1,000 at 12. Nothing is received yet, so the order is worth ¥0 and the
+  // ¥1,000 settles nothing (owner rule of 2026-11-23): nothing paid toward it in INR.
   const supplier = await api.newSupplier("Knits List");
   const order = await api.createOrder({
     supplier: supplier.name,
@@ -34,7 +35,7 @@ test("a new order is listed with its figures; the row and the PO link open it", 
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await search(page).fill(order.po);
   const row = rowOf(page, order.po);
-  for (const text of ["Polo shirts", supplier.name, "240 pcs", shortDate(due), "1. Order and deposit", "On track", inr(12_000)]) {
+  for (const text of ["Polo shirts", supplier.name, "240 pcs", shortDate(due), "1. Order and deposit", "On track", inr(0)]) {
     await expect(row).toContainText(text);
   }
   await expect(table(page).getByRole("row")).toHaveCount(2);

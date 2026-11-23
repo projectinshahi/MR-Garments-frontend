@@ -131,6 +131,34 @@ describe("Delete Goods Receipt (REC-4)", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Receipt deleted"));
     expect(remove).toHaveBeenCalledTimes(2);
   });
+
+  // Owner rule of 2026-11-23, 6: a delete that re-settles a final landed cost needs a Management approval and reason.
+  const finalMessage = "Deleting this receipt changes the payments that settle PO-2049, whose landed cost is already final. A Management user must approve it with a reason.";
+  it("final landed cost: Management gives the reason and the delete is sent again with it", async () => {
+    remove.mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", finalMessage)).mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    render(<ReceivingScreen order={order} receipts={receipts} canDelete canApprove />);
+    await user.click(screen.getByRole("button", { name: firstReceipt }));
+    await user.click(within(await screen.findByRole("alertdialog", { name: "Delete Goods Receipt?" })).getByRole("button", { name: "Delete receipt" }));
+    const approve = await screen.findByRole("dialog", { name: "Approve a change to a final landed cost?" });
+    expect(approve).toHaveTextContent(finalMessage);
+    await user.type(within(approve).getByRole("textbox", { name: /Reason/ }), "Duplicate receipt, checked with the warehouse");
+    await user.click(within(approve).getByRole("button", { name: "Approve and save" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Receipt deleted"));
+    expect(remove).toHaveBeenNthCalledWith(1, "/receipts/r1");
+    expect(remove).toHaveBeenNthCalledWith(2, "/receipts/r1", { finalSettlementApproval: { reason: "Duplicate receipt, checked with the warehouse" } });
+    expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("final landed cost without approval rights: the API's message is toasted and nothing is deleted", async () => {
+    remove.mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", finalMessage));
+    const { user, confirm } = await askReceipt();
+    await user.click(confirm);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(finalMessage));
+    expect(screen.queryByRole("dialog", { name: "Approve a change to a final landed cost?" })).not.toBeInTheDocument();
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
 });
 
 describe("Delete Container (CON-6)", () => {

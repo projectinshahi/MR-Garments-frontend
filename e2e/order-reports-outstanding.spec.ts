@@ -24,11 +24,12 @@ test("Order reports settle a supplier's orders oldest first and never show a neg
   expect(created.status(), await created.text()).toBe(201);
   const supplier = ((await created.json()) as { supplier: SupplierRow }).supplier;
   const lines = [{ item: "Denim jeans", quantity: 100, rateCny: 10 }];
-  const a = await api.createOrder({ supplier: name, lines });
-  const b = await api.createOrder({ supplier: name, lines });
+  // Each received in full: an order is worth its received quantity x rate (owner rule of 2026-11-23).
+  const a = await api.createReceivedOrder({ supplier: name, lines });
+  const b = await api.createReceivedOrder({ supplier: name, lines });
   const paid = await api.post("/payments", { supplierId: supplier.id, amount: 2500, rateInr: 12.5, paidOn: new Date().toISOString().slice(0, 10), mode: "Bank transfer", clientRequestId: randomUUID() });
   expect(paid.status(), await paid.text()).toBe(201);
-  const c = await api.createOrder({ supplier: name, lines });
+  const c = await api.createReceivedOrder({ supplier: name, lines });
 
   await test.step("the API: FIFO settles A and B in full and ¥500 of C; nothing is negative", async () => {
     const report = await api.get<OrderReportsResponse>(`/reports/orders?supplierId=${supplier.id}`);
@@ -46,7 +47,7 @@ test("Order reports settle a supplier's orders oldest first and never show a neg
     await page.goto(`/reports/orders?supplier=${supplier.id}`);
     await expect(page.getByRole("heading", { name: "Order reports" })).toBeVisible();
     await expect(kpi(page, "Orders")).toContainText("3");
-    await expect(kpi(page, "Order value")).toContainText("¥3,000");
+    await expect(kpi(page, "Order value (received)")).toContainText("¥3,000");
     await expect(kpi(page, "Settled")).toContainText("¥2,500");
     await expect(kpi(page, "Outstanding")).toContainText("¥500");
     const headers = await page.getByRole("columnheader").allTextContents();

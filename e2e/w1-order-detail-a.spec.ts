@@ -55,10 +55,25 @@ test("Overview: header, tabs, facts, journey and money", async ({ page, api }) =
   await expect(journey.getByRole("listitem").first()).toContainText(shortDate(today()));
   await expect(journey.getByRole("listitem").nth(1)).toHaveText("2. Receiving in China");
 
-  // Money from the API's FIFO projection: settled, outstanding with its status, the Deposit Required milestone.
-  await expect(kv(page, "Order value")).toHaveText("¥14,700.00");
-  await expect(kv(page, "Settled from supplier account")).toHaveText("¥3,000.00");
+  // Money from the API's FIFO projection. Nothing received yet (owner rule of 2026-11-23): worth ¥0, awaiting goods; the
+  // ¥3,000 paid is supplier credit and counts nothing toward the deposit required.
   const term = (start: string) => page.getByRole("term").filter({ hasText: new RegExp(`^${start}`), visible: true });
+  await expect(kv(page, "Order value (received)")).toHaveText("¥0.00");
+  await expect(kv(page, "PO value (ordered)")).toHaveText("¥14,700.00");
+  await expect(kv(page, "Settled from supplier account")).toHaveText("¥0.00");
+  await expect(term("Outstanding")).toContainText("Awaiting goods");
+  await expect(term("Outstanding").locator("xpath=following-sibling::dd[1]")).toHaveText("¥0.00");
+  await expect(term("Deposit required")).toContainText("Deposit not met");
+  await expect(term("Deposit required").locator("xpath=following-sibling::dd[1]")).toHaveText("¥5,000.00 pending");
+  const credit = page.locator("section").filter({ has: page.getByRole("heading", { name: "Supplier account" }) });
+  await expect(credit).toContainText("¥3,000.00");
+  await expect(credit).toContainText("Available with supplier");
+
+  // The goods arrive in China: worth ¥14,700, and the credit settles ¥3,000 of it.
+  await api.receive(order.po, { "Denim jeans": 300, "Cotton fabric": 1200 });
+  await page.reload();
+  await expect(kv(page, "Order value (received)")).toHaveText("¥14,700.00");
+  await expect(kv(page, "Settled from supplier account")).toHaveText("¥3,000.00");
   await expect(term("Outstanding")).toContainText("Partly paid");
   await expect(term("Outstanding").locator("xpath=following-sibling::dd[1]")).toHaveText("¥11,700.00");
   await expect(term("Deposit required")).toContainText("¥5,000.00");
@@ -111,10 +126,11 @@ test("Items: every line with its rate and total, and the order terms", async ({ 
 
   const rows = page.getByRole("table").getByRole("row");
   await expect(rows).toHaveCount(4);
-  await expect(rows.nth(1).getByRole("cell")).toHaveText(["Denim jeans", "300 pcs", "¥15.00 / pcs", "¥4,500"]);
-  await expect(rows.nth(2).getByRole("cell")).toHaveText(["Cotton fabric", "1,200 m", "¥8.50 / m", "¥10,200"]);
+  // Each line's PO value (ordered x rate) and value (received x rate): nothing received yet.
+  await expect(rows.nth(1).getByRole("cell")).toHaveText(["Denim jeans", "300 pcs", "¥15.00 / pcs", "¥4,500", "¥0"]);
+  await expect(rows.nth(2).getByRole("cell")).toHaveText(["Cotton fabric", "1,200 m", "¥8.50 / m", "¥10,200", "¥0"]);
   // Mixed units: no quantity total.
-  await expect(rows.nth(3).getByRole("cell")).toHaveText(["Total", "", "", "¥14,700"]);
+  await expect(rows.nth(3).getByRole("cell")).toHaveText(["Total", "", "", "¥14,700", "¥0"]);
 
   for (const [label, value] of [
     ["Supplier", "Guangzhou Textile Co."],
@@ -141,7 +157,7 @@ test("Items of a one-unit order totals the quantity", async ({ page, api }) => {
     ],
   });
   await page.goto(`/orders/${order.po}/items`);
-  await expect(page.getByRole("table").getByRole("row").last().getByRole("cell")).toHaveText(["Total", "150 pcs", "", "¥1,300"]);
+  await expect(page.getByRole("table").getByRole("row").last().getByRole("cell")).toHaveText(["Total", "150 pcs", "", "¥1,300", "¥0"]);
 });
 
 test("an unknown or malformed PO and the removed tabs show Not found", async ({ page, api }) => {

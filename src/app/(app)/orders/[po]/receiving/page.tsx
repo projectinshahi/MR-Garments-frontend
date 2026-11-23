@@ -14,5 +14,5 @@ export default async function OrderReceivingPage({ params }: PageProps<"/orders/
   // null: the user can't view receiving, so the tab doesn't exist for them.
   if (!order?.receipts) notFound();
   // REC-4 needs receiving Full (Management); the API refuses anyone else too.
-  return <ReceivingScreen order={order} receipts={order.receipts} canDelete={!!me && hasAccess(me, "receiving", "Full")} />;
+  return <ReceivingScreen order={order} receipts={order.receipts} canDelete={!!me && hasAccess(me, "receiving", "Full")} canApprove={!!me && hasAccess(me, "payments", "Full")} />;
 }

@@ -44,11 +44,11 @@ const options: ReceiptOptions = {
       po: "PO-2035",
       supplier: "Shenzhen Apparel",
       currency: "CNY",
-      orderValueCny: 72000,
+      orderValueCny: 72000, poValueCny: 72000,
       outstandingCny: 32000,
       lines: [{ orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 }],
     },
-    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", currency: "CNY", orderValueCny: 1, outstandingCny: 1, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
+    { orderId: "o40", po: "PO-2040", supplier: "Foshan Fabrics", currency: "CNY", orderValueCny: 1, poValueCny: 1, outstandingCny: 1, lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 10, receivedEarlier: 0, unitPriceCny: 1 }] },
   ],
 };
 
@@ -90,28 +90,33 @@ describe("filterReceipts", () => {
   });
 });
 
-describe("short and balance", () => {
+// Owner rule of 2026-11-23: an order is worth its received quantity x rate, so a receipt adds what it receives.
+describe("short and the value received", () => {
   const jackets: ReceiptLine = { item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, receivedNow: 460, unitPrice: 60 };
 
-  it("reproduces the reference: 40 pcs short, balance ¥29,600", () => {
+  it("values what this receipt receives (460 x 60 on 42,000 so far); the 40 short add nothing", () => {
     expect(lineShort(jackets)).toBe(40);
-    expect(paymentEffect({ outstanding: 32000 }, [jackets])).toEqual({
-      balanceBefore: 32000,
-      deductions: [{ unit: "pcs", short: 40, unitPrice: 60, amount: 2400 }],
-      balanceNow: 29600,
+    expect(paymentEffect({ value: 42000 }, [jackets])).toEqual({
+      valueBefore: 42000,
+      additions: [{ unit: "pcs", quantity: 460, unitPrice: 60, amount: 27600 }],
+      added: 27600,
+      valueAfter: 69600,
     });
     expect(lineShort({ ...jackets, receivedNow: 600 })).toBe(0);
   });
 
-  it("is never negative when more arrives than was ordered (360 m)", () => {
+  it("values an over-receipt in full, is never negative short, and skips unpriced or empty lines", () => {
     const fabric: ReceiptLine = { item: "Cotton fabric", unit: "m", ordered: 360, receivedEarlier: 0, receivedNow: 0, unitPrice: 3 };
     expect([360, 300, 400, 949].map((receivedNow) => lineShort({ ...fabric, receivedNow }))).toEqual([0, 60, 0, 0]);
     expect(lineShort({ ...fabric, receivedEarlier: 300, receivedNow: 100 })).toBe(0);
-    expect(paymentEffect({ outstanding: 1080 }, [{ ...fabric, receivedNow: 949 }])).toEqual({
-      balanceBefore: 1080,
-      deductions: [{ unit: "m", short: 0, unitPrice: 3, amount: 0 }],
-      balanceNow: 1080,
+    expect(paymentEffect({ value: 0 }, [{ ...fabric, receivedNow: 949 }, fabric, { ...fabric, unitPrice: undefined, receivedNow: 5 }])).toEqual({
+      valueBefore: 0,
+      additions: [{ unit: "m", quantity: 949, unitPrice: 3, amount: 2847 }],
+      added: 2847,
+      valueAfter: 2847,
     });
+    // Cents: 3 x 0.335 = 1.005 rounds to 1.01 (the API rounds the same way).
+    expect(paymentEffect({ value: 10.1 }, [{ ...fabric, receivedNow: 3, unitPrice: 0.335 }]).valueAfter).toBe(11.11);
   });
 });
 

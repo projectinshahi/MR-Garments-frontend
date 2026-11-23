@@ -43,6 +43,26 @@ async function openVoid(payment = PAYMENT) {
 
 beforeEach(() => vi.clearAllMocks());
 
+// Owner review of 2026-11-23: a void that takes a protected final landed cost's credits needs Management's reason.
+describe("a void that changes a final landed cost", () => {
+  it("asks for the approval's reason and voids again with it", async () => {
+    remove
+      .mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", "Voiding this payment changes the payments that settle PO-2049, whose landed cost is already final. Give the reason for approving it."))
+      .mockResolvedValueOnce({ payment: { id: "p1" }, ledger: { supplierId: "s1", currency: "CNY", balanceBefore: 0, balanceAfter: -5000 } });
+    const { user, reason, confirm } = await openVoid();
+    await user.type(reason, "Entered twice");
+    await user.click(confirm);
+    const approve = await screen.findByRole("dialog", { name: "Approve a change to a final landed cost?" });
+    expect(approve).toHaveTextContent("PO-2049");
+    await user.type(within(approve).getByRole("textbox", { name: /Reason/ }), "Bank returned it");
+    await user.click(within(approve).getByRole("button", { name: "Approve and save" }));
+    await waitFor(() => expect(remove).toHaveBeenCalledTimes(2));
+    expect(remove.mock.calls[0]![1]).toEqual({ reason: "Entered twice" });
+    expect(remove.mock.calls[1]![1]).toEqual({ reason: "Entered twice", finalSettlementApproval: { reason: "Bank returned it" } });
+    expect(await screen.findByRole("dialog", { name: "Payment voided" })).toBeInTheDocument();
+  });
+});
+
 describe("VoidPaymentButton (PAY-3: a void with a reason, never a delete)", () => {
   it("needs a reason, then sends it and shows the API's balance before and after", async () => {
     remove.mockResolvedValue({ payment: { id: "p1", voided: true }, ledger: { supplierId: "s1", currency: "CNY", balanceBefore: 2000, balanceAfter: -3000 } });

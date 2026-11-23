@@ -28,7 +28,21 @@ import { AdjustmentDialog } from "./adjustment-dialog";
 import type { SupplierLedgerData } from "./data/queries";
 import { DepositsArchive } from "./deposits-archive";
 import { statementFile } from "./ledger-files";
-import { ENTRY_LABEL, ENTRY_TONE, EXCLUDED_FROM_LEDGER, filterEntries, paymentChoice, reasonOf, signed, type StatementFilters } from "./ledger-logic";
+import {
+  ENTRY_LABEL,
+  entryLabel,
+  entryTone,
+  EXCLUDED_FROM_LEDGER,
+  filterEntries,
+  isZeroOrderEntry,
+  NO_CHANGE,
+  NOTHING_RECEIVED,
+  paymentChoice,
+  reasonOf,
+  signed,
+  type StatementFilters,
+  ZERO_ORDER_PILL,
+} from "./ledger-logic";
 
 // One supplier's ledger (LED-1, D14): an account card per currency (signed), the statement newest first with the
 // running balance, the orders' FIFO projection, held accounts' raw records, and the two read-only archives. Record
@@ -102,7 +116,10 @@ const statementColumns = (supplier: string, linkPo: boolean, canVoid: boolean, m
     header: "Type",
     cell: ({ row }) => (
       <span className="flex flex-col items-start gap-1">
-        <StatusPill tone={ENTRY_TONE[row.original.entryType]}>{ENTRY_LABEL[row.original.entryType]}</StatusPill>
+        <StatusPill tone={entryTone(row.original)}>
+          {isZeroOrderEntry(row.original) ? ZERO_ORDER_PILL[row.original.entryType as keyof typeof ZERO_ORDER_PILL] : entryLabel(row.original)}
+        </StatusPill>
+        {isZeroOrderEntry(row.original) ? <span className="text-xs text-muted-foreground">{NOTHING_RECEIVED}</span> : null}
         {row.original.payment?.voided ? <StatusPill tone="danger">Voided</StatusPill> : null}
         {row.original.origin === "backfill" ? <span className="text-xs text-muted-foreground">Migrated</span> : null}
       </span>
@@ -115,9 +132,13 @@ const statementColumns = (supplier: string, linkPo: boolean, canVoid: boolean, m
     accessorKey: "amount",
     header: "Amount",
     meta: right,
-    cell: ({ row }) => (
-      <span className={cn("font-bold whitespace-nowrap", row.original.amount < 0 ? "text-danger" : "text-success")}>{signed(row.original.amount, (v) => amountOf(v, row.original.currency))}</span>
-    ),
+    cell: ({ row }) =>
+      // A zero-value order posting moves no money: "No change", never a green "+¥0.00" that could read as a payment.
+      isZeroOrderEntry(row.original) ? (
+        <span className="whitespace-nowrap text-muted-foreground">{NO_CHANGE}</span>
+      ) : (
+        <span className={cn("font-bold whitespace-nowrap", row.original.amount < 0 ? "text-danger" : "text-success")}>{signed(row.original.amount, (v) => amountOf(v, row.original.currency))}</span>
+      ),
   },
   { accessorKey: "exchangeRate", header: "Rate (INR)", meta: right, cell: ({ row }) => (row.original.currency === "INR" || row.original.exchangeRate === null ? DASH : formatRateInr(row.original.exchangeRate)) },
   { accessorKey: "amountInr", header: "INR", meta: right, cell: ({ row }) => moneyOrDash(row.original.amountInr === null ? null : Math.abs(row.original.amountInr), (v) => formatINR(v, 2)) },
@@ -152,7 +173,7 @@ const orderColumns = (linkPo: boolean): ColumnDef<LedgerOrder>[] => {
     { accessorKey: "po", header: "PO", cell: ({ row }) => <PoLink po={row.original.po} linked={linkPo} /> },
     { accessorKey: "orderDate", header: "Order date", cell: ({ row }) => formatDate(row.original.orderDate) },
     { accessorKey: "stage", header: "Stage", cell: ({ row }) => stageLabel(row.original.stage) },
-    { accessorKey: "valueCny", header: "Order value", meta: right, cell: ({ row }) => money(row.original.valueCny, row.original) },
+    { accessorKey: "valueCny", header: "Order value (received)", meta: right, cell: ({ row }) => money(row.original.valueCny, row.original) },
     { accessorKey: "settledCny", header: "Settled", meta: right, cell: ({ row }) => money(row.original.settledCny, row.original) },
     { accessorKey: "outstandingCny", header: "Outstanding", meta: right, cell: ({ row }) => money(row.original.outstandingCny, row.original) },
     { id: "status", header: "Status", cell: ({ row }) => <PaymentStatusPill status={row.original.paymentStatus} held={row.original.held} /> },
@@ -311,7 +332,7 @@ export function SupplierLedgerScreen({ data }: { data: SupplierLedgerData }) {
               </AdjustmentDialog>
             ) : null}
             {canEnter && supplier.status !== "Inactive" ? (
-              <RecordPaymentDialog suppliers={[choice]} supplierId={supplier.id}>
+              <RecordPaymentDialog suppliers={[choice]} supplierId={supplier.id} canApprove={canFull}>
                 <Button type="button" size="header" aria-label="+ Record payment" className="max-sm:px-3">
                   +<span className="max-sm:sr-only"> Record payment</span>
                 </Button>

@@ -87,6 +87,7 @@ const data = (canDelete: boolean): ReceivingListData => ({
   suppliers: ["Hangzhou Knits", "Shenzhen Apparel"],
   canRecord: true,
   canDelete,
+  canApprove: canDelete,
   linkPos: true,
 });
 const headers = () =>

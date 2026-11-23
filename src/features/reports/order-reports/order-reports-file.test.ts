@@ -31,7 +31,7 @@ const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
   ],
   closed: true,
   closedOn: "2026-11-05",
-  orderValueCny: 1400,
+  orderValueCny: 1400, poValueCny: 1400,
   held: false,
   settledCny: 800,
   outstandingCny: 600,
@@ -57,7 +57,7 @@ const data: OrderReportsResponse = {
       closed: false,
       closedOn: null,
       currency: "USD",
-      orderValueCny: 200,
+      orderValueCny: 200, poValueCny: 200,
       settledCny: 0,
       outstandingCny: 200,
       settledInr: 0,
@@ -72,8 +72,8 @@ const data: OrderReportsResponse = {
   summary: {
     orders: 2,
     byCurrency: [
-      { currency: "CNY", orderValueCny: 1400, settledCny: 800, outstandingCny: 600 },
-      { currency: "USD", orderValueCny: 200, settledCny: 0, outstandingCny: 200 },
+      { currency: "CNY", orderValueCny: 1400, poValueCny: 1400, settledCny: 800, outstandingCny: 600 },
+      { currency: "USD", orderValueCny: 200, poValueCny: 200, settledCny: 0, outstandingCny: 200 },
     ],
     paidInr: 9850,
     landedCostInr: 49550,
@@ -97,24 +97,25 @@ describe("order reports file", () => {
   it("writes each row with its status label, the ledger's settled, outstanding and payment status, and totals the currency's table", () => {
     const [cny, usd] = file.sections;
     const headers = cny!.columns.map((column) => column.header);
-    expect(headers.slice(16, 19)).toEqual(["Settled (CNY)", "Outstanding (CNY)", "Payment status"]);
+    expect(headers.slice(13, 15)).toEqual(["PO value (CNY)", "Order value (received) (CNY)"]);
+    expect(headers.slice(17, 20)).toEqual(["Settled (CNY)", "Outstanding (CNY)", "Payment status"]);
     expect(cny!.rows).toEqual([
-      ["PO-2050", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "6. India warehouse", "Closed", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 120, 100, 1400, null, null, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"],
+      ["PO-2050", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "6. India warehouse", "Closed", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 120, 100, 1400, 1400, null, null, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"],
     ]);
-    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, null, 2, null, null, null, null, null, null, 1400, null, null, 800, 600, null, 9850, 49550, null, null]);
+    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, null, 2, null, null, null, null, null, null, 1400, 1400, null, null, 800, 600, null, 9850, 49550, null, null]);
     // A pending order due in 10 days reads as the orders list labels it (on track beyond 7 days); no cost yet is an empty cell.
-    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "1. Order and deposit", "On track", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 0, 0, 200, null, null, 0, 200, "Unpaid", 0, null, null, null]);
+    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "1. Order and deposit", "On track", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 0, 0, 200, 200, null, null, 0, 200, "Unpaid", 0, null, null, null]);
     expect(usd!.columns.map((column) => column.header)).toContain("Outstanding (USD)");
   });
 
   // docs/supplier-currency.md: the rate saved on the order and the PO value at it; an INR total only when every order has a rate.
   it("carries the rate saved on the order and the PO value at it, totalling INR only when every order has a rate", () => {
-    const withRate = orderReportsFile({ ...data, rows: [row({ currency: "USD", exchangeRate: 88, orderValueCny: 200, orderValueInr: 17600 })] }, TODAY);
+    const withRate = orderReportsFile({ ...data, rows: [row({ currency: "USD", exchangeRate: 88, orderValueCny: 200, poValueCny: 200, orderValueInr: 17600 })] }, TODAY);
     const table = withRate.sections.find((section) => section.title === "Orders in USD")!;
-    expect(table.columns.map((column) => column.header).slice(13, 16)).toEqual(["Order value (USD)", "Rate (INR per 1)", "Order value (INR)"]);
-    expect(table.rows[0]!.slice(13, 16)).toEqual([200, 88, 17600]);
-    expect(table.total!.slice(13, 16)).toEqual([200, null, 17600]);
-    expect(file.sections[0]!.total!.slice(13, 16)).toEqual([1400, null, null]);
+    expect(table.columns.map((column) => column.header).slice(14, 17)).toEqual(["Order value (received) (USD)", "Rate (INR per 1)", "Order value (received) (INR)"]);
+    expect(table.rows[0]!.slice(14, 17)).toEqual([200, 88, 17600]);
+    expect(table.total!.slice(14, 17)).toEqual([200, null, 17600]);
+    expect(file.sections[0]!.total!.slice(14, 17)).toEqual([1400, null, null]);
   });
 
   it("summarises per currency from the API's summary, with the INR totals", () => {
@@ -143,8 +144,8 @@ describe("order reports file", () => {
 // The ledger's FIFO projection: an overpaid order is simply settled (outstanding 0); its extra money is the supplier's
 // balance, never a negative outstanding. A held (pending review) or unposted order has no figures and adds nothing.
 describe("order reports settlement figures", () => {
-  const paid = row({ id: "b", po: "PO-3002", orderValueCny: 800, settledCny: 800, outstandingCny: 0, paymentStatus: "paid", paidInr: 9600 });
-  const held = row({ id: "c", po: "PO-3003", orderValueCny: 1000, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, paidInr: null, depositStatus: null });
+  const paid = row({ id: "b", po: "PO-3002", orderValueCny: 800, poValueCny: 800, settledCny: 800, outstandingCny: 0, paymentStatus: "paid", paidInr: 9600 });
+  const held = row({ id: "c", po: "PO-3003", orderValueCny: 1000, poValueCny: 1000, held: true, settledCny: null, outstandingCny: null, paymentStatus: null, settledInr: null, paidInr: null, depositStatus: null });
   const file = orderReportsFile({ ...data, rows: [row({ id: "a", po: "PO-3001" }), paid, held] }, TODAY);
   const [cny] = file.sections;
   const at = cny!.columns.findIndex((column) => column.header === "Settled (CNY)");
@@ -157,7 +158,7 @@ describe("order reports settlement figures", () => {
     ]);
     expect(cny!.total!.slice(at, at + 4)).toEqual([1600, 600, null, 19450]);
     // Its PO value is listed but not totalled either, as on the Summary sheet (pre-release audit M3): 1,400 + 800.
-    const value = cny!.columns.findIndex((column) => column.header === "Order value (CNY)");
+    const value = cny!.columns.findIndex((column) => column.header === "Order value (received) (CNY)");
     expect(cny!.rows.map((cells) => cells[value])).toEqual([1400, 800, 1000]);
     expect(cny!.total![value]).toBe(2200);
   });

@@ -24,6 +24,26 @@ export const ENTRY_TONE: Record<LedgerEntryType, Tone> = {
   adjustment: "purple",
 };
 
+/**
+ * A zero-value order posting (owner rule of 2026-11-23: an order is worth its received quantity x rate): the debit of an
+ * order placed before any goods, or the cancellation of an order deleted with nothing received. Kept, never rewritten:
+ * the journal holds one debit per order and one cancellation per deleted order (the reconciliation checks both). It
+ * moves no money and is never a payment, so it reads as what it is.
+ */
+export const isZeroOrderEntry = (entry: Pick<LedgerEntry, "entryType" | "amount">) => (entry.entryType === "order_debit" || entry.entryType === "order_cancel") && entry.amount === 0;
+export const ZERO_ORDER_LABEL = { order_debit: "Order placed, nothing received", order_cancel: "Order deleted, nothing received" } as const;
+export const NO_CHANGE = "No change";
+/** The statement's pill for a zero-value order posting, with NOTHING_RECEIVED under it (the long label is the export's). */
+export const ZERO_ORDER_PILL = { order_debit: "Order placed", order_cancel: "Order deleted" } as const;
+export const NOTHING_RECEIVED = "Nothing received";
+/** The entry's type label: a zero-value order posting says so. */
+export const entryLabel = (entry: Pick<LedgerEntry, "entryType" | "amount">) =>
+  isZeroOrderEntry(entry) ? ZERO_ORDER_LABEL[entry.entryType as keyof typeof ZERO_ORDER_LABEL] : ENTRY_LABEL[entry.entryType];
+export const entryTone = (entry: Pick<LedgerEntry, "entryType" | "amount">): Tone => (isZeroOrderEntry(entry) ? "neutral" : ENTRY_TONE[entry.entryType]);
+/** The note on every statement export about zero-value order postings. */
+export const ZERO_ORDER_NOTE =
+  "Order placed / Order deleted, nothing received: postings of 0 that keep the order's place in the journal (an order is worth its received quantity x rate). They are not payments and change no balance.";
+
 /** The legacy archive's status for a receipt the owner excluded (ADV-1 `exclusionReason`): never on the account. */
 export const EXCLUDED_FROM_LEDGER = "Excluded from ledger";
 

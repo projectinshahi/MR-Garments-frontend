@@ -59,7 +59,8 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
         // Every paid payment (supplier and shipping agent, orderless ones included) at its own rate; voided and held (D4) left out.
         ["Paid so far, all payees (INR)", kpi(sources.payments, (p) => round2(p.payments.reduce((sum, row) => sum + (!row.voided && !row.held && row.status === "paid" ? (row.amountInr ?? 0) : 0), 0)))],
         // A held account's orders (D4) are listed but add nothing to any value.
-        ["PO value", kpi(orders, (list) => amountsText(sumByCurrency(list.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny)))],
+        ["Order value (received)", kpi(orders, (list) => amountsText(sumByCurrency(list.filter((o) => !o.held), (o) => o.currency, (o) => o.orderValueCny)))],
+        ["PO value (ordered)", kpi(orders, (list) => amountsText(sumByCurrency(list.filter((o) => !o.held), (o) => o.currency, (o) => o.poValueCny)))],
         // The supplier ledger accounts below zero (PAY-1's LED-2 totals), held accounts left out.
         ["Payable to suppliers", kpi(sources.payments, (p) => amountsText((p.totals ?? []).filter((t) => t.payableCny > 0).map((t) => ({ currency: t.currency, amount: t.payableCny }))))],
       ]),
@@ -90,6 +91,7 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
             active: mine.filter((o) => o.stage < 6).length,
             // Null while the account is held (D4), as settled and outstanding: no figure, never a made-up value.
             value: mine.some((o) => o.held) ? null : round2(mine.reduce((sum, o) => sum + o.orderValueCny, 0)),
+            poValue: mine.some((o) => o.held) ? null : round2(mine.reduce((sum, o) => sum + o.poValueCny, 0)),
             // The FIFO settlement; null while the account is held or an order is not posted (no figure, never a made-up 0).
             settled: mine.some((o) => o.settledCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.settledCny!, 0)),
             outstanding: mine.some((o) => o.outstandingCny === null) ? null : round2(mine.reduce((sum, o) => sum + o.outstandingCny!, 0)),
@@ -98,8 +100,8 @@ export function dashboardFile(sources: DashboardSources, today: string): ReportF
         return perCurrency(lines).map(([currency, rows]) => ({
           sheet: "Suppliers",
           title: `Supplier summary (${currency} orders)`,
-          columns: [text("Supplier"), text("Orders"), text("Active orders"), money("PO value", currency), money("Settled", currency), money("Outstanding", currency)],
-          rows: rows.map((r) => [r.supplier, r.orders, r.active, r.value, r.settled, r.outstanding]),
+          columns: [text("Supplier"), text("Orders"), text("Active orders"), money("PO value", currency), money("Order value (received)", currency), money("Settled", currency), money("Outstanding", currency)],
+          rows: rows.map((r) => [r.supplier, r.orders, r.active, r.poValue, r.value, r.settled, r.outstanding]),
         }));
       }),
     ],

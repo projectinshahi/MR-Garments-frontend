@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { balanceText, HELD_MESSAGE, round2 } from "@/features/payments/money";
+import { balanceText, HELD_MESSAGE } from "@/features/payments/money";
 import { apiClient } from "@/lib/api/client";
 import type { CreateOrderResponse } from "@/lib/api/types";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
@@ -94,7 +94,7 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
     const ledger = created.ledger;
     notifySuccess(
       ledger
-        ? `Order ${created.order.po} placed. Debited ${formatMoney(ledger.debitCny, ledger.currency, { decimals: 2 })}; supplier balance ${balanceText(ledger.balanceAfter, ledger.currency)}.`
+        ? `Order ${created.order.po} placed. Supplier balance ${balanceText(ledger.balanceAfter, ledger.currency)}: it changes as goods are received.`
         : `Order ${created.order.po} placed`,
     );
     router.push(orderHref(created.order.po));
@@ -309,8 +309,8 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
               </Button>
 
               <div className="mt-3 flex items-start justify-end gap-7 border-t pt-[12.5px]">
-                <span className="text-[15px] leading-4">Order total</span>
-                <output aria-label="Order total" className="text-[17px] leading-[19px] font-bold">
+                <span className="text-[15px] leading-4">PO value</span>
+                <output aria-label="PO value" className="text-[17px] leading-[19px] font-bold">
                   {formatMoney(total, currency, { decimals: 2, spaced: true })}
                 </output>
               </div>
@@ -351,14 +351,15 @@ export function NewOrderScreen({ data: { options, today } }: { data: NewOrderDat
                 density="compact"
                 className="mt-2.5 border-b border-border-subtle"
                 items={[
-                  { label: "Order total", value: spaced(total) },
-                  // No balances without payments View (ORD-2 sends ledgerBalance null): only the total.
+                  { label: "PO value", value: spaced(total) },
+                  // No balances without payments View (ORD-2 sends ledgerBalance null): only the PO value. The order's value
+                  // is its received quantity x rate (owner rule of 2026-11-23): placing it changes no balance.
                   ...(supplier && !held && supplier.ledgerBalance
                     ? [
                         { label: "Supplier balance now", value: balanceText(balanceNow, currency) },
                         {
                           label: <span className="text-base leading-5 font-bold">Supplier balance after this order</span>,
-                          value: <span className="text-base leading-5 font-bold">{balanceText(round2(balanceNow - total), currency)}</span>,
+                          value: <span className="text-base leading-5 font-bold">{balanceText(balanceNow, currency)}</span>,
                         },
                       ]
                     : []),

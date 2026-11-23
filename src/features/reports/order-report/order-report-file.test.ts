@@ -64,7 +64,7 @@ const report: OrderReport = {
     closed: true,
     closedOn: "2026-11-05",
     currency: "CNY",
-    orderValueCny: 1400,
+    orderValueCny: 1400, poValueCny: 1400,
     exchangeRate: null,
     orderValueInr: null,
     products: 2,
@@ -74,8 +74,8 @@ const report: OrderReport = {
     ],
   },
   lines: [
-    { id: "l1", position: 0, itemId: "i1", item: "Denim jeans", unit: "pcs", ordered: 100, received: 120, excess: 20, short: 0, pending: 0, loaded: 100, stocked: 100, rateCny: 10, valueCny: 1000 },
-    { id: "l2", position: 1, itemId: "i2", item: "Cotton fabric", unit: "m", ordered: 50, received: 30, excess: 0, short: 20, pending: 20, loaded: 50, stocked: 50, rateCny: 8, valueCny: 400 },
+    { id: "l1", position: 0, itemId: "i1", item: "Denim jeans", unit: "pcs", ordered: 100, received: 120, excess: 20, short: 0, pending: 0, loaded: 100, stocked: 100, rateCny: 10, valueCny: 1000, poValueCny: 1000 },
+    { id: "l2", position: 1, itemId: "i2", item: "Cotton fabric", unit: "m", ordered: 50, received: 30, excess: 0, short: 20, pending: 20, loaded: 50, stocked: 50, rateCny: 8, valueCny: 400, poValueCny: 400 },
   ],
   payments: {
     held: false,
@@ -250,7 +250,8 @@ describe("order report file", () => {
   it("writes the overview and supplier as Field/Value rows, the items with pending and excess, and the currency codes in the headers", () => {
     const rows = csvRows(file);
     expect(rows).toContainEqual(["Status", "Closed on 5 Nov 2026"]);
-    expect(rows).toContainEqual(["Original PO value (CNY)", 1400]);
+    expect(rows).toContainEqual(["PO value (CNY, ordered quantity x rate)", 1400]);
+    expect(rows).toContainEqual(["Order value (CNY, received quantity x rate)", 1400]);
     expect(rows).toContainEqual(["Outstanding (CNY)", 600]);
     expect(rows).toContainEqual(["Payment status", "Partly paid"]);
     expect(rows).toContainEqual(["Supplier code", "SUP-001"]);
@@ -258,10 +259,10 @@ describe("order report file", () => {
     expect(rows).toContainEqual(["Email", "–"]);
     expect(rows).toContainEqual(["m", 50, 30, 20, 50]);
     const items = titled("Items");
-    expect(items.columns.map((column) => column.header)).toEqual(["Sl. No.", "Item code", "Item", "Unit", "Quantity", "Received", "Pending", "Excess", "Loaded", "Stocked", "Rate (CNY)", "Amount (CNY)"]);
+    expect(items.columns.map((column) => column.header)).toEqual(["Sl. No.", "Item code", "Item", "Unit", "Quantity", "Received", "Pending", "Excess", "Loaded", "Stocked", "Rate (CNY)", "PO amount (ordered) (CNY)", "Amount (received) (CNY)"]);
     expect(items.rows).toEqual([
-      [1, null, "Denim jeans", "pcs", 100, 120, 0, 20, 100, 100, 10, 1000],
-      [2, null, "Cotton fabric", "m", 50, 30, 20, 0, 50, 50, 8, 400],
+      [1, null, "Denim jeans", "pcs", 100, 120, 0, 20, 100, 100, 10, 1000, 1000],
+      [2, null, "Cotton fabric", "m", 50, 30, 20, 0, 50, 50, 8, 400, 400],
     ]);
     expect(items.total?.at(-1)).toBe(1400);
   });

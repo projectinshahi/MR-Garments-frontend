@@ -100,7 +100,7 @@ describe("report files", () => {
 
   it("write CSV with currency codes in the headers, human labels and a No rows line for an empty table", () => {
     expect(toCsv(csvRows(reportFile("payments-per-supplier", payments, TODAY)))).toBe(
-      "Supplier,Open orders,Order value (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance\r\n" +
+      "Supplier,Open orders,Order value (received) (CNY),Settled (CNY),Outstanding (CNY),Payments (CNY),Paid (INR),Supplier balance (CNY),Balance\r\n" +
         'Foshan Fabrics,"PO-2047, PO-2041",160000.5,40000,120000.5,40000,480000,-120000.5,Payable to supplier\r\n' +
         "Total,2 open orders,160000.5,40000,120000.5,,480000,-120000.5,",
     );
@@ -125,7 +125,7 @@ describe("report files", () => {
     const csv = toCsv(csvRows(reportFile("payments-per-supplier", mixed, TODAY))).split("\r\n\r\n");
     expect(csv).toHaveLength(2);
     expect(csv[1]).toBe(
-      "Supplier,Open orders,Order value (USD),Settled (USD),Outstanding (USD),Payments (USD),Paid (INR),Supplier balance (USD),Balance\r\nBoston Denim,PO-2050,1200,1200,0,1500,132000,300,Available with supplier\r\nTotal,1 open order,1200,1200,0,,132000,300,",
+      "Supplier,Open orders,Order value (received) (USD),Settled (USD),Outstanding (USD),Payments (USD),Paid (INR),Supplier balance (USD),Balance\r\nBoston Denim,PO-2050,1200,1200,0,1500,132000,300,Available with supplier\r\nTotal,1 open order,1200,1200,0,,132000,300,",
     );
   });
 
@@ -228,7 +228,7 @@ describe("PDF file", () => {
     const text = pdf(toPdf(reportFile("payments-per-supplier", { ...payments, suppliers: lines }, TODAY), "Generated"));
     expect(text).toContain("(?? Trims 0) Tj");
     expect(text).toMatch(/\/Count [2-9] /);
-    expect(text.match(/\(Order value \\\(CNY\\\)\) Tj/g)?.length).toBe(Number(/\/Count (\d)/.exec(text)?.[1]));
+    expect(text.match(/\(Order value \\\(received\\\) \\\(CNY\\\)\) Tj/g)?.length).toBe(Number(/\/Count (\d)/.exec(text)?.[1]));
     expect(pdf(toPdf(reportFile("deliveries-per-day", noDeliveries, TODAY), "Generated"))).toContain("(No rows) Tj");
   });
 });

@@ -42,8 +42,12 @@ export function BalanceFigure({ balance, currency, held = false, inline = false,
   );
 }
 
-/** The order's FIFO payment status (API `paymentStatus`); null (held, not posted) shows nothing. */
+/**
+ * The order's FIFO payment status (API `paymentStatus`); null (held, not posted) shows nothing. "Awaiting goods":
+ * nothing received yet, so nothing is due (its value is received quantity × rate).
+ */
 export const PAYMENT_STATUS: Record<OrderPaymentStatus, { label: string; tone: Tone }> = {
+  awaiting_goods: { label: "Awaiting goods", tone: "neutral" },
   unpaid: { label: "Unpaid", tone: "neutral" },
   partly: { label: "Partly paid", tone: "warning" },
   paid: { label: "Paid", tone: "success" },

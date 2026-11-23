@@ -11,7 +11,7 @@ import type { LedgerAccount, LedgerEntry, LedgerOverviewResponse, SupplierLedger
 import { ADJUSTMENT_NOTICE, AdjustmentDialog, toAdjustmentBody } from "./adjustment-dialog";
 import type { SupplierLedgerData } from "./data/queries";
 import { ledgerOverviewFile, milestonesFile, statementFile } from "./ledger-files";
-import { filterEntries, filterOverview, overviewRows, paymentChoice, stateOf } from "./ledger-logic";
+import { entryLabel, filterEntries, filterOverview, isZeroOrderEntry, overviewRows, paymentChoice, stateOf, ZERO_ORDER_NOTE } from "./ledger-logic";
 import { LedgerOverviewScreen } from "./ledger-overview-screen";
 import { filterMilestones, MilestonesScreen } from "./milestones-screen";
 import { SupplierLedgerScreen } from "./supplier-ledger-screen";
@@ -83,7 +83,7 @@ const LEDGER: SupplierLedgerResponse = {
       stage: 2,
       currency: "CNY",
       exchangeRate: 12,
-      valueCny: 5_000,
+      valueCny: 5_000, poValueCny: 5_000,
       held: false,
       settledCny: 3_800,
       outstandingCny: 1_200,
@@ -110,6 +110,38 @@ const data = (over: Partial<SupplierLedgerData> = {}): SupplierLedgerData => ({
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
+
+// Owner rule of 2026-11-23: an order is worth what is received, so an order placed before any goods (or deleted with
+// nothing received) posts 0. Those postings stay (one debit per order, one cancellation per deleted order) and must never
+// read as a payment.
+describe("zero-value order postings", () => {
+  const zeroDebit = entry("z1", { entryType: "order_debit", amount: 0, orderId: "o9", po: "PO-3009", runningBalance: -1_200, entryDate: "2026-11-09" });
+  const zeroCancel = entry("z2", { entryType: "order_cancel", amount: 0, orderId: null, po: "PO-3010", runningBalance: -1_200, entryDate: "2026-11-09" });
+
+  it("are labelled as an order placed or deleted with nothing received; real order postings keep their labels", () => {
+    expect([zeroDebit, zeroCancel].map(isZeroOrderEntry)).toEqual([true, true]);
+    expect(entryLabel(zeroDebit)).toBe("Order placed, nothing received");
+    expect(entryLabel(zeroCancel)).toBe("Order deleted, nothing received");
+    expect(entryLabel(entry("d", { entryType: "order_debit", amount: -500 }))).toBe("Order debit");
+    expect(isZeroOrderEntry(entry("p", { entryType: "payment", amount: 0 }))).toBe(false);
+  });
+
+  it("show No change (never a green +0) on the statement, and are named in the export with a note", () => {
+    const ledger = { ...LEDGER, entries: [zeroCancel, zeroDebit, ...LEDGER.entries] };
+    render(<SupplierLedgerScreen data={data({ ledger })} />);
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1, 3);
+    expect(rows.map((r) => within(r).getAllByRole("cell")[1]!.textContent)).toEqual(["Order deletedNothing received", "Order placedNothing received"]);
+    for (const row of rows) {
+      expect(row).toHaveTextContent("No change");
+      expect(row).not.toHaveTextContent("+¥0.00");
+    }
+    const file = statementFile(ledger, ledger.entries, "Supplier: Hangzhou Silk", "2026-11-10");
+    expect(file.notes).toContain(ZERO_ORDER_NOTE);
+    const statement = file.sections.find((section) => section.rows.some((cells) => cells.includes("Order placed, nothing received")));
+    expect(statement).toBeDefined();
+    expect(statement!.rows.flat()).toContain("Order deleted, nothing received");
+  });
+});
 
 describe("SupplierLedgerScreen (LED-1)", () => {
   it("labels each account's signed balance: payable, settled, available", () => {
@@ -175,7 +207,7 @@ describe("SupplierLedgerScreen (LED-1)", () => {
       currencyOptions: [],
       entries: [],
       orders: [],
-      held: [{ currency: "CNY", reason: "Opening balance disputed.", orders: [{ id: "o9", po: "PO-0901", orderDate: "2026-09-01", stage: 1 as const, valueCny: 800 }], payments: [], advanceEntries: [] }],
+      held: [{ currency: "CNY", reason: "Opening balance disputed.", orders: [{ id: "o9", po: "PO-0901", orderDate: "2026-09-01", stage: 1 as const, valueCny: 800, poValueCny: 800 }], payments: [], advanceEntries: [] }],
     };
     render(<SupplierLedgerScreen data={data({ ledger: held, canEnter: true, canFull: true })} />);
     expect(screen.getByRole("status")).toHaveTextContent("This supplier's account is pending review. CNY: Opening balance pending review. Opening balance disputed.");

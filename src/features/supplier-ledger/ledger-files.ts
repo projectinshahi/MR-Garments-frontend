@@ -5,7 +5,7 @@ import type { AdvanceArchiveResponse, DepositMilestone } from "@/lib/api/deposit
 import type { LedgerAccount, LedgerEntry, LedgerTotal, SupplierLedgerResponse } from "@/lib/api/ledger-types";
 import { formatDateTime } from "@/lib/formatters";
 
-import { ENTRY_LABEL, EXCLUDED_FROM_LEDGER, type OverviewRow, reasonOf } from "./ledger-logic";
+import { entryLabel, EXCLUDED_FROM_LEDGER, type OverviewRow, reasonOf, ZERO_ORDER_NOTE } from "./ledger-logic";
 
 // Supplier ledger downloads (PDF, Excel, CSV) through the report download helpers: one table per currency, so no total
 // adds two currencies. Balances are signed (+ available with the supplier, − payable to the supplier); held accounts
@@ -99,7 +99,12 @@ const entryDetails = (e: LedgerEntry) =>
     .filter(Boolean)
     .join(" · ") || null;
 
-export const LEDGER_NOTES = [SIGN_NOTE, HELD_NOTE, "Orders are settled from the account oldest first; outstanding is never negative. Each entry keeps the exchange rate of its source (INR per 1 unit)."];
+export const LEDGER_NOTES = [
+  SIGN_NOTE,
+  HELD_NOTE,
+  "Orders are settled from the account oldest first; outstanding is never negative. Each entry keeps the exchange rate of its source (INR per 1 unit).",
+  ZERO_ORDER_NOTE,
+];
 
 /** One supplier's statement (LED-1, as filtered), the orders projection and the legacy advance archive. */
 export function statementFile(data: SupplierLedgerResponse, entries: LedgerEntry[], filters: string, today: string, advances: AdvanceArchiveResponse | null = null): ReportFile {
@@ -117,7 +122,7 @@ export function statementFile(data: SupplierLedgerResponse, entries: LedgerEntry
         columns: [
           text("PO"),
           date("Order date"),
-          money("Order value", currency),
+          money("Order value (received)", currency),
           money("Settled", currency),
           money("Outstanding", currency),
           text("Payment status"),
@@ -204,7 +209,7 @@ export function ledgerSections(accounts: LedgerAccount[], entries: LedgerEntry[]
       ],
       rows: list.map((e) => [
         e.entryDate,
-        ENTRY_LABEL[e.entryType],
+        entryLabel(e),
         e.po,
         e.amount,
         e.exchangeRate,

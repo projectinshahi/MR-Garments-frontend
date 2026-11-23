@@ -28,7 +28,9 @@ const options: ReceiptOptions = {
       po: "PO-2035",
       supplier: "Shenzhen Apparel",
       currency: "CNY",
-      orderValueCny: 72000,
+      // Received so far: 700 jackets x 60 (the order's value, owner rule of 2026-11-23); PO value 1,200 x 60.
+      orderValueCny: 42000,
+      poValueCny: 72000,
       outstandingCny: 32000,
       lines: [
         { orderLineId: "l1", item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, unitPriceCny: 60 },
@@ -40,13 +42,15 @@ const options: ReceiptOptions = {
       po: "PO-2040",
       supplier: "Foshan Fabrics",
       currency: "CNY",
-      orderValueCny: 5000,
-      outstandingCny: 4000,
+      // Nothing received yet: value 0 (awaiting goods), PO value 1,000 m x 5.
+      orderValueCny: 0,
+      poValueCny: 5000,
+      outstandingCny: 0,
       lines: [{ orderLineId: "l9", item: "Cotton fabric", unit: "m", ordered: 1000, receivedEarlier: 0, unitPriceCny: 5 }],
     },
   ],
 };
-const data = { options, receipts: [], receivedBy: "Chen Yu", today: "2026-10-27" };
+const data = { options, receipts: [], receivedBy: "Chen Yu", today: "2026-10-27", canApprove: false };
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -66,8 +70,10 @@ describe("RecordReceiptScreen", () => {
     expect(screen.getByRole("textbox", { name: "Received by" })).toHaveValue("Chen Yu");
     expect(screen.getByText("Partly received")).toBeInTheDocument();
     await user.type(screen.getByRole("textbox", { name: "Received now, Men's jackets" }), "460");
-    expect(screen.getByText("Short: 40 pcs × ¥60")).toBeInTheDocument();
-    expect(screen.getByText("¥ 29,600")).toBeInTheDocument();
+    // An order is worth what is received: 460 more jackets add 27,600 to the 42,000 so far; the short 40 add nothing.
+    expect(screen.getByText("Received now: 460 pcs × ¥60")).toBeInTheDocument();
+    expect(screen.getByText("Order value after this receipt").nextSibling).toHaveTextContent("¥ 69,600");
+    expect(screen.queryByText(/Short:/)).not.toBeInTheDocument();
     expect(screen.getByText("No deliveries yet.")).toBeInTheDocument();
   });
 
@@ -77,7 +83,7 @@ describe("RecordReceiptScreen", () => {
       ...options,
       orders: options.orders.map((o) => ({
         ...o,
-        orderValueCny: null,
+        orderValueCny: null, poValueCny: null,
         outstandingCny: null,
         lines: o.lines.map((line) => ({ ...line, unitPriceCny: null })),
       })),
@@ -96,8 +102,9 @@ describe("RecordReceiptScreen", () => {
 
   it("reads the outstanding from the ledger and hides the card while the supplier account is held", () => {
     const { unmount } = render(<RecordReceiptScreen data={data} />);
-    expect(screen.getByText("¥ 40,000")).toBeInTheDocument(); // settled = 72,000 − 32,000 outstanding
-    expect(screen.getByText("¥ 32,000")).toBeInTheDocument();
+    expect(screen.getByText("PO value (ordered)").nextSibling).toHaveTextContent("¥ 72,000");
+    expect(screen.getByText("Order value received so far").nextSibling).toHaveTextContent("¥ 42,000");
+    expect(screen.getByText("Outstanding before this receipt").nextSibling).toHaveTextContent("¥ 32,000");
     unmount();
     const held: ReceiptOptions = { ...options, orders: options.orders.map((o) => ({ ...o, outstandingCny: null })) };
     render(<RecordReceiptScreen data={{ ...data, options: held }} />);
@@ -156,6 +163,38 @@ describe("RecordReceiptScreen", () => {
     });
     expect(success).toHaveBeenCalledWith("Receipt saved");
     expect(refresh).toHaveBeenCalled();
+  });
+
+  // Owner rule of 2026-11-23, 6: a receipt that re-settles a final landed cost needs a Management approval and reason.
+  it("asks Management for the reason when REC-3 answers final_settlement_approval, then resends with it", async () => {
+    const user = userEvent.setup();
+    const message = "This receipt changes the payments that settle PO-2001, whose landed cost is already final. A Management user must approve it with a reason.";
+    post.mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", message)).mockResolvedValueOnce({ receipt: { id: "r9" } });
+    render(<RecordReceiptScreen data={{ ...data, canApprove: true }} />);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    const dialog = await screen.findByRole("dialog", { name: "Approve a change to a final landed cost?" });
+    expect(dialog).toHaveTextContent(message);
+    await user.click(within(dialog).getByRole("button", { name: "Approve and save" }));
+    expect(within(dialog).getByText("Enter the reason for approving this change.")).toBeInTheDocument();
+    await user.type(within(dialog).getByRole("textbox", { name: /Reason/ }), "Late delivery agreed with the owner");
+    await user.click(within(dialog).getByRole("button", { name: "Approve and save" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/receiving"));
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[1]![1]).toMatchObject({ orderId: "o35", finalSettlementApproval: { reason: "Late delivery agreed with the owner" } });
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("finalSettlementApproval");
+  });
+
+  it("only shows the API's message to a user who can't approve, and saves nothing", async () => {
+    const user = userEvent.setup();
+    const message = "This receipt changes the payments that settle PO-2001, whose landed cost is already final. A Management user must approve it with a reason.";
+    post.mockRejectedValue(new ApiError(409, "final_settlement_approval", message));
+    render(<RecordReceiptScreen data={data} />);
+    await fillPo2035(user, "500");
+    await user.click(screen.getByRole("button", { name: "Save receipt" }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("switches the lines with the order", async () => {

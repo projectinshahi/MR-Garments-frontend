@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
@@ -22,6 +23,7 @@ import { formatMoney, formatNumber, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { RecordReceiptData } from "./data/queries";
+import { FinalApprovalDialog, needsFinalApproval } from "./final-approval-dialog";
 import {
   deliveryEvents,
   emptyLines,
@@ -85,15 +87,20 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
   // order whose supplier account is held or not posted yet: no "Effect on payment" card then.
   const showPayment = order?.orderValueCny !== null && order?.outstandingCny !== null;
   const outstanding = order?.outstandingCny ?? 0;
-  const effect = paymentEffect({ outstanding }, lines);
+  const effect = paymentEffect({ value: order?.orderValueCny ?? 0 }, lines);
+  // A 409 final_settlement_approval kept with the form values, while a Management user gives the reason.
+  const [approval, setApproval] = useState<{ message: string; values: ReceiptFormValues } | null>(null);
   const deliveries = deliveryEvents(data.receipts, orderId);
   const linesError = errors.lines?.message ?? errors.lines?.root?.message;
   const remarkNeeded = remarkRequired(order, typed);
 
-  const onSubmit = handleSubmit(async (values) => {
+  async function send(values: ReceiptFormValues, reason?: string) {
     try {
-      await apiClient.post<{ receipt: { id: string } }>("/receipts", toReceiptBody(values));
+      await apiClient.post<{ receipt: { id: string } }>("/receipts", { ...toReceiptBody(values), ...(reason ? { finalSettlementApproval: { reason } } : {}) });
     } catch (error) {
+      // A receipt that re-settles a final landed cost: Management approves it with a reason; anyone else sees the API's message.
+      const final = needsFinalApproval(error);
+      if (final && data.canApprove && !reason) return setApproval({ message: final, values });
       // A 409 without fields (order_not_receivable) is toasted with its own message by handleApiError.
       const fields = handleApiError(error) ?? {};
       FORM_FIELDS.filter((key) => fields[key]).forEach((key, index) =>
@@ -104,12 +111,14 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
         .forEach(([, message]) => notifyError(message));
       return;
     }
+    setApproval(null);
     notifySuccess(RECEIPT_SAVED);
     // The page stays mounted (Activity): start the next visit from an empty form.
     reset(defaults);
     router.push("/receiving");
     router.refresh();
-  });
+  }
+  const onSubmit = handleSubmit((values) => send(values));
 
   return (
     <>
@@ -269,22 +278,24 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
           <div className="flex flex-col gap-(--page-gap)">
             {showPayment ? (
               <SectionCard title="Effect on payment" titleGap="none">
+                {/* An order is worth its received quantity x rate: this receipt adds what it receives (posted on save). */}
                 <KeyValueList
                   size="sm"
                   className="mt-[10px]"
                   items={[
-                    { label: "Order value", value: spaced(order?.orderValueCny ?? 0) },
-                    { label: "Settled from supplier payments", value: spaced(Math.max(0, Math.round(((order?.orderValueCny ?? 0) - outstanding) * 100) / 100)) },
-                    { label: "Balance before this receipt", value: spaced(effect.balanceBefore) },
-                    ...effect.deductions
-                      .filter((d) => d.short > 0)
-                      .map((d) => ({
-                        label: `Short: ${formatQty(d.short, d.unit)} × ${formatMoney(d.unitPrice, currency)}`,
-                        value: <span className="font-bold text-danger">− {spaced(d.amount)}</span>,
-                      })),
+                    { label: "PO value (ordered)", value: spaced(order?.poValueCny ?? 0) },
+                    { label: "Order value received so far", value: spaced(effect.valueBefore) },
+                    { label: "Outstanding before this receipt", value: spaced(outstanding) },
+                    ...effect.additions.map((d) => ({
+                      label: `Received now: ${formatQty(d.quantity, d.unit)} × ${formatMoney(d.unitPrice, currency)}`,
+                      value: <span className="font-bold">+ {spaced(d.amount)}</span>,
+                    })),
                   ]}
-                  total={{ label: "Balance to pay now", value: spaced(effect.balanceNow) }}
+                  total={{ label: "Order value after this receipt", value: spaced(effect.valueAfter) }}
                 />
+                <p className="mt-2 text-[12.5px] leading-4 text-muted-foreground">
+                  The value received is posted to the supplier&apos;s account when you save; credit on the account settles it, oldest order first.
+                </p>
               </SectionCard>
             ) : null}
             <SectionCard title={order ? `Deliveries for ${order.po}` : "Deliveries"} titleGap="none">
@@ -309,6 +320,7 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
           </div>
         </div>
       </PageContainer>
+      <FinalApprovalDialog message={approval?.message ?? null} onCancel={() => setApproval(null)} onApprove={(reason) => send(approval!.values, reason)} />
     </>
   );
 }

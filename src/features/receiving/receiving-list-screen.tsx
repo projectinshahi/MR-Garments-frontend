@@ -30,7 +30,7 @@ const STATE_TONE: Record<ReceiptState, Tone> = { partly: "warning", complete: "s
  * already in a container (REC-1 `containers`): Delete explains which containers to delete first instead (Close only).
  * `onlyReceipt`: the order has no other receipt, so it goes back to waiting to be received.
  */
-function DeleteReceipt({ row, onlyReceipt }: { row: ReceiptRow; onlyReceipt: boolean }) {
+function DeleteReceipt({ row, onlyReceipt, canApprove }: { row: ReceiptRow; onlyReceipt: boolean; canApprove: boolean }) {
   const containers = row.containers ?? [];
   const many = containers.length > 1;
   const po = <strong className="whitespace-nowrap text-foreground">{row.po}</strong>;
@@ -51,6 +51,7 @@ function DeleteReceipt({ row, onlyReceipt }: { row: ReceiptRow; onlyReceipt: boo
     <DeleteRecordButton
       path={`/receipts/${row.id}`}
       noun="receipt"
+      canApprove={canApprove}
       label={`Delete receipt of ${row.po} on ${formatDate(row.receivedOn)}, ${row.received}`}
       title="Delete Goods Receipt?"
       refused={
@@ -93,7 +94,7 @@ const CHIPS = [
  * `linkPos`: the PO opens the order (canOpen /orders); otherwise plain text. `receiptsOf`: each order's receipt count,
  * given only to Management (receiving Full), who then gets Actions after Status with Delete on every receipt (REC-4).
  */
-const columnsFor = (linkPos: boolean, receiptsOf: Map<string, number> | null): ColumnDef<ReceiptRow>[] => {
+const columnsFor = (linkPos: boolean, receiptsOf: Map<string, number> | null, canApprove = false): ColumnDef<ReceiptRow>[] => {
   // With Actions, twelve columns need about 30 px more than 1440 gives: cells pad 12 px instead of 14.5 (the outer
   // edges keep theirs), and a long supplier name wraps instead of pushing Delete out of view.
   const fit = (className?: string, wrap = false) => (receiptsOf ? cn(className, "px-3", wrap && "whitespace-normal") : className);
@@ -125,7 +126,7 @@ const columnsFor = (linkPos: boolean, receiptsOf: Map<string, number> | null): C
             id: "actions",
             header: "Actions",
             meta: { className: `w-[84px] ${ACTIONS_COLUMN_CLASS}` },
-            cell: ({ row }) => <DeleteReceipt row={row.original} onlyReceipt={receiptsOf.get(row.original.orderId) === 1} />,
+            cell: ({ row }) => <DeleteReceipt row={row.original} onlyReceipt={receiptsOf.get(row.original.orderId) === 1} canApprove={canApprove} />,
           } satisfies ColumnDef<ReceiptRow>,
         ]
       : []),
@@ -142,8 +143,8 @@ export function ReceivingListScreen({ data }: { data: ReceivingListData }) {
     // Counted over every receipt, not the filtered rows: an order's other receipts stay even when hidden.
     const receiptsOf = new Map<string, number>();
     for (const r of data.receipts) receiptsOf.set(r.orderId, (receiptsOf.get(r.orderId) ?? 0) + 1);
-    return columnsFor(data.linkPos, data.canDelete ? receiptsOf : null);
-  }, [data.linkPos, data.canDelete, data.receipts]);
+    return columnsFor(data.linkPos, data.canDelete ? receiptsOf : null, data.canApprove);
+  }, [data.linkPos, data.canDelete, data.canApprove, data.receipts]);
 
   return (
     <>

@@ -94,7 +94,8 @@ export function paymentsFile(orders: OrderPaymentRow[], payments: Payment[], que
     sections: [
       summarySection([
         ["Orders", orders.length],
-        ["Order value", known((o) => o.orderValueCny)],
+        ["Order value (received)", known((o) => o.orderValueCny)],
+        ["PO value (ordered)", known((o) => o.poValueCny)],
         ["Settled", known((o) => o.settledCny)],
         ["Outstanding", known((o) => o.outstandingCny)],
         ...(totals.length
@@ -116,7 +117,8 @@ export function paymentsFile(orders: OrderPaymentRow[], payments: Payment[], que
         columns: [
           text("PO"),
           text("Supplier"),
-          money("Order value", currency),
+          money("PO value", currency),
+          money("Order value (received)", currency),
           money("Settled", currency),
           money("Outstanding", currency),
           text("Payment status"),
@@ -131,6 +133,7 @@ export function paymentsFile(orders: OrderPaymentRow[], payments: Payment[], que
         rows: list.map((o) => [
           o.po,
           o.supplier,
+          o.poValueCny,
           o.orderValueCny,
           o.settledCny,
           o.outstandingCny,

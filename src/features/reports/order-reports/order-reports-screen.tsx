@@ -34,7 +34,7 @@ export function OrderReportsScreen({ page, linkPos }: { page: OrderReportsPage; 
         <OrderReportsFilters options={data.options} currencies={data.rows.map((row) => row.currency)} />
         <KpiRow gap="sm" className="md:grid-flow-row lg:grid-flow-col">
           <KpiCard size="xs" label="Orders" value={formatNumber(summary.orders)} sub={label ? "matching the filters" : "every order"} />
-          <KpiCard size="xs" label="Order value" value={each((t) => t.orderValueCny)} sub="all stages" />
+          <KpiCard size="xs" label="Order value (received)" value={each((t) => t.orderValueCny)} sub="all stages" />
           <KpiCard size="xs" label="Settled" value={each((t) => t.settledCny)} sub={`${formatINR(summary.paidInr)} paid at payment-day rates`} />
           <KpiCard size="xs" label="Outstanding" value={each((t) => t.outstandingCny)} sub="order value less what the supplier's account settled" />
           <KpiCard size="xs" label="Landed cost" value={formatINR(summary.landedCostInr)} sub="orders with a cost so far" />

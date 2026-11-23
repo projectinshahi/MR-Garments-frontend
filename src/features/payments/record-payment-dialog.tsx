@@ -20,6 +20,7 @@ import { currencySymbol, formatINR, rateText } from "@/lib/formatters";
 import { todayInIndia } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import type { Currency } from "@/types/domain";
+import { FinalApprovalDialog, needsFinalApproval } from "@/features/receiving/final-approval-dialog";
 
 import { balanceText, HELD_MESSAGE, round2 } from "./money";
 import {
@@ -72,7 +73,21 @@ function showErrors(error: unknown, setError: (field: never, error: { message: s
  * never an order. It goes to the supplier's account in the chosen currency; the supplier's orders settle from the
  * account, oldest first. `supplierId`: opened from an order, that order's supplier, fixed. Records only.
  */
-export function RecordPaymentDialog({ suppliers, supplierId, children }: { suppliers: SupplierChoice[]; supplierId?: string; children: React.ReactElement }) {
+/**
+ * `canApprove` (Management, payments Full): a payment dated before the credits that settle a protected final landed
+ * cost (409 final_settlement_approval) asks for the approval's reason; anyone else sees the API's message.
+ */
+export function RecordPaymentDialog({
+  suppliers,
+  supplierId,
+  canApprove = false,
+  children,
+}: {
+  suppliers: SupplierChoice[];
+  supplierId?: string;
+  canApprove?: boolean;
+  children: React.ReactElement;
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   return (
@@ -89,6 +104,7 @@ export function RecordPaymentDialog({ suppliers, supplierId, children }: { suppl
         <SupplierPaymentForm
           suppliers={suppliers}
           fixedId={supplierId}
+          canApprove={canApprove}
           onCancel={() => setOpen(false)}
           onSaved={(message) => {
             notifySuccess(message);
@@ -102,7 +118,20 @@ export function RecordPaymentDialog({ suppliers, supplierId, children }: { suppl
 }
 
 // Rendered inside DialogContent, which unmounts on close: the form and its request id start fresh on every open.
-function SupplierPaymentForm({ suppliers, fixedId, onCancel, onSaved }: { suppliers: SupplierChoice[]; fixedId?: string; onCancel: () => void; onSaved: (message: string) => void }) {
+function SupplierPaymentForm({
+  suppliers,
+  fixedId,
+  canApprove,
+  onCancel,
+  onSaved,
+}: {
+  suppliers: SupplierChoice[];
+  fixedId?: string;
+  canApprove: boolean;
+  onCancel: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [approval, setApproval] = useState<{ message: string; values: SupplierPaymentValues } | null>(null);
   const [today] = useState(() => todayInIndia());
   const [requestId] = useState(newRequestId);
   const fixed = fixedId ? suppliers.find((s) => s.id === fixedId) : undefined;
@@ -141,14 +170,20 @@ function SupplierPaymentForm({ suppliers, fixedId, onCancel, onSaved }: { suppli
     setValue("currency", nextCurrency);
   }
 
-  async function save(values: SupplierPaymentValues) {
+  async function save(values: SupplierPaymentValues, approvalReason?: string) {
     let response: CreatePaymentResponse;
     try {
-      response = await apiClient.post<CreatePaymentResponse>("/payments", toSupplierPaymentBody(values, requestId));
+      response = await apiClient.post<CreatePaymentResponse>("/payments", {
+        ...toSupplierPaymentBody(values, requestId),
+        ...(approvalReason ? { finalSettlementApproval: { reason: approvalReason } } : {}),
+      });
     } catch (error) {
+      const final = needsFinalApproval(error);
+      if (final && canApprove && !approvalReason) return setApproval({ message: final, values });
       showErrors(error, setError, (field) => field in values);
       return;
     }
+    setApproval(null);
     const who = find(values.supplierId)?.name ?? "the supplier";
     const ledger = response.ledger;
     onSaved(
@@ -159,94 +194,98 @@ function SupplierPaymentForm({ suppliers, fixedId, onCancel, onSaved }: { suppli
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit(save)} className="mt-[14px]">
-      <div className="grid gap-x-4 gap-y-[14px] sm:grid-cols-2">
-        <Field className={cn(fieldClass, "sm:col-span-2")} data-invalid={!!errors.supplierId}>
-          <FieldLabel htmlFor="payment-supplier" className={labelClass}>
-            Supplier <RequiredMark />
-          </FieldLabel>
-          {fixed ? (
-            <Input id="payment-supplier" readOnly size="sm" value={fixed.name} />
-          ) : (
-            // Searchable (native datalist): type part of the name and pick it.
-            <>
-              <Input
-                id="payment-supplier"
-                required
-                size="sm"
-                list="payment-supplier-options"
-                autoComplete="off"
-                placeholder="Search supplier"
-                value={name}
-                onChange={(event) => chooseName(event.target.value)}
-                aria-invalid={!!errors.supplierId}
-              />
-              <datalist id="payment-supplier-options">
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.name} />
-                ))}
-              </datalist>
-            </>
-          )}
-          <FieldError errors={[errors.supplierId]} />
-        </Field>
-        {blocked ? (
-          <Callout tone="warning" size="sm" role="alert" className="sm:col-span-2">
-            {HELD_MESSAGE} No payment can be recorded for it until the review is done.
-          </Callout>
-        ) : null}
-        <Field className={fieldClass} data-invalid={!!errors.currency}>
-          <FieldLabel htmlFor="payment-currency" className={labelClass}>
-            Currency <RequiredMark />
-          </FieldLabel>
-          <NativeSelect
-            size="sm"
-            id="payment-currency"
-            required
-            disabled={!supplier || blocked}
-            aria-invalid={!!errors.currency}
-            {...register("currency", { onChange: (event: { target: { value: string } }) => follow(supplier, event.target.value) })}
-            // Controlled: a new supplier brings new options, and the chosen one must show even when it isn't the first.
-            value={currency}
-          >
-            {supplier ? null : <option value="">Choose a supplier first</option>}
-            {supplier?.currencyOptions.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </NativeSelect>
-          {supplier?.held && !blocked ? (
-            <FieldDescription className="text-xs">
-              {supplier.currency}: {HELD_MESSAGE}
-            </FieldDescription>
+    <>
+      <form noValidate onSubmit={handleSubmit((values) => save(values))} className="mt-[14px]">
+        <div className="grid gap-x-4 gap-y-[14px] sm:grid-cols-2">
+          <Field className={cn(fieldClass, "sm:col-span-2")} data-invalid={!!errors.supplierId}>
+            <FieldLabel htmlFor="payment-supplier" className={labelClass}>
+              Supplier <RequiredMark />
+            </FieldLabel>
+            {fixed ? (
+              <Input id="payment-supplier" readOnly size="sm" value={fixed.name} />
+            ) : (
+              // Searchable (native datalist): type part of the name and pick it.
+              <>
+                <Input
+                  id="payment-supplier"
+                  required
+                  size="sm"
+                  list="payment-supplier-options"
+                  autoComplete="off"
+                  placeholder="Search supplier"
+                  value={name}
+                  onChange={(event) => chooseName(event.target.value)}
+                  aria-invalid={!!errors.supplierId}
+                />
+                <datalist id="payment-supplier-options">
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.name} />
+                  ))}
+                </datalist>
+              </>
+            )}
+            <FieldError errors={[errors.supplierId]} />
+          </Field>
+          {blocked ? (
+            <Callout tone="warning" size="sm" role="alert" className="sm:col-span-2">
+              {HELD_MESSAGE} No payment can be recorded for it until the review is done.
+            </Callout>
           ) : null}
-          <FieldError errors={[errors.currency]} />
-        </Field>
-        <MoneyFields
-          register={(field) => register(field)}
-          errors={errors}
-          today={today}
-          symbol={symbol}
-          inr={inr}
-          rateHint={
-            supplier && currency === supplier.currency && supplier.exchangeRate !== null
-              ? `Supplier rate now: ${rateText(currency, supplier.exchangeRate)}. Change it if this payment used another.`
-              : `No saved rate for ${currency || "this currency"}: enter this payment's.`
-          }
-        />
-      </div>
-      <InrLine amount={amount} rateInr={inr ? "1" : rateInr} />
-      {supplier && currency && !blocked ? (
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <span className="text-[13px] leading-5 text-muted-foreground">Supplier balance ({currency})</span>
-          <output aria-label="Balance now and after" className="text-[13.5px] leading-5 font-bold">
-            {balanceText(now, currency)} → {balanceText(after, currency)}
-          </output>
+          <Field className={fieldClass} data-invalid={!!errors.currency}>
+            <FieldLabel htmlFor="payment-currency" className={labelClass}>
+              Currency <RequiredMark />
+            </FieldLabel>
+            <NativeSelect
+              size="sm"
+              id="payment-currency"
+              required
+              disabled={!supplier || blocked}
+              aria-invalid={!!errors.currency}
+              {...register("currency", { onChange: (event: { target: { value: string } }) => follow(supplier, event.target.value) })}
+              // Controlled: a new supplier brings new options, and the chosen one must show even when it isn't the first.
+              value={currency}
+            >
+              {supplier ? null : <option value="">Choose a supplier first</option>}
+              {supplier?.currencyOptions.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </NativeSelect>
+            {supplier?.held && !blocked ? (
+              <FieldDescription className="text-xs">
+                {supplier.currency}: {HELD_MESSAGE}
+              </FieldDescription>
+            ) : null}
+            <FieldError errors={[errors.currency]} />
+          </Field>
+          <MoneyFields
+            register={(field) => register(field)}
+            errors={errors}
+            today={today}
+            symbol={symbol}
+            inr={inr}
+            rateHint={
+              supplier && currency === supplier.currency && supplier.exchangeRate !== null
+                ? `Supplier rate now: ${rateText(currency, supplier.exchangeRate)}. Change it if this payment used another.`
+                : `No saved rate for ${currency || "this currency"}: enter this payment's.`
+            }
+          />
         </div>
-      ) : null}
-      <Footer onCancel={onCancel} pending={formState.isSubmitting} disabled={blocked} label="Record payment" />
-    </form>
+        <InrLine amount={amount} rateInr={inr ? "1" : rateInr} />
+        {supplier && currency && !blocked ? (
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <span className="text-[13px] leading-5 text-muted-foreground">Supplier balance ({currency})</span>
+            <output aria-label="Balance now and after" className="text-[13.5px] leading-5 font-bold">
+              {balanceText(now, currency)} → {balanceText(after, currency)}
+            </output>
+          </div>
+        ) : null}
+        <Footer onCancel={onCancel} pending={formState.isSubmitting} disabled={blocked} label="Record payment" />
+      </form>
+      {/* Outside the form: React bubbles a portal's submit to its React parents. */}
+      <FinalApprovalDialog message={approval?.message ?? null} onCancel={() => setApproval(null)} onApprove={(reason) => save(approval!.values, reason)} />
+    </>
   );
 }
 

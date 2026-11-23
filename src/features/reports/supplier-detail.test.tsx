@@ -147,7 +147,9 @@ const line = (orderLineId: string, more: Partial<Line> = {}): Line => ({
   unit: "pcs",
   quantity: 100,
   rateCny: 2.5,
+  received: 100,
   amountCny: 250,
+  poAmountCny: 250,
   currency: "CNY",
   ...more,
 });
@@ -254,10 +256,10 @@ describe("Supplier detail lists: every amount in its own currency", () => {
     renderIn(
       <SupplierLinesList
         list={page([
-          line("l-1", { po: "PO-2052", quantity: 20, rateCny: 3, amountCny: 60 }),
+          line("l-1", { po: "PO-2052", quantity: 20, rateCny: 3, received: 20, amountCny: 60, poAmountCny: 60 }),
           line("l-2"),
-          line("l-3", { po: "PO-2053", item: "Denim jeans", currency: "USD", quantity: 7, rateCny: 17.8575, amountCny: 125 }),
-          line("l-4", { po: "PO-2054", item: "Cotton fabric", unit: "m", currency: "INR", quantity: 200, rateCny: 8, amountCny: 1600 }),
+          line("l-3", { po: "PO-2053", item: "Denim jeans", currency: "USD", quantity: 7, rateCny: 17.8575, received: 7, amountCny: 125, poAmountCny: 125 }),
+          line("l-4", { po: "PO-2054", item: "Cotton fabric", unit: "m", currency: "INR", quantity: 200, rateCny: 8, received: 200, amountCny: 1600, poAmountCny: 1600 }),
         ])}
         linkPos={false}
         empty=""

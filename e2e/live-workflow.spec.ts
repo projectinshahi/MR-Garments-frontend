@@ -32,8 +32,9 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
   /**
    * The order's figures on Orders, Payments and the order's Payments tab, as Management sees them: `settled` and
    * `outstanding` are the supplier account's FIFO projection; `paidInr` is goods (at each credit's rate) plus sea freight.
+   * `value`: the order's value, its received quantity x rate (owner rule of 2026-11-23).
    */
-  async function expectMoney(viewer: Page, settled: string, paidInr: string, outstanding: string, status: string) {
+  async function expectMoney(viewer: Page, settled: string, paidInr: string, outstanding: string, status: string, value = "¥4,000") {
     await viewer.goto("/orders");
     await viewer.getByRole("searchbox", { name: "Search PO, item or supplier" }).fill(po);
     await expect(rowOf(viewer, po)).toContainText(paidInr);
@@ -41,20 +42,21 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await viewer.getByRole("searchbox", { name: "Search PO or supplier" }).fill(po);
     const cells = viewer.getByRole("table").nth(1).getByRole("row").filter({ hasText: po }).getByRole("cell");
     await expect(cells.nth(0)).toHaveText(`${po}${supplierName}`);
-    await expect(cells.nth(1)).toHaveText(amountCell("4,000.00"));
+    await expect(cells.nth(1)).toHaveText(amountCell(`${value.replace("¥", "")}.00`));
     await expect(cells.nth(2)).toHaveText(amountCell(`${settled.replace("¥", "")}.00`));
     await expect(cells.nth(3)).toHaveText(amountCell(`${outstanding.replace("¥", "")}.00`));
     await expect(cells.nth(4)).toContainText(status);
     await expect(cells.nth(5)).toHaveText(paidInr);
     await viewer.goto(`/orders/${po}/payments`);
-    await expect(kpi(viewer, "Order value")).toContainText("¥4,000.00");
-    await expect(kpi(viewer, "Settled")).toContainText(`${settled}.00`);
+    await expect(kpi(viewer, "Order value (received)")).toContainText(`${value}.00`);
+    // first(): the KPI card; the Supplier account card's balance may also read "Settled".
+    await expect(kpi(viewer, "Settled").first()).toContainText(`${settled}.00`);
     await expect(kpi(viewer, "Outstanding")).toContainText(`${outstanding}.00`);
     await expect(kpi(viewer, "Outstanding")).toContainText(status);
     await expect(viewer.getByText("Paid (INR), goods + sea freight").filter({ visible: true }).locator("..")).toContainText(paidInr);
   }
 
-  await test.step("Procurement places the order (Orders): the supplier's account is debited", async () => {
+  await test.step("Procurement places the order (Orders): nothing is owed until goods are received", async () => {
     const priya = await as(browser, PROCUREMENT_STATE);
     await priya.goto("/orders");
     await priya.getByRole("link", { name: "+ New order" }).click();
@@ -69,7 +71,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await priya.getByRole("textbox", { name: "Rate (¥), line 2" }).fill("5");
     await priya.getByRole("textbox", { name: "Quantity, line 2" }).fill("200");
     await expect(kv(priya, "Supplier balance now")).toHaveText("Settled");
-    await expect(kv(priya, "Supplier balance after this order")).toHaveText("Payable to supplier ¥4,000.00");
+    await expect(kv(priya, "Supplier balance after this order")).toHaveText("Settled");
     // Container terms are chosen on the order (backend docs/order-container-terms.md).
     await priya.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
     await priya.getByRole("button", { name: "Place order" }).dblclick();
@@ -79,7 +81,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await priya.close();
 
     const order = await api.order(po);
-    expect(order).toMatchObject({ stage: 1, orderValueCny: 4000, settledCny: 0, outstandingCny: 4000, paymentStatus: "unpaid", item: "Men's jackets", quantity: 100 });
+    expect(order).toMatchObject({ stage: 1, orderValueCny: 0, poValueCny: 4000, settledCny: 0, outstandingCny: 0, paymentStatus: "awaiting_goods", item: "Men's jackets", quantity: 100 });
     expect((await api.options()).nextPo).toBe(`PO-${Number(po.slice(3)) + 1}`); // the double click placed one order
   });
 
@@ -93,7 +95,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await page.getByRole("searchbox", { name: "Search PO, item or supplier" }).fill(po);
     await expect(rowOf(page, po)).toContainText("1. Order and deposit");
     await expect(rowOf(page, po)).toContainText("Due in 5 days");
-    await expectMoney(page, "¥0", "₹0", "¥4,000", "Unpaid");
+    await expectMoney(page, "¥0", "₹0", "¥0", "Awaiting goods", "¥0");
   });
 
   await test.step("Accounts pays the supplier ¥1,000 and the agent ¥500; totals update everywhere", async () => {
@@ -108,7 +110,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await expect(form.getByRole("textbox", { name: "Rate (₹ per ¥)" })).toHaveValue("12");
     await form.getByRole("textbox", { name: "Mode" }).fill("Bank transfer");
     await expect(form.getByRole("status").first()).toHaveText("₹12,000");
-    await expect(form.getByRole("status", { name: "Balance now and after" })).toHaveText("Payable to supplier ¥4,000.00 → Payable to supplier ¥3,000.00");
+    await expect(form.getByRole("status", { name: "Balance now and after" })).toHaveText("Settled → Available with supplier ¥1,000.00");
     await form.getByRole("button", { name: "Record payment" }).dblclick();
     await expect(toast(anita, `Payment recorded for ${supplierName}`).first()).toBeVisible();
 
@@ -132,8 +134,9 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     const order = await api.order(po);
     expect(order.payments).toHaveLength(1);
     expect(order.payments![0]).toMatchObject({ kind: "Balance", payee: "Dragon Cargo", payeeRole: "agent", amountCny: 500, rateInr: 12.5, mode: "Wire" });
-    expect(order.slices).toMatchObject([{ entryType: "payment", amount: 1000, exchangeRate: 12, amountInr: 12_000 }]);
-    await expectMoney(page, "¥1,000", "₹18,250", "¥3,000", "Partly paid");
+    // Paid before any goods: supplier credit, nothing settled yet (only the sea freight counts in INR).
+    expect(order.slices).toEqual([]);
+    await expectMoney(page, "¥0", "₹6,250", "¥0", "Awaiting goods", "¥0");
     // Management (payments Full): the agent payment recorded against the PO has Void.
     const rows = page.locator("section").filter({ has: page.getByRole("heading", { name: `Recorded against ${po}` }) }).getByRole("row");
     await expect(rows.nth(1).getByRole("cell")).toHaveText([longDate(today()), "Sea freight · Balance", "Dragon Cargo", "¥500.00", "12.50", "₹6,250", "Paid", "Void"]);
@@ -166,6 +169,9 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await expect(rowOf(page, po)).toContainText("2. Receiving in China");
     await page.goto("/calendar/list");
     await expect(rowOf(page, po)).toContainText("Due in 5 days"); // stage 2 is still on the calendar
+    // The receipt values the order: 60 x ¥30 + 200 x ¥5 = ¥2,800, which the ¥1,000 credit settles in part.
+    expect((await api.order(po)).slices).toMatchObject([{ entryType: "payment", amount: 1000, exchangeRate: 12, amountInr: 12_000 }]);
+    await expectMoney(page, "¥1,000", "₹18,250", "¥1,800", "Partly paid", "¥2,800");
   });
 
   await test.step("a second receipt completes the jackets", async () => {

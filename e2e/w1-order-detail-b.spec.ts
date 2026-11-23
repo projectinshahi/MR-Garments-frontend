@@ -13,16 +13,17 @@ const rows = (page: Page) => page.getByRole("table").getByRole("row");
 test("Payments: KPIs, settled by (each credit at its own rate), sea freight to agents, the supplier account and the INR", async ({ page, api }) => {
   // A supplier of its own, so FIFO settles this order only: ¥2,000 at 12 to the account, ¥1,500 at 12.5 to an agent.
   const supplier = await api.newSupplier("Polo Ledger");
-  const order = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 400, rateCny: 20 }] });
+  // Received in full: an order is worth its received quantity x rate (owner rule of 2026-11-23).
+  const order = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 400, rateCny: 20 }] });
   await api.paySupplier(supplier.id, { amount: 2000, rateInr: 12, paidOn: today(-5), reference: "TXN-S1" });
   await api.payAgent(order.id, { kind: "Balance", amountCny: 1500, rateInr: 12.5, mode: "Cash" });
 
   await page.goto(`/orders/${order.po}`);
   await tabs(page).getByRole("link", { name: "Payments" }).click();
   await expect(page).toHaveURL(`/orders/${order.po}/payments`);
-  await expect(page.getByText(`Polo shirts · ${supplier.name} · Order value ¥8,000.00`)).toBeVisible();
+  await expect(page.getByText(`Polo shirts · ${supplier.name} · Order value (received) ¥8,000.00 · PO value ¥8,000.00`)).toBeVisible();
 
-  await expect(kpi(page, "Order value")).toContainText("¥8,000.00");
+  await expect(kpi(page, "Order value (received)")).toContainText("¥8,000.00");
   await expect(kpi(page, "Settled")).toContainText("¥2,000.00");
   await expect(kpi(page, "Settled")).toContainText("from the supplier account");
   await expect(kpi(page, "Outstanding")).toContainText("¥6,000.00");
@@ -54,7 +55,7 @@ test("Payments: KPIs, settled by (each credit at its own rate), sea freight to a
 
 test("Payments: nothing settled yet, then a fully paid order", async ({ page, api }) => {
   const supplier = await api.newSupplier("Unpaid Polo");
-  const unpaid = await api.createOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 10, rateCny: 100 }] });
+  const unpaid = await api.createReceivedOrder({ supplier: supplier.name, lines: [{ item: "Polo shirts", quantity: 10, rateCny: 100 }] });
   await page.goto(`/orders/${unpaid.po}/payments`);
   await expect(page.getByText("Nothing has settled this order yet.")).toBeVisible();
   await expect(page.getByText("No payment names this PO.")).toBeVisible();

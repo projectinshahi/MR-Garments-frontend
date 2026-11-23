@@ -144,7 +144,9 @@ export type LedgerOrder = {
   stage: OrderStage;
   currency: Currency;
   exchangeRate: number | null;
+  /** Received quantity × rate (the value the ledger settles); poValueCny ordered quantity × rate (reference). */
   valueCny: number;
+  poValueCny: number;
 } & SettlementFields &
   MilestoneFields;
 
@@ -152,7 +154,7 @@ export type LedgerOrder = {
 export type HeldAccount = {
   currency: Currency;
   reason: string;
-  orders: { id: string; po: string; orderDate: string; stage: OrderStage; valueCny: number }[];
+  orders: { id: string; po: string; orderDate: string; stage: OrderStage; valueCny: number; poValueCny: number }[];
   payments: {
     id: string;
     po: string;

@@ -58,7 +58,7 @@ describe("paymentsFile: a held account (D4, pre-release audit M1/M3)", () => {
 
   it("lists its order as Pending review, and its value adds nothing to the order totals", () => {
     const summary = Object.fromEntries(of("Summary").rows.map(([k, v]) => [k, v]));
-    expect(summary).toMatchObject({ Orders: 2, "Order value": "CNY 10,000.00", Settled: "CNY 4,000.00", Outstanding: "CNY 6,000.00" });
+    expect(summary).toMatchObject({ Orders: 2, "Order value (received)": "CNY 10,000.00", "PO value (ordered)": "CNY 10,000.00", Settled: "CNY 4,000.00", Outstanding: "CNY 6,000.00" });
     const status = of("Payments by order (CNY)").columns.findIndex((c) => c.header === "Payment status");
     expect(of("Payments by order (CNY)").rows.map((r) => r[status])).toEqual(["Partly paid", "Pending review"]);
   });

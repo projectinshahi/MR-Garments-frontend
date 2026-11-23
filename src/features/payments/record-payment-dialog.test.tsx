@@ -26,10 +26,10 @@ const SUPPLIERS: SupplierChoice[] = [
 ];
 let ids = 0;
 
-async function open(supplierId?: string) {
+async function open(supplierId?: string, canApprove = false) {
   const user = userEvent.setup();
   render(
-    <RecordPaymentDialog suppliers={SUPPLIERS} supplierId={supplierId}>
+    <RecordPaymentDialog suppliers={SUPPLIERS} supplierId={supplierId} canApprove={canApprove}>
       <Button>Open</Button>
     </RecordPaymentDialog>,
   );
@@ -53,6 +53,34 @@ beforeEach(() => {
   vi.spyOn(globalThis.crypto, "randomUUID").mockImplementation(() => `00000000-0000-4000-8000-00000000000${++ids}` as `${string}-${string}-${string}-${string}-${string}`);
 });
 afterEach(() => vi.restoreAllMocks());
+
+// Owner review of 2026-11-23: a payment dated before the credits that settle a protected final landed cost re-prices it.
+describe("a backdated payment that changes a final landed cost", () => {
+  it("asks Management for the approval's reason and records again with it, same request key", async () => {
+    post
+      .mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", "This payment's date puts it before the payments that settle PO-2049, whose landed cost is already final, so it changes them. A Management user must approve it with a reason."))
+      .mockResolvedValueOnce({ payment: { id: "p1" }, ledger: { supplierId: "s1", currency: "CNY", balanceBefore: -1000, balanceAfter: 1345.67 } });
+    const form = await open(undefined, true);
+    await fill(form);
+    await form.user.click(form.submit);
+    const approve = await screen.findByRole("dialog", { name: "Approve a change to a final landed cost?" });
+    await form.user.type(within(approve).getByRole("textbox", { name: /Reason/ }), "Bank statement");
+    await form.user.click(within(approve).getByRole("button", { name: "Approve and save" }));
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    expect(post.mock.calls[0]![1]).not.toHaveProperty("finalSettlementApproval");
+    expect(post.mock.calls[1]![1]).toMatchObject({ supplierId: "s1", clientRequestId: (post.mock.calls[0]![1] as { clientRequestId: string }).clientRequestId, finalSettlementApproval: { reason: "Bank statement" } });
+  });
+
+  it("shows only the API's message to someone who can't approve (Accounts)", async () => {
+    post.mockRejectedValueOnce(new ApiError(409, "final_settlement_approval", "This payment's date puts it before the payments that settle PO-2049, whose landed cost is already final, so it changes them. A Management user must approve it with a reason."));
+    const form = await open();
+    await fill(form);
+    await form.user.click(form.submit);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("This payment's date puts it before the payments that settle PO-2049, whose landed cost is already final, so it changes them. A Management user must approve it with a reason."));
+    expect(screen.queryByRole("dialog", { name: "Approve a change to a final landed cost?" })).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("RecordPaymentDialog (one supplier payment, no order)", () => {
   it("has no payment type, kind or order: supplier, currency, amount, rate, date, mode, reference and notes", async () => {

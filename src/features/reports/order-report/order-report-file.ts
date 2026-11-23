@@ -134,8 +134,9 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Currency", cur],
         [`Exchange rate on this PO (INR per 1 ${cur})`, order.exchangeRate],
         ["Products", order.products],
-        [`Original PO value (${cur})`, order.orderValueCny],
-        ["PO value (INR, at the PO rate)", order.orderValueInr],
+        [`PO value (${cur}, ordered quantity x rate)`, order.poValueCny],
+        [`Order value (${cur}, received quantity x rate)`, order.orderValueCny],
+        ["Order value (INR, at the PO rate)", order.orderValueInr],
         ...(payments
           ? ([
               [`Settled from the supplier's account (${cur})`, payments.settledCny],
@@ -210,9 +211,9 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
   sections.push({
     sheet: "Order Items",
     title: "Items",
-    columns: columns("Sl. No.", "Item code", "Item", "Unit", "Quantity", "Received", "Pending", "Excess", "Loaded", "Stocked", money("Rate", cur), money("Amount", cur)),
-    rows: lines.map((line) => [line.position + 1, null, line.item, line.unit, line.ordered, line.received, line.pending, line.excess, line.loaded, line.stocked, line.rateCny, line.valueCny]),
-    total: ["", "", `${order.products} item${order.products === 1 ? "" : "s"}`, "", perUnit((t) => t.ordered), perUnit((t) => t.received), perUnit((t) => t.pending), "", "", perUnit((t) => t.stocked), "", order.orderValueCny],
+    columns: columns("Sl. No.", "Item code", "Item", "Unit", "Quantity", "Received", "Pending", "Excess", "Loaded", "Stocked", money("Rate", cur), money("PO amount (ordered)", cur), money("Amount (received)", cur)),
+    rows: lines.map((line) => [line.position + 1, null, line.item, line.unit, line.ordered, line.received, line.pending, line.excess, line.loaded, line.stocked, line.rateCny, line.poValueCny, line.valueCny]),
+    total: ["", "", `${order.products} item${order.products === 1 ? "" : "s"}`, "", perUnit((t) => t.ordered), perUnit((t) => t.received), perUnit((t) => t.pending), "", "", perUnit((t) => t.stocked), "", order.poValueCny, order.orderValueCny],
   });
   if (receipts) {
     sections.push({

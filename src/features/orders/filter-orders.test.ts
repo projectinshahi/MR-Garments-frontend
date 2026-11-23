@@ -28,7 +28,7 @@ const row = (po: string, item: string, supplier: string, stage: OrderRow["stage"
   stocked: 0,
   closed: false,
   closedOn: null,
-  orderValueCny: 0,
+  orderValueCny: 0, poValueCny: 0,
   held: false,
   settledCny: 0,
   outstandingCny: 0,

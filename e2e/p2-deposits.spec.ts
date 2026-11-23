@@ -17,7 +17,7 @@ const searchPo = (page: Page, po: string, shown: () => Promise<void>) =>
     await shown();
   }).toPass({ timeout: 20_000 });
 
-test("Scenario 6: a Deposit Required milestone goes not met, partly met, met as payments settle the order", async ({ page, api }) => {
+test("Scenario 6: a Deposit Required milestone counts only what FIFO settles once goods are received: not met, partly met, met", async ({ page, api }) => {
   // ¥1,000 order whose supplier asked for a ¥1,000 deposit; nothing paid yet.
   const supplier = await api.newSupplier("Milestone Supply");
   const { po } = await api.createOrder({ supplier: supplier.name, depositRequiredCny: 1000 });
@@ -35,8 +35,18 @@ test("Scenario 6: a Deposit Required milestone goes not met, partly met, met as 
   await expect(row.getByText("Deposit not met", { exact: true })).toBeVisible();
   await expect(row.getByRole("link", { name: supplier.name })).toHaveAttribute("href", `/supplier-ledger/${supplier.id}`);
 
-  // ¥300 to the supplier's account: partly met, ¥700 pending.
+  // ¥300 to the supplier's account before any goods: supplier credit only, the deposit is still not met (owner rule
+  // of 2026-11-23: only what FIFO settles to the order counts, and nothing is settled before goods are received).
   await api.paySupplier(supplier.id, { amount: 300, rateInr: 12 });
+  await page.reload();
+  await searchPo(page, po, oneRow);
+  await expect(cells.nth(4)).toHaveText("¥0.00");
+  await expect(cells.nth(5)).toHaveText("¥1,000.00");
+  await expect(row.getByText("Deposit not met", { exact: true })).toBeVisible();
+  expect(await api.order(po)).toMatchObject({ orderValueCny: 0, paymentStatus: "awaiting_goods", depositSettledCny: 0, depositStatus: "unmet" });
+
+  // The goods arrive: the order is worth ¥1,000 and the ¥300 credit settles it: partly met, ¥700 pending.
+  await api.receive(po, { "Denim jeans": 100 });
   await page.reload();
   await searchPo(page, po, oneRow);
   await expect(cells.nth(4)).toHaveText("¥300.00");

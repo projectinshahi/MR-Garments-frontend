@@ -70,7 +70,8 @@ test("an item's price is set in Settings and fills the rate on New order, editab
   expect((await api.patch(`/items/${item.id}`, { price: 20 })).status()).toBe(200);
   const order = await api.order(po);
   expect(order.lines[0]).toMatchObject({ rateCny: 16, quantity: 10 });
-  expect(order.orderValueCny).toBe(160);
+  // Nothing received yet: worth 0, its PO value 10 x 16 (owner rule of 2026-11-23).
+  expect(order).toMatchObject({ orderValueCny: 0, poValueCny: 160 });
   const options = await api.options();
   expect(options.items.find((row) => row.id === item.id)?.price).toBe(20);
 

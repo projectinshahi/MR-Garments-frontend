@@ -29,7 +29,7 @@ export function suppliersListFile(rows: SupplierRow[], filters: string, today: s
     filters,
     notes: [
       "Exchange rate: the supplier's rate now (INR per 1 unit of its currency), used by new orders and deposits; each order and deposit keeps the rate saved on it.",
-      "Purchase value is this year's order value. The supplier balance is the signed ledger balance: positive is money available with the supplier, negative is payable to the supplier. Amounts in different currencies are never added together.",
+      "Purchase value is this year's order value: received quantity x rate. The supplier balance is the signed ledger balance: positive is money available with the supplier, negative is payable to the supplier. Amounts in different currencies are never added together.",
     ],
     sections: [
       summarySection([

@@ -53,13 +53,14 @@ test("the form shows the next PO and fills supplier facts, totals and the suppli
   await box(page, "Rate (¥), line 2").fill("8");
   await box(page, "Quantity, line 2").fill("500");
   await expect(box(page, "Amount (¥), line 2")).toHaveValue("4,000.00");
-  await expect(page.getByRole("status", { name: "Order total" })).toHaveText("¥ 6,500.00");
+  await expect(page.getByRole("status", { name: "PO value" })).toHaveText("¥ 6,500.00");
 
   // No deposits on the order (supplier money is recorded with Record payment): the supplier's balance before and after.
   await expect(page.getByRole("button", { name: "+ Add deposit" })).toHaveCount(0);
-  await expect(kv(page, "Order total")).toHaveText("¥ 6,500.00");
+  await expect(kv(page, "PO value")).toHaveText("¥ 6,500.00");
   await expect(kv(page, "Supplier balance now")).toHaveText(balanceText(balance));
-  await expect(kv(page, "Supplier balance after this order")).toHaveText(balanceText(Math.round((balance - 6500) * 100) / 100));
+  // An order is worth what is received (owner rule of 2026-11-23): placing it changes no balance.
+  await expect(kv(page, "Supplier balance after this order")).toHaveText(balanceText(balance));
   await expect(page.getByText("A milestone, not a payment. Record what the supplier was paid with Record payment.")).toBeVisible();
 
   // Cancel goes back to the list and places nothing.
@@ -152,10 +153,9 @@ test("a server refusal (422) shows under its field; a failed or lost request kee
   expect(await nextPo(api)).toBe(po);
 });
 
-test("placing an order debits the supplier's account, goes to its detail page, and the next visit starts a fresh form", async ({ page, api }) => {
+test("placing an order leaves the supplier's account as it is until goods arrive, goes to its detail page, and the next visit starts a fresh form", async ({ page, api }) => {
   const po = await nextPo(api);
   const before = await balanceOf(api, "Foshan Fabrics");
-  const after = Math.round((before - 2500) * 100) / 100;
   await page.goto("/orders/new");
   await fillValid(page);
   await box(page, "Deposit required (¥)").fill("1,500");
@@ -163,18 +163,19 @@ test("placing an order debits the supplier's account, goes to its detail page, a
   await page.getByRole("combobox", { name: "Container terms" }).selectOption("FOB");
   await place(page).click();
 
-  await expect(toast(page, `Order ${po} placed. Debited ¥2,500.00; supplier balance ${balanceText(after)}.`)).toBeVisible();
+  await expect(toast(page, `Order ${po} placed. Supplier balance ${balanceText(before)}: it changes as goods are received.`)).toBeVisible();
   await expect(page).toHaveURL(`/orders/${po}`);
   await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
 
   const saved = await api.order(po);
-  expect(saved).toMatchObject({ stage: 1, supplier: { name: "Foshan Fabrics" }, orderDate: today(), deliveryDate: today(20), orderValueCny: 2500, held: false });
+  expect(saved).toMatchObject({ stage: 1, supplier: { name: "Foshan Fabrics" }, orderDate: today(), deliveryDate: today(20), orderValueCny: 0, poValueCny: 2500, paymentStatus: "awaiting_goods", held: false });
   // The deposit required (0009) is a milestone of the order, met as the supplier's account settles it.
   expect(saved).toMatchObject({ depositRequiredCny: 1500 });
-  expect(saved.depositStatus).toMatch(/^(unmet|partly|met)$/);
+  // Nothing received, so nothing is settled to it yet: the deposit is not met.
+  expect(saved.depositStatus).toBe("unmet");
   expect(saved.lines).toMatchObject([{ item: { name: "Denim jeans" }, quantity: 200, rateCny: 12.5 }]);
   expect(saved.payments).toEqual([]);
-  expect(saved.supplierAccount).toMatchObject({ currency: "CNY", balanceCny: after });
+  expect(saved.supplierAccount).toMatchObject({ currency: "CNY", balanceCny: before });
 
   // Back to the list and in again: the kept (Activity) route shows an empty form with the next PO.
   await page.getByRole("link", { name: "Orders", exact: true }).first().click();

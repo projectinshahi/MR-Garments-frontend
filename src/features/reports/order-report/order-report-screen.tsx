@@ -367,7 +367,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
         <SectionCard title="Overview" titleGap="none" {...section("overview")}>
           <div className="mt-3 flex flex-col gap-4">
             <KpiRow gap="sm" className="grid-cols-2 md:grid-flow-row md:grid-cols-4">
-              <KpiCard size="xs" label="Original PO value" value={money(order.orderValueCny)} sub={`${plural(order.products, "product")} · ${quantities((t) => t.ordered)}`} />
+              <KpiCard size="xs" label="Order value (received)" value={money(order.orderValueCny)} sub={`PO value ${money(order.poValueCny)} · ${plural(order.products, "product")}`} />
               <KpiCard
                 size="xs"
                 label="Settled from supplier account"
@@ -408,7 +408,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   { label: "Currency", value: currencyTitle(cur) },
                   // The rate saved when the PO was placed, never the supplier's current one (docs/supplier-currency.md).
                   { label: "Exchange rate on this PO", value: order.exchangeRate === null ? "Not set (the supplier had no rate when it was placed)" : rateText(cur, order.exchangeRate) },
-                  { label: "PO value in INR", value: order.orderValueInr === null ? DASH : `${formatINR(order.orderValueInr, 2)} at the PO rate` },
+                  { label: "Order value in INR", value: order.orderValueInr === null ? DASH : `${formatINR(order.orderValueInr, 2)} at the PO rate` },
                   { label: "Products", value: formatNumber(order.products) },
                   { label: "Ordered", value: quantities((t) => t.ordered) },
                   { label: "Received in China · pending", value: `${quantities((t) => t.received)} · ${quantities((t) => t.pending)}` },

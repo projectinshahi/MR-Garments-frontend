@@ -16,6 +16,7 @@ type Order = Pick<
   OrderView,
   | "currency"
   | "orderValueCny"
+  | "poValueCny"
   | "held"
   | "settledCny"
   | "outstandingCny"
@@ -45,7 +46,8 @@ export function OrderMoney({ order }: { order: Order }) {
         size="sm"
         className="mt-3"
         items={[
-          { label: "Order value", value: money(order.orderValueCny) },
+          { label: "Order value (received)", value: money(order.orderValueCny) },
+          { label: "PO value (ordered)", value: money(order.poValueCny) },
           { label: "Settled from supplier account", value: money(order.settledCny) },
           {
             label: (
