@@ -1,4 +1,4 @@
-import { ClipboardList, type LucideIcon, Users } from "lucide-react";
+import { ClipboardList, History, type LucideIcon, Users } from "lucide-react";
 import Link from "next/link";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
@@ -10,7 +10,7 @@ import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { ReportsHubData, ReportsSummary } from "./data/queries";
-import { OrderReportsDownloads, SupplierOrdersDownloads } from "./order-reports/order-reports-downloads";
+import { OrderReportsDownloads, SupplierHistoryDownloads, SupplierOrdersDownloads } from "./order-reports/order-reports-downloads";
 import { filterLabel } from "./data/filters";
 import { CardDownloads, ReportDownload, UrlSelect } from "./report-actions";
 import { amountsText, type ReportFile, type ReportName } from "./report-files";
@@ -79,6 +79,16 @@ const CARDS: ReportCard[] = [
     href: "/reports/supplier-orders",
     Downloads: SupplierOrdersDownloads,
     stat: (s) => `${plural(s.suppliers.length, "supplier")} · ${plural(s.orders.total, "order")}`,
+  },
+  {
+    // RPT-SH (owner approval of 2026-11-25): every recorded event of a supplier, one timeline.
+    category: "History",
+    title: "Supplier History",
+    description: "Every recorded order, receipt, payment, void, adjustment and shipment event of one supplier or all of them.",
+    icon: History,
+    href: "/reports/supplier-history",
+    Downloads: SupplierHistoryDownloads,
+    stat: (s) => `${plural(s.suppliers.length, "supplier")} · one timeline`,
   },
   {
     category: "Deliveries",

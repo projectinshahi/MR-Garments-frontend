@@ -193,7 +193,7 @@ const orderColumns = (linkPo: boolean): ColumnDef<LedgerOrder>[] => {
   ];
 };
 
-const archiveColumns: ColumnDef<AdvanceArchiveEntry>[] = [
+export const archiveColumns: ColumnDef<AdvanceArchiveEntry>[] = [
   { accessorKey: "entryDate", header: "Date", cell: ({ row }) => formatDate(row.original.entryDate) },
   {
     accessorKey: "kind",

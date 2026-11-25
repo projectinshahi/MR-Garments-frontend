@@ -37,12 +37,18 @@ export function SupplierDetailScreen({
   parent,
   base,
   actions,
+  tabs,
+  extra,
 }: {
   page: SupplierDetailPage;
   linkPos: boolean;
   parent?: { label: string; href: string };
   base?: string;
   actions?: React.ReactNode;
+  /** The supplier profile's tab bar (Supplier Full History), under the header. */
+  tabs?: React.ReactNode;
+  /** A card after the supplier overview (the profile's history totals). */
+  extra?: React.ReactNode;
 }) {
   const { data } = page;
   const { supplier, summary } = data;
@@ -102,6 +108,7 @@ export function SupplierDetailScreen({
           </>
         }
       />
+      {tabs}
       <PageContainer>
         <SectionCard title="Supplier overview">
           <div className="grid gap-x-10 lg:grid-cols-2">
@@ -109,6 +116,7 @@ export function SupplierDetailScreen({
             <KeyValueList boldValues items={details.slice(half)} className="border-t border-border-subtle lg:border-t-0" />
           </div>
         </SectionCard>
+        {extra}
         <KpiRow gap="sm">
           <KpiCard size="xs" label="Orders" value={formatNumber(summary.orders)} sub={`${formatNumber(summary.openOrders)} open`} />
           <KpiCard size="xs" label="Payment transactions" value={formatNumber(summary.payments)} sub="paid and due" />

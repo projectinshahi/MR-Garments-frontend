@@ -1,0 +1,15 @@
+import type { Metadata } from "next";
+
+import { canOpen } from "@/config/navigation";
+import { HistoryReceiptsScreen } from "@/features/supplier-history/history-screens";
+import { getHistoryReceipts } from "@/features/supplier-history/queries";
+import { getMe } from "@/lib/session";
+
+export const metadata: Metadata = { title: "Supplier receiving" };
+
+/** Suppliers › one supplier › Receiving (Supplier 360°, backend docs/supplier-history.md). */
+export default async function SupplierReceiptsPage({ params, searchParams }: PageProps<"/suppliers/[id]/receiving">) {
+  const [{ id }, search] = await Promise.all([params, searchParams]);
+  const [page, me] = await Promise.all([getHistoryReceipts(id, search), getMe()]);
+  return <HistoryReceiptsScreen id={id} page={page} linkPos={!!me && canOpen(me, "/orders")} />;
+}

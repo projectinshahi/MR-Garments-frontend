@@ -13,7 +13,7 @@ import { entryLabel, EXCLUDED_FROM_LEDGER, type OverviewRow, reasonOf, ZERO_ORDE
 
 const text = (header: string): Column => ({ header });
 const date = (header: string): Column => ({ header, date: true });
-const slug = (name: string) => name.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+export const slug = (name: string) => name.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 /** Per-currency totals of the accounts given, held ones left out, in whole cents (LedgerTotal's shape). */
 function totalsOf(list: { currency: string; held: boolean; balanceCny: number | null; outstandingCny: number | null }[]): LedgerTotal[] {
   const counted = list.filter((account) => !account.held && account.balanceCny !== null);

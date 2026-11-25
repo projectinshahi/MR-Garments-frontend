@@ -5,10 +5,12 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
 import type { OrderReportsResponse, SupplierOrdersResponse } from "@/lib/api/reports-types";
+import type { SupplierHistoryReport } from "@/lib/api/supplier-history-types";
 import { handleApiError } from "@/lib/feedback";
 import { todayInIndia } from "@/lib/today";
 
 import { downloadReport, type FileFormat, type ReportFile } from "../report-files";
+import { historyFile } from "../../supplier-history/history-file";
 import { supplierOrdersFile } from "../supplier-orders/supplier-orders-file";
 import { orderReportsFile } from "./order-reports-file";
 import { orderReportsQuery } from "./params";
@@ -52,5 +54,18 @@ export const SupplierOrdersDownloads = ({ query, className }: { query: string; c
     className={className}
     title="Supplier Order Details"
     load={async (q) => supplierOrdersFile(await apiClient.get<SupplierOrdersResponse>(`/reports/supplier-orders${q}`), todayInIndia())}
+  />
+);
+
+/** The Supplier History card: GET /reports/supplier-history (RPT-SH), every matching event (the hub's period and supplier). */
+export const SupplierHistoryDownloads = ({ query, className }: { query: string; className: string }) => (
+  <FetchedDownloads
+    query={query}
+    className={className}
+    title="Supplier History"
+    load={async (q) => {
+      const data = await apiClient.get<SupplierHistoryReport>(`/reports/supplier-history${q ? `${q}&all=1` : "?all=1"}`);
+      return historyFile(data.events.rows, { title: "Supplier history", filename: `supplier-history-${todayInIndia()}`, filters: data.filter.supplier ?? "Every supplier, every event", withSupplier: true });
+    }}
   />
 );

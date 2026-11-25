@@ -34,11 +34,31 @@ function PerLine({ values, align = "left" }: { values: string[]; align?: "left" 
 }
 
 export function SupplierOrdersTable({ rows, today, linkPos, supplier }: { rows: SupplierOrderRow[]; today: string; linkPos: boolean; supplier: string }) {
+  const columns = supplierOrderColumns(today, linkPos);
+  return (
+    <DataTable
+      columns={columns}
+      data={rows}
+      getRowId={(row) => row.id}
+      variant="plain"
+      density="loose"
+      size="sm"
+      header="tall"
+      padding="tight"
+      sortable
+      pagination={{ pageSize: 10, itemLabel: `orders of ${supplier}`, pageSizeOptions: [10, 25, 50] }}
+      emptyState="No orders."
+    />
+  );
+}
+
+/** The columns of one supplier's orders (Supplier order details, and the supplier profile's Orders tab). */
+export function supplierOrderColumns(today: string, linkPos: boolean): ColumnDef<SupplierOrderRow>[] {
   const money =
     (pick: (row: SupplierOrderRow) => number | null) =>
     ({ row }: { row: { original: SupplierOrderRow } }) =>
       moneyOrDash(pick(row.original), (v) => formatMoney(v, row.original.currency));
-  const columns: ColumnDef<SupplierOrderRow>[] = [
+  return [
     {
       accessorKey: "po",
       header: "PO / Date",
@@ -189,19 +209,4 @@ export function SupplierOrdersTable({ rows, today, linkPos, supplier }: { rows: 
       },
     },
   ];
-  return (
-    <DataTable
-      columns={columns}
-      data={rows}
-      getRowId={(row) => row.id}
-      variant="plain"
-      density="loose"
-      size="sm"
-      header="tall"
-      padding="tight"
-      sortable
-      pagination={{ pageSize: 10, itemLabel: `orders of ${supplier}`, pageSizeOptions: [10, 25, 50] }}
-      emptyState="No orders."
-    />
-  );
 }

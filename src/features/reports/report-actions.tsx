@@ -58,11 +58,14 @@ export function ReportDownload({
   size = "header",
   label = "Download report",
   className,
+  onSaved,
 }: {
   file: ReportFile | (() => ReportFile | Promise<ReportFile>);
   size?: React.ComponentProps<typeof Button>["size"];
   label?: string;
   className?: string;
+  /** Called once the file has been handed to the browser (never before; not on a failure). */
+  onSaved?: (file: ReportFile, format: FileFormat) => void;
 }) {
   const [busy, setBusy] = useState(false);
   // A second choice before React re-renders the disabled button still finds the guard set.
@@ -72,7 +75,9 @@ export function ReportDownload({
     running.current = true;
     setBusy(true);
     try {
-      await downloadReport(typeof file === "function" ? await file() : file, format);
+      const built = typeof file === "function" ? await file() : file;
+      await downloadReport(built, format);
+      onSaved?.(built, format);
     } catch (error) {
       downloadFailed(error);
     } finally {

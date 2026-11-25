@@ -40,7 +40,7 @@ function useAhead(value: string) {
 type DetailUrl = { query: URLSearchParams; update: (changes: Record<string, string | null>) => void };
 const DetailUrlContext = createContext<DetailUrl | null>(null);
 
-function useDetailUrl() {
+export function useDetailUrl() {
   const url = use(DetailUrlContext);
   if (!url) throw new Error("useDetailUrl needs a DetailUrlProvider");
   return url;
@@ -63,7 +63,7 @@ export function DetailUrlProvider({ base, search, children }: { base: string; se
   return <DetailUrlContext value={{ query: new URLSearchParams(query), update }}>{children}</DetailUrlContext>;
 }
 
-type List<T> = { rows: T[]; total: number; page: number; pageSize: number };
+export type List<T> = { rows: T[]; total: number; page: number; pageSize: number };
 
 type PagedTableProps<T> = {
   list: List<T>;
@@ -79,7 +79,7 @@ type PagedTableProps<T> = {
 };
 
 /** One server-paged list, on the page the server loaded. */
-function PagedTable<T>({ list, columns, param, itemLabel, empty, getRowId, onRowClick }: PagedTableProps<T>) {
+export function PagedTable<T>({ list, columns, param, itemLabel, empty, getRowId, onRowClick }: PagedTableProps<T>) {
   const { update } = useDetailUrl();
   if (list.total === 0) return <EmptyState title={empty} />;
   if (list.rows.length === 0) {

@@ -28,10 +28,12 @@ const REPORTS = [
 ];
 // The first card is the Order Report: it opens the Order reports list (/reports/orders; p2-order-report.spec.ts covers
 // its downloads). It took the Order status card's slot; that report's page stays at its URL.
-// The second is Supplier Order Details (RPT-S1, owner request of 2026-11-24; supplier-orders.spec.ts covers it).
+// The second is Supplier Order Details (RPT-S1, owner request of 2026-11-24; supplier-orders.spec.ts covers it), the
+// third Supplier History (RPT-SH, owner approval of 2026-11-25; supplier-history.spec.ts covers it).
 const CARDS = [
   { card: "Order Report", href: "/reports/orders", title: "Order reports" },
   { card: "Supplier Order Details", href: "/reports/supplier-orders", title: "Supplier order details" },
+  { card: "Supplier History", href: "/reports/supplier-history", title: "Supplier history" },
   ...REPORTS,
 ];
 const ORDER_STATUS = { href: "/reports/order-status", title: "Order status" };
@@ -43,7 +45,7 @@ async function expectReport(page: Page, title: string) {
   await expect(breadcrumb(page)).toHaveAttribute("href", "/reports");
 }
 
-test("hub shows seven report cards, an empty download list and the access note", async ({ page }) => {
+test("hub shows eight report cards, an empty download list and the access note", async ({ page }) => {
   await page.goto("/reports");
   await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
   await expect(page.getByText("Management only", { exact: true })).toBeVisible();
@@ -116,7 +118,7 @@ test("the Order Report card opens /reports/orders from anywhere on it, at 1440 a
   await page.goto("/reports");
   await expect(card.getByText(description, { exact: true })).toBeVisible();
   // The first card of the grid, where Order status was.
-  await expect(cards).toHaveCount(7);
+  await expect(cards).toHaveCount(8);
   await expect(cards.first().getByRole("heading", { level: 2 })).toHaveText("Order Report");
   await expect(page.getByRole("heading", { level: 2, name: "Order status" })).toHaveCount(0);
   await page.screenshot({ path: shot(testInfo, "reports-hub-1440.png"), fullPage: true });
