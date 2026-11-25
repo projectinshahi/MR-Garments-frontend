@@ -1,4 +1,4 @@
-import { ClipboardList, type LucideIcon } from "lucide-react";
+import { ClipboardList, type LucideIcon, Users } from "lucide-react";
 import Link from "next/link";
 
 import { PageContainer, PageHeader } from "@/components/layout/page-header";
@@ -10,7 +10,7 @@ import { formatINR, formatMoneyList, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { ReportsHubData, ReportsSummary } from "./data/queries";
-import { OrderReportsDownloads } from "./order-reports/order-reports-downloads";
+import { OrderReportsDownloads, SupplierOrdersDownloads } from "./order-reports/order-reports-downloads";
 import { filterLabel } from "./data/filters";
 import { CardDownloads, ReportDownload, UrlSelect } from "./report-actions";
 import { amountsText, type ReportFile, type ReportName } from "./report-files";
@@ -69,6 +69,16 @@ const CARDS: ReportCard[] = [
     href: "/reports/orders",
     Downloads: OrderReportsDownloads,
     stat: (s) => `${plural(s.orders.total, "order")} · ${formatNumber(s.orders.atStage1)} pending`,
+  },
+  {
+    // RPT-S1 (owner request of 2026-11-24): every order in full, grouped by supplier.
+    category: "Suppliers",
+    title: "Supplier Order Details",
+    description: "Every order of each supplier in full: items, received quantities, values, Dollar Cost, payments, containers and landed cost.",
+    icon: Users,
+    href: "/reports/supplier-orders",
+    Downloads: SupplierOrdersDownloads,
+    stat: (s) => `${plural(s.suppliers.length, "supplier")} · ${plural(s.orders.total, "order")}`,
   },
   {
     category: "Deliveries",

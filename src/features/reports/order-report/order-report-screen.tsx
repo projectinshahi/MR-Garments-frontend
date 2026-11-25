@@ -395,7 +395,7 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                   { label: "Last updated", value: when(order.updatedAt) },
                   { label: "Order date", value: formatDate(order.orderDate) },
                   { label: "Delivery date", value: formatDate(order.deliveryDate) },
-                  { label: "Supplier", value: `${supplier.name}${supplier.code ? ` (${supplier.code})` : ""}` },
+                  { label: "Supplier", value: supplier.name },
                 ]}
               />
               <KeyValueList
@@ -429,7 +429,6 @@ export function OrderReportScreen({ report, today, frame = "order" }: { report: 
                 size="sm"
                 boldValues
                 items={[
-                  { label: "Supplier code", value: orDash(supplier.code) },
                   { label: "Supplier name", value: supplier.name },
                   { label: "Country", value: orDash(supplier.country) },
                   { label: "Status", value: <StatusPill tone={supplier.status === "Active" ? "success" : "neutral"}>{supplier.status}</StatusPill> },

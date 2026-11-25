@@ -6,6 +6,7 @@ import { toCsv } from "../csv";
 import { toPdf } from "../pdf";
 import { csvRows } from "../report-files";
 import { toXlsx } from "../xlsx";
+import { DOLLAR_COST_NOTE } from "../dollar-cost";
 import { orderReportsFile, OUTSTANDING_NOTE } from "./order-reports-file";
 
 const TODAY = "2026-11-09";
@@ -32,6 +33,8 @@ const row = (over: Partial<OrderReportRow>): OrderReportRow => ({
   closed: true,
   closedOn: "2026-11-05",
   orderValueCny: 1400, poValueCny: 1400,
+  usdRate: null,
+  dollarCost: null,
   held: false,
   settledCny: 800,
   outstandingCny: 600,
@@ -58,6 +61,7 @@ const data: OrderReportsResponse = {
       closedOn: null,
       currency: "USD",
       orderValueCny: 200, poValueCny: 200,
+      dollarCost: 200,
       settledCny: 0,
       outstandingCny: 200,
       settledInr: 0,
@@ -75,6 +79,7 @@ const data: OrderReportsResponse = {
       { currency: "CNY", orderValueCny: 1400, poValueCny: 1400, settledCny: 800, outstandingCny: 600 },
       { currency: "USD", orderValueCny: 200, poValueCny: 200, settledCny: 0, outstandingCny: 200 },
     ],
+    dollarCost: { usd: null, missing: 1 },
     paidInr: 9850,
     landedCostInr: 49550,
   },
@@ -97,25 +102,30 @@ describe("order reports file", () => {
   it("writes each row with its status label, the ledger's settled, outstanding and payment status, and totals the currency's table", () => {
     const [cny, usd] = file.sections;
     const headers = cny!.columns.map((column) => column.header);
-    expect(headers.slice(13, 15)).toEqual(["PO value (CNY)", "Order value (received) (CNY)"]);
-    expect(headers.slice(17, 20)).toEqual(["Settled (CNY)", "Outstanding (CNY)", "Payment status"]);
+    expect(headers.slice(12, 15)).toEqual(["PO value (CNY)", "Order value (received) (CNY)", "Rate (INR per 1)"]);
+    expect(headers).not.toContain("Supplier code");
+    expect(headers[16]).toBe("Dollar cost (USD)");
+    expect(headers.slice(18, 21)).toEqual(["Settled (CNY)", "Outstanding (CNY)", "Payment status"]);
+    expect(headers[17]).toBe("USD rate (INR per 1 USD)");
     expect(cny!.rows).toEqual([
-      ["PO-2050", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "6. India warehouse", "Closed", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 120, 100, 1400, 1400, null, null, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"],
+      ["PO-2050", "Guangzhou Textile Co.", "2026-10-10", "6. India warehouse", "Closed", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 120, 100, 1400, 1400, null, null, null, null, 800, 600, "Partly paid", 9850, 49550, 330.33, "2026-11-05"],
     ]);
-    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, null, 2, null, null, null, null, null, null, 1400, 1400, null, null, 800, 600, null, 9850, 49550, null, null]);
+    // No Dollar Cost total while an order has no USD rate saved (as the INR total without a rate).
+    expect(cny!.total).toEqual(["Total", "1 order", null, null, null, 2, null, null, null, null, null, null, 1400, 1400, null, null, null, null, 800, 600, null, 9850, 49550, null, null]);
     // A pending order due in 10 days reads as the orders list labels it (on track beyond 7 days); no cost yet is an empty cell.
-    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "SUP-001", "2026-10-10", "1. Order and deposit", "On track", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 0, 0, 200, 200, null, null, 0, 200, "Unpaid", 0, null, null, null]);
+    expect(usd!.rows[0]).toEqual(["PO-2051", "Guangzhou Textile Co.", "2026-10-10", "1. Order and deposit", "On track", 2, "100 pcs · 50 m", "Denim jeans", 100, "pcs", 0, 0, 200, 200, null, null, 200, null, 0, 200, "Unpaid", 0, null, null, null]);
     expect(usd!.columns.map((column) => column.header)).toContain("Outstanding (USD)");
+    expect(usd!.total![16]).toBe(200); // every USD order has its Dollar Cost
   });
 
   // docs/supplier-currency.md: the rate saved on the order and the PO value at it; an INR total only when every order has a rate.
   it("carries the rate saved on the order and the PO value at it, totalling INR only when every order has a rate", () => {
     const withRate = orderReportsFile({ ...data, rows: [row({ currency: "USD", exchangeRate: 88, orderValueCny: 200, poValueCny: 200, orderValueInr: 17600 })] }, TODAY);
     const table = withRate.sections.find((section) => section.title === "Orders in USD")!;
-    expect(table.columns.map((column) => column.header).slice(14, 17)).toEqual(["Order value (received) (USD)", "Rate (INR per 1)", "Order value (received) (INR)"]);
-    expect(table.rows[0]!.slice(14, 17)).toEqual([200, 88, 17600]);
-    expect(table.total!.slice(14, 17)).toEqual([200, null, 17600]);
-    expect(file.sections[0]!.total!.slice(14, 17)).toEqual([1400, null, null]);
+    expect(table.columns.map((column) => column.header).slice(13, 16)).toEqual(["Order value (received) (USD)", "Rate (INR per 1)", "Order value (received) (INR)"]);
+    expect(table.rows[0]!.slice(13, 16)).toEqual([200, 88, 17600]);
+    expect(table.total!.slice(13, 16)).toEqual([200, null, 17600]);
+    expect(file.sections[0]!.total!.slice(13, 16)).toEqual([1400, null, null]);
   });
 
   it("summarises per currency from the API's summary, with the INR totals", () => {
@@ -127,14 +137,17 @@ describe("order reports file", () => {
       ["Order value (USD)", 200],
       ["Settled (USD)", 0],
       ["Outstanding (USD)", 200],
+      ["Dollar cost (USD)", "No USD rate saved for 1 order"],
       ["Paid (INR)", 9850],
       ["Landed cost (INR)", 49550],
     ]);
-    expect(file.notes).toEqual([OUTSTANDING_NOTE]);
+    expect(file.notes).toEqual([OUTSTANDING_NOTE, DOLLAR_COST_NOTE]);
+    const known = orderReportsFile({ ...data, summary: { ...data.summary, dollarCost: { usd: 200, missing: 0 } } }, TODAY);
+    expect(known.sections.at(-1)!.rows).toContainEqual(["Dollar cost (USD)", 200]);
   });
 
   it("keeps one empty CNY table with no total when nothing matches, and says All orders when unfiltered", () => {
-    const empty = orderReportsFile({ ...data, rows: [], summary: { orders: 0, byCurrency: [], paidInr: 0, landedCostInr: 0 }, filter: { ...data.filter, supplier: null } }, TODAY);
+    const empty = orderReportsFile({ ...data, rows: [], summary: { orders: 0, byCurrency: [], dollarCost: { usd: 0, missing: 0 }, paidInr: 0, landedCostInr: 0 }, filter: { ...data.filter, supplier: null } }, TODAY);
     expect(empty.filters).toBe("All orders");
     expect(empty.sections[0]).toMatchObject({ title: "Orders in CNY", rows: [], total: undefined });
     expect(empty.sections).toHaveLength(2);

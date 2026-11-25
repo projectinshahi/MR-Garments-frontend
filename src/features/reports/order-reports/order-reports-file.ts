@@ -4,7 +4,8 @@ import type { OrderReportRow, OrderReportsResponse } from "@/lib/api/reports-typ
 import { orderedCurrencies } from "@/lib/currencies";
 import type { Currency } from "@/types/domain";
 
-import { type Column, money, type ReportFile, type Section } from "../report-files";
+import { DOLLAR_COST_NOTE, dollarCostTotalText } from "../dollar-cost";
+import { type Column, money, rate, type ReportFile, type Section } from "../report-files";
 import { orderReportsFilterLabel } from "./params";
 
 // The Excel and PDF of the Order reports page (RPT-O2, backend docs/phase2-contracts.md 4.2; money per
@@ -33,7 +34,6 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
     columns: columns(
       "PO",
       "Supplier",
-      "Supplier code",
       date("Order date"),
       "Stage",
       "Status",
@@ -48,6 +48,8 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
       money("Order value (received)", currency),
       "Rate (INR per 1)",
       money("Order value (received)", "INR"),
+      money("Dollar cost", "USD"),
+      rate("USD rate", "USD"),
       money("Settled", currency),
       money("Outstanding", currency),
       "Payment status",
@@ -59,7 +61,6 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
     rows: rows.map((row) => [
       row.po,
       row.supplier.name,
-      row.supplier.code,
       row.orderDate,
       stageLabel(row.stage),
       rowStatus(row, today).label,
@@ -74,6 +75,8 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
       row.orderValueCny,
       row.exchangeRate,
       row.orderValueInr,
+      row.dollarCost,
+      row.usdRate,
       row.settledCny,
       row.outstandingCny,
       paymentStatusLabel(row),
@@ -89,7 +92,6 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
           null,
           null,
           null,
-          null,
           sum(rows, (row) => row.lineCount),
           null,
           null,
@@ -102,6 +104,9 @@ function rowsTable(currency: Currency, rows: OrderReportRow[], today: string): S
           null,
           // Only when every order has a saved rate: a part total would read as the whole.
           counted.every((row) => row.orderValueInr !== null) ? sum(counted, (row) => row.orderValueInr ?? 0) : null,
+          // The same rule: no total while any order has no USD rate saved.
+          counted.every((row) => row.dollarCost !== null) ? sum(counted, (row) => row.dollarCost ?? 0) : null,
+          null,
           sum(counted, (row) => row.settledCny ?? 0),
           sum(counted, (row) => row.outstandingCny ?? 0),
           null,
@@ -136,6 +141,7 @@ export function orderReportsFile(data: OrderReportsResponse, today: string): Rep
         [`Settled (${total.currency})`, total.settledCny],
         [`Outstanding (${total.currency})`, total.outstandingCny],
       ]),
+      ["Dollar cost (USD)", summary.dollarCost.usd ?? dollarCostTotalText(summary.dollarCost)],
       ["Paid (INR)", summary.paidInr],
       ["Landed cost (INR)", summary.landedCostInr],
     ],
@@ -145,6 +151,6 @@ export function orderReportsFile(data: OrderReportsResponse, today: string): Rep
     filename: `order-reports-${today}`,
     filters: orderReportsFilterLabel(filter) ?? "All orders",
     sections: [...tables, summaryTable],
-    notes: [OUTSTANDING_NOTE],
+    notes: [OUTSTANDING_NOTE, DOLLAR_COST_NOTE],
   };
 }

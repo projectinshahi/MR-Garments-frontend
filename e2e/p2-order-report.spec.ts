@@ -53,7 +53,8 @@ test("an order's Report tab shows its items, payments and timeline, and download
   await expect(kpi(page, "Outstanding").first()).toContainText("Partly paid");
   // Settled by: the supplier payment that settled it, at its own rate.
   await expect(page.locator("#payments").filter({ visible: true }).getByRole("row").filter({ hasText: "TXN-R1" })).toContainText("₹3,600");
-  await expect(kv(page, "Supplier code")).toHaveText(/^SUP-\d{3,}$/);
+  // Owner decision of 2026-11-24: no supplier code on the report (the name stays).
+  await expect(page.getByText("Supplier code", { exact: true }).filter({ visible: true })).toHaveCount(0);
   await expect(kv(page, "Supplier balance (ledger)")).toHaveText("CNY: Payable to supplier ¥1,140.00");
   await expect(kv(page, "Deposit utilised for this PO")).toContainText("Not tracked");
   await expect(page.getByRole("heading", { level: 2, name: "Timeline" })).toBeVisible();
@@ -76,7 +77,7 @@ test("an order's Report tab shows its items, payments and timeline, and download
   expect(pdf.text).toContain("Page 1 of");
   const csv = await downloadReport(page, "CSV");
   expect(csv.name).toMatch(new RegExp(`^order-report-${order.po}-\\d{4}-\\d{2}-\\d{2}\\.csv$`));
-  expect(csv.text).toContain("Supplier code");
+  expect(csv.text).not.toContain("Supplier code");
   expect(csv.text).toContain("Settled by (supplier credits, oldest first)");
   expect(csv.text).toContain("TXN-R1");
 });
@@ -212,7 +213,9 @@ test("Order reports lists the new order, filters by PO from the URL and download
   const csv = await downloadReport(page, "CSV");
   expect(csv.name).toMatch(/^order-reports-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(csv.text).toContain(order.po);
-  expect(csv.text).toContain("Supplier code");
+  // Owner request of 2026-11-24: Dollar Cost in, Supplier code out (the supplier's name stays).
+  expect(csv.text).toContain("Dollar cost (USD)");
+  expect(csv.text).not.toContain("Supplier code");
 
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page).not.toHaveURL(/po=/);

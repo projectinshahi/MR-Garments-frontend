@@ -215,7 +215,7 @@ describe("order report file", () => {
 
   it("is named after the PO (slashes become dashes) and spells out the order and supplier code in its filters line", () => {
     expect(file).toMatchObject({ title: "Order report MR/2026/001", filename: "order-report-MR-2026-001-2026-11-09" });
-    expect(file.filters).toBe("Supplier: Guangzhou Textile Co. (SUP-001) · Ordered 10 Oct 2026 · 6. India warehouse · Closed on 5 Nov 2026");
+    expect(file.filters).toBe("Supplier: Guangzhou Textile Co. · Ordered 10 Oct 2026 · 6. India warehouse · Closed on 5 Nov 2026");
   });
 
   it("puts each section on its sheet, one sheet per report section, in the page's order", () => {
@@ -254,7 +254,9 @@ describe("order report file", () => {
     expect(rows).toContainEqual(["Order value (CNY, received quantity x rate)", 1400]);
     expect(rows).toContainEqual(["Outstanding (CNY)", 600]);
     expect(rows).toContainEqual(["Payment status", "Partly paid"]);
-    expect(rows).toContainEqual(["Supplier code", "SUP-001"]);
+    // Owner decision of 2026-11-24: no supplier code in the report (the name stays).
+    expect(rows.map((cells) => cells[0])).not.toContain("Supplier code");
+    expect(rows).toContainEqual(["Supplier name", "Guangzhou Textile Co."]);
     expect(rows).toContainEqual(["Payment terms", "30% deposit"]);
     expect(rows).toContainEqual(["Email", "–"]);
     expect(rows).toContainEqual(["m", 50, 30, 20, 50]);

@@ -128,7 +128,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
         ["Last updated", when(order.updatedAt)],
         ["Order date", formatDate(order.orderDate)],
         ["Delivery date", formatDate(order.deliveryDate)],
-        ["Supplier", `${supplier.name}${supplier.code ? ` (${supplier.code})` : ""}`],
+        ["Supplier", supplier.name],
         ["Stage", stageLabel(order.stage)],
         ["Status", closureLabel(order)],
         ["Currency", cur],
@@ -162,7 +162,6 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
       title: "Supplier",
       columns: columns("Field", "Value"),
       rows: [
-        ["Supplier code", orDash(supplier.code)],
         ["Supplier name", supplier.name],
         ["Country", orDash(supplier.country)],
         ["Status", supplier.status],
@@ -488,7 +487,7 @@ export function orderReportFile(report: OrderReport, today: string): ReportFile 
   return {
     title: `Order report ${order.po}`,
     filename: `order-report-${order.po.replace(/[^\w-]+/g, "-")}-${today}`,
-    filters: `Supplier: ${supplier.name}${supplier.code ? ` (${supplier.code})` : ""} · Ordered ${formatDate(order.orderDate)} · ${stageLabel(order.stage)} · ${closureLabel(order)}`,
+    filters: `Supplier: ${supplier.name} · Ordered ${formatDate(order.orderDate)} · ${stageLabel(order.stage)} · ${closureLabel(order)}`,
     sections,
   };
 }

@@ -502,6 +502,13 @@ export type OrderReportRow = {
   /** Received quantity × rate; poValueCny ordered quantity × rate (reference). */
   orderValueCny: number;
   poValueCny: number;
+  /** INR per 1 USD saved on the order (0019); null when none was known. */
+  usdRate: number | null;
+  /**
+   * The order value in USD (backend orders/money.ts `dollarCost`): a USD order's value; another currency's at its saved
+   * rates (value × exchangeRate ÷ usdRate); null without them (no USD rate saved).
+   */
+  dollarCost: number | null;
   /** Null while the order's account is held (D4). */
   agentPaidInr: number | null;
   paidInr: number | null;
@@ -515,9 +522,14 @@ export type OrderReportRow = {
  * RPT-O2 GET /api/v1/reports/orders?po&supplierId&from&to&status&warehouseId&paymentStatus: every order (newest
  * first) matching the filters, the summary of those rows, the filters echoed by name and the page's select options.
  */
+/** Totals per order currency, never added across currencies (a held account's orders count in none). */
+export type CurrencyTotals = { currency: Currency; orderValueCny: number; poValueCny: number; settledCny: number; outstandingCny: number };
+/** Dollar Cost added up: `usd` null when any order has no USD rate (`missing` of them). */
+export type DollarCostTotal = { usd: number | null; missing: number };
+
 export type OrderReportsResponse = {
   rows: OrderReportRow[];
-  summary: { orders: number; byCurrency: { currency: Currency; orderValueCny: number; poValueCny: number; settledCny: number; outstandingCny: number }[]; paidInr: number; landedCostInr: number };
+  summary: { orders: number; byCurrency: CurrencyTotals[]; dollarCost: DollarCostTotal; paidInr: number; landedCostInr: number };
   filter: {
     po: string | null;
     /** The supplier-name text filter, as typed. */
@@ -532,4 +544,28 @@ export type OrderReportsResponse = {
     paymentStatus: PaymentState | null;
   };
   options: { suppliers: Named[]; warehouses: Named[] };
+};
+
+/** RPT-S1: an RPT-O2 row with its lines, the containers carrying it and its landed cost's parts (INR). */
+export type SupplierOrderRow = OrderReportRow & {
+  lines: { item: string; unit: Unit; ordered: number; received: number; rate: number; poValueCny: number; orderValueCny: number; dollarCost: number | null }[];
+  containers: { number: string; status: ContainerState; terms: ContainerTerms | null; loadedOn: string | null; sailedOn: string | null; eta: string | null; quantity: number }[];
+  landedCost: {
+    goodsInr: number;
+    seaFreightInr: number;
+    clearingInr: number | null;
+    transportInr: number | null;
+    totalInr: number;
+    perPieceInr: number | null;
+    final: boolean;
+    waitingFor: string | null;
+  } | null;
+};
+
+/** RPT-S1 GET /api/v1/reports/supplier-orders (RPT-O2's query): the orders grouped by supplier, suppliers by name. */
+export type SupplierOrdersResponse = {
+  suppliers: { supplier: Named; orders: number; byCurrency: CurrencyTotals[]; dollarCost: DollarCostTotal; landedCostInr: number; rows: SupplierOrderRow[] }[];
+  summary: OrderReportsResponse["summary"] & { suppliers: number };
+  filter: OrderReportsResponse["filter"];
+  options: OrderReportsResponse["options"];
 };

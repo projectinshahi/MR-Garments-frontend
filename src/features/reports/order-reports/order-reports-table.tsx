@@ -13,16 +13,19 @@ import { moneyOrDash } from "@/features/payments/money";
 import type { OrderReportRow } from "@/lib/api/reports-types";
 import { formatDate, formatINR, formatMoney, formatNumber, formatQty, formatRateInr } from "@/lib/formatters";
 
+import { DOLLAR_COST_NOTE, dollarCostText } from "../dollar-cost";
 import { paymentStatusLabel, rowStatus } from "./order-reports-file";
 
-// The Order reports table (RPT-O2, docs/order-report.md): one row per order with its supplier (name and code), items,
-// ordered quantity per unit, currency, PO value, settled, outstanding, stage and status, and the link to the order's detailed
+// The Order reports table (RPT-O2, docs/order-report.md): one row per order with its supplier name, items, ordered
+// quantity per unit, currency, value, Dollar Cost, settled, outstanding, stage and status, and the link to the order's detailed
 // report. Amounts in the row's currency. Sortable, paged by 10. Client-side because column definitions hold functions.
 
 const PAYMENT_TONE = { awaiting_goods: "neutral", unpaid: "danger", partly: "warning", paid: "success" } as const;
 const right = { align: "right" } as const;
-// Table cells never wrap by default; these columns may, so twelve columns fit a 1440 px page with every row's text.
+// Table cells never wrap by default; these columns may, so thirteen columns fit a 1440 px page with every row's text.
 const wrap = "whitespace-normal";
+/** 6 px side padding (the table's is 10) on four narrow columns: room for the Dollar Cost column and the widest payment pill. */
+const narrow = "px-1.5";
 /** The detailed report under Reports (breadcrumb Reports › Order Report › PO). */
 export const detailedReportHref = (po: string) => `/reports/orders/${encodeURIComponent(po)}`;
 
@@ -38,28 +41,22 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       id: "supplier",
       accessorFn: (row) => row.supplier.name,
       header: "Supplier",
-      meta: { className: `w-[150px] ${wrap}` },
-      cell: ({ row }) => (
-        <span className="flex flex-col leading-[18px]">
-          <span>{row.original.supplier.name}</span>
-          <span className="text-[12.5px] text-muted-foreground">{row.original.supplier.code || "–"}</span>
-        </span>
-      ),
+      meta: { className: `w-[100px] ${wrap}` },
     },
-    { accessorKey: "lineCount", header: "Items", meta: { ...right, className: `w-[56px] ${wrap}` }, cell: ({ row }) => formatNumber(row.original.lineCount) },
+    { accessorKey: "lineCount", header: "Items", meta: { ...right, className: `w-[56px] ${wrap} ${narrow}` }, cell: ({ row }) => formatNumber(row.original.lineCount) },
     {
       // Pieces and metres never compare, so this column does not sort.
       id: "quantity",
       enableSorting: false,
       header: "Total Quantity",
-      meta: { ...right, className: `w-[104px] ${wrap}` },
+      meta: { ...right, className: `w-[92px] ${wrap} ${narrow}` },
       cell: ({ row }) => row.original.quantities.map((total) => formatQty(total.quantity, total.unit)).join(" · ") || "–",
     },
     {
       // The rate saved on the order under its currency; "–" for orders placed before rates were kept.
       accessorKey: "currency",
       header: "Currency",
-      meta: { className: `w-[84px] ${wrap}` },
+      meta: { className: `w-[76px] ${wrap} ${narrow}` },
       cell: ({ row }) => (
         <span className="flex flex-col leading-[18px]">
           <span>{row.original.currency}</span>
@@ -70,7 +67,7 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
     {
       accessorKey: "orderValueCny",
       header: "Value (received)",
-      meta: { ...right, className: `w-[104px] ${wrap}` },
+      meta: { ...right, className: `w-[100px] ${wrap}` },
       // The INR value at the order's own rate under the amount (none without a rate).
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end leading-[18px]">
@@ -81,10 +78,24 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
       ),
     },
     {
+      // The order value in USD (the API's dollarCost); a non-USD order with goods received has no USD rate saved.
+      accessorKey: "dollarCost",
+      header: "Dollar Cost",
+      meta: { ...right, className: `w-[76px] ${wrap} ${narrow}` },
+      cell: ({ row }) =>
+        row.original.dollarCost === null ? (
+          <span className="text-[12.5px] leading-4 text-muted-foreground" title={DOLLAR_COST_NOTE}>
+            {dollarCostText(null)}
+          </span>
+        ) : (
+          dollarCostText(row.original.dollarCost)
+        ),
+    },
+    {
       // What the supplier's account settled of the order (the ledger's FIFO projection) and its payment status.
       accessorKey: "settledCny",
       header: "Settled",
-      meta: { ...right, className: `w-[96px] ${wrap}` },
+      meta: { ...right, className: `w-[92px] ${wrap}` },
       cell: ({ row }) => (
         <span className="inline-flex flex-col items-end">
           {moneyOrDash(row.original.settledCny, (v) => formatMoney(v, row.original.currency))}
@@ -98,7 +109,7 @@ export function OrderReportsTable({ rows, today, linkPos }: { rows: OrderReportR
     },
     // Never below 0 by construction (the projection); "–" while held or not posted.
     { accessorKey: "outstandingCny", header: "Outstanding", meta: { ...right, className: `w-[84px] ${wrap}` }, cell: money((row) => row.outstandingCny) },
-    { accessorKey: "stage", header: "Order Stage", meta: { className: `w-[108px] ${wrap}` }, cell: ({ row }) => stageLabel(row.original.stage) },
+    { accessorKey: "stage", header: "Order Stage", meta: { className: `w-[88px] ${wrap}` }, cell: ({ row }) => stageLabel(row.original.stage) },
     {
       id: "status",
       accessorFn: (row) => rowStatus(row, today).label,
