@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -99,5 +99,20 @@ describe("PaymentsScreen (unified ledger)", () => {
     await userEvent.setup().type(screen.getByRole("searchbox", { name: "Search PO or supplier" }), "utr 3");
     expect(within(tables()[0]!).getAllByRole("row")).toHaveLength(2); // header + the one payment
     expect(screen.getByText("No orders match your search.")).toBeInTheDocument();
+  });
+  it("keeps the Payments table on its page when a refresh after Edit or Void sends new rows", async () => {
+    const user = userEvent.setup();
+    const many = (stamp: string): PaymentsResponse => ({
+      ...api,
+      payments: Array.from({ length: 15 }, (_, i) => paymentRow(`m${i}`, { paidOn: "2026-11-05", reference: `REF-${i}-${stamp}` })),
+    });
+    const data = (stamp: string) => ({ ...toPaymentsData(many(stamp), "2026-11-10"), ...NONE });
+    const { rerender } = render(<PaymentsScreen data={data("a")} />);
+    await user.click(screen.getAllByRole("button", { name: "Page 2" })[0]!);
+    expect(screen.getByText(/Showing 11 to 15 of 15 payments/)).toBeInTheDocument();
+    rerender(<PaymentsScreen data={data("b")} />); // router.refresh(): new arrays, same rows
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20))); // TanStack's page reset runs queued, after render
+    expect(screen.getByText(/Showing 11 to 15 of 15 payments/)).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /REF-14-b/ })).toBeInTheDocument();
   });
 });

@@ -6,7 +6,9 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { RequiredMark } from "@/components/shared/form";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { dialogFooterButtonClass } from "@/components/shared/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { FinalApprovalDialog, needsFinalApproval } from "@/features/receiving/final-approval-dialog";
@@ -31,6 +33,9 @@ import { editSchemaFor, editStart, type EditPaymentInput, type EditPaymentValues
 export const EDIT_TEXT = {
   updated: "Payment updated",
   legacy: "Recorded against an order before the supplier ledger: void it and record a new payment instead.",
+  blockedTitle: "Can't edit this payment",
+  legacyNext: "Void is next to Edit on this payment, and + Record payment is at the top of the Payments page.",
+  heldNext: "Payments of an account under review can't change until the review is done.",
 };
 
 /** The facts Edit needs; a PAY-1 or ORD-4 payment row. `held`: its account is pending review (D4). */
@@ -43,53 +48,73 @@ export type EditablePayment = Pick<
 const isLegacy = (p: EditablePayment) => p.payeeRole === "supplier" && (p.kind !== "Payment" || p.po !== null);
 
 /**
- * "Edit" in a row's Actions, and its dialog. Nothing for a voided or due payment; disabled with the reason for a legacy
- * supplier row or a held account (the API refuses both with 409). Saving refreshes the page (the row and the KPIs).
+ * "Edit" in a row's Actions, and its dialog. Nothing for a voided or due payment. A legacy supplier row or a held account
+ * (the API refuses both with 409) opens the reason and what to do instead, never the form. Saving refreshes the page
+ * (the row and the KPIs).
  */
 export function EditPaymentButton({ payment }: { payment: EditablePayment }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const legacy = isLegacy(payment);
   if (payment.voided || (!legacy && payment.status !== "paid")) return null;
-  const blocked = legacy ? EDIT_TEXT.legacy : payment.held ? HELD_MESSAGE : null;
+  const blocked = legacy
+    ? { reason: EDIT_TEXT.legacy, next: EDIT_TEXT.legacyNext }
+    : payment.held
+      ? { reason: HELD_MESSAGE, next: EDIT_TEXT.heldNext }
+      : null;
   return (
     <>
-      {blocked ? (
-        <button type="button" disabled title={blocked} aria-label={`Edit unavailable: ${blocked}`} className={cn(rowActionClass, "cursor-not-allowed text-muted-foreground")}>
-          Edit
-        </button>
-      ) : (
-        <button
-          type="button"
-          aria-label={`Edit payment of ${payment.paidOn ? formatDate(payment.paidOn) : "no date"}, ${formatMoney(payment.amountCny, payment.currency)}`}
-          className={rowActionClass}
-          onClick={(event) => {
-            // A row click would select its order.
-            event.stopPropagation();
-            setOpen(true);
-          }}
-        >
-          Edit
-        </button>
-      )}
+      {/* Always clickable: on a payment that can't be edited it opens the reason (a disabled button gave no answer to a
+          click, and its tooltip never shows on a phone). */}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={blocked ? `Edit unavailable: ${blocked.reason}` : `Edit payment of ${payment.paidOn ? formatDate(payment.paidOn) : "no date"}, ${formatMoney(payment.amountCny, payment.currency)}`}
+        title={blocked?.reason}
+        className={cn(rowActionClass, blocked && "text-muted-foreground")}
+        onClick={(event) => {
+          // A row click would select its order.
+          event.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        Edit
+      </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="gap-0 pb-[26px]" onClick={(event) => event.stopPropagation()}>
-          <DialogHeader className="gap-[7px]">
-            <DialogTitle className="text-[21px] leading-[26px]">Edit payment</DialogTitle>
-            <DialogDescription className="text-sm leading-5 [overflow-wrap:anywhere]">
-              {payment.payeeRole === "agent" ? `Sea freight paid to ${payment.payee} for ${payment.po}.` : `Paid to ${payment.supplier}'s ${payment.currency} account.`} Mode, reference
-              and notes change on this payment. A new amount, date or rate voids it and records the corrected payment; both stay listed.
-            </DialogDescription>
-          </DialogHeader>
-          <EditForm
-            payment={payment}
-            onClose={() => setOpen(false)}
-            onSaved={(message) => {
-              if (message) notifySuccess(message);
-              setOpen(false);
-              router.refresh();
-            }}
-          />
+          {blocked ? (
+            <>
+              <DialogHeader className="gap-[7px]">
+                <DialogTitle className="text-[21px] leading-[26px]">{EDIT_TEXT.blockedTitle}</DialogTitle>
+                <DialogDescription className="text-sm leading-5 [overflow-wrap:anywhere]">{blocked.reason}</DialogDescription>
+              </DialogHeader>
+              <p className="mt-3 text-sm leading-5">{blocked.next}</p>
+              <DialogFooter className="mt-5 pt-4">
+                <Button type="button" className={dialogFooterButtonClass} onClick={() => setOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader className="gap-[7px]">
+                <DialogTitle className="text-[21px] leading-[26px]">Edit payment</DialogTitle>
+                <DialogDescription className="text-sm leading-5 [overflow-wrap:anywhere]">
+                  {payment.payeeRole === "agent" ? `Sea freight paid to ${payment.payee} for ${payment.po}.` : `Paid to ${payment.supplier}'s ${payment.currency} account.`} Mode, reference
+                  and notes change on this payment. A new amount, date or rate voids it and records the corrected payment; both stay listed.
+                </DialogDescription>
+              </DialogHeader>
+              <EditForm
+                payment={payment}
+                onClose={() => setOpen(false)}
+                onSaved={(message) => {
+                  if (message) notifySuccess(message);
+                  setOpen(false);
+                  router.refresh();
+                }}
+              />
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

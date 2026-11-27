@@ -104,12 +104,28 @@ describe("EditPaymentButton (PAY-4)", () => {
     expect(router.refresh).not.toHaveBeenCalled();
   });
 
-  it("is disabled with the reason on a legacy row or a held account, and absent on a voided or due payment", () => {
+  it("on a legacy row or a held account, a click opens the reason and what to do, never the form or the API", async () => {
+    const user = userEvent.setup();
     const { rerender } = render(<EditPaymentButton payment={{ ...PAYMENT, kind: "Deposit", po: "PO-3001" }} />);
-    expect(screen.getByRole("button", { name: `Edit unavailable: ${EDIT_TEXT.legacy}` })).toBeDisabled();
+    const legacy = screen.getByRole("button", { name: `Edit unavailable: ${EDIT_TEXT.legacy}` });
+    expect(legacy).toBeEnabled(); // a disabled button answered no click (the production report of 2026-11-27)
+    await user.click(legacy);
+    const dialog = await screen.findByRole("dialog", { name: EDIT_TEXT.blockedTitle });
+    expect(dialog).toHaveTextContent(EDIT_TEXT.legacy);
+    expect(dialog).toHaveTextContent(EDIT_TEXT.legacyNext);
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    // Close (the footer button and the corner X share the name; either closes it).
+    await user.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
     rerender(<EditPaymentButton payment={{ ...PAYMENT, held: true }} />);
-    expect(screen.getByRole("button", { name: `Edit unavailable: ${HELD_MESSAGE}` })).toHaveAttribute("title", HELD_MESSAGE);
-    rerender(<EditPaymentButton payment={{ ...PAYMENT, voided: true }} />);
+    await user.click(screen.getByRole("button", { name: `Edit unavailable: ${HELD_MESSAGE}` }));
+    expect(await screen.findByRole("dialog", { name: EDIT_TEXT.blockedTitle })).toHaveTextContent(EDIT_TEXT.heldNext);
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("is absent on a voided or due payment", () => {
+    const { rerender } = render(<EditPaymentButton payment={{ ...PAYMENT, voided: true }} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     rerender(<EditPaymentButton payment={{ ...PAYMENT, payeeRole: "agent", kind: "Balance", po: "PO-3001", status: "due" }} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();

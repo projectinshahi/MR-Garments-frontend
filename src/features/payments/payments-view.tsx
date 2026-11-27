@@ -29,6 +29,7 @@ import { VoidPaymentButton } from "./void-payment";
 
 // 10 px cell padding as measured in 16_5_Deposits_&_Payments.jpeg; PO / Supplier takes the rest.
 const PAD = "px-2.5 first:pl-2.5 last:pr-2.5";
+const PAYMENTS_PAGE_SIZE = 10;
 const head = (label: string) => <span className="block pt-1.5 text-xs">{label}</span>;
 
 /**
@@ -158,8 +159,12 @@ type PaymentsViewProps = {
 export function PaymentsView({ orders, payments, defaultPo, kpis, suppliers, agents, linkPo, canVoid = false, totals = [] }: PaymentsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedPo, setSelectedPo] = useState(defaultPo);
+  // The Payments table's page is kept here: the refresh after an Edit or Void sends new rows, and a table that owns its
+  // page goes back to page 1 then, so the row just saved left the screen (a phone has no search box).
+  const [page, setPage] = useState(0);
   const visible = filterOrders(orders, query);
   const shownPayments = filterPayments(payments, query);
+  const paymentsPage = Math.min(page, Math.max(0, Math.ceil(shownPayments.length / PAYMENTS_PAGE_SIZE) - 1));
   const selected = visible.find((order) => order.po === selectedPo);
   const currencies = new Set(orders.map((order) => order.currency));
   const single = currencies.size > 1 ? null : ([...currencies][0] ?? "CNY");
@@ -171,7 +176,17 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, suppliers, age
         actions={
           <>
             <form role="search" className="hidden sm:block" onSubmit={(event) => event.preventDefault()}>
-              <SearchInput size="sm" label="Search PO or supplier" placeholder="Search PO or supplier" value={query} onValueChange={setQuery} className="w-[170px] lg:w-[250px]" />
+              <SearchInput
+                size="sm"
+                label="Search PO or supplier"
+                placeholder="Search PO or supplier"
+                value={query}
+                onValueChange={(value) => {
+                  setQuery(value);
+                  setPage(0);
+                }}
+                className="w-[170px] lg:w-[250px]"
+              />
             </form>
             <ReportDownload file={() => paymentsFile(visible, shownPayments, query, todayInIndia(), totals)} />
             {suppliers ? (
@@ -194,7 +209,7 @@ export function PaymentsView({ orders, payments, defaultPo, kpis, suppliers, age
             size="sm"
             header="tall"
             emptyState={payments.length ? "No payments match your search." : "No payments recorded yet."}
-            pagination={{ pageSize: 10, itemLabel: "payments" }}
+            pagination={{ pageSize: PAYMENTS_PAGE_SIZE, itemLabel: "payments", pageIndex: paymentsPage, onPageChange: setPage }}
             className="mt-2.5"
           />
         </SectionCard>
