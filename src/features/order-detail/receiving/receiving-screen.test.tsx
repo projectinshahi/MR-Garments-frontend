@@ -28,13 +28,28 @@ const receipt = (id: string, receivedOn: string, quantity: number): OrderReceipt
 });
 
 describe("ReceivingScreen", () => {
-  it("keeps the actual received quantity and shows Short as 0, never negative", () => {
+  it("keeps the actual received quantity and shows what came in above the order, never a negative short", () => {
     render(<ReceivingScreen order={order} receipts={[receipt("r1", "2026-11-01", 300), receipt("r2", "2026-11-05", 649)]} />);
+    expect(screen.getByText("Ordered", { selector: "p" }).nextElementSibling).toHaveTextContent("360 m");
     expect(screen.getByText("Received in China", { selector: "p" }).nextElementSibling).toHaveTextContent("949 m");
-    expect(screen.getByText("Short", { selector: "p" }).nextElementSibling).toHaveTextContent("0");
+    expect(screen.getByText("Over-received", { selector: "p" }).nextElementSibling).toHaveTextContent("589 m");
+    expect(screen.queryByText("Remaining", { selector: "p" })).not.toBeInTheDocument();
     const row = screen.getByText("Cotton fabric", { selector: "td" }).closest("tr")!;
     expect(row).toHaveTextContent("360 m");
     expect(row).toHaveTextContent("949 m");
-    expect(row).not.toHaveTextContent("-");
+    expect(row).toHaveTextContent("Over-received 589");
+    expect(row).not.toHaveTextContent(/-\s*\d/); // no negative quantity
+  });
+
+  it("shows what is still to receive when short, and 0 once complete", () => {
+    const short = { ...order, received: 300, lines: [{ ...order.lines[0]!, received: 300 }] } as OrderView;
+    const { unmount } = render(<ReceivingScreen order={short} receipts={[receipt("r1", "2026-11-01", 300)]} />);
+    expect(screen.getByText("Remaining", { selector: "p" }).nextElementSibling).toHaveTextContent("60 m");
+    expect(screen.getByText("Cotton fabric", { selector: "td" }).closest("tr")).toHaveTextContent(/60$/);
+    unmount();
+    const complete = { ...order, received: 360, lines: [{ ...order.lines[0]!, received: 360 }] } as OrderView;
+    render(<ReceivingScreen order={complete} receipts={[receipt("r1", "2026-11-01", 360)]} />);
+    expect(screen.getByText("Remaining", { selector: "p" }).nextElementSibling).toHaveTextContent("0 m");
+    expect(screen.queryByText(/Over-received/)).not.toBeInTheDocument();
   });
 });

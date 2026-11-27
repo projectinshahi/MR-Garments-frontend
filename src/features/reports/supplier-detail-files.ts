@@ -106,8 +106,8 @@ export function supplierDetailFile(data: SupplierPaymentDetail, statement: Suppl
       ...perCurrency(data.lines.rows).map(([currency, list]) => ({
         sheet: "Order Lines",
         title: `Order lines (${currency})`,
-        columns: [text("PO"), text("Item"), text("Unit"), text("Quantity"), money("Saved rate", currency), money("Amount", currency)],
-        rows: list.map((l) => [l.po, l.item, l.unit, l.quantity, l.rateCny, l.amountCny]),
+        columns: [text("PO"), text("Item"), text("Unit"), text("Ordered"), text("Received"), money("Saved rate", currency), money("Amount (received)", currency)],
+        rows: list.map((l) => [l.po, l.item, l.unit, l.quantity, l.received, l.rateCny, l.amountCny]),
       })),
       ...perCurrency(data.payments.rows).map(([currency, list]) => ({
         sheet: "Payments",

@@ -186,9 +186,9 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await wang.close();
     expect(await receiptsOf()).toHaveLength(2);
 
-    // Nothing is left: the form no longer offers the order (the API would still take more; see w1-receiving).
+    // Fully received: the form still offers the order, labelled, for anything the supplier sends on top.
     await page.goto("/receiving/new");
-    await expect(page.getByRole("combobox", { name: "Order", exact: true }).getByRole("option", { name: po, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Order", exact: true }).getByRole("option", { name: `${po} (fully received)`, exact: true })).toHaveCount(1);
 
     // Receiving list: both receipts with their running totals, PO linked for Management.
     await page.goto("/receiving");
@@ -204,7 +204,7 @@ test("a new order goes from Orders through Payments, Calendar, Receiving and Con
     await expect(page.getByRole("heading", { name: "Latest receipt in China" })).toBeVisible();
     await expect(kpi(page, "Received in China")).toContainText("100 pcs");
     await expect(kpi(page, "Received in China")).toContainText("8 bundles");
-    await expect(kpi(page, "Short")).toContainText("0 pcs");
+    await expect(kpi(page, "Remaining")).toContainText("0 pcs");
     await expect(field(page, "Received by")).toHaveValue("Wang Fang");
     const history = page.getByRole("list").filter({ hasText: "Received 40 pcs Men's jackets" });
     await expect(history.getByRole("listitem")).toHaveCount(2);

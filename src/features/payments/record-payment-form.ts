@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import type { AdvanceSupplierOption } from "@/lib/api/deposits-types";
-import type { CreateAgentPaymentBody, CreateSupplierPaymentBody } from "@/lib/api/types";
+import type { PaymentRow } from "@/lib/api/ledger-types";
+import type { CreateAgentPaymentBody, CreateSupplierPaymentBody, EditPaymentBody } from "@/lib/api/types";
 import type { Currency } from "@/types/domain";
 
 // Record payment (PAY-2) after the unified supplier ledger (backend docs/unified-ledger.md). A supplier payment is
@@ -23,6 +24,8 @@ export const MESSAGES = {
   modeTooLong: "Use 100 characters or fewer for the mode.",
   referenceTooLong: "Use 100 characters or fewer for the reference.",
   notesTooLong: "Use 1,000 characters or fewer for the notes.",
+  reason: "Enter the reason for changing the amount, date or rate.",
+  reasonTooLong: "Use 1,000 characters or fewer for the reason.",
 };
 const M = MESSAGES;
 
@@ -129,8 +132,53 @@ export function toAgentPaymentBody(values: AgentPaymentValues, orderId: string, 
   };
 }
 
-/** PAY-2 422 field → the form field it belongs under; fields a form doesn't have are toasted instead. */
-export const FORM_FIELD: Record<string, "supplierId" | "currency" | "agentId" | "kind" | "amount" | "paidOn" | "rateInr" | "mode" | "reference" | "notes"> = {
+/** The payment as saved, which Edit payment (PAY-4) starts from. */
+export type EditOriginal = Pick<PaymentRow, "currency" | "amountCny" | "paidOn" | "rateInr" | "mode" | "reference" | "notes">;
+
+/** A new amount, date or rate: PAY-4 then voids the payment and records the corrected one, so it needs a reason. */
+export const moneyChanged = (original: EditOriginal, values: { amount: number; paidOn: string; rateInr: number | undefined }) =>
+  Math.round(values.amount * 100) !== Math.round(original.amountCny * 100) ||
+  values.paidOn !== original.paidOn ||
+  // INR takes no rate (stored as 1).
+  Math.round((values.rateInr ?? 1) * 10_000) !== Math.round((original.rateInr ?? 1) * 10_000);
+
+/** Edit payment (PAY-4): PAY-2's money fields in the payment's currency, plus the reason a correction needs. */
+export const editSchemaFor = (today: string, original: EditOriginal) =>
+  z
+    .object({ ...common(today, original.currency), reason: z.string().trim().max(1000, M.reasonTooLong) })
+    .superRefine((values, ctx) => {
+      if (!values.reason && moneyChanged(original, values)) ctx.addIssue({ code: "custom", path: ["reason"], message: M.reason });
+    });
+export type EditPaymentInput = z.input<ReturnType<typeof editSchemaFor>>;
+export type EditPaymentValues = z.output<ReturnType<typeof editSchemaFor>>;
+
+export const editStart = (original: EditOriginal): EditPaymentInput => ({
+  amount: String(original.amountCny),
+  paidOn: original.paidOn ?? "",
+  rateInr: original.currency === "INR" || original.rateInr === null ? "" : String(original.rateInr),
+  mode: original.mode ?? "",
+  reference: original.reference,
+  notes: original.notes,
+  reason: "",
+});
+
+/** The PAY-4 body: every field as it should be; the reason only for a correction. The id is the dialog's, reused on retry. */
+export function toEditPaymentBody(original: EditOriginal, values: EditPaymentValues, clientRequestId: string): EditPaymentBody {
+  const { amount, paidOn, rateInr, mode, reference, notes, reason } = values;
+  return {
+    amount,
+    paidOn,
+    ...(rateInr === undefined ? {} : { rateInr }),
+    mode,
+    reference,
+    notes,
+    ...(moneyChanged(original, values) ? { reason } : {}),
+    clientRequestId,
+  };
+}
+
+/** PAY-2/PAY-4 422 field → the form field it belongs under; fields a form doesn't have are toasted instead. */
+export const FORM_FIELD: Record<string, "supplierId" | "currency" | "agentId" | "kind" | "amount" | "paidOn" | "rateInr" | "mode" | "reference" | "notes" | "reason"> = {
   supplierId: "supplierId",
   currency: "currency",
   agentId: "agentId",
@@ -142,4 +190,5 @@ export const FORM_FIELD: Record<string, "supplierId" | "currency" | "agentId" | 
   mode: "mode",
   reference: "reference",
   notes: "notes",
+  reason: "reason",
 };

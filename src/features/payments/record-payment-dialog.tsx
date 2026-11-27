@@ -57,10 +57,10 @@ type FieldName = "amount" | "paidOn" | "rateInr" | "mode" | "reference" | "notes
 type MoneyErrors = FieldErrors<Pick<SupplierPaymentInput, FieldName>>;
 
 /** One request id per opened dialog: a retry after a lost answer sends the same one, so the API records the payment once. */
-const newRequestId = () => crypto.randomUUID();
+export const newRequestId = () => crypto.randomUUID();
 
 /** 422 fields under their inputs (the first focused); anything else (409 held, 503 maintenance, idempotency) is toasted. */
-function showErrors(error: unknown, setError: (field: never, error: { message: string }, options: { shouldFocus: boolean }) => void, has: (field: string) => boolean) {
+export function showErrors(error: unknown, setError: (field: never, error: { message: string }, options: { shouldFocus: boolean }) => void, has: (field: string) => boolean) {
   Object.entries(handleApiError(error) ?? {}).forEach(([key, message], index) => {
     const field = FORM_FIELD[key];
     if (field && has(field)) setError(field as never, { message }, { shouldFocus: index === 0 });
@@ -386,7 +386,7 @@ function AgentPaymentForm({ order, agents, onCancel, onSaved }: { order: Freight
 }
 
 /** Amount, date, rate (not for INR), mode, reference and notes: the fields both payments share. */
-function MoneyFields({
+export function MoneyFields({
   register,
   errors,
   today,
@@ -452,7 +452,7 @@ function MoneyFields({
   );
 }
 
-function InrLine({ amount, rateInr }: { amount: string; rateInr: string }) {
+export function InrLine({ amount, rateInr }: { amount: string; rateInr: string }) {
   return (
     <div className="mt-[14px] flex items-center justify-between gap-4 border-t border-dashed pt-[7px]">
       <span className="text-[13px] leading-5 text-muted-foreground">Amount in INR</span>
@@ -463,7 +463,7 @@ function InrLine({ amount, rateInr }: { amount: string; rateInr: string }) {
   );
 }
 
-function Footer({ onCancel, pending, disabled = false, label }: { onCancel: () => void; pending: boolean; disabled?: boolean; label: string }) {
+export function Footer({ onCancel, pending, disabled = false, label }: { onCancel: () => void; pending: boolean; disabled?: boolean; label: string }) {
   return (
     <DialogFooter className="mt-5 pt-4">
       <Button type="button" variant="outline" className={cn(footerButtonClass, "border-input")} onClick={onCancel}>

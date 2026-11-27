@@ -605,6 +605,27 @@ export type CreatePaymentBody = CreateSupplierPaymentBody | CreateAgentPaymentBo
 export type CreatePaymentResponse = { payment: PaymentRow; ledger?: LedgerChange };
 /** PAY-3 DELETE /api/v1/payments/:id with `{ reason }` (payments Full): voids the payment; `ledger` null for an unposted one. */
 export type VoidPaymentResponse = { payment: PaymentRow; ledger: LedgerChange | null };
+/**
+ * PAY-4 PATCH /api/v1/payments/:id (payments Full): every field as it should be (PAY-2's rules). `reason` is required
+ * when the amount, date or rate changes; `clientRequestId` keys the corrected payment (a retry replays it).
+ */
+export type EditPaymentBody = {
+  amount: number;
+  paidOn: string;
+  rateInr?: number;
+  mode: string;
+  reference?: string;
+  notes?: string;
+  reason?: string;
+  clientRequestId: string;
+  finalSettlementApproval?: { reason: string };
+};
+/**
+ * PAY-4: `payment` is the row now live. Mode, reference or notes only: the same payment, `replaced` and `ledger` null.
+ * A new amount, date or rate: the corrected payment, `replaced` the voided original's id, `ledger` the supplier
+ * account's balance before the void and after the new credit (null for a sea freight payment, never posted).
+ */
+export type EditPaymentResponse = { payment: PaymentRow; replaced: string | null; ledger: LedgerChange | null };
 
 /** CON-4 GET /api/v1/containers/:id */
 export type ContainerDetail = ContainerListItem & {

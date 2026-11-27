@@ -111,13 +111,13 @@ describe("RecordReceiptScreen", () => {
     expect(screen.queryByRole("heading", { name: "Effect on payment" })).not.toBeInTheDocument();
   });
 
-  it("takes more than was ordered: Short shows 0, no remark is needed, and the quantity is sent as typed", async () => {
+  it("takes more than was ordered: the line shows Over by, no remark is needed, and the quantity is sent as typed", async () => {
     const user = userEvent.setup();
     post.mockResolvedValue({ receipt: { id: "r9" } });
     render(<RecordReceiptScreen data={data} />);
     await fillPo2035(user, "949");
     const jackets = screen.getByText("Men's jackets", { selector: "td" }).closest("tr")!;
-    expect(within(jackets).getAllByRole("cell").at(-1)).toHaveTextContent(/^0$/);
+    expect(within(jackets).getAllByRole("cell").at(-1)).toHaveTextContent(/^Over by 449 pcs$/); // 700 + 949 of 1,200
     expect(screen.queryByText(/left to receive/)).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /Short remark/ })).toHaveAttribute("aria-required", "false");
     await user.click(screen.getByRole("button", { name: "Save receipt" }));
@@ -129,6 +129,34 @@ describe("RecordReceiptScreen", () => {
         { orderLineId: "l2", quantity: 500 },
       ],
     });
+  });
+
+  it("offers a fully received order, labelled; shows each line's remaining or over-received and its status after this receipt", async () => {
+    const user = userEvent.setup();
+    const done = { ...options.orders[1]!, orderId: "o41", po: "PO-2041", lines: [{ orderLineId: "l7", item: "Cotton fabric", unit: "m", ordered: 1000, receivedEarlier: 1080, unitPriceCny: 5 }] };
+    render(<RecordReceiptScreen data={{ ...data, options: { ...options, orders: [...options.orders, done] } }} />);
+    const picker = screen.getByRole("combobox", { name: "Order" });
+    expect(within(picker).getAllByRole("option").map((o) => o.textContent)).toEqual(["PO-2035", "PO-2040", "PO-2041 (fully received)"]);
+    const status = (item: string) => within(screen.getByText(item, { selector: "td" }).closest("tr")!).getAllByRole("cell").at(-1);
+
+    // 700 of 1,200 so far: 460 now leaves 40 short, 500 completes the line, 520 takes it 20 over.
+    expect(screen.getByText("Men's jackets", { selector: "td" }).closest("tr")).toHaveTextContent("Remaining 500 pcs");
+    expect(status("Men's jackets")).toHaveTextContent("Short 500 pcs");
+    const jackets = screen.getByRole("textbox", { name: "Received now, Men's jackets" });
+    for (const [typed, after] of [["460", "Short 40 pcs"], ["500", "Complete"], ["520", "Over by 20 pcs"]] as const) {
+      await user.clear(jackets);
+      await user.type(jackets, typed);
+      expect(status("Men's jackets")).toHaveTextContent(after);
+    }
+
+    // 1,080 of 1,000 so far: 40 more is taken, with no remark needed.
+    await user.selectOptions(picker, "o41");
+    expect(screen.getByText("Fully received")).toBeInTheDocument();
+    expect(screen.getByText("Cotton fabric", { selector: "td" }).closest("tr")).toHaveTextContent("Over-received 80 m");
+    expect(status("Cotton fabric")).toHaveTextContent("Over by 80 m");
+    await user.type(screen.getByRole("textbox", { name: "Received now, Cotton fabric" }), "40");
+    expect(status("Cotton fabric")).toHaveTextContent("Over by 120 m");
+    expect(screen.getByRole("textbox", { name: /Short remark/ })).toHaveAttribute("aria-required", "false");
   });
 
   it("asks for at least one quantity", async () => {

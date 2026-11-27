@@ -19,15 +19,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
 import { handleApiError, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatMoney, formatNumber, formatQty } from "@/lib/formatters";
+import { formatMoney, formatQty } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import type { RecordReceiptData } from "./data/queries";
 import { FinalApprovalDialog, needsFinalApproval } from "./final-approval-dialog";
 import {
+  balanceOf,
   deliveryEvents,
   emptyLines,
-  lineShort,
+  fullyReceived,
+  lineStatus,
   paymentEffect,
   receiptSchema,
   remarkRequired,
@@ -145,9 +147,10 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                     {...register("orderId", { onChange: (event) => setValue("lines", emptyLines(options, event.target.value)) })}
                   >
                     {options.orders.length ? null : <option value="">No orders to receive</option>}
+                    {/* A fully received order stays on offer: the supplier may deliver more than ordered. */}
                     {options.orders.map((o) => (
                       <option key={o.orderId} value={o.orderId}>
-                        {o.po}
+                        {fullyReceived(o) ? `${o.po} (fully received)` : o.po}
                       </option>
                     ))}
                   </select>
@@ -160,7 +163,11 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                     </>
                   ) : null}
                 </p>
-                {order?.lines.some((l) => l.receivedEarlier > 0) ? <StatusPill tone="warning">Partly received</StatusPill> : null}
+                {order && fullyReceived(order) ? (
+                  <StatusPill tone="success">Fully received</StatusPill>
+                ) : order?.lines.some((l) => l.receivedEarlier > 0) ? (
+                  <StatusPill tone="warning">Partly received</StatusPill>
+                ) : null}
               </div>
               <FieldError className="mt-1" errors={[errors.orderId]} />
 
@@ -216,21 +223,30 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                 <TableHeader>
                   <TableRow className="bg-table-head hover:bg-table-head">
                     <TableHead className={headClass}>Item</TableHead>
-                    <TableHead className={cn(headClass, "w-[130px] text-right")}>Ordered</TableHead>
-                    <TableHead className={cn(headClass, "w-[160px] text-right")}>Received earlier</TableHead>
+                    <TableHead className={cn(headClass, "w-[110px] text-right")}>Ordered</TableHead>
+                    <TableHead className={cn(headClass, "w-[140px] text-right")}>Received so far</TableHead>
                     <TableHead className={cn(headClass, "w-[142px] text-right")}>Received now</TableHead>
-                    <TableHead className={cn(headClass, "w-[86px] text-right")}>Short</TableHead>
+                    <TableHead className={cn(headClass, "w-[140px] text-right")}>After this receipt</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lines.map((line, i) => {
-                    const short = lineShort(line);
+                    // The ordered quantity is an estimate: any received quantity is taken, below or above it.
+                    const before = balanceOf(line.ordered, line.receivedEarlier);
+                    const after = lineStatus(line);
                     const error = errors.lines?.[i]?.quantity;
                     return (
                       <TableRow key={`${orderId}-${i}`} className="h-[60px] border-border-subtle hover:bg-transparent">
                         <TableCell className={cn(cellClass, "font-bold")}>{line.item}</TableCell>
                         <TableCell className={cn(cellClass, "text-right")}>{formatQty(line.ordered, line.unit)}</TableCell>
-                        <TableCell className={cn(cellClass, "text-right")}>{formatQty(line.receivedEarlier, line.unit)}</TableCell>
+                        <TableCell className={cn(cellClass, "text-right")}>
+                          {formatQty(line.receivedEarlier, line.unit)}
+                          {before.remaining > 0 || before.over > 0 ? (
+                            <span className="block text-[12px] leading-4 text-muted-foreground">
+                              {before.remaining > 0 ? `Remaining ${formatQty(before.remaining, line.unit)}` : `Over-received ${formatQty(before.over, line.unit)}`}
+                            </span>
+                          ) : null}
+                        </TableCell>
                         {/* The reference sets the input 8 px from the row top, above the text line. */}
                         <TableCell className={cn(cellClass, "pt-2 text-right align-top")}>
                           <Input
@@ -242,8 +258,8 @@ export function RecordReceiptScreen({ data }: { data: RecordReceiptData }) {
                           />
                           <FieldError className="pb-1 text-left" errors={[error]} />
                         </TableCell>
-                        <TableCell className={cn(cellClass, "text-right", short > 0 && "font-bold text-danger")}>
-                          {short > 0 ? formatQty(short, line.unit) : formatNumber(short)}
+                        <TableCell className={cn(cellClass, "text-right")}>
+                          <StatusPill tone={after.tone}>{after.label}</StatusPill>
                         </TableCell>
                       </TableRow>
                     );

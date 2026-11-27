@@ -7,7 +7,8 @@ import {
   ALL,
   deliveryEvents,
   filterReceipts,
-  lineShort,
+  fullyReceived,
+  lineStatus,
   paymentEffect,
   receiptSchema,
   receivingKpis,
@@ -53,13 +54,13 @@ const options: ReceiptOptions = {
 };
 
 describe("toReceiptRow", () => {
-  it("is complete with 0 short once the total reaches the order", () => {
+  it("is complete with 0 short once the total reaches the order, over-received above it", () => {
     expect(toReceiptRow(items[1]!)).toMatchObject({ state: "complete", statusLabel: "Complete", short: 0 });
-    expect(toReceiptRow({ ...items[1]!, totalSoFar: 1600 })).toMatchObject({ state: "complete", short: 0 });
+    expect(toReceiptRow({ ...items[1]!, totalSoFar: 1600 })).toMatchObject({ state: "complete", statusLabel: "Over-received 100 pcs", short: 0 });
   });
 
-  it("is partly received with Short not counted (–) below it, never short", () => {
-    expect(toReceiptRow(items[0]!)).toMatchObject({ state: "partly", statusLabel: "Partly received", short: null, thisReceipt: 460, totalSoFar: 1160 });
+  it("is partly received below it, short by what is still to receive", () => {
+    expect(toReceiptRow(items[0]!)).toMatchObject({ state: "partly", statusLabel: "Partly received", short: 40, thisReceipt: 460, totalSoFar: 1160 });
   });
 });
 
@@ -95,20 +96,23 @@ describe("short and the value received", () => {
   const jackets: ReceiptLine = { item: "Men's jackets", unit: "pcs", ordered: 1200, receivedEarlier: 700, receivedNow: 460, unitPrice: 60 };
 
   it("values what this receipt receives (460 x 60 on 42,000 so far); the 40 short add nothing", () => {
-    expect(lineShort(jackets)).toBe(40);
+    expect(lineStatus(jackets)).toEqual({ tone: "danger", label: "Short 40 pcs" });
     expect(paymentEffect({ value: 42000 }, [jackets])).toEqual({
       valueBefore: 42000,
       additions: [{ unit: "pcs", quantity: 460, unitPrice: 60, amount: 27600 }],
       added: 27600,
       valueAfter: 69600,
     });
-    expect(lineShort({ ...jackets, receivedNow: 600 })).toBe(0);
+    expect(lineStatus({ ...jackets, receivedNow: 500 })).toEqual({ tone: "success", label: "Complete" });
   });
 
   it("values an over-receipt in full, is never negative short, and skips unpriced or empty lines", () => {
     const fabric: ReceiptLine = { item: "Cotton fabric", unit: "m", ordered: 360, receivedEarlier: 0, receivedNow: 0, unitPrice: 3 };
-    expect([360, 300, 400, 949].map((receivedNow) => lineShort({ ...fabric, receivedNow }))).toEqual([0, 60, 0, 0]);
-    expect(lineShort({ ...fabric, receivedEarlier: 300, receivedNow: 100 })).toBe(0);
+    expect([360, 300, 400, 949].map((receivedNow) => lineStatus({ ...fabric, receivedNow }).label)).toEqual(["Complete", "Short 60 m", "Over by 40 m", "Over by 589 m"]);
+    // Earlier receipts count: 300 + 100 of 360; a fully received line takes 80 more.
+    expect(lineStatus({ ...fabric, receivedEarlier: 300, receivedNow: 100 })).toEqual({ tone: "info", label: "Over by 40 m" });
+    expect(lineStatus({ ...fabric, receivedEarlier: 360, receivedNow: 80 }).label).toBe("Over by 80 m");
+    expect(lineStatus({ ...fabric, receivedEarlier: 360 }).label).toBe("Complete");
     expect(paymentEffect({ value: 0 }, [{ ...fabric, receivedNow: 949 }, fabric, { ...fabric, unitPrice: undefined, receivedNow: 5 }])).toEqual({
       valueBefore: 0,
       additions: [{ unit: "m", quantity: 949, unitPrice: 3, amount: 2847 }],
@@ -117,6 +121,16 @@ describe("short and the value received", () => {
     });
     // Cents: 3 x 0.335 = 1.005 rounds to 1.01 (the API rounds the same way).
     expect(paymentEffect({ value: 10.1 }, [{ ...fabric, receivedNow: 3, unitPrice: 0.335 }]).valueAfter).toBe(11.11);
+  });
+});
+
+describe("fullyReceived", () => {
+  it("is true once every line has its ordered quantity, also above it", () => {
+    const order = options.orders[0]!;
+    const line = order.lines[0]!;
+    expect(fullyReceived(order)).toBe(false);
+    expect(fullyReceived({ ...order, lines: [{ ...line, receivedEarlier: 1200 }] })).toBe(true);
+    expect(fullyReceived({ ...order, lines: [{ ...line, receivedEarlier: 1280 }, { ...line, receivedEarlier: 0 }] })).toBe(false);
   });
 });
 

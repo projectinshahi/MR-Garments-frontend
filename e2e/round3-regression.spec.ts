@@ -125,7 +125,7 @@ function pagesFor(po: string, due: string, s: State): [string, (page: Page) => P
       async (page) => {
         if (s.receivedMain) {
           await expect(kpi(page, "Received in China")).toContainText(s.receivedMain);
-          await expect(kpi(page, "Short")).toContainText(s.shortMain!);
+          await expect(kpi(page, "Remaining")).toContainText(s.shortMain!);
         } else await expect(page.getByRole("heading", { level: 1, name: po })).toBeVisible();
       },
     ],

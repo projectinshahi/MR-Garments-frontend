@@ -209,14 +209,16 @@ export function SupplierLinesList({ list, linkPos, empty }: { list: List<Line>; 
   const columns: ColumnDef<Line>[] = [
     { accessorKey: "item", header: "Product", meta: { className: "font-bold" } },
     { accessorKey: "po", header: "PO", cell: ({ row }) => <PoLink po={row.original.po} linked={linkPos} /> },
-    { accessorKey: "quantity", header: "Quantity", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.quantity, row.original.unit) },
+    // The amount is received quantity x rate (API amountCny), so both quantities show: ordered is the estimate.
+    { accessorKey: "quantity", header: "Ordered", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.quantity, row.original.unit) },
+    { accessorKey: "received", header: "Received", meta: { align: "right" }, cell: ({ row }) => formatQty(row.original.received, row.original.unit) },
     {
       accessorKey: "rateCny",
       header: "Unit rate",
       meta: { align: "right" },
       cell: ({ row }) => formatMoney(row.original.rateCny, row.original.currency, { decimals: 2 }),
     },
-    { accessorKey: "amountCny", header: "Total", meta: { align: "right" }, cell: ({ row }) => formatMoney(row.original.amountCny, row.original.currency) },
+    { accessorKey: "amountCny", header: "Total (received)", meta: { align: "right" }, cell: ({ row }) => formatMoney(row.original.amountCny, row.original.currency) },
     { accessorKey: "currency", header: "Currency" },
   ];
   return <PagedTable list={list} columns={columns} param={PAGE_PARAMS.lines} itemLabel="order lines" empty={empty} getRowId={(row) => row.orderLineId} />;

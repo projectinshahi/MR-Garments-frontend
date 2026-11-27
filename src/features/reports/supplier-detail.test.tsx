@@ -252,11 +252,11 @@ describe("Supplier detail lists: every amount in its own currency", () => {
     expect(money("PO-2054")).toEqual(["100 pcs", "¥120", "–", "–", "Pending review"]);
   });
 
-  it("products: one row per order line, rate to the cent and total in the order's currency", () => {
+  it("products: one row per order line, ordered and received apart, total = received x rate in the order's currency", () => {
     renderIn(
       <SupplierLinesList
         list={page([
-          line("l-1", { po: "PO-2052", quantity: 20, rateCny: 3, received: 20, amountCny: 60, poAmountCny: 60 }),
+          line("l-1", { po: "PO-2052", quantity: 20, rateCny: 3, received: 12, amountCny: 36, poAmountCny: 60 }),
           line("l-2"),
           line("l-3", { po: "PO-2053", item: "Denim jeans", currency: "USD", quantity: 7, rateCny: 17.8575, received: 7, amountCny: 125, poAmountCny: 125 }),
           line("l-4", { po: "PO-2054", item: "Cotton fabric", unit: "m", currency: "INR", quantity: 200, rateCny: 8, received: 200, amountCny: 1600, poAmountCny: 1600 }),
@@ -266,12 +266,12 @@ describe("Supplier detail lists: every amount in its own currency", () => {
       />,
     );
     const rows = screen.getAllByRole("row").slice(1);
-    // Product, PO, Quantity, Unit rate, Total, Currency
+    // Product, PO, Ordered, Received, Unit rate, Total (received), Currency
     expect(rows.map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent))).toEqual([
-      ["Track pants", "PO-2052", "20 pcs", "¥3.00", "¥60", "CNY"],
-      ["Track pants", "PO-2051", "100 pcs", "¥2.50", "¥250", "CNY"],
-      ["Denim jeans", "PO-2053", "7 pcs", "$17.86", "$125", "USD"],
-      ["Cotton fabric", "PO-2054", "200 m", "₹8.00", "₹1,600", "INR"],
+      ["Track pants", "PO-2052", "20 pcs", "12 pcs", "¥3.00", "¥36", "CNY"],
+      ["Track pants", "PO-2051", "100 pcs", "100 pcs", "¥2.50", "¥250", "CNY"],
+      ["Denim jeans", "PO-2053", "7 pcs", "7 pcs", "$17.86", "$125", "USD"],
+      ["Cotton fabric", "PO-2054", "200 m", "200 m", "₹8.00", "₹1,600", "INR"],
     ]);
   });
 

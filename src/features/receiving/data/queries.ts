@@ -25,7 +25,7 @@ export type ReceiptRow = {
   unit: string;
   thisReceipt: number;
   totalSoFar: number;
-  /** null: not counted yet ("–"). */
+  /** What the main line still lacks after this receipt, never negative; null ("–"): not known. */
   short: number | null;
   bundles: number;
   receivedBy: string;

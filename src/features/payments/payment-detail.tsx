@@ -6,6 +6,7 @@ import type { OrderOptions } from "@/lib/api/types";
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
+import { EditPaymentButton } from "./edit-payment";
 import { HELD_MESSAGE, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
 import { RecordPaymentDialog, RecordSeaFreightDialog, type SupplierChoice } from "./record-payment-dialog";
 import { VoidPaymentButton } from "./void-payment";
@@ -89,7 +90,18 @@ export function PaymentDetailCard({ order, payments, suppliers, agents, linkPo, 
         <ol className="mt-2 flex flex-col gap-3">
           {payments.map((payment, index) => (
             <li key={payment.id}>
-              <PaymentBlock number={index + 1} payment={payment} remove={canVoid ? <VoidPaymentButton payment={payment} voided={payment.voided} /> : null} />
+              <PaymentBlock
+                number={index + 1}
+                payment={payment}
+                remove={
+                  canVoid ? (
+                    <>
+                      <EditPaymentButton payment={payment} />
+                      <VoidPaymentButton payment={payment} voided={payment.voided} />
+                    </>
+                  ) : null
+                }
+              />
             </li>
           ))}
         </ol>

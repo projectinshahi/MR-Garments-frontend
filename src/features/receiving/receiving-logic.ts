@@ -24,12 +24,16 @@ export function filterReceipts(rows: ReceiptRow[], { query, office, supplier, st
 
 export const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
 
+/** Ordered against received, never negative: what is still to receive, or what came in above the order. */
+export const balanceOf = (ordered: number, received: number) => ({ remaining: Math.max(0, ordered - received), over: Math.max(0, received - ordered) });
+
 /**
- * REC-1 row -> list row. Complete once the main line's total reaches the order; otherwise partly received with "–"
- * in Short, as the reference draws a partly received row. "Short" needs a counted-short fact REC-1 doesn't have.
+ * REC-1 row -> list row. Short is what the main line still lacks after this receipt (the ordered quantity is an
+ * estimate, owner rule of 2026-11-27); complete once nothing is left, labelled over-received above the order.
  */
 export function toReceiptRow(r: ReceiptListItem): ReceiptRow {
-  const complete = r.totalSoFar >= r.ordered;
+  const { remaining, over } = balanceOf(r.ordered, r.totalSoFar);
+  const complete = remaining === 0;
   return {
     id: r.id,
     receivedOn: r.receivedOn,
@@ -42,11 +46,11 @@ export function toReceiptRow(r: ReceiptListItem): ReceiptRow {
     unit: r.unit,
     thisReceipt: r.thisReceipt,
     totalSoFar: r.totalSoFar,
-    short: complete ? 0 : null,
+    short: remaining,
     bundles: r.bundles,
     receivedBy: r.receivedBy,
     state: complete ? "complete" : "partly",
-    statusLabel: complete ? "Complete" : "Partly received",
+    statusLabel: !complete ? "Partly received" : over > 0 ? `Over-received ${formatQty(over, r.unit)}` : "Complete",
     received: (r.lines ?? [{ item: r.item, unit: r.unit, quantity: r.thisReceipt }]).map((l) => `${formatQty(l.quantity, l.unit)} ${l.item}`).join(", "),
     containers: r.containers ?? null,
     lines: (r.lines ?? [{ item: r.item, unit: r.unit, quantity: r.thisReceipt }]).map((l) => ({ item: l.item, unit: l.unit, quantity: l.quantity, ordered: l.ordered ?? null, received: l.received ?? null })),
@@ -82,8 +86,16 @@ export function receivingKpis(items: ReceiptListItem[], options: ReceiptOptions 
   };
 }
 
-/** Quantity still missing after this receipt; never negative. */
-export const lineShort = (line: ReceiptLine) => Math.max(0, line.ordered - line.receivedEarlier - line.receivedNow);
+/** A line after this receipt (earlier + now against ordered): short, complete or over; never a negative short. */
+export function lineStatus(line: ReceiptLine) {
+  const { remaining, over } = balanceOf(line.ordered, line.receivedEarlier + line.receivedNow);
+  if (remaining > 0) return { tone: "danger", label: `Short ${formatQty(remaining, line.unit)}` } as const;
+  if (over > 0) return { tone: "info", label: `Over by ${formatQty(over, line.unit)}` } as const;
+  return { tone: "success", label: "Complete" } as const;
+}
+
+/** Every line received at least as ordered: REC-2 still offers the order, as a supplier may deliver more. */
+export const fullyReceived = (order: ReceiptOptions["orders"][number]) => order.lines.every((l) => l.receivedEarlier >= l.ordered);
 
 const cents = (value: number) => Math.round(value * 100);
 

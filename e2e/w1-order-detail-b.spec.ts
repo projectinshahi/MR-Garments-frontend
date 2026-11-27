@@ -91,7 +91,7 @@ test("Receiving: empty, then each receipt with its totals, remark and history", 
   await expect(kpi(page, "Ordered")).toContainText("100 pcs");
   await expect(kpi(page, "Received in China")).toContainText("60 pcs");
   await expect(kpi(page, "Received in China")).toContainText("3 bundles");
-  await expect(kpi(page, "Short")).toContainText("40 pcs");
+  await expect(kpi(page, "Remaining")).toContainText("40 pcs");
   await expect(field(page, "Received on")).toHaveValue(longDate(today(-2)));
   await expect(field(page, "Delivery note")).toHaveValue("DN-1");
   await expect(page.getByText("40 jeans to follow")).toBeVisible();
@@ -104,7 +104,7 @@ test("Receiving: empty, then each receipt with its totals, remark and history", 
   await expect(page.getByRole("heading", { name: "Latest receipt in China" })).toBeVisible();
   await expect(kpi(page, "Received in China")).toContainText("100 pcs");
   await expect(kpi(page, "Received in China")).toContainText("5 bundles");
-  await expect(kpi(page, "Short")).toContainText("0 pcs");
+  await expect(kpi(page, "Remaining")).toContainText("0 pcs");
   await expect(field(page, "Received on")).toHaveValue(longDate(today()));
   await expect(field(page, "Office")).toHaveValue("Guangzhou office");
   await expect(field(page, "Received by")).toHaveValue("Suresh Menon");

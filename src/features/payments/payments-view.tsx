@@ -19,6 +19,7 @@ import { todayInIndia } from "@/lib/today";
 import type { Currency } from "@/types/domain";
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
+import { EditPaymentButton } from "./edit-payment";
 import { filterOrders, filterPayments } from "./filter-orders";
 import { DASH, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
 import { PaymentDetailCard } from "./payment-detail";
@@ -59,8 +60,13 @@ const paymentColumns = (linkPo: boolean, canVoid: boolean): ColumnDef<Payment>[]
         {
           id: "actions",
           header: "Actions",
-          meta: { className: `w-[72px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
-          cell: ({ row }) => <VoidPaymentButton payment={row.original} voided={row.original.voided} />,
+          meta: { className: `w-[96px] ${PLAIN_ACTIONS_COLUMN_CLASS}` },
+          cell: ({ row }) => (
+            <span className="flex gap-3">
+              <EditPaymentButton payment={row.original} />
+              <VoidPaymentButton payment={row.original} voided={row.original.voided} />
+            </span>
+          ),
         } satisfies ColumnDef<Payment>,
       ]
     : []),
@@ -139,7 +145,7 @@ type PaymentsViewProps = {
   agents: OrderOptions["agents"] | null;
   /** POs link to their order page (canOpen(me, "/orders")). */
   linkPo: boolean;
-  /** Void on each payment (PAY-3, payments Full). */
+  /** Edit and Void on each payment (PAY-4, PAY-3: payments Full). */
   canVoid?: boolean;
   /** LED-2's per-currency totals, for the download's summary. */
   totals?: LedgerTotal[];

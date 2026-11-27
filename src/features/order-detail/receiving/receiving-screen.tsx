@@ -5,6 +5,7 @@ import { Timeline } from "@/components/shared/timeline";
 import type { OrderReceipt, OrderView } from "@/features/order-detail/data/queries";
 import { DeleteRecordButton, RecordFacts } from "@/features/order-detail/shared/delete-record";
 import { OrderContextStrip } from "@/features/order-detail/shared/order-detail-frame";
+import { balanceOf } from "@/features/receiving/receiving-logic";
 import { formatDate, formatNumber, formatQty, formatShortDate } from "@/lib/formatters";
 
 import { ReadOnlyField } from "./read-only-field";
@@ -37,7 +38,8 @@ export function ReceivingScreen({
     );
   }
 
-  const short = Math.max(0, order.quantity - order.received);
+  // The ordered quantity is an estimate: what is still to receive, or what came in above it; never a negative short.
+  const { remaining, over } = balanceOf(order.quantity, order.received);
   const bundles = receipts.reduce((sum, r) => sum + r.bundles, 0);
   const fields = [
     { id: "receipt-received-on", label: "Received on", value: formatDate(latest.receivedOn) },
@@ -88,7 +90,11 @@ export function ReceivingScreen({
       <KpiRow gap="sm">
         <KpiCard size="xs" label="Ordered" value={formatQty(order.quantity, order.unit)} />
         <KpiCard size="xs" label="Received in China" value={formatQty(order.received, order.unit)} sub={`${formatNumber(bundles)} bundles`} />
-        <KpiCard size="xs" label="Short" value={formatQty(short, order.unit)} tone={short > 0 ? "danger" : "default"} />
+        {over > 0 ? (
+          <KpiCard size="xs" label="Over-received" value={formatQty(over, order.unit)} />
+        ) : (
+          <KpiCard size="xs" label="Remaining" value={formatQty(remaining, order.unit)} tone={remaining > 0 ? "danger" : "default"} />
+        )}
       </KpiRow>
 
       <div className="grid items-start gap-(--page-gap) lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">

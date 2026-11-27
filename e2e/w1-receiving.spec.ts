@@ -40,7 +40,7 @@ test("the list shows each receipt with its totals, filters by search, office, su
 
   await search(page).fill(partly.po);
   await expect(rowOf(page, partly.po).getByRole("cell")).toHaveText([
-    shortDate(today()), partly.po, "Hangzhou Knits", "Ladies kurtis", "200 pcs", "120", "120", "–", "4", "Suresh Menon", "Partly received",
+    shortDate(today()), partly.po, "Hangzhou Knits", "Ladies kurtis", "200 pcs", "120", "120", "80", "4", "Suresh Menon", "Partly received",
     // Management (receiving Full): the Actions column's Delete.
     "Delete",
   ]);
@@ -106,7 +106,8 @@ test("Record receipt: the chosen order's lines, short and the effect on payment 
   const jackets = page.getByRole("row").filter({ hasText: "Men's jackets" });
   await expect(jackets).toContainText("500 pcs");
   await expect(jackets).toContainText("20 pcs");
-  await expect(jackets.getByRole("cell").last()).toHaveText("480 pcs");
+  await expect(jackets).toContainText("Remaining 480 pcs");
+  await expect(jackets.getByRole("cell").last()).toHaveText("Short 480 pcs");
   await expect(kv(page, "PO value (ordered)")).toHaveText("¥ 33,000");
   await expect(kv(page, "Order value received so far")).toHaveText("¥ 1,200");
   await expect(kv(page, "Outstanding before this receipt")).toHaveText("¥ 0");
@@ -115,7 +116,7 @@ test("Record receipt: the chosen order's lines, short and the effect on payment 
 
   await receivedNow(page, "Men's jackets").fill("470");
   await receivedNow(page, "Cotton fabric").fill("300");
-  await expect(jackets.getByRole("cell").last()).toHaveText("10 pcs");
+  await expect(jackets.getByRole("cell").last()).toHaveText("Short 10 pcs");
   // What this receipt receives adds to the value; the 10 short jackets add nothing.
   await expect(kv(page, "Received now: 470 pcs × ¥60")).toHaveText("+ ¥ 28,200");
   await expect(kv(page, "Received now: 300 m × ¥10")).toHaveText("+ ¥ 3,000");
@@ -166,20 +167,20 @@ test("Record receipt: more than ordered is accepted and listed as complete", asy
   await page.getByRole("textbox", { name: "Bundles received now" }).fill("12");
   await receivedNow(page, "Cotton fabric").fill("949");
   const fabric = page.getByRole("row").filter({ hasText: "Cotton fabric" });
-  await expect(fabric.getByRole("cell").last()).toHaveText("0");
+  await expect(fabric.getByRole("cell").last()).toHaveText("Over by 589 m");
   await expect(page.getByRole("textbox", { name: "Short remark" })).toHaveAttribute("aria-required", "false");
   await save(page).click();
   await expect(toast(page, "Receipt saved")).toBeVisible();
   await expect(page).toHaveURL("/receiving");
 
-  // The list keeps the actual quantity: 949 of 360 m, short 0, complete.
+  // The list keeps the actual quantity: 949 of 360 m, short 0, over-received.
   await search(page).fill(order.po);
   const cells = rowOf(page, order.po).getByRole("cell");
   await expect(cells.nth(4)).toHaveText("360 m");
   await expect(cells.nth(5)).toHaveText("949");
   await expect(cells.nth(6)).toHaveText("949");
   await expect(cells.nth(7)).toHaveText("0");
-  await expect(rowOf(page, order.po)).toContainText("Complete");
+  await expect(rowOf(page, order.po)).toContainText("Over-received 589 m");
   expect((await api.order(order.po)).lines).toMatchObject([{ quantity: 360, received: 949 }]);
 });
 
@@ -230,10 +231,10 @@ test("saving a receipt returns to the list, moves the order to stage 2, and the 
   expect((await api.order(order.po)).stage).toBe(2);
   expect((await api.order(order.po)).receipts).toMatchObject([{ bundles: 2, deliveryNote: "DN-77", shortRemark: "", receivedBy: "Suresh Menon" }]);
 
-  // The fully received order is no longer offered, and the form is empty.
+  // The fully received order is still offered, labelled (the supplier may deliver more), and the form is empty.
   await page.getByRole("link", { name: "+ Record receipt" }).click();
   await expect(page).toHaveURL("/receiving/new");
-  await expect(page.getByRole("combobox", { name: "Order", exact: true }).getByRole("option", { name: order.po, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Order", exact: true }).getByRole("option", { name: `${order.po} (fully received)`, exact: true })).toHaveCount(1);
   await expect(page.getByRole("textbox", { name: "Bundles received now" })).toHaveValue("");
 
   // Cancel goes back to the list.
