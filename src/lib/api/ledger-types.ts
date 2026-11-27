@@ -118,6 +118,23 @@ export type PaymentRow = {
   voidReason: string;
   /** The payment's account is held (D4, "pending review"): listed as a record, counted in no total. */
   held: boolean;
+  /**
+   * How much of a posted supplier payment has settled orders (FIFO): null for agent, due, voided, held and unposted rows.
+   * Optional: treat a missing one as null.
+   */
+  settlement?: PaymentSettlement | null;
+};
+
+/**
+ * PAY-1/ORD-4 `settlement` of a posted supplier payment, in its currency: `usedCny` settled orders (or a Management
+ * adjustment), `freeCny` is still on the account. `usedBy` po null: a ledger adjustment or shortfall.
+ */
+export type PaymentSettlement = {
+  state: "unsettled" | "partly" | "settled";
+  amountCny: number;
+  usedCny: number;
+  freeCny: number;
+  usedBy: { po: string | null; amountCny: number }[];
 };
 
 /** The before/after of the account a write touched (PAY-2, PAY-3). */

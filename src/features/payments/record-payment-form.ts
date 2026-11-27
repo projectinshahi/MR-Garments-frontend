@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AdvanceSupplierOption } from "@/lib/api/deposits-types";
 import type { PaymentRow } from "@/lib/api/ledger-types";
 import type { CreateAgentPaymentBody, CreateSupplierPaymentBody, EditPaymentBody } from "@/lib/api/types";
+import { formatMoney } from "@/lib/formatters";
 import type { Currency } from "@/types/domain";
 
 // Record payment (PAY-2) after the unified supplier ledger (backend docs/unified-ledger.md). A supplier payment is
@@ -25,6 +26,7 @@ export const MESSAGES = {
   referenceTooLong: "Use 100 characters or fewer for the reference.",
   notesTooLong: "Use 1,000 characters or fewer for the notes.",
   reason: "Enter the reason for changing the amount, date or rate.",
+  reasonLegacy: "Enter the reason for the correction.",
   reasonTooLong: "Use 1,000 characters or fewer for the reason.",
 };
 const M = MESSAGES;
@@ -142,12 +144,24 @@ export const moneyChanged = (original: EditOriginal, values: { amount: number; p
   // INR takes no rate (stored as 1).
   Math.round((values.rateInr ?? 1) * 10_000) !== Math.round((original.rateInr ?? 1) * 10_000);
 
+/**
+ * How a legacy supplier row (Deposit or Balance, or recorded against a PO) is edited: every change is a correction, so
+ * `reasonAlways`; a partly used one keeps its date and rate and needs an amount of at least `minAmount` (what it paid).
+ */
+export type EditRules = { reasonAlways?: boolean; minAmount?: number };
+
+/** "At least ¥3,000.00": the smallest amount a partly used payment can be corrected to. */
+export const minAmountText = (min: number, currency: Currency) => `At least ${formatMoney(min, currency, { decimals: 2 })}`;
+
 /** Edit payment (PAY-4): PAY-2's money fields in the payment's currency, plus the reason a correction needs. */
-export const editSchemaFor = (today: string, original: EditOriginal) =>
+export const editSchemaFor = (today: string, original: EditOriginal, { reasonAlways = false, minAmount }: EditRules = {}) =>
   z
     .object({ ...common(today, original.currency), reason: z.string().trim().max(1000, M.reasonTooLong) })
     .superRefine((values, ctx) => {
-      if (!values.reason && moneyChanged(original, values)) ctx.addIssue({ code: "custom", path: ["reason"], message: M.reason });
+      if (!values.reason && (reasonAlways || moneyChanged(original, values)))
+        ctx.addIssue({ code: "custom", path: ["reason"], message: reasonAlways ? M.reasonLegacy : M.reason });
+      if (minAmount !== undefined && Math.round(values.amount * 100) < Math.round(minAmount * 100))
+        ctx.addIssue({ code: "custom", path: ["amount"], message: `${minAmountText(minAmount, original.currency)}: that much of it already paid orders.` });
     });
 export type EditPaymentInput = z.input<ReturnType<typeof editSchemaFor>>;
 export type EditPaymentValues = z.output<ReturnType<typeof editSchemaFor>>;
@@ -163,7 +177,7 @@ export const editStart = (original: EditOriginal): EditPaymentInput => ({
 });
 
 /** The PAY-4 body: every field as it should be; the reason only for a correction. The id is the dialog's, reused on retry. */
-export function toEditPaymentBody(original: EditOriginal, values: EditPaymentValues, clientRequestId: string): EditPaymentBody {
+export function toEditPaymentBody(original: EditOriginal, values: EditPaymentValues, clientRequestId: string, reasonAlways = false): EditPaymentBody {
   const { amount, paidOn, rateInr, mode, reference, notes, reason } = values;
   return {
     amount,
@@ -172,7 +186,7 @@ export function toEditPaymentBody(original: EditOriginal, values: EditPaymentVal
     mode,
     reference,
     notes,
-    ...(moneyChanged(original, values) ? { reason } : {}),
+    ...(reasonAlways || moneyChanged(original, values) ? { reason } : {}),
     clientRequestId,
   };
 }

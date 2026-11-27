@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import type { OrderPayment } from "@/features/order-detail/data/queries";
 import { ACTIONS_COLUMN_CLASS } from "@/features/order-detail/shared/delete-record";
-import { DASH, moneyOrDash, PaymentStatus, paymentType } from "@/features/payments/money";
+import { DASH, moneyOrDash, PaymentStatusCell, paymentType } from "@/features/payments/money";
 import { VoidPaymentButton } from "@/features/payments/void-payment";
 import type { SettlementSlice } from "@/lib/api/ledger-types";
 import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters";
@@ -40,7 +40,7 @@ function paymentColumns(canVoid: boolean): ColumnDef<OrderPayment>[] {
     { accessorKey: "rateInr", header: "Rate", meta: right, cell: ({ row }) => rateOf(row.original.rateInr, row.original.currency) },
     // The API's figure at the payment's own rate; null while due.
     { accessorKey: "amountInr", header: "In INR", meta: { align: "right", className: "font-bold" }, cell: ({ row }) => moneyOrDash(row.original.amountInr, formatINR) },
-    { id: "status", header: "Status", cell: ({ row }) => <PaymentStatus payment={row.original} /> },
+    { id: "status", header: "Status", cell: ({ row }) => <PaymentStatusCell payment={row.original} /> },
     ...(canVoid
       ? [
           {

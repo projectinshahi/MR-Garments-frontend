@@ -385,7 +385,11 @@ function AgentPaymentForm({ order, agents, onCancel, onSaved }: { order: Freight
   );
 }
 
-/** Amount, date, rate (not for INR), mode, reference and notes: the fields both payments share. */
+/**
+ * Amount, date, rate (not for INR), mode, reference and notes: the fields both payments share. Edit payment only:
+ * `locked` makes the date and rate read-only with that note under each (a visible note, not a tooltip); `amountHint`
+ * goes under the amount.
+ */
 export function MoneyFields({
   register,
   errors,
@@ -393,6 +397,8 @@ export function MoneyFields({
   symbol,
   inr,
   rateHint,
+  locked,
+  amountHint,
 }: {
   register: (field: FieldName) => UseFormRegisterReturn;
   errors: MoneyErrors;
@@ -400,7 +406,10 @@ export function MoneyFields({
   symbol: string;
   inr: boolean;
   rateHint: string;
+  locked?: string;
+  amountHint?: string;
 }) {
+  const lockNote = (id: string) => (locked ? <FieldDescription id={id} className="text-xs">{locked}</FieldDescription> : null);
   return (
     <>
       <Field className={fieldClass} data-invalid={!!errors.amount}>
@@ -408,13 +417,25 @@ export function MoneyFields({
           Amount ({symbol}) <RequiredMark />
         </FieldLabel>
         <Input id="payment-amount" required inputMode="decimal" placeholder={symbol} size="sm" aria-invalid={!!errors.amount} {...register("amount")} />
+        {amountHint ? <FieldDescription className="text-xs">{amountHint}</FieldDescription> : null}
         <FieldError errors={[errors.amount]} />
       </Field>
       <Field className={fieldClass} data-invalid={!!errors.paidOn}>
         <FieldLabel htmlFor="payment-paid-on" className={labelClass}>
           Paid on <RequiredMark />
         </FieldLabel>
-        <Input id="payment-paid-on" required type="date" max={today} size="sm" aria-invalid={!!errors.paidOn} {...register("paidOn")} />
+        <Input
+          id="payment-paid-on"
+          required
+          type="date"
+          max={today}
+          size="sm"
+          readOnly={!!locked}
+          aria-describedby={locked ? "payment-paid-on-locked" : undefined}
+          aria-invalid={!!errors.paidOn}
+          {...register("paidOn")}
+        />
+        {lockNote("payment-paid-on-locked")}
         <FieldError errors={[errors.paidOn]} />
       </Field>
       {inr ? null : (
@@ -422,8 +443,17 @@ export function MoneyFields({
           <FieldLabel htmlFor="payment-rate" className={labelClass}>
             Rate (₹ per {symbol}) <RequiredMark />
           </FieldLabel>
-          <Input id="payment-rate" required inputMode="decimal" size="sm" aria-invalid={!!errors.rateInr} {...register("rateInr")} />
-          <FieldDescription className="text-xs">{rateHint}</FieldDescription>
+          <Input
+            id="payment-rate"
+            required
+            inputMode="decimal"
+            size="sm"
+            readOnly={!!locked}
+            aria-describedby={locked ? "payment-rate-locked" : undefined}
+            aria-invalid={!!errors.rateInr}
+            {...register("rateInr")}
+          />
+          {lockNote("payment-rate-locked") ?? <FieldDescription className="text-xs">{rateHint}</FieldDescription>}
           <FieldError errors={[errors.rateInr]} />
         </Field>
       )}

@@ -64,7 +64,13 @@ const order = {
   supplierAccount: account,
   payments: [],
 } as unknown as OrderView;
-const memo = paymentRow("p1", { orderId: "o2", po: "PO-3002", kind: "Deposit", reference: "UTR 1" });
+const memo = paymentRow("p1", {
+  orderId: "o2",
+  po: "PO-3002",
+  kind: "Deposit",
+  reference: "UTR 1",
+  settlement: { state: "partly", amountCny: 5_000, usedCny: 3_000, freeCny: 2_000, usedBy: [{ po: "PO-3002", amountCny: 3_000 }] },
+});
 const freight = paymentRow("p2", { orderId: "o2", po: "PO-3002", kind: "Balance", payeeRole: "agent", payee: "Sino Freight", amountCny: 500, amountInr: 6_250, rateInr: 12.5 });
 const voided = paymentRow("p3", { orderId: "o2", po: "PO-3002", kind: "Balance", amountCny: 900, voided: true, voidReason: "Wrong PO" });
 
@@ -90,6 +96,9 @@ describe("Order Payments tab (ORD-4, unified ledger)", () => {
     render(<PaymentsScreen order={order} payments={[memo, freight, voided]} canVoid />);
     const recorded = within(card("Recorded against PO-3002").querySelector("table")!);
     expect(recorded.getByRole("row", { name: /Deposit \(legacy\)/ })).toHaveTextContent("Paid");
+    // The API's settlement, as a visible line under the status (sea freight has none).
+    expect(recorded.getByRole("row", { name: /Deposit \(legacy\)/ })).toHaveTextContent("Partly used · ¥3,000.00 of ¥5,000.00");
+    expect(recorded.getByRole("row", { name: /Sea freight · Balance/ })).not.toHaveTextContent(/used/);
     expect(recorded.getByRole("row", { name: /Sea freight · Balance/ })).toHaveTextContent("Sino Freight");
     expect(within(recorded.getByRole("row", { name: /Wrong PO|Voided/ })).queryByRole("button", { name: /^Void/ })).not.toBeInTheDocument();
     expect(recorded.getAllByRole("button", { name: /^Void payment/ })).toHaveLength(2);

@@ -21,7 +21,7 @@ import type { Currency } from "@/types/domain";
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { EditPaymentButton } from "./edit-payment";
 import { filterOrders, filterPayments } from "./filter-orders";
-import { DASH, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
+import { DASH, MilestonePill, moneyOrDash, PaymentStatusCell, PaymentStatusPill, paymentType } from "./money";
 import { PaymentDetailCard } from "./payment-detail";
 import { paymentsFile } from "./payment-files";
 import { RecordPaymentDialog, type SupplierChoice } from "./record-payment-dialog";
@@ -55,7 +55,7 @@ const paymentColumns = (linkPo: boolean, canVoid: boolean): ColumnDef<Payment>[]
   { accessorKey: "rateInr", header: "Rate", meta: { align: "right" }, cell: ({ row }) => (row.original.currency === "INR" || row.original.rateInr === null ? DASH : formatRate(row.original.rateInr)) },
   { accessorKey: "amountInr", header: "In INR", meta: { align: "right" }, cell: ({ row }) => moneyOrDash(row.original.amountInr, formatINR) },
   { id: "reference", header: "Mode · reference", cell: ({ row }) => [row.original.mode, row.original.reference].filter(Boolean).join(" · ") || DASH },
-  { id: "status", header: "Status", cell: ({ row }) => <PaymentStatus payment={row.original} /> },
+  { id: "status", header: "Status", cell: ({ row }) => <PaymentStatusCell payment={row.original} /> },
   ...(canVoid
     ? [
         {

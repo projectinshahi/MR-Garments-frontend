@@ -7,7 +7,7 @@ import { formatDate, formatINR, formatMoney, formatRate } from "@/lib/formatters
 
 import type { OrderPaymentRow, Payment } from "./data/queries";
 import { EditPaymentButton } from "./edit-payment";
-import { HELD_MESSAGE, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType } from "./money";
+import { HELD_MESSAGE, MilestonePill, moneyOrDash, PaymentStatus, PaymentStatusPill, paymentType, settlementText } from "./money";
 import { RecordPaymentDialog, RecordSeaFreightDialog, type SupplierChoice } from "./record-payment-dialog";
 import { VoidPaymentButton } from "./void-payment";
 
@@ -147,6 +147,8 @@ function PaymentBlock({ number, payment, remove }: { number: number; payment: Pa
     ...(paid ? [{ label: "In INR", value: moneyOrDash(payment.amountInr, formatINR) }] : []),
     ...(payment.mode ? [{ label: "Mode", value: payment.mode }] : []),
     ...(payment.reference ? [{ label: "Reference", value: payment.reference }] : []),
+    // How much of a posted supplier payment has paid orders (the API's, never the Paid label).
+    ...(payment.settlement ? [{ label: "Settlement", value: settlementText(payment.settlement, currency) }] : []),
   ];
   return (
     <article className="rounded-[10px] border bg-input-background px-4 py-[13px]" aria-label={`${number}. ${paymentType(payment)}${payment.voided ? " (voided)" : ""}`}>

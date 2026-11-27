@@ -624,6 +624,9 @@ export type EditPaymentBody = {
  * PAY-4: `payment` is the row now live. Mode, reference or notes only: the same payment, `replaced` and `ledger` null.
  * A new amount, date or rate: the corrected payment, `replaced` the voided original's id, `ledger` the supplier
  * account's balance before the void and after the new credit (null for a sea freight payment, never posted).
+ * A legacy supplier row (Deposit or Balance, or recorded against a PO): every edit is a correction (reason required),
+ * the copy keeps its order and kind. 409 `settled_payment` (fully used) or `settlement_change` (would change what
+ * paid an order); a partly used one keeps its date and rate and an amount of at least what it already paid.
  */
 export type EditPaymentResponse = { payment: PaymentRow; replaced: string | null; ledger: LedgerChange | null };
 

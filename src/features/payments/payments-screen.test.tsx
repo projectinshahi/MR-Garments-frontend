@@ -94,6 +94,28 @@ describe("PaymentsScreen (unified ledger)", () => {
     expect(within(within(payments).getByRole("row", { name: /Deposit \(legacy\)/ })).queryByRole("button", { name: /^Void/ })).not.toBeInTheDocument();
   });
 
+  it("shows the API's settlement as a visible line in the Status cell and in the order card's payment block", () => {
+    const partly = { state: "partly", amountCny: 4_000, usedCny: 1_500, freeCny: 2_500, usedBy: [{ po: "PO-3002", amountCny: 1_500 }] } as const;
+    const withSettlement: PaymentsResponse = {
+      ...api,
+      payments: [
+        paymentRow("p3", { reference: "UTR 3", settlement: { state: "unsettled", amountCny: 5_000, usedCny: 0, freeCny: 5_000, usedBy: [] } }),
+        paymentRow("p4", { reference: "UTR 4", settlement: { state: "settled", amountCny: 5_000, usedCny: 5_000, freeCny: 0, usedBy: [{ po: "PO-3001", amountCny: 5_000 }] } }),
+        paymentRow("p2", { po: "PO-3002", orderId: "o-PO-3002", payeeRole: "agent", payee: "Sino Freight", kind: "Balance", amountCny: 500 }),
+        paymentRow("p1", { po: "PO-3002", orderId: "o-PO-3002", kind: "Deposit", amountCny: 4_000, reference: "UTR 1", settlement: { ...partly, usedBy: [...partly.usedBy] } }),
+      ],
+    };
+    render(<PaymentsScreen data={{ ...toPaymentsData(withSettlement, "2026-11-10"), ...NONE }} />);
+    const payments = within(tables()[0]!);
+    expect(payments.getByRole("row", { name: /UTR 3/ })).toHaveTextContent("PaidUnused");
+    expect(payments.getByRole("row", { name: /UTR 4/ })).toHaveTextContent("PaidFully used");
+    expect(payments.getByRole("row", { name: /UTR 1/ })).toHaveTextContent("PaidPartly used · ¥1,500.00 of ¥4,000.00");
+    expect(payments.getByRole("row", { name: /Sino Freight/ })).not.toHaveTextContent(/used/i);
+    const block = screen.getByRole("article", { name: "1. Deposit (legacy)" });
+    expect(within(block).getByText("Settlement").nextSibling).toHaveTextContent("Partly used · ¥1,500.00 of ¥4,000.00");
+    expect(within(screen.getByRole("article", { name: "2. Sea freight · Balance" })).queryByText("Settlement")).not.toBeInTheDocument();
+  });
+
   it("searches both tables by PO, supplier or reference", async () => {
     renderScreen();
     await userEvent.setup().type(screen.getByRole("searchbox", { name: "Search PO or supplier" }), "utr 3");

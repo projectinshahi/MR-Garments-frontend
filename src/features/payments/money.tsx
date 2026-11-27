@@ -1,5 +1,5 @@
 import { StatusPill } from "@/components/shared/status-pill";
-import type { PaymentRow } from "@/lib/api/ledger-types";
+import type { PaymentRow, PaymentSettlement } from "@/lib/api/ledger-types";
 import type { MilestoneStatus, PaymentStatus as OrderPaymentStatus } from "@/lib/api/types";
 import { formatMoney, formatShortDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -85,3 +85,24 @@ export function PaymentStatus({ payment }: { payment: Pick<PaymentRow, "voided" 
 
 /** "Payment" (to the supplier's account), or a legacy / sea freight row's Deposit or Balance. */
 export const paymentType = (p: Pick<PaymentRow, "kind" | "payeeRole">) => (p.payeeRole === "agent" ? `Sea freight · ${p.kind}` : p.kind === "Payment" ? "Supplier payment" : `${p.kind} (legacy)`);
+
+/** ¥3,000.00: an amount to the cent in its currency. */
+export const money2 = (value: number, currency: Currency) => formatMoney(value, currency, { decimals: 2 });
+
+/** How much of a posted supplier payment has paid orders: "Unused", "Partly used · ¥3,000.00 of ¥5,000.00", "Fully used". */
+export const settlementText = (s: PaymentSettlement, currency: Currency) =>
+  s.state === "unsettled" ? "Unused" : s.state === "settled" ? "Fully used" : `Partly used · ${money2(s.usedCny, currency)} of ${money2(s.amountCny, currency)}`;
+
+/** What a payment paid: "PO-11218, PO-11219" (po null is a Management ledger adjustment or shortfall). */
+export const usedByText = (s: PaymentSettlement) => s.usedBy.map((u) => u.po ?? "a ledger adjustment").join(", ");
+
+/** A payments table's Status cell: the status and, on a posted supplier payment, how much of it is used (a visible line, no hover). */
+export function PaymentStatusCell({ payment }: { payment: Parameters<typeof PaymentStatus>[0]["payment"] & Pick<PaymentRow, "settlement" | "currency"> }) {
+  const { settlement } = payment;
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <PaymentStatus payment={payment} />
+      {settlement ? <span className="max-w-36 text-xs leading-4 whitespace-normal text-muted-foreground">{settlementText(settlement, payment.currency)}</span> : null}
+    </span>
+  );
+}
